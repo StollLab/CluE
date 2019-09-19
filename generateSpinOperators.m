@@ -1,0 +1,364 @@
+function [SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4]= generateSpinOperators(spin)
+
+% enum
+E = 1;  Z = 2; RAISE = 3; LOWER = 4;
+
+% Set spin and spin multiplicity;
+multiplicity = 2*spin+1;
+
+%--------------------------------------------------------------------------
+% 1-Clusters: E O
+%--------------------------------------------------------------------------
+% E (1)  : E
+% O (2-4): z + -
+
+% Initialize Spin multiplicity Cluster size arrays.
+SpinOp_1 = zeros(multiplicity,multiplicity,4);
+SpinOp_2 = zeros(multiplicity^2,multiplicity^2,10);
+SpinOp_3 = zeros(multiplicity^3,multiplicity^3,19);
+SpinOp_4 = zeros(multiplicity^4,multiplicity^4,31);
+
+% Assign single spin operators.
+SpinOp_1(:,:,E) = eye(multiplicity);
+SpinOp_1(:,:,Z) = spinZ(spin);
+SpinOp_1(:,:,RAISE) = spinRaise(spin);
+SpinOp_1(:,:,LOWER) = spinLower(spin);
+
+%--------------------------------------------------------------------------
+% 2-Clusters: EE EO OE OO
+%--------------------------------------------------------------------------
+% EE (1)   : EE
+% EO (2-4) : Ez E+ E-
+% OE (5-7) : zE +E -E
+% OO (8-10): zz +- -+
+
+% Assign 2-cluster operators that contain an identity.
+% EE
+SpinOp_2(:,:,E) = eye(multiplicity^2);
+spin_index = E;
+for iop =Z:LOWER
+  % EO
+  spin_index = spin_index + 1;
+  SpinOp_2(:,:,spin_index) = kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop));
+end
+
+for iop =Z:LOWER
+  % OE
+  spin_index = spin_index + 1;
+  SpinOp_2(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_1(:,:,E));
+end
+
+% Assign 2-cluster operators that do not contain an identity.
+%OO
+SpinOp_2(:,:,8) = kron(SpinOp_1(:,:,Z),SpinOp_1(:,:,Z));
+SpinOp_2(:,:,9) = kron(SpinOp_1(:,:,RAISE),SpinOp_1(:,:,LOWER));
+SpinOp_2(:,:,10) = kron(SpinOp_1(:,:,LOWER),SpinOp_1(:,:,RAISE));
+
+%--------------------------------------------------------------------------
+% 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
+%--------------------------------------------------------------------------
+% EEE (1)    : EEE
+% EEO (2-4)  : EEz EE+ EE-
+% EOE (5-7)  : EzE E+E E-E
+% OEE (8-10) : zEE +EE -EE
+% EOO (11-13): Ezz E+- E-+
+% OEO (14-16): zEz +E- -E+
+% OOE (17-19): zzE +-E -+E
+
+% Assign 3-cluster operators that contain one non-identity operator.
+SpinOp_3(:,:,E) = eye(multiplicity^3);
+spin_index = E;
+for iop =Z:LOWER
+  % EEO
+  spin_index = spin_index + 1;
+  SpinOp_3(:,:,spin_index) = kron(SpinOp_2(:,:,E),SpinOp_1(:,:,iop));
+end
+
+for iop =Z:LOWER  
+  % EOE
+  spin_index = spin_index + 1;
+  SpinOp_3(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop))  ,SpinOp_1(:,:,E));
+end
+
+for iop =Z:LOWER  
+  % OEE
+  spin_index = spin_index + 1;
+  SpinOp_3(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_2(:,:,E));
+  
+end
+
+% Assign 3-cluster operators that contain two non-identity operators.
+% EOO
+for iop =8:10
+  spin_index = spin_index + 1;
+  SpinOp_3(:,:,spin_index)= kron(SpinOp_1(:,:,E),SpinOp_2(:,:,iop));
+end
+
+% OEO
+
+spin_index = spin_index + 1;
+SpinOp_3(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,Z));
+
+spin_index = spin_index + 1;
+SpinOp_3(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,LOWER));
+
+spin_index = spin_index + 1;
+SpinOp_3(:,:,spin_index) = kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,RAISE));
+
+% OOE
+
+for iop =8:10
+  spin_index = spin_index + 1;
+  SpinOp_3(:,:,spin_index)= kron(SpinOp_2(:,:,iop),SpinOp_1(:,:,E));
+end
+
+%--------------------------------------------------------------------------
+% 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
+%--------------------------------------------------------------------------
+% EEEE (1)    :  EEEE
+% EEEO (2-4)  :  EEEz EEE+ EEE-
+% EEOE (5-7)  :  EEzE EE+E EE-E
+% EOEE (8-10) :  EzEE E+EE E-EE
+% OEEE (11-13):  zEEE +EEE -EEE
+% EEOO (14-16):  EEzz EE+- EE-+
+% EOEO (17-19):  EzEz E+E- -E+E
+% OEEO (20-22):  zEEz +EE- -EE+ 
+% EOOE (23-25):  EzzE E+-E E-+E
+% OEOE (26-28):  zEzE +E-E -E+E
+% OOEE (29-31):  zzEE +-EE -+EE
+
+% Assign 4-cluster operators that contain one non-identity operator.
+SpinOp_4(:,:,E) = eye(multiplicity^4);
+spin_index = E;
+for iop =Z:LOWER
+  % EEEO
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index) = kron(SpinOp_3(:,:,E),SpinOp_1(:,:,iop));
+end
+
+for iop =Z:LOWER
+  % EEOE
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_2(:,:,E),SpinOp_1(:,:,iop))  ,SpinOp_1(:,:,E));
+end
+
+for iop =Z:LOWER
+  % EOEE
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop))  ,SpinOp_2(:,:,E));
+end
+
+for iop =Z:LOWER
+  % OEEE
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_3(:,:,E));
+  
+end
+
+% Assign 4-cluster operators that contain two non-identity operators.
+% EEOO
+for iop =8:10
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index)= kron(SpinOp_2(:,:,E),SpinOp_2(:,:,iop));
+end
+
+% EOEO
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,E), kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,Z)));
+
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,E), kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,LOWER)));
+
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,E), kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,RAISE)));
+
+% OEEO
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_2(:,:,E))  ,SpinOp_1(:,:,Z));
+
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_2(:,:,E))  ,SpinOp_1(:,:,LOWER));
+
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_2(:,:,E))  ,SpinOp_1(:,:,RAISE));
+
+
+% EOOE
+
+for iop =8:10
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index)=  kron(SpinOp_1(:,:,E), kron(SpinOp_2(:,:,iop),SpinOp_1(:,:,E)));
+end
+
+% OEOE
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron( kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,Z)),SpinOp_1(:,:,E));
+
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron( kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,LOWER)),SpinOp_1(:,:,E));
+
+spin_index = spin_index + 1;
+SpinOp_4(:,:,spin_index) = kron( kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,RAISE)) ,SpinOp_1(:,:,E));
+
+% OOEE
+
+for iop =8:10
+  spin_index = spin_index + 1;
+  SpinOp_4(:,:,spin_index)= kron(SpinOp_2(:,:,iop),SpinOp_2(:,:,E));
+end
+
+%--------------------------------------------------------------------------
+% 5-Clusters: EEEEE EEEEO EEEOE EEOEE EOEEE OEEEE EEEOO EEOEO EOEEO OEEEO
+% EEOOE EOEOE OEEOE EOOEE OEOEE OOEEE
+%--------------------------------------------------------------------------
+% EEEEE (1)    :  EEEEE
+% EEEEO (2-4)  :  EEEEz EEEE+ EEEE-
+% EEEOE (5-7)  :  EEEzE EEE+E EEE-E
+% EEOEE (8-10) :  EEzEE EE+EE EE-EE
+% EOEEE (11-13):  EzEEE E+EEE E-EEE
+% OEEEE (14-16):  zEEEE +EEEE -EEEE
+% EEEOO (17-19):  EEEzz EEE+- EEE-+
+% EEOEO (20-22):  EEzEz EE+E- EE-E+
+% EOEEO (23-25):  EzEEz E+EE- E-EE+
+% OEEEO (26-28):  zEEEz +EEE- -EEE+ 
+% EEOOE (29-31):  EEzzE EE+-E EE-+E
+% EOEOE (32-34):  EzEzE E+E-E E-E+E
+% EOEOE (35-37):  zEEzE +EE-E -EE+E
+% EOOEE (38-40):  EzzEE E+-EE E-+EE
+% OEOEE (41-43):  zEzEE +E-EE -E+EE
+% OOEEE (44-46):  zzEEE +-EEE -+EEE
+
+%--------------------------------------------------------------------------
+% 6-Clusters: EEEEEE EEEEEO EEEEOE EEEOEE EEOEEE EOEEEE OEEEEE EEEEOO
+% EEEOEO EEOEEO EOEEEO OEEEEO EEEOOE EEOEOE EOEEOE OEEEOE EEOOEE EOEOEE OEEOEE EOOEEE OOEEEE
+%--------------------------------------------------------------------------
+% EEEEEE (1)    :  EEEEEE
+% EEEEEO (2-4)  :  EEEEEz EEEEE+ EEEEE-
+% EEEEOE (5-7)  :  EEEEzE EEEE+E EEEE-E
+% EEEOEE (8-10) :  EEEzEE EEE+EE EEE-EE
+% EEOEEE (11-13):  EEzEEE EE+EEE EE-EEE
+% EOEEEE (14-16):  EzEEEE +EEEEE -EEEEE
+% OEEEEE (17-19):  zEEEEE +EEEEE -EEEEE
+% EEEEOO (20-22):  EEEEzz EEEE+- EEEE-+
+% EEEOEO (23-25):  EEEzEz EEE+E- EEE-E+
+% EEOEEO (26-28):  EEzEEz EE+EE- EE-EE+
+% EOEEEO (29-31):  EzEEEz E+EEE- E-EEE+ 
+% OEEEEO (32-34):  zEEEEz +EEEE- -EEEE+ 
+% EEEOOE (35-37):  EEEzzE EEE+-E EEE-+E
+% EEOEOE (38-40):  EEzEzE EE+E-E EE-E+E
+% EOEEOE (41-43):  EzEEzE E+EE-E E-EE+E
+% OEEEOE (44-46):  zEEEzE +EEE-E -EEE+E
+% EEOOEE (47-49):  EEzzEE EE+-EE EE-+EE
+% EOEOEE (50-51):  EzEzEE E+E-EE E-E+EE
+% OEEOEE (53-55):  zEEzEE +EE-EE -EE+EE
+% EOOEEE (56-58):  EzzEEE E+-EEE E-+EEE
+% OEOEEE (59-61):  zEzEEE +E-EEE -E+EEE
+% OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
+
+%--------------------------------------------------------------------------
+% 7-Clusters: 
+%--------------------------------------------------------------------------
+% EEEEEEE (1)    :  EEEEEEE
+% EEEEEEO (2-4)  :  EEEEEEz EEEEEE+ EEEEEE-
+% EEEEEOE (5-7)  :  EEEEEzE EEEEE+E EEEEE-E
+% EEEEOEE (8-10) :  EEEEzEE EEEE+EE EEEE-EE
+% EEEOEEE (11-13):  EEEzEEE EEE+EEE EEE-EEE
+% EEOEEEE (14-19):  EEzEEEE EE+EEEE EE-EEEE
+% EOEEEEE (17-22):  EzEEEEE E+EEEEE E-EEEEE
+% OEEEEEE (20-25):  zEEEEEE +EEEEEE -EEEEEE
+% EEEEEOO (20-28):  EEEEEzz EEEEE+- EEEEE-+
+% EEEEOEO (23-31):  EEEEzEz EEEE+E- EEEE-E+
+% EEEOEEO (26-34):  EEEzEEz EEE+EE- EEE-EE+
+% EEOEEEO (29-37):  EEzEEEz EE+EEE- EE-EEE+ 
+% EOEEEEO (32-40):  EzEEEEz E+EEEE- E-EEEE+ 
+% OEEEEEO (32-43):  zEEEEEz +EEEEE- -EEEEE+ 
+% EEEEOOE (35-46):  EEEEzzE EEEE+-E EEEE-+E
+% EEEOEOE (38-49):  EEEzEzE EEE+E-E EEE-E+E
+% EEOEEOE (41-52):  EEzEEzE EE+EE-E EE-EE+E
+% EOEEEOE (44-55):  EzEEEzE E+EEE-E E-EEE+E
+% OEEEEOE (44-58):  zEEEEzE +EEEE-E -EEEE+E
+% EEEOOEE (47-61):  EEEzzEE EEE+-EE EEE-+EE
+% EEOEOEE (50-64):  EEzEzEE EE+E-EE EE-E+EE
+% EOEEOEE (53-67):  EzEEzEE E+EE-EE E-EE+EE
+% OEEEOEE (53-70):  zEEEzEE +EEE-EE -EEE+EE
+% EEOOEEE (56-73):  EEzzEEE EE+-EEE EE-+EEE
+% EOEOEEE (59-76):  EzEzEEE E+E-EEE E-E+EEE
+% OEEOEEE (59-79):  zEEzEEE +EE-EEE -E+EEE
+% EOOEEEE (62-82):  EzzEEEE E+-EEEE E-+EEEE
+% OEOEEEE (62-85):  zEzEEEE +E-EEEE -E+EEEE
+% OOEEEEE (62-88):  zzEEEEE +-EEEEE -+EEEEE
+
+%--------------------------------------------------------------------------
+% 8-Clusters: 
+%--------------------------------------------------------------------------
+% EEEEEEEE (1)    :  EEEEEEE
+% EEEEEEEO (2-4)  :  EEEEEEz EEEEEE+ EEEEEE-
+% EEEEEEOE (5-7)  :  EEEEEzE EEEEE+E EEEEE-E
+% EEEEEOEE (8-10) :  EEEEzEE EEEE+EE EEEE-EE
+% EEEEOEEE (11-13):  EEEzEEE EEE+EEE EEE-EEE
+% EEEOEEEE (14-16):  EEzEEEE EE+EEEE EE-EEEE
+% EEOEEEEE (17-19):  EzEEEEE E+EEEEE E-EEEEE
+% EOEEEEEE (17-19):  zEEEEEE +EEEEEE -EEEEEE
+% OEEEEEEE (17-19):  zEEEEEE +EEEEEE -EEEEEE
+% EEEEEEOO (20-22):  EEEEEzz EEEEE+- EEEEE-+
+% EEEEEOEO (23-25):  EEEEzEz EEEE+E- EEEE-E+
+% EEEEOEEO (26-28):  EEEzEEz EEE+EE- EEE-EE+
+% EEEOEEEO (29-31):  EEzEEEz EE+EEE- EE-EEE+ 
+% EEOEEEEO (32-34):  EzEEEEz E+EEEE- E-EEEE+ 
+% EOEEEEEO (32-34):  zEEEEEz +EEEEE- -EEEEE+ 
+% OEEEEEEO (32-34):  zEEEEEz +EEEEE- -EEEEE+ 
+% EEEEEOOE (35-37):  EEEEzzE EEEE+-E EEEE-+E
+% EEEEOEOE (38-40):  EEEzEzE EEE+E-E EEE-E+E
+% EEEOEEOE (41-43):  EEzEEzE EE+EE-E EE-EE+E
+% EEOEEEOE (44-46):  EzEEEzE E+EEE-E E-EEE+E
+% EOEEEEOE (44-46):  zEEEEzE +EEEE-E -EEEE+E
+% EOEEEEOE (44-46):  zEEEEzE +EEEE-E -EEEE+E
+% OEEEEEOE (44-46):  zEEEEzE +EEEE-E -EEEE+E
+% EEEEOOEE (47-49):  EEEzzEE EEE+-EE EEE-+EE
+% EEEOEOEE (50-51):  EEzEzEE EE+E-EE EE-E+EE
+% EEOEEOEE (53-55):  EzEEzEE E+EE-EE E-EE+EE
+% EOEEEOEE (53-55):  zEEEzEE +EEE-EE -EEE+EE
+% OEEEEOEE (53-55):  zEEEzEE +EEE-EE -EEE+EE
+% EEEOOEEE (56-58):  EEzzEEE EE+-EEE EE-+EEE
+% EEOEOEEE (59-61):  EzEzEEE E+E-EEE E-E+EEE
+% EOEEOEEE (59-61):  zEEzEEE +EE-EEE -E+EEE
+% OEEEOEEE (59-61):  zEEzEEE +EE-EEE -E+EEE
+% EEOOEEEE (62-64):  EzzEEEE E+-EEEE E-+EEEE
+% EOEOEEEE (62-64):  zEzEEEE +E-EEEE -E+EEEE
+% OEEOEEEE (62-64):  zEzEEEE +E-EEEE -E+EEEE
+% EOOEEEEE (62-64):  zzEEEEE +-EEEEE -+EEEEE
+% OEOEEEEE (62-64):  zzEEEEE +-EEEEE -+EEEEE
+% OOEEEEEE (62-112):  zzEEEEE +-EEEEE -+EEEEE
+end
+
+% ========================================================================
+% S- matrix
+% ========================================================================
+
+function Sz = spinZ(spin)
+Sz = eye(2*spin+1);
+for ii = 1:(2*spin+1)
+  Sz(ii,ii) = spin+ 1 - ii;
+end
+end
+
+
+% ========================================================================
+% S+ matrix
+% ========================================================================
+function Splus = spinRaise(spin)
+Splus = zeros(2*spin+1);
+for ii = 1:(2*spin+1)-1
+  Splus(ii,ii+1) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
+end
+end
+
+% ========================================================================
+% S- matrix
+% ========================================================================
+function Sminus = spinLower(spin)
+Sminus = zeros(2*spin+1);
+for ii = 1:(2*spin+1)-1
+  Sminus(ii+1,ii) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
+end
+end
