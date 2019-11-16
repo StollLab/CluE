@@ -2,13 +2,16 @@
 % Clusters(cluster index , size > order ,order) = 0.
 
 function [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu0(System, Method, Nuclei,Clusters, timepoints,dt)
+       = calculateSignal_gpu0(System, Method, Nuclei,Clusters, timepoints,dt,t0)
+
+maxSize = 6;     
+     
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
 Method_order = Method.order;  
 System_full_Sz_Hyperfine = System.full_Sz_Hyperfine;
-maxClusterSize = min(4,Method_order);
+maxClusterSize = min(maxSize,Method_order);
 % Convert variable to gpu compatible forms
 dimensionality = 1;
 if strcmp(System.experiment,'FID')
@@ -45,11 +48,22 @@ Spin2Op1 = Nuclei.SpinOperators{2}{1};
 Spin2Op2 = Nuclei.SpinOperators{2}{2};
 Spin2Op3 = Nuclei.SpinOperators{2}{3};
 Spin2Op4 = Nuclei.SpinOperators{2}{4};
+Spin2Op5 = Nuclei.SpinOperators{2}{5};
+Spin2Op6 = Nuclei.SpinOperators{2}{6};
 
 Spin3Op1 = Nuclei.SpinOperators{3}{1};
 Spin3Op2 = Nuclei.SpinOperators{3}{2};
 Spin3Op3 = Nuclei.SpinOperators{3}{3};
 Spin3Op4 = Nuclei.SpinOperators{3}{4};
+Spin3Op5 = Nuclei.SpinOperators{3}{5};
+Spin3Op6 = Nuclei.SpinOperators{3}{6};
+
+Spin4Op1 = Nuclei.SpinOperators{4}{1};
+Spin4Op2 = Nuclei.SpinOperators{4}{2};
+Spin4Op3 = Nuclei.SpinOperators{4}{3};
+Spin4Op4 = Nuclei.SpinOperators{4}{4};
+Spin4Op5 = Nuclei.SpinOperators{4}{5};
+Spin4Op6 = Nuclei.SpinOperators{4}{6};
 
 numberClusters = Nuclei.numberClusters(1:maxClusterSize);
 maxNumberClusters = max(numberClusters(1:maxClusterSize));
@@ -82,12 +96,18 @@ for isize = 1:Method_order
         case 4
           SubclusterIndices_4 = zeros(nchoosek(isize,2), isize , Nuclei.numberClusters(isize));
           Coherences_4 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 5
+          SubclusterIndices_5 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_5 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 6
+          SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_6 = ones(numberClusters(isize),timepoints^dimensionality);
       end
       
 end
 
 % Define placeholder variables.
-for isize = Method_order+1:4
+for isize = Method_order+1:maxSize
   
       switch isize 
         
@@ -103,6 +123,13 @@ for isize = Method_order+1:4
         case 4
           SubclusterIndices_4 = 1;
           Coherences_4 = 1;
+          
+        case 5
+          SubclusterIndices_5 = [];
+          Coherences_5 = 1;
+        case 6
+          SubclusterIndices_6 = 1;
+          Coherences_6 = 1;
       end
       
 end
@@ -121,6 +148,18 @@ graphCriterion = CONNECTED;
 if strcmp(Nuclei.graphCriterion,'complete')
   graphCriterion = COMPLETE;
 end
+
+useHamiltonian = System.useHamiltonian;
+
+% Methyl Groups
+IsMethyl = strcmp(Nuclei.Type,'CH3');
+if ~isempty(Nuclei.Methyl_Data)
+  Methyl_P3 = Nuclei.Methyl_Data.Projection_3;
+  Methyl_P4 = Nuclei.Methyl_Data.Projection_4;
+  Methyl_P5 = Nuclei.Methyl_Data.Projection_5;
+  Methyl_P6 = Nuclei.Methyl_Data.Projection_6;
+end
+Methyl_gA = [0,0];
 %--------------------------------------------------------------------------
 % gpu code
 %--------------------------------------------------------------------------
@@ -138,26 +177,59 @@ for clusterSize = 1:Method_order
       continue;
     end
     
+    thisClusterSize = clusterSize + 2*sum(IsMethyl(Cluster));
+    ThisCluster = zeros(1,thisClusterSize);
+    thisIndex = 0;
+    MethylID = zeros(1,thisClusterSize);
+    methyl_number = 0;
+    for ii = 1:clusterSize
+
+      thisIndex = thisIndex + 1;
+      
+      if IsMethyl(Cluster(ii))
+        methyl_number = methyl_number + 1;
+        Methyl_gA(methyl_number) = Nuclei_Abundance(Cluster(ii));
+        MethylID(thisIndex:thisIndex+2) = methyl_number;
+        ThisCluster(thisIndex) = Cluster(ii) + 1;
+        thisIndex = thisIndex + 1;
+        ThisCluster(thisIndex) = Cluster(ii) + 2;
+        thisIndex = thisIndex + 1;
+        ThisCluster(thisIndex) = Cluster(ii) + 3;
+      else
+        ThisCluster(thisIndex) = Cluster(ii);
+      end
+      
+    end
+    
     switch clusterSize 
       % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
       % the jth cluster of size subCluster_size that is a subcluster of
       % the ith ccluster of size clusterSize.
       case 2
-        SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+        SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);   
       case 3
         SubclusterIndices_3(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
       case 4
         SubclusterIndices_4(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 5
+        SubclusterIndices_5(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 6
+        SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      otherwise
+        continue;
+        
     end
     
     % Select the appropriate spin operator.
-     switch clusterSize
+     switch thisClusterSize
       case 1
         switch Nuclei_Spin(Cluster(1))
           case 1/2
             SpinOp = Spin2Op1;
           case 1
             SpinOp = Spin3Op1;
+          case 3/2
+            SpinOp = Spin4Op1;
         end
         
        case 2
@@ -166,6 +238,8 @@ for clusterSize = 1:Method_order
             SpinOp = Spin2Op2;
           case 1
             SpinOp = Spin3Op2;
+          case 3/2
+            SpinOp = Spin4Op2;
         end
         
        case 3
@@ -174,6 +248,8 @@ for clusterSize = 1:Method_order
             SpinOp = Spin2Op3;
           case 1
             SpinOp = Spin3Op3;
+          case 3/2
+            SpinOp = Spin4Op3;
         end
         
        case 4
@@ -182,37 +258,284 @@ for clusterSize = 1:Method_order
             SpinOp = Spin2Op4;
           case 1
             SpinOp = Spin3Op4;
+          case 3/2
+            SpinOp = Spin4Op4;
         end
+        
+       case 5
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op5;
+           case 1
+             SpinOp = Spin3Op5;
+           case 3/2
+             SpinOp = Spin4Op5;
+         end
+         
+       case 6
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op6;
+           case 1
+             SpinOp = Spin3Op6;
+           case 3/2
+             SpinOp = Spin4Op6;
+         end
+         
+       otherwise
+        continue;
          
      end
      
-    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar);
+    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,ThisCluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID);
     
     ms = -1/2;
-    Hb = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
+    Hbeta = assembleHamiltonian_gpu(Hamiltonian,SpinOp,ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number);
     ms= 1/2;
-    Ha = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
+    Halpha = assembleHamiltonian_gpu(Hamiltonian,SpinOp,ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number);
   
     % get density matrix
-    DensityMatrix = getDensityMatrix(ZeemanStates,NumberStates,Cluster);
+    DensityMatrix0 = getDensityMatrix(ZeemanStates,NumberStates,Cluster);
     
-    % get cluster coherence
-    switch clusterSize
+    switch methyl_number
+      case 0
+        PA = eye(size(Halpha));
       case 1
-        Coherences_1(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
-      case 2
-        Coherences_2(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
-      case 3
-        Coherences_3(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
-        if clusterSize==3 && all(sort(Cluster)==[6,7,11])
-          1+1;
+        gA = Methyl_gA(1);
+        gE = 1-gA;
+        methyl_index = find(MethylID==1,1);
+        switch thisClusterSize
+          case 3
+            PA = Methyl_P3(:,:,1);
+            PEap = Methyl_P3(:,:,2);
+            PEam = Methyl_P3(:,:,3);
+            PEbp = Methyl_P3(:,:,4);
+            PEbm = Methyl_P3(:,:,5);
+           
+          case 4      
+            switch methyl_index
+              case 1
+                jmethyl = 6;
+              case 2
+                jmethyl = 1;
+            end
+                PA = Methyl_P4(:,:,jmethyl);
+                PEap = Methyl_P4(:,:,jmethyl+1);
+                PEam = Methyl_P4(:,:,jmethyl+2);
+                PEbp = Methyl_P4(:,:,jmethyl+3);
+                PEbm = Methyl_P4(:,:,jmethyl+4);
+            
+          case 5
+            switch methyl_index
+              case 1
+                jmethyl = 11;
+              case 2
+                jmethyl = 6;
+             case 3
+                jmethyl = 1;
+            end
+                PA   = Methyl_P5(:,:,jmethyl);
+                PEap = Methyl_P5(:,:,jmethyl+1);
+                PEam = Methyl_P5(:,:,jmethyl+2);
+                PEbp = Methyl_P5(:,:,jmethyl+3);
+                PEbm = Methyl_P5(:,:,jmethyl+4);
+            
+          case 6
+            switch methyl_index
+              case 1
+                jmethyl = 16;
+              case 2
+                jmethyl = 11;
+             case 3
+                jmethyl = 6;
+             case 4
+                jmethyl = 1;
+            end
+                PA   = Methyl_P6(:,:,jmethyl);
+                PEap = Methyl_P6(:,:,jmethyl+1);
+                PEam = Methyl_P6(:,:,jmethyl+2);
+                PEbp = Methyl_P6(:,:,jmethyl+3);
+                PEbm = Methyl_P6(:,:,jmethyl+4);
+            
         end
-      case 4
-        Coherences_4(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
-
+      case 2
+        gA = Methyl_gA(1)*Methyl_gA(2);
+        gE = (1-Methyl_gA(1))*(1-Methyl_gA(2));
+        
+        jmethyl = 21;
+        PA1   = Methyl_P6(:,:,jmethyl);
+        PEap1 = Methyl_P6(:,:,jmethyl+1);
+        PEam1 = Methyl_P6(:,:,jmethyl+2);
+        PEbp1 = Methyl_P6(:,:,jmethyl+3);
+        PEbm1 = Methyl_P6(:,:,jmethyl+4);
+        
+        PA2   = Methyl_P6(:,:,jmethyl+5);
+        PEap2 = Methyl_P6(:,:,jmethyl+6);
+        PEam2 = Methyl_P6(:,:,jmethyl+7);
+        PEbp2 = Methyl_P6(:,:,jmethyl+8);
+        PEbm2 = Methyl_P6(:,:,jmethyl+9);
+        
+        PA = PA1*PA2; 
+        PEap = PEap1*PEap2;
+        PEam = PEam1*PEam2;
+        PEbp = PEbp1*PEbp2;
+        PEbm = PEbm1*PEbm2;
+        
     end
     
+      Hb=PA*Hbeta*PA;
+      Ha=PA*Halpha*PA;
+      DensityMatrix=PA*DensityMatrix0*PA;
+
+    % get cluster coherence
     
+    switch clusterSize
+      case 1
+        Coherences_1(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+      case 2
+        Coherences_2(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+      case 3
+        Coherences_3(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+      case 4
+        Coherences_4(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+      case 5
+        Coherences_5(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+      case 6
+        Coherences_6(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+
+    end 
+    
+    if methyl_number==0
+      continue;
+    end
+    
+    Hb_E =   PEap*Hbeta*PEap + PEam*Hbeta*PEam ...
+           + PEbp*Hbeta*PEbp + PEbm*Hbeta*PEbm ...
+           + PEap*Hbeta*PEbm + PEam*Hbeta*PEbp ...
+           + PEbp*Hbeta*PEam + PEbm*Hbeta*PEap;
+    
+    Ha_E =   PEap*Halpha*PEap + PEam*Halpha*PEam ...
+           + PEbp*Halpha*PEbp + PEbm*Halpha*PEbm ...
+           + PEap*Halpha*PEbm + PEam*Halpha*PEbp ...
+           + PEbp*Halpha*PEam + PEbm*Halpha*PEap;
+         
+    DensityMatrix_E =   PEap*DensityMatrix0*PEap + PEam*DensityMatrix0*PEam ...
+           + PEbp*DensityMatrix0*PEbp + PEbm*DensityMatrix0*PEbm ...
+           + PEap*DensityMatrix0*PEbm + PEam*DensityMatrix0*PEbp ...
+           + PEbp*DensityMatrix0*PEam + PEbm*DensityMatrix0*PEap;     
+         
+    %{
+    % Get dimensionality of the Hilbert space.
+    dimension = size(DensityMatrix,1);
+    StateNumbers = 1:dimension;
+    AStates = [];
+    
+    for imethyl = 1:methyl_number
+      state_cycles = 2.^find(MethylID==imethyl);
+      StateList = zeros(3,dimension);
+      
+      for iH = 1:3
+        n_=state_cycles(iH);
+        for ii = 1:dimension/n_
+%           StateList(iH, 1+ii*n_ :(ii+1)*n_/2)  = 0;
+          StateList(iH, (ii-1/2)*n_ + 1:ii*n_)  = 1;
+        end
+        
+      end
+      AStates = [AStates ,find((StateList(1,:)==StateList(2,:)) .* (StateList(1,:)==StateList(3,:)))];
+    end
+    AStates = unique(AStates);
+    keepStates= setdiff(StateNumbers,AStates);
+    DensityMatrix_E = DensityMatrix(keepStates,keepStates);
+    DensityMatrix_E =DensityMatrix_E/trace(DensityMatrix_E);
+    Hb_E = Hb(keepStates,keepStates);
+    Ha_E = Ha(keepStates,keepStates);
+    %}
+    
+    Coherences_E = propagate(total_time, DensityMatrix_E,timepoints,dt,t0,Hb_E,Ha_E,EXPERIMENT);
+    
+    switch clusterSize
+      case 1
+        Coherences_1(iCluster,:) = gA*Coherences_1(iCluster,:) + gE*Coherences_E;
+      case 2
+        Coherences_2(iCluster,:) = gA*Coherences_2(iCluster,:) + gE*Coherences_E;
+      case 3
+        Coherences_3(iCluster,:) = gA*Coherences_3(iCluster,:) + gE*Coherences_E;
+      case 4
+        Coherences_4(iCluster,:) = gA*Coherences_4(iCluster,:) + gE*Coherences_E;
+      case 5
+        Coherences_5(iCluster,:) = gA*Coherences_5(iCluster,:) + gE*Coherences_E;
+      case 6
+        Coherences_6(iCluster,:) = gA*Coherences_6(iCluster,:) + gE*Coherences_E;
+    end
+    
+     if methyl_number < 2
+      continue;
+     end
+     
+     Hb_AE =   PEap2*Hbeta*PEap2 + PEam*Hbeta*PEam2 ...
+       + PEbp2*Hbeta*PEbp2 + PEbm2*Hbeta*PEbm2 ...
+       + PEap2*Hbeta*PEbm2 + PEam2*Hbeta*PEbp2 ...
+       + PEbp2*Hbeta*PEam2 + PEbm2*Hbeta*PEap2;
+     Hb_AE = PA1*Hb_AE*PA1;
+     
+     Ha_AE =   PEap2*Halpha*PEap + PEam2*Halpha*PEam2 ...
+       + PEbp2*Halpha*PEbp + PEbm2*Halpha*PEbm2 ...
+       + PEap2*Halpha*PEbm + PEam2*Halpha*PEbp2 ...
+       + PEbp2*Halpha*PEam + PEbm2*Halpha*PEap2;
+     Ha_AE = PA1*Ha_AE*PA1;
+     
+     DensityMatrix_AE =   PEap2*DensityMatrix0*PEap2 + PEam2*DensityMatrix0*PEam2 ...
+       + PEbp2*DensityMatrix0*PEbp2 + PEbm2*DensityMatrix0*PEbm2 ...
+       + PEap2*DensityMatrix0*PEbm2 + PEam2*DensityMatrix0*PEbp2 ...
+       + PEbp2*DensityMatrix0*PEam2 + PEbm2*DensityMatrix0*PEap2;
+     DensityMatrix_AE = PA1*DensityMatrix_AE*PA1;
+     
+     Coherences_AE = propagate(total_time, DensityMatrix_AE,timepoints,dt,t0,Hb_AE,Ha_AE,EXPERIMENT);
+    
+     
+     Hb_EA =   PEap1*Hbeta*PEap1 + PEam*Hbeta*PEam1 ...
+       + PEbp1*Hbeta*PEbp1 + PEbm1*Hbeta*PEbm1 ...
+       + PEap1*Hbeta*PEbm1 + PEam1*Hbeta*PEbp1 ...
+       + PEbp1*Hbeta*PEam1 + PEbm1*Hbeta*PEap1;
+     Hb_EA = PA2*Hb_EA*PA2;
+     
+     Ha_EA =   PEap1*Halpha*PEap + PEam1*Halpha*PEam1 ...
+       + PEbp1*Halpha*PEbp + PEbm1*Halpha*PEbm1 ...
+       + PEap1*Halpha*PEbm + PEam1*Halpha*PEbp1 ...
+       + PEbp1*Halpha*PEam + PEbm1*Halpha*PEap1;
+     Ha_EA = PA2*Ha_EA*PA2;
+     
+     DensityMatrix_EA =   PEap1*DensityMatrix0*PEap1 + PEam1*DensityMatrix0*PEam1 ...
+       + PEbp1*DensityMatrix0*PEbp1 + PEbm1*DensityMatrix0*PEbm1 ...
+       + PEap1*DensityMatrix0*PEbm1 + PEam1*DensityMatrix0*PEbp1 ...
+       + PEbp1*DensityMatrix0*PEam1 + PEbm1*DensityMatrix0*PEap1;
+     DensityMatrix_EA = PA2*DensityMatrix_EA*PA2;
+     
+     Coherences_EA = propagate(total_time, DensityMatrix_EA,timepoints,dt,t0,Hb_EA,Ha_EA,EXPERIMENT);
+
+     switch clusterSize
+       case 2
+         Coherences_2(iCluster,:) = Coherences_2(iCluster,:)  ...
+           + Methyl_gA(1)*(1-Methyl_gA(2))*Coherences_AE ...
+           +(1 - Methyl_gA(1))*Methyl_gA(2)*Coherences_EA;
+       case 3
+         Coherences_3(iCluster,:) = Coherences_3(iCluster,:) ...
+           + Methyl_gA(1)*(1-Methyl_gA(2))*Coherences_AE ...
+           +(1 - Methyl_gA(1))*Methyl_gA(2)*Coherences_EA;
+       case 4
+         Coherences_4(iCluster,:) = Coherences_4(iCluster,:) ...
+           + Methyl_gA(1)*(1-Methyl_gA(2))*Coherences_AE ...
+           +(1 - Methyl_gA(1))*Methyl_gA(2)*Coherences_EA;
+       case 5
+         Coherences_5(iCluster,:) = Coherences_5(iCluster,:) ...
+           + Methyl_gA(1)*(1-Methyl_gA(2))*Coherences_AE ...
+           +(1 - Methyl_gA(1))*Methyl_gA(2)*Coherences_EA;
+       case 6
+         Coherences_6(iCluster,:) = Coherences_6(iCluster,:)  ...
+           + Methyl_gA(1)*(1-Methyl_gA(2))*Coherences_AE ...
+           +(1 - Methyl_gA(1))*Methyl_gA(2)*Coherences_EA;
+     end
   end
   
   
@@ -222,8 +545,8 @@ end
 % Calculate signal
 %-------------------------------------------------------------------------------
 [Signals, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4] ...
-  = doClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,Coherences_3,Coherences_4,ClusterArray, ...
-  SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
+  = doClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
+  SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,SubclusterIndices_5,SubclusterIndices_6,...
   timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
 % 
 % if EXPERIMENT == CPMG_2D
@@ -268,24 +591,37 @@ end
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,DensityMatrix,timepoints,dt,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT)
+function Signal = propagate(total_time,DensityMatrix,timepoints,dt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
+DensityMatrix = eye(size(DensityMatrix)).*DensityMatrix/trace(DensityMatrix);
 vecDensityMatrixT = reshape(DensityMatrix.',1,[]);
 
+Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
+Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
 
 dU_beta = propagator_eig(Hamiltonian_beta,dt);
 dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
 
 nStates = length(Hamiltonian_beta);
-U_beta = eye(nStates);
-U_alpha = eye(nStates);
+if t0 > 0
+  U_beta = propagator_eig(Hamiltonian_beta,t0);
+  U_alpha = propagator_eig(Hamiltonian_alpha,t0);
+else
+  U_beta = eye(nStates);
+  U_alpha = eye(nStates);
+end
 
 if EXPERIMENT==CPMG
-  U_beta_2 = eye(nStates);
-  U_alpha_2 = eye(nStates);
+  if t0 > 0
+    U_beta_2 = propagator_eig(Hamiltonian_beta,t0);
+    U_alpha_2 = propagator_eig(Hamiltonian_alpha,t0);
+  else
+    U_beta_2 = eye(nStates);
+    U_alpha_2 = eye(nStates);
+  end
 end
 
 if EXPERIMENT == CPMG_CONST
@@ -453,6 +789,10 @@ jCluster = 0;
 
 % Each cluster is a subset of itself.
 Indices(1,clusterSize)=iCluster;
+    
+numberSubClusters = NchooseK(clusterSize,1:clusterSize);
+
+
 
 switch clusterSize
   case 1
@@ -460,18 +800,52 @@ switch clusterSize
     return;
     
   case 3
-    
-    numberSubClusters = [3,3,1];
-   
-    possibleSubClusters_2 = [0,1,1; 1, 0,1; 1,1,0];
+    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
+%     possibleSubClusters_2 = [0,1,1; 1, 0,1; 1,1,0];
     
   case 4
+    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
+    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize);
+%     
+%     possibleSubClusters_2 = [0,0,1,1; 0,1,0,1; 1,0,0,1; 0,1,1,0; 1,0,1,0; 1,1,0,0];
+%     possibleSubClusters_3 = [0,1,1,1; 1,0,1,1; 1,1,0,1; 1,1,1,0];
+   
+  case 5
+    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
+    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize); 
+    possibleSubClusters_4 = zeros(numberSubClusters(4),clusterSize); 
     
-    numberSubClusters = [4,6,4,1];
-    
-    possibleSubClusters_2 = [0,0,1,1; 0,1,0,1; 1,0,0,1; 0,1,1,0; 1,0,1,0; 1,1,0,0];
-    possibleSubClusters_3 = [0,1,1,1; 1,0,1,1; 1,1,0,1; 1,1,1,0];
+  case 6
+    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
+    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize); 
+    possibleSubClusters_4 = zeros(numberSubClusters(4),clusterSize);  
+    possibleSubClusters_5 = zeros(numberSubClusters(5),clusterSize); 
 end  
+
+subcluster_count = zeros(1,clusterSize);
+for isc = 1:2^(clusterSize)-1
+  
+  subcluster_str = dec2bin(isc);
+  subcluster_str = pad(subcluster_str,clusterSize,'left','0');
+  sc_size = sum(subcluster_str=='1');
+  
+  switch sc_size
+    
+    case 2
+      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
+      possibleSubClusters_2(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 3
+      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
+      possibleSubClusters_3(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 4
+      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
+      possibleSubClusters_4(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 5
+      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
+      possibleSubClusters_5(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+  end
+  
+end
 
 Cluster = Clusters(iCluster, 1:clusterSize ,clusterSize);
 Indices(1:clusterSize,1) = Cluster;
@@ -531,6 +905,52 @@ for jCluster = 1:numberSubClusters(3)
   Indices(jCluster,3) = subclusterIndex;
 end
 
+%--------------------------------------------------------------------------
+
+isize = 4;  
+if clusterSize == isize
+  return;
+end
+
+for jCluster = 1:numberSubClusters(isize)
+  
+  SubCluster = Cluster(possibleSubClusters_4(jCluster,:)==1);
+  
+  % Search for a valid cluster that equals the subcluster.
+  Search = Clusters(:, 1:isize, isize)==SubCluster;
+ 
+  % Locate where the subcluster is.
+  subclusterIndex = find( all(Search,2));
+ 
+  if isempty(subclusterIndex)
+    subclusterIndex = 0;
+  end
+  
+  Indices(jCluster,isize) = subclusterIndex;
+end
+%--------------------------------------------------------------------------
+
+isize = 5;  
+if clusterSize == isize
+  return;
+end
+
+for jCluster = 1:numberSubClusters(isize)
+  
+  SubCluster = Cluster(possibleSubClusters_5(jCluster,:)==1);
+  
+  % Search for a valid cluster that equals the subcluster.
+  Search = Clusters(:, 1:isize, isize)==SubCluster;
+ 
+  % Locate where the subcluster is.
+  subclusterIndex = find( all(Search,2));
+ 
+  if isempty(subclusterIndex)
+    subclusterIndex = 0;
+  end
+  
+  Indices(jCluster,isize) = subclusterIndex;
+end
 
 end
 % ========================================================================

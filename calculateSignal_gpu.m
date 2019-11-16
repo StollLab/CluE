@@ -1,12 +1,18 @@
 % Clusters = Clusters(cluster index , 1:size ,order)
 % Clusters(cluster index , size > order ,order) = 0.
 
-function [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu(timepoints,dt, Method_order, EXPERIMENT,dimensionality,System_full_Sz_Hyperfine,total_time, ...  
+function [Signal, ...
+          AuxiliarySignal_1,AuxiliarySignal_2,...
+          AuxiliarySignal_3,AuxiliarySignal_4,...
+          AuxiliarySignal_5,AuxiliarySignal_6, Signals] ...
+  = calculateSignal_gpu(timepoints,dt, Method_order, EXPERIMENT,dimensionality,System_full_Sz_Hyperfine,total_time, ...
   Nuclei_Coordinates, Nuclei_ValidPair, graphCriterion, Nuclei_Abundance, Nuclei_Spin, Nuclei_g, NumberStates, ZeemanStates, ...
-  Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, ...
-  numberClusters,ClusterArray,SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4, ...
-  ge, magneticField, muB, muN, mu0, hbar) 
+  Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin2Op5, Spin2Op6, ...
+  Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, Spin3Op5, Spin3Op6, ...
+  numberClusters,ClusterArray,...
+  SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4, ...
+  SubclusterIndices_5,SubclusterIndices_6, ...
+  ge, magneticField, muB, muN, mu0, hbar, useHamiltonian)
 
 % Setup -------------------------------------------------------------------
 % if ~test_subclusters(ClusterArray,...
@@ -29,12 +35,15 @@ for isize = 1:Method_order
     case 1
       Coherences_1 = ones(numberClusters(isize),timepoints^dimensionality);
     case 2
-      Coherences_2 = ones(numberClusters(isize),timepoints^dimensionality);
-      
+      Coherences_2 = ones(numberClusters(isize),timepoints^dimensionality);  
     case 3
       Coherences_3 = ones(numberClusters(isize),timepoints^dimensionality);
     case 4
       Coherences_4 = ones(numberClusters(isize),timepoints^dimensionality);
+    case 5
+      Coherences_5 = ones(numberClusters(isize),timepoints^dimensionality);
+    case 6
+      Coherences_6 = ones(numberClusters(isize),timepoints^dimensionality);
   end
   
 end
@@ -45,11 +54,22 @@ switch Method_order
     Coherences_2 = 1;
     Coherences_3 = 1;
     Coherences_4 = 1;
+    Coherences_5 = 1;
+    Coherences_6 = 1;
   case 2
     Coherences_3 = 1;
     Coherences_4 = 1;
+    Coherences_5 = 1;
+    Coherences_6 = 1;
   case 3
     Coherences_4 = 1;
+    Coherences_5 = 1;
+    Coherences_6 = 1;
+  case 4
+    Coherences_5 = 1;
+    Coherences_6 = 1;
+  case 5
+    Coherences_6 = 1;
 end
       
 
@@ -73,30 +93,36 @@ for clusterSize = 1:Method_order
     end
     
     % Select the appropriate spin operator.
+
      switch clusterSize
-       
       case 1
         switch Nuclei_Spin(Cluster(1))
           case 1/2
             SpinOp = Spin2Op1;
           case 1
             SpinOp = Spin3Op1;
+          case 3/2
+            SpinOp = Spin4Op1;
         end
         
-       case 2         
+       case 2
         switch Nuclei_Spin(Cluster(1))
           case 1/2
             SpinOp = Spin2Op2;
           case 1
             SpinOp = Spin3Op2;
+          case 3/2
+            SpinOp = Spin4Op2;
         end
         
-       case 3         
+       case 3
         switch Nuclei_Spin(Cluster(1))
           case 1/2
             SpinOp = Spin2Op3;
           case 1
             SpinOp = Spin3Op3;
+          case 3/2
+            SpinOp = Spin4Op3;
         end
         
        case 4
@@ -105,11 +131,33 @@ for clusterSize = 1:Method_order
             SpinOp = Spin2Op4;
           case 1
             SpinOp = Spin3Op4;
+          case 3/2
+            SpinOp = Spin4Op4;
         end
+        
+       case 5
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op5;
+           case 1
+             SpinOp = Spin3Op5;
+           case 3/2
+             SpinOp = Spin4Op5;
+         end
+         
+       case 6
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op6;
+           case 1
+             SpinOp = Spin3Op6;
+           case 3/2
+             SpinOp = Spin4Op6;
+         end
          
      end
      
-    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar);
+    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, useHamiltonian);
     
     ms = -1/2;
     Hb = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
@@ -129,6 +177,10 @@ for clusterSize = 1:Method_order
         Coherences_3(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
       case 4
         Coherences_4(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
+      case 5
+        Coherences_5(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
+      case 6
+        Coherences_6(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,Hb,Ha,EXPERIMENT); 
     end
     
     
@@ -140,10 +192,13 @@ end
 
 % Calculate signal
 %-------------------------------------------------------------------------------
-[Signals, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4] ...
+[Signals, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4...
+          AuxiliarySignal_5,AuxiliarySignal_6,] ...
   = doClusterCorrelationExpansion_gpu(...
-  Coherences_1,Coherences_2,Coherences_3,Coherences_4,ClusterArray, ...
+  Coherences_1,Coherences_2,Coherences_3,Coherences_4,...
+  Coherences_5,Coherences_6, ClusterArray, ...
   SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
+  SubclusterIndices_5,SubclusterIndices_6, ...
   timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
 
 % if EXPERIMENT == CPMG_2D

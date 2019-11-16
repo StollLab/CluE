@@ -21,6 +21,9 @@ else
   % Connected = formConnection(Connected_,Indices_nonWater);
 if System.Methyl.include
   [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater);
+  Nuclei.Methyl_Data = Methyl_Data;
+else
+  Nuclei.Methyl_Data = [];
 end
 
   % Initialize the number of unit cells o include along each direction.
@@ -166,7 +169,7 @@ end
             Nuclei.Type{nucleiCounter} = 'CH3';
             Nuclei.Element{nucleiCounter} = type;
             Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = nan; % hbar
+            Nuclei.Spin(nucleiCounter) = 1/2; % hbar
             Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
             Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
             Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
@@ -178,7 +181,7 @@ end
             Nuclei.Auxiliary_ID(nucleiCounter,:) = Methyl_Data.Hydron_ID{inucleus};
 %             Nuclei.Auxiliary_Coordinates{nucleiCounter} = Methyl_Data.Hydron_Coordinates{inucleus};
 
-            Nuclei.State{nucleiCounter} = getMethylState(System); 
+            [Nuclei.State{nucleiCounter}, Nuclei.Abundance(nucleiCounter)] = getMethylState(System); 
             
             nucleiCounter = nucleiCounter +1;
             Nuclei.Index(nucleiCounter) = nucleiCounter;
@@ -439,8 +442,11 @@ end
 Nuclei = getPairwiseStatistics(System, Nuclei);
 Nuclei.maxSpin = max(Nuclei.Spin);
 
-% Nuclei.ValidPair = ones(Nuclei.number);
-Nuclei.ValidPair = Nuclei.SameType;
+Nuclei.ValidPair = Nuclei.valid'*Nuclei.valid;
+Nuclei.ValidPair = Nuclei.ValidPair.*Nuclei.Same_g;
+% exclude_spins = find( isnan(Nuclei.Spin));
+% Nuclei.ValidPair(exclude_spins,:) = 0;
+% Nuclei.ValidPair(:,exclude_spins) = 0;
 
 num_criteria = numel(Method.Criteria);
 for ii = 1:num_criteria
@@ -471,12 +477,14 @@ for ii = 1:num_criteria
 end
 
 Nuclei.SpinOperators{1}=1;
-[Spin2Op_1,Spin2Op_2,Spin2Op_3,Spin2Op_4] = generateSpinOperators(1/2);
-[Spin3Op_1,Spin3Op_2,Spin3Op_3,Spin3Op_4] = generateSpinOperators(1);
+[Spin2Op_1,Spin2Op_2,Spin2Op_3,Spin2Op_4,Spin2Op_5,Spin2Op_6] = generateSpinOperators(1/2);
+[Spin3Op_1,Spin3Op_2,Spin3Op_3,Spin3Op_4,Spin3Op_5,Spin3Op_6] = generateSpinOperators(1);
+[Spin4Op_1,Spin4Op_2,Spin4Op_3,Spin4Op_4,Spin4Op_5,Spin4Op_6] = generateSpinOperators(1);
 
 Nuclei.SpinOperators{2} = {1,1,1,1};
-Nuclei.SpinOperators{2} = {Spin2Op_1,Spin2Op_2,Spin2Op_3,Spin2Op_4};
-Nuclei.SpinOperators{3} = {Spin3Op_1,Spin3Op_2,Spin3Op_3,Spin3Op_4};
+Nuclei.SpinOperators{2} = {Spin2Op_1,Spin2Op_2,Spin2Op_3,Spin2Op_4,Spin2Op_5,Spin2Op_6};
+Nuclei.SpinOperators{3} = {Spin3Op_1,Spin3Op_2,Spin3Op_3,Spin3Op_4,Spin3Op_5,Spin3Op_6};
+Nuclei.SpinOperators{4} = {Spin4Op_1,Spin4Op_2,Spin4Op_3,Spin4Op_4,Spin4Op_5,Spin4Op_6};
 
 Nuclei.startSpin = max(1, floor(Method.startSpin));
 Nuclei.endSpin = min(Nuclei.number, floor(Method.endSpin));
@@ -700,30 +708,58 @@ Rz  =   [cos(phi ), -sin(phi ), 0; ...
 end
 
 % ========================================================================
-% New Function
+% Set thermal states.
 % ========================================================================
 
 % Sets the initial bath state with a Boltzmann distribution.
+% Both output variables contain the same information, but are formated
+% differently.
 function [State,ZeemanStates] = setState(System,Nuclei)
+
 ZeemanStates = zeros(Nuclei.number, 2*Nuclei.maxSpin+1);
-for iinucleus = Nuclei.number:-1:1 % loop through all nuclei.
-  n = Nuclei.NumberStates(iinucleus);
+
+% Loop through all nuclei.
+for iinucleus = Nuclei.number:-1:1 
+ 
+  spin_multiplicity = Nuclei.NumberStates(iinucleus);
+  
   if isfield(Nuclei,'State') && (length(Nuclei.State) >= iinucleus) && ~isempty(Nuclei.State{iinucleus})
+  
+    % Assign state. 
     State{iinucleus} = Nuclei.State{iinucleus};
+    
+    ZeemanStates(iinucleus,1:length(Nuclei.State{iinucleus})) = Nuclei.State{iinucleus};
     continue;
-  else
-    State{iinucleus} = zeros(n,1); % initialize state
+  
   end
+    
+  % Initialize state.
+  State{iinucleus} = zeros(spin_multiplicity,1);
+  
+  
+  % Set spin antiparallel to the magnetic field.
   mI = -double(Nuclei.Spin(iinucleus));
+  
+  % Set reference energy. 
   en0 = -mI*System.magneticField*System.muN*Nuclei.Nuclear_g(iinucleus);
-  for ithresh = 1:n % adjust threshold steps to the Boltzmann distribution.
+  
+  % Loop through spin states.
+  for ithresh = 1:spin_multiplicity 
+    % Increment z-projection.
     mI = double(ithresh - Nuclei.Spin(iinucleus) - 1);
+    
+    % Calculate the difference in energy from the reference energy.
     deltaE = -mI*System.magneticField*System.muN*Nuclei.Nuclear_g(iinucleus)- en0;
-    State{iinucleus}(ithresh) = State{iinucleus}(ithresh) + exp(-deltaE/Nuclei.kT);
-    ZeemanStates(iinucleus,ithresh)  = ZeemanStates(iinucleus,ithresh) + exp(-deltaE/Nuclei.kT);
+    
+    
+    % Set population according to the Boltzmann distribution.
+    State{iinucleus}(ithresh) = State{iinucleus}(ithresh) + exp(-deltaE/Nuclei.kT/2);
+    ZeemanStates(iinucleus,ithresh)  = ZeemanStates(iinucleus,ithresh) + exp(-deltaE/Nuclei.kT/2);
   end
+  
+  % Normalize states.
   normalization = sqrt(State{iinucleus}'*State{iinucleus});
-  State{iinucleus} = State{iinucleus}/normalization; % normalize.
+  State{iinucleus} = State{iinucleus}/normalization; 
   ZeemanStates(iinucleus,:) = ZeemanStates(iinucleus,:)./normalization;
   
 end
@@ -809,27 +845,38 @@ end
 % ========================================================================
 
 function  [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater)
-N = length(Type);
+
+Number_Nuclei = length(Type);
 Methyl_Data.number_methyls = 0;
 Methyl_Data.Hydron_Coordinates = cell(1);
 Methyl_Data.ID = [];
-for ispin = 1:N
-  
+
+for ispin = 1:Number_Nuclei
+
+  % Check for a carbon.
   if ~strcmp(Type{ispin},'C')
      continue;
   end
   
+  % Get connected nuclei.
   local_group = [Type{Connected{ispin}} ];
   
+  % Skip lone carbons.
   if isempty(local_group)
     continue;
   end
   
+  % Check if the carbon is a methyl carbon.
   indexH = [];
-  for ii=1:length(local_group)
+  for ii=0:length(local_group)
+    
+    % Remove the forth carbon bond.
     methyl = local_group([1:ii-1,(ii+1):end]);
+    
     if strcmp(methyl,'CHHH')
+      % Record indices.
       indexH = Connected{ispin}([ 2,3,4 ]);
+      % Adjust for the forth carbon bond. 
       indexH = indexH + (indexH >=ii);
       break;
     elseif strcmp(methyl,'HCHH')
@@ -845,11 +892,15 @@ for ispin = 1:N
       indexH = indexH + (indexH >=ii);
       break;
     end
+    
   end
+  
+  % Check for no detected methyl groups.
   if isempty(indexH)
     continue;
   end
-  new_index = N + Methyl_Data.number_methyls + 1;
+  
+  new_index = Number_Nuclei + Methyl_Data.number_methyls + 1;
 %   Methyl_Data
 %   Coordinates
 %   Type,
@@ -876,15 +927,17 @@ for ispin = 1:N
   
   
 end
-
-Methyl_Data.Transform = [0, 0, 0, 1/sqrt(3), 0, exp(2*1i*pi/3)/sqrt(3), exp(-2*1i*pi/3)/sqrt(3), 0; ...
-                         0, exp(-2*1i*pi/3)/sqrt(3), exp(2*1i*pi/3)/sqrt(3), 0, 1/sqrt(3), 0, 0, 0; ...
-                         0, 0, 0, 1/sqrt(3), 0, exp(-2*1i*pi/3)/sqrt(3), exp(2*1i*pi/3)/sqrt(3), 0; ...
-                         0, exp(2*1i*pi/3)/sqrt(3), exp(-2*1i*pi/3)/sqrt(3), 0, 1/sqrt(3), 0, 0, 0; ...
-                         1, 0, 0, 0, 0, 0, 0, 0; ...
-                         0, 0, 0, 1/sqrt(3), 0, 1/sqrt(3), 1/sqrt(3), 0; ...
-                         0, 1/sqrt(3), 1/sqrt(3), 0, 1/sqrt(3), 0, 0, 0; ...
-                         0, 0, 0, 0, 0, 0, 0, 1];
+ep = exp(2*1i*pi/3);
+sq3 = sqrt(3);
+%                       [aaa, aab, aba, abb, baa, bab, bba, bbb]
+Methyl_Data.Transform = [0  , 1  , ep , 0  , ep', 0  , 0  , 0  ; ... % |+1/2 Ea>
+                         0  , 0  , 0  , ep', 0  , ep , 1  , 0  ; ... % |-1/2 Ea>
+                         0  , 1  , ep', 0  , ep , 0  , 0  , 0  ; ... % |+1/2 Eb>
+                         0  , 0  , 0  , ep , 0  , ep', 1  , 0  ; ... % |-1/2 Eb>
+                         sq3, 0  , 0  , 0  , 0  , 0  , 0  , 0  ; ... % |+3/2 A >
+                         0  , 1  , 1  , 0  , 1  , 0  , 0  , 0  ; ... % |+1/2 A >
+                         0  , 0  , 0  , 1  , 0  , 1  , 1  , 0  ; ... % |-1/2 A >
+                         0  , 0  , 0  , 0  , 0  , 0  , 0  , sq3]/sq3;% |-3/2 A >
                        
 Methyl_Data.Projection_A = zeros(4,8);
 Methyl_Data.Projection_A(5,5) = 1;  Methyl_Data.Projection_A(6,6) = 1;
@@ -896,17 +949,74 @@ Methyl_Data.Projection_Ea(1,1) = 1;  Methyl_Data.Projection_Ea(2,2) = 1;
 Methyl_Data.Projection_Eb = zeros(2,8);
 Methyl_Data.Projection_Eb(1,3) = 1;  Methyl_Data.Projection_Eb(2,4) = 1;
 
+
+PA = zeros(8);
+for ii=5:8
+  for jj=5:8
+    PA=PA +Methyl_Data.Transform(ii,:)'*Methyl_Data.Transform(jj,:);
+  end
+end
+Pap = Methyl_Data.Transform(1,:)'*Methyl_Data.Transform(1,:);
+Pam = Methyl_Data.Transform(2,:)'*Methyl_Data.Transform(2,:);
+
+Pbp = Methyl_Data.Transform(3,:)'*Methyl_Data.Transform(3,:);
+Pbm = Methyl_Data.Transform(4,:)'*Methyl_Data.Transform(4,:);
+
+P=zeros(8,8,5);
+P(:,:,1) = PA;
+P(:,:,2) = Pap;
+P(:,:,3) = Pam;
+P(:,:,4) = Pbp;
+P(:,:,5) = Pbm;
+E = eye(2);
+[Methyl_Data.Projection_3,Methyl_Data.Projection_4,...
+  Methyl_Data.Projection_5,Methyl_Data.Projection_6] = getMethylProjections(P,E);
+
+%{
+PEE = zeros(8);
+for ii=1:4
+  PEE = PEE +Methyl_Data.Transform(ii,:)'*Methyl_Data.Transform(ii,:);
+end
+PEAB = zeros(8);
+PEBA = zeros(8);
+PEBA = PEBA +Methyl_Data.Transform(1,:)'*Methyl_Data.Transform(4,:);
+PEAB = PEAB +Methyl_Data.Transform(4,:)'*Methyl_Data.Transform(1,:);
+PEAB = PEAB +Methyl_Data.Transform(2,:)'*Methyl_Data.Transform(3,:);
+PEBA = PEBA +Methyl_Data.Transform(3,:)'*Methyl_Data.Transform(2,:);
+
+PE0 = zeros(8);
+for ii=1:4
+  for jj=1:4
+    PE0=PE0 +Methyl_Data.Transform(ii,:)'*Methyl_Data.Transform(jj,:);
+  end
+end
+
+PEa = zeros(8);
+for ii=1:2
+  for jj=1:2
+    PEa=PEa +Methyl_Data.Transform(ii,:)'*Methyl_Data.Transform(jj,:);
+  end
+end
+PEb = zeros(8);
+for ii=3:4
+  for jj=3:4
+    PEb=PEb +Methyl_Data.Transform(ii,:)'*Methyl_Data.Transform(jj,:);
+  end
+end
+%}
+
 end
 
 % ========================================================================
 % New Function
 % ========================================================================
 
-function State = getMethylState(System)
+function [State, gA]= getMethylState(System)
 
 Nucleus_.kT=System.kT;
 Nucleus_.Nuclear_g(1) = 5.58569;
 Nucleus_.Spin(1) = 3/2;
+Nucleus_.maxSpin = 3/2;
 Nucleus_.NumberStates(1) = int8(4);
 Nucleus_.number = 1;
 State_A = setState(System,Nucleus_);
@@ -917,10 +1027,10 @@ State_E = setState(System,Nucleus_);
 
 Spin_Density = [State_E{1}; State_E{1}; State_A{1}].^2;
 e_EkT= exp(-System.hbar*System.Methyl.tunnel_splitting/System.Methyl.kT);
-Density = Spin_Density.*[e_EkT;e_EkT;e_EkT;e_EkT; 1;1;1;1];
+Density = Spin_Density;%.*[e_EkT;e_EkT;e_EkT;e_EkT; 1;1;1;1];
 Density = Density/sum(Density);
 State = sqrt(Density);
-
+gA = 1/(1+e_EkT);
 end
 
 % ========================================================================
@@ -937,6 +1047,7 @@ Nuclei.Nuclear_Dipole = zeros(Nuclei.number);
 Nuclei.Frequency_Pair = zeros(Nuclei.number);
 Nuclei.DeltaHyperfine = zeros(Nuclei.number);
 Nuclei.SameType = eye(Nuclei.number);
+Nuclei.Same_g = eye(Nuclei.number);
 
 Nuclei.SpinSet = unique(Nuclei.Spin);
 
@@ -961,6 +1072,11 @@ for inucleus = 1:Nuclei.number
     if strcmp(Nuclei.Type{inucleus},Nuclei.Type{jnucleus})
       Nuclei.SameType(inucleus,jnucleus) = true;
       Nuclei.SameType(jnucleus,inucleus) = true;
+    end
+    
+    if abs(Nuclei.Nuclear_g(inucleus)-Nuclei.Nuclear_g(jnucleus)) < 1e-9
+      Nuclei.Same_g(inucleus,jnucleus) = true;
+      Nuclei.Same_g(jnucleus,inucleus) = true;
     end
     
     % calculate dipolar coupling

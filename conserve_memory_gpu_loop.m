@@ -5,12 +5,14 @@ function [partial_signal,Cluster_Statistics,NonCluster_Statistics] = ...
   timepoints,dt, ... % Method_order, ...
   EXPERIMENT,dimensionality,System_full_Sz_Hyperfine,total_time, ...  
   Nuclei_Coordinates, Nuclei_ValidPair, Nuclei_Abundance, Nuclei_Spin, Nuclei_g, NumberStates, ZeemanStates, ...
-  Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, ...
+  Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin2Op5, Spin2Op6, ...
+  Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, Spin3Op5, Spin3Op6, ...
   numberClusters,... %ClusterArray,SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4, ...
   ge, magneticField, muB, muN, mu0, hbar, ...
   Method_seed, Nuclei_number,graphCriterion,Method_partialSave,Method_MonteCarlo_Threshold,maxPossibleNumberSubClusters, ...
   Reduced_ClusterArray, SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
-  Method_record_clusters)
+  SubclusterIndices_5,SubclusterIndices_6, ...
+  Method_record_clusters,useHamiltonian)
 
 %--------------------------------------------------------------------------
 
@@ -113,6 +115,8 @@ while iBundle <= Bundle(iCore,2)
   Reduced_SubclusterIndices_2 = SubclusterIndices_2;
   Reduced_SubclusterIndices_3 = SubclusterIndices_3;
   Reduced_SubclusterIndices_4 = SubclusterIndices_4;
+  Reduced_SubclusterIndices_5 = SubclusterIndices_5;
+  Reduced_SubclusterIndices_6 = SubclusterIndices_6;
   
   % Loop through subcluster sizes.
   for jsize = 2:iorder-1
@@ -167,6 +171,41 @@ while iBundle <= Bundle(iCore,2)
             Reduced_SubclusterIndices_4(:,jsize,:) = toZero4.*Reduced_SubclusterIndices_4(:,jsize,:);
           case 4
             Reduced_SubclusterIndices_4(:,:,jCluster) = 0*Reduced_SubclusterIndices_4(:,:,jCluster);
+            
+            if isempty(Reduced_SubclusterIndices_5)
+              continue;
+            end
+            
+            toZero5 = Reduced_SubclusterIndices_5(:,jsize,:);
+            toZero5(toZero5==jCluster) = 0;
+            toZero5(toZero5 >= 1) = 1;
+            Reduced_SubclusterIndices_5(:,jsize,:) = toZero5.*Reduced_SubclusterIndices_5(:,jsize,:);
+            
+            if isempty(Reduced_SubclusterIndices_6)
+              continue;
+            end
+            
+            toZero6 = Reduced_SubclusterIndices_6(:,jsize,:);
+            toZero6(toZero6==jCluster) = 0;
+            toZero6(toZero6 >= 1) = 1;
+            Reduced_SubclusterIndices_6(:,jsize,:) = toZero6.*Reduced_SubclusterIndices_6(:,jsize,:);
+         
+          case 5
+            Reduced_SubclusterIndices_5(:,:,jCluster) = 0*Reduced_SubclusterIndices_5(:,:,jCluster);
+            
+            if isempty(Reduced_SubclusterIndices_6)
+              continue;
+            end
+            
+            toZero6 = Reduced_SubclusterIndices_6(:,jsize,:);
+            toZero6(toZero6==jCluster) = 0;
+            toZero6(toZero6 >= 1) = 1;
+            Reduced_SubclusterIndices_6(:,jsize,:) = toZero6.*Reduced_SubclusterIndices_6(:,jsize,:);
+            
+          case 6
+            Reduced_SubclusterIndices_6(:,:,jCluster) = 0*Reduced_SubclusterIndices_6(:,:,jCluster);
+            
+            
         end
       end
       
@@ -174,13 +213,18 @@ while iBundle <= Bundle(iCore,2)
   end
  
  
-  [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,~] ... 
+  [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,...
+          AuxiliarySignal_5,AuxiliarySignal_6,~] ... 
        = calculateSignal_gpu(...
        timepoints,dt, iorder, EXPERIMENT,dimensionality,System_full_Sz_Hyperfine,total_time, ...
        Nuclei_Coordinates,Nuclei_ValidPair, graphCriterion, Nuclei_Abundance, Nuclei_Spin, Nuclei_g, NumberStates, ZeemanStates, ...
-       Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, ...
-       numberClusters,Reduced_Clusters,Reduced_SubclusterIndices_2,Reduced_SubclusterIndices_3,Reduced_SubclusterIndices_4, ...
-       ge, magneticField, muB, muN, mu0, hbar);
+       Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin2Op5, Spin2Op6, ...
+       Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, Spin3Op5, Spin3Op6, ...
+       numberClusters,Reduced_Clusters, ...
+       Reduced_SubclusterIndices_2,Reduced_SubclusterIndices_3, ...
+       Reduced_SubclusterIndices_4, ...
+       Reduced_SubclusterIndices_5,Reduced_SubclusterIndices_6, ...
+       ge, magneticField, muB, muN, mu0, hbar,useHamiltonian);
   
   % collect cluster contribution to a the node output
 
@@ -194,6 +238,10 @@ while iBundle <= Bundle(iCore,2)
       v_ = 1 + isotopeProbability*(AuxiliarySignal_3(1,:)- 1);
     case 4
       v_ = 1 + isotopeProbability*(AuxiliarySignal_4(1,:) - 1);
+    case 5
+      v_ = 1 + isotopeProbability*(AuxiliarySignal_5(1,:)- 1);
+    case 6
+      v_ = 1 + isotopeProbability*(AuxiliarySignal_6(1,:) - 1);
   end
   
   % partial_signal  = partial_signal.*Cluster_AuxiliarySignal{iorder,1};

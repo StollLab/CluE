@@ -783,7 +783,7 @@ end
 
 timepoints = size(System.Time,2);
 dt = System.Time(2)-System.Time(1);
-
+t0 = System.t0;
 linearTimeAxis = true; % Code should be changed to enforce this.
 
 % Calculate signal
@@ -810,11 +810,11 @@ else
   
   if Method.vectorized
     [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu0(System, Method, Nuclei,Clusters, timepoints,dt);
+       = calculateSignal_gpu0(System, Method, Nuclei,Clusters, timepoints,dt,t0);
     AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
     
     Statistics = [];
-    Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:)};
+    Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
   else
     [Signal,AuxiliarySignal,Order_n_Signal,Statistics] = calculateSignal_standard(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
   end
@@ -1832,8 +1832,9 @@ if ~isfield(Method.MonteCarlo,'Cluster_Limit')
   Method.MonteCarlo.Cluster_Limit = inf*(1:Method.order); 
 elseif length(Method.MonteCarlo.Cluster_Limit) < Method.order
   Cluster_Limit = inf*(1:Method.order);
-  for ii = Method.order_lower_bound:Method.order
-    Cluster_Limit(ii) = Method.MonteCarlo.Cluster_Limit(1+ii-Method.order_lower_bound);
+  Cluster_Limit(1:length(Method.MonteCarlo.Cluster_Limit)) = Method.MonteCarlo.Cluster_Limit;
+  for ii = length(Method.MonteCarlo.Cluster_Limit):Method.order
+    Cluster_Limit(ii) = Method.MonteCarlo.Cluster_Limit(length(Method.MonteCarlo.Cluster_Limit));
   end
   Method.MonteCarlo.Cluster_Limit = Cluster_Limit;
 end
@@ -1847,8 +1848,9 @@ if length(Method.MonteCarlo.Increment)==1
 end
 if length(Method.MonteCarlo.Increment) < Method.order
   Increment = 1000*(1:Method.order);
-  for ii = Method.order_lower_bound:Method.order
-    Increment(ii) = Method.MonteCarlo.Increment(1+ii-Method.order_lower_bound);
+  Increment(1:length(Method.MonteCarlo.Increment)) = length(Method.MonteCarlo.Increment);
+  for ii = length(Method.MonteCarlo.Increment):Method.order
+    Increment(ii) = Method.MonteCarlo.Increment(length(Method.MonteCarlo.Increment));
   end
   Method.MonteCarlo.Increment = Increment;
 end
@@ -2046,6 +2048,11 @@ else
   error('System.timepoints and System.dt are required.');
 end
 
+if ~isfield(System,'t0')
+  System.t0 = 0;
+end
+System.Time = System.Time + System.t0;
+
 switch System.experiment
   case 'FID'
     System.dimensionality = 1;
@@ -2072,6 +2079,25 @@ if ~isfield(System,'gridSize') || isempty(System.gridSize)
   System.gridSize = 14;
 end
 
+
+if ~isfield(System,'electron_Zeeman')
+  System.electron_Zeeman = true;
+end
+
+if ~isfield(System,'nuclear_Zeeman')
+  System.nuclear_Zeeman = true;
+end
+
+if ~isfield(System,'secular_Hyperfine')
+  System.secular_Hyperfine = true;
+end
+if ~isfield(System,'full_Sz_Hyperfine')
+  System.full_Sz_Hyperfine = false;
+end
+if System.full_Sz_Hyperfine
+  System.secular_Hyperfine = true;
+end
+
 if ~isfield(System,'fullDipoleTensor')
   System.fullDipoleTensor = true;
 end
@@ -2089,9 +2115,12 @@ if ~isfield(System,'nuclear_dipole_EF')
   System.nuclear_dipole_EF = false;
 end
 
-if ~isfield(System,'full_Sz_Hyperfine')
-  System.full_Sz_Hyperfine = false;
+if ~isfield(System,'useHamiltonian')
+System.useHamiltonian = [System.electron_Zeeman,...
+  System.nuclear_Zeeman,System.secular_Hyperfine, ...
+  System.nuclear_dipole_B];
 end
+
 % System limiting options
 if ~isfield(System,'limitToSpinHalf')
   System.limitToSpinHalf = false;
@@ -2150,6 +2179,10 @@ if isfield(Method,'mixed_eState') && Method.mixed_eState
   
 else
   Method.mixed_eState = false;
+end
+
+if ~isfield(Method,'vectorized')
+  Method.vectorized = false;
 end
 
 % save options
@@ -2380,6 +2413,7 @@ end
 isvalid = true;
 
 end
+
 
 
 

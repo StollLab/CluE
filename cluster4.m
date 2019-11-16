@@ -1,4 +1,4 @@
-function [ClusterArray, SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4] = cluster4(order)
+function [ClusterArray, SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,SubclusterIndices_5,SubclusterIndices_6] = cluster4(order)
 
 ClusterArray = zeros(nchoosek(order,ceil(order/2)),order,order);
 
@@ -80,6 +80,35 @@ SubclusterIndices_4 = zeros(nchoosek(clusterSize,ceil(clusterSize/2)), clusterSi
 
 for iCluster = 1:numClusters(clusterSize)
   SubclusterIndices_4(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+end
+%--------------------------------------------------------------------------
+clusterSize = 5;
+
+if order < clusterSize
+  SubclusterIndices_5 = [];
+  return;
+end
+
+numClusters(clusterSize) = nchoosek(order, clusterSize);
+SubclusterIndices_5 = zeros(nchoosek(clusterSize,ceil(clusterSize/2)), clusterSize , numClusters(clusterSize)); 
+
+for iCluster = 1:numClusters(clusterSize)
+  SubclusterIndices_5(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+end
+
+%--------------------------------------------------------------------------
+clusterSize = 6;
+
+if order < clusterSize
+  SubclusterIndices_6 = [];
+  return;
+end
+
+numClusters(clusterSize) = nchoosek(order, clusterSize);
+SubclusterIndices_6 = zeros(nchoosek(clusterSize,ceil(clusterSize/2)), clusterSize , numClusters(clusterSize)); 
+
+for iCluster = 1:numClusters(clusterSize)
+  SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
 end
 
 end

@@ -15,78 +15,171 @@ System_nuclear_dipole_EF = System.nuclear_dipole_EF;
 System_theory = ...
 [System.full_Sz_Hyperfine,System.fullDipoleTensor,System.nuclear_dipole_A,System.nuclear_dipole_B,System.nuclear_dipole_CD,System.nuclear_dipole_EF];
 %}
-function H_out = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize)
-%--------------------------------------------------------------------------
-% ENUM 1-Clusters: E O
-%--------------------------------------------------------------------------
-% E (1)  : E
-% O (2-4): z + -
-
-E = 1;
-Z = 2; R = 3; L = 4;
-%--------------------------------------------------------------------------
-% 2-Clusters: EE EO OE OO
-%--------------------------------------------------------------------------
-% EE (1)   : EE
-% EO (2-4) : Ez E+ E-
-% OE (5-7) : zE +E -E
-% OO (8-10): zz +- -+
-
-EE = 1;
-EZ = 2; ER = 3; EL =  4;
-ZE = 5; RE = 6; LE =  7;
-ZZ = 8; RL = 9; LR = 10;
-%--------------------------------------------------------------------------
-% ENUM 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
-%--------------------------------------------------------------------------
-% EEE (1)    : EEE
-% EEO (2-4)  : EEz EE+ EE-
-% EOE (5-7)  : EzE E+E E-E
-% OEE (8-10) : zEE +EE -EE
-% EOO (11-13): Ezz E+- E-+
-% OEO (14-16): zEz +E- -E+
-% OOE (17-19): zzE +-E -+E
-
-EEE =  1;
-EEZ =  2; EER =  3; EEL =  4;
-EZE =  5; ERE =  6; ELE =  7;
-ZEE =  8; REE =  9; LEE = 10;
-EZZ = 11; ERL = 12; ELR = 13;
-ZEZ = 14; REL = 15; LER = 16;
-ZZE = 17; RLE = 18; LRE = 19;
-
-%--------------------------------------------------------------------------
-% ENUM 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
-%--------------------------------------------------------------------------
-% EEEE (1)    :  EEEE
-% EEEO (2-4)  :  EEEz EEE+ EEE-
-% EEOE (5-7)  :  EEzE EE+E EE-E
-% EOEE (8-10) :  EzEE E+EE E-EE
-% OEEE (11-13):  zEEE +EEE -EEE
-% EEOO (14-16):  EEzz EE+- EE-+
-% EOEO (17-19):  EzEz E+E- -E+E
-% OEEO (20-22):  zEEz +EE- -EE+
-% EOOE (23-25):  EzzE E+-E E-+E
-% OEOE (26-28):  zEzE +E-E -E+E
-% OOEE (29-31):  zzEE +-EE -+EE
-
-
-EEEE =  1;
-EEEZ =  2; EEER =  3; EEEL =  4;
-EEZE =  5; EERE =  6; EELE =  7;
-EZEE =  8; EREE =  9; ELEE = 10;
-ZEEE = 11; REEE = 12; LEEE = 13;
-EEZZ = 14; EERL = 15; EELR = 16;
-EZEZ = 17; EREL = 18; ELER = 19;
-ZEEZ = 20; REEL = 21; LEER = 22;
-EZZE = 23; ERLE = 24; ELRE = 25;
-ZEZE = 26; RELE = 27; LERE = 28;
-ZZEE = 29; RLEE = 30; LREE = 31;
-
-
+function H_out = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize,MethylID,methyl_number)
+switch clusterSize
+  case 1
+    %--------------------------------------------------------------------------
+    % ENUM 1-Clusters: E O
+    %--------------------------------------------------------------------------
+    % E (1)  : E
+    % O (2-4): z + -
+    
+    E = 1;
+    Z = 2; R = 3; L = 4;
+    
+    
+  case 2
+    %--------------------------------------------------------------------------
+    % 2-Clusters: EE EO OE OO
+    %--------------------------------------------------------------------------
+    % EE (1)   : EE
+    % EO (2-4) : Ez E+ E-
+    % OE (5-7) : zE +E -E
+    % OO (8-10): zz +- -+
+    
+    EE = 1;
+    EZ = 2; ER = 3; EL =  4;
+    ZE = 5; RE = 6; LE =  7;
+    ZZ = 8; RL = 9; LR = 10;
+    
+    
+  case 3
+    %--------------------------------------------------------------------------
+    % ENUM 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
+    %--------------------------------------------------------------------------
+    % EEE (1)    : EEE
+    % EEO (2-4)  : EEz EE+ EE-
+    % EOE (5-7)  : EzE E+E E-E
+    % OEE (8-10) : zEE +EE -EE
+    % EOO (11-13): Ezz E+- E-+
+    % OEO (14-16): zEz +E- -E+
+    % OOE (17-19): zzE +-E -+E
+    
+    EEE =  1;
+    EEZ =  2; EER =  3; EEL =  4;
+    EZE =  5; ERE =  6; ELE =  7;
+    ZEE =  8; REE =  9; LEE = 10;
+    EZZ = 11; ERL = 12; ELR = 13;
+    ZEZ = 14; REL = 15; LER = 16;
+    ZZE = 17; RLE = 18; LRE = 19;
+    
+    
+  case 4
+    %--------------------------------------------------------------------------
+    % ENUM 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
+    %--------------------------------------------------------------------------
+    % EEEE (1)    :  EEEE
+    % EEEO (2-4)  :  EEEz EEE+ EEE-
+    % EEOE (5-7)  :  EEzE EE+E EE-E
+    % EOEE (8-10) :  EzEE E+EE E-EE
+    % OEEE (11-13):  zEEE +EEE -EEE
+    % EEOO (14-16):  EEzz EE+- EE-+
+    % EOEO (17-19):  EzEz E+E- -E+E
+    % OEEO (20-22):  zEEz +EE- -EE+
+    % EOOE (23-25):  EzzE E+-E E-+E
+    % OEOE (26-28):  zEzE +E-E -E+E
+    % OOEE (29-31):  zzEE +-EE -+EE
+    
+    
+    EEEE =  1;
+    EEEZ =  2; EEER =  3; EEEL =  4;
+    EEZE =  5; EERE =  6; EELE =  7;
+    EZEE =  8; EREE =  9; ELEE = 10;
+    ZEEE = 11; REEE = 12; LEEE = 13;
+    EEZZ = 14; EERL = 15; EELR = 16;
+    EZEZ = 17; EREL = 18; ELER = 19;
+    ZEEZ = 20; REEL = 21; LEER = 22;
+    EZZE = 23; ERLE = 24; ELRE = 25;
+    ZEZE = 26; RELE = 27; LERE = 28;
+    ZZEE = 29; RLEE = 30; LREE = 31;
+    
+    
+  case 5
+    % EEEEE (1)    :  EEEEE
+    % EEEEO (2-4)  :  EEEEz EEEE+ EEEE-
+    % EEEOE (5-7)  :  EEEzE EEE+E EEE-E
+    % EEOEE (8-10) :  EEzEE EE+EE EE-EE
+    % EOEEE (11-13):  EzEEE E+EEE E-EEE
+    % OEEEE (14-16):  zEEEE +EEEE -EEEE
+    % EEEOO (17-19):  EEEzz EEE+- EEE-+
+    % EEOEO (20-22):  EEzEz EE+E- EE-E+
+    % EOEEO (23-25):  EzEEz E+EE- E-EE+
+    % OEEEO (26-28):  zEEEz +EEE- -EEE+
+    % EEOOE (29-31):  EEzzE EE+-E EE-+E
+    % EOEOE (32-34):  EzEzE E+E-E E-E+E
+    % EOEOE (35-37):  zEEzE +EE-E -EE+E
+    % EOOEE (38-40):  EzzEE E+-EE E-+EE
+    % OEOEE (41-43):  zEzEE +E-EE -E+EE
+    % OOEEE (44-46):  zzEEE +-EEE -+EEE
+    
+    EEEEE =  1;
+    EEEEZ =  2; EEEER =  3; EEEEL =  4;
+    EEEZE =  5; EEERE =  6; EEELE =  7;
+    EEZEE =  8; EEREE =  9; EELEE = 10;
+    EZEEE = 11; EREEE = 12; ELEEE = 13;
+    ZEEEE = 14; REEEE = 15; LEEEE = 16;
+    EEEZZ = 17; EEERL = 18; EEELR = 19;
+    EEZEZ = 20; EEREL = 21; EELER = 22;
+    EZEEZ = 23; EREEL = 24; ELEER = 25;
+    ZEEEZ = 26; REEEL = 27; LEEER = 28;
+    EEZZE = 29; EERLE = 30; EELRE = 31;
+    EZEZE = 32; ERELE = 33; ELERE = 34;
+    ZEEZE = 35; REELE = 36; LEERE = 37;
+    EZZEE = 38; ERLEE = 39; ELREE = 40;
+    ZEZEE = 41; RELEE = 42; LEREE = 43;
+    ZZEEE = 44; RLEEE = 45; LREEE = 46;
+    
+  case 6
+    % EEEEEE (1)    :  EEEEEE
+    % EEEEEO (2-4)  :  EEEEEz EEEEE+ EEEEE-
+    % EEEEOE (5-7)  :  EEEEzE EEEE+E EEEE-E
+    % EEEOEE (8-10) :  EEEzEE EEE+EE EEE-EE
+    % EEOEEE (11-13):  EEzEEE EE+EEE EE-EEE
+    % EOEEEE (14-16):  EzEEEE +EEEEE -EEEEE
+    % OEEEEE (17-19):  zEEEEE +EEEEE -EEEEE
+    % EEEEOO (20-22):  EEEEzz EEEE+- EEEE-+
+    % EEEOEO (23-25):  EEEzEz EEE+E- EEE-E+
+    % EEOEEO (26-28):  EEzEEz EE+EE- EE-EE+
+    % EOEEEO (29-31):  EzEEEz E+EEE- E-EEE+
+    % OEEEEO (32-34):  zEEEEz +EEEE- -EEEE+
+    % EEEOOE (35-37):  EEEzzE EEE+-E EEE-+E
+    % EEOEOE (38-40):  EEzEzE EE+E-E EE-E+E
+    % EOEEOE (41-43):  EzEEzE E+EE-E E-EE+E
+    % OEEEOE (44-46):  zEEEzE +EEE-E -EEE+E
+    % EEOOEE (47-49):  EEzzEE EE+-EE EE-+EE
+    % EOEOEE (50-51):  EzEzEE E+E-EE E-E+EE
+    % OEEOEE (53-55):  zEEzEE +EE-EE -EE+EE
+    % EOOEEE (56-58):  EzzEEE E+-EEE E-+EEE
+    % OEOEEE (59-61):  zEzEEE +E-EEE -E+EEE
+    % OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
+    
+    EEEEEE =  1;
+    EEEEEZ =  2; EEEEER =  3; EEEEEL =  4;
+    EEEEZE =  5; EEEERE =  6; EEEELE =  7;
+    EEEZEE =  8; EEEREE =  9; EEELEE = 10;
+    EEZEEE = 11; EEREEE = 12; EELEEE = 13;
+    EZEEEE = 14; EREEEE = 15; ELEEEE = 16;
+    ZEEEEE = 17; REEEEE = 18; LEEEEE = 19;
+    EEEEZZ = 20; EEEERL = 21; EEEELR = 22;
+    EEEZEZ = 23; EEEREL = 24; EEELER = 25;
+    EEZEEZ = 26; EEREEL = 27; EELEER = 28;
+    EZEEEZ = 29; EREEEL = 30; ELEEER = 31;
+    ZEEEEZ = 32; REEEEL = 33; LEEEER = 34;
+    EEEZZE = 35; EEERLE = 36; EEELRE = 37;
+    EEZEZE = 38; EERELE = 39; EELERE = 40;
+    EZEEZE = 41; EREELE = 42; ELEERE = 43;
+    ZEEEZE = 44; REEELE = 45; LEEERE = 46;
+    EEZZEE = 47; EERLEE = 48; EELREE = 49;
+    EZEZEE = 50; ERELEE = 51; ELEREE = 52;
+    ZEEZEE = 53; REELEE = 54; LEEREE = 55;
+    EZZEEE = 56; ERLEEE = 57; ELREEE = 58;
+    ZEZEEE = 59; RELEEE = 60; LEREEE = 61;
+    ZZEEEE = 62; RLEEEE = 63; LREEEE = 64;
+    
+end
 Cluster = sort(unique(Cluster));
 
-if abs(double(zeroIndex) + 1 -double(Cluster(1)))>=1
+if methyl_number==0 && abs(double(zeroIndex) + 1 - double(Cluster(1)) )>=1
   error('Cluster reference failure.');
 end
 
@@ -106,6 +199,10 @@ switch clusterSize
     H_out = SpinOp(:,:,EEE);
   case 4
     H_out = SpinOp(:,:,EEEE);
+  case 5
+    H_out = SpinOp(:,:,EEEEE);
+  case 6
+    H_out = SpinOp(:,:,EEEEEE);
 end
 
 % electron Zeeman splitting
@@ -200,6 +297,72 @@ for icluster = 1:n_cluster
           hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEER) - SpinOp(:,:,EEEL) )/2i;
           
       end
+    case 5
+      
+      switch pre_operators
+        case 0
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,ZEEEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZEEEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,REEEE) + SpinOp(:,:,LEEEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEEE) - SpinOp(:,:,LEEEE) )/2i;
+        case 1
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZEEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZEEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EREEE) + SpinOp(:,:,ELEEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREEE) - SpinOp(:,:,ELEEE) )/2i;
+        case 2
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEZEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEZEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEREE) + SpinOp(:,:,EELEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEREE) - SpinOp(:,:,EELEE) )/2i;
+        case 3
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEZE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEZE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEERE) + SpinOp(:,:,EEELE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEERE) - SpinOp(:,:,EEELE) )/2i;
+        case 4
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEEZ);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEEZ);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEER) + SpinOp(:,:,EEEEL) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEER) - SpinOp(:,:,EEEEL) )/2i;
+          
+      end
+      
+    case 6
+      
+      switch pre_operators
+        case 0
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,ZEEEEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZEEEEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,REEEEE) + SpinOp(:,:,LEEEEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEEEE) - SpinOp(:,:,LEEEEE) )/2i;
+        case 1
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZEEEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZEEEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EREEEE) + SpinOp(:,:,ELEEEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREEEE) - SpinOp(:,:,ELEEEE) )/2i;
+        case 2
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEZEEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEZEEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEREEE) + SpinOp(:,:,EELEEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEREEE) - SpinOp(:,:,EELEEE) )/2i;
+        case 3
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEZEE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEZEE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEREE) + SpinOp(:,:,EEELEE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEREE) - SpinOp(:,:,EEELEE) )/2i;
+        case 4
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEEZE);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEEZE);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEERE) + SpinOp(:,:,EEEELE) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEERE) - SpinOp(:,:,EEEELE) )/2i;
+        case 5
+          nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEEEZ);
+          hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEEEZ);
+          hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEEER) + SpinOp(:,:,EEEEEL) )/2;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEEER) - SpinOp(:,:,EEEEEL) )/2i;
+          
+      end
       
   end
   
@@ -276,6 +439,122 @@ for icluster = 1:n_cluster
           case 2
             nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZZ);
             nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERL)+SpinOp(:,:,EELR));
+        end
+        
+      case 5
+        switch pre_operators
+          case 0
+            switch post_operators
+              case 0
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEEL)+SpinOp(:,:,LEEER));
+              case 1
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REELE)+SpinOp(:,:,LEERE));
+              case 2
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEZEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RELEE)+SpinOp(:,:,LEREE));
+              case 3
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZZEEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RLEEE)+SpinOp(:,:,LREEE));
+ 
+                
+            end
+          case 1
+            switch post_operators
+              case 0
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EREEL)+SpinOp(:,:,ELEER));
+              case 1
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERELE)+SpinOp(:,:,ELERE));
+              case 2
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZZEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERLEE)+SpinOp(:,:,ELREE));
+                
+            end
+            
+          case 2
+            switch post_operators
+              case 0
+            nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZEZ);
+            nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEREL)+SpinOp(:,:,EELER));
+              case 1
+            nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZZE);
+            nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERLE)+SpinOp(:,:,EELRE));
+            end
+            
+          case 3
+            
+            nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEEZZ);
+            nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEERL)+SpinOp(:,:,EEELR));
+            
+        end
+        
+        case 6
+        switch pre_operators
+          case 0
+            switch post_operators
+              case 0
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEEEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEEEL)+SpinOp(:,:,LEEEER));
+              case 1
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEEZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEELE)+SpinOp(:,:,LEEERE));
+              case 2
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEZEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REELEE)+SpinOp(:,:,LEEREE));
+              case 3
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEZEEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RELEEE)+SpinOp(:,:,LEREEE));
+              case 4
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZZEEEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RLEEEE)+SpinOp(:,:,LREEEE));
+                
+            end
+          case 1
+            switch post_operators
+              case 0
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEEEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EREEEL)+SpinOp(:,:,ELEEER));
+              case 1
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEEZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EREELE)+SpinOp(:,:,ELEERE)); 
+              case 2
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEZEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERELEE)+SpinOp(:,:,ELEREE));
+              case 3
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZZEEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERLEEE)+SpinOp(:,:,ELREEE));
+                
+            end
+            
+          case 2
+            switch post_operators
+              case 0
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZEEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEREEL)+SpinOp(:,:,EELEER));
+              case 1
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZEZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERELE)+SpinOp(:,:,EELERE));
+              case 2
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZZEE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERLEE)+SpinOp(:,:,EELREE));
+            end
+            
+          case 3
+            switch post_operators
+              case 0
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEEZEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEEREL)+SpinOp(:,:,EEELER));
+              case 1
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEEZZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEERLE)+SpinOp(:,:,EEELRE));
+            end
+
+          case 4
+            nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEEEZZ);
+            nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEEERL)+SpinOp(:,:,EEEELR));
         end
         
     end

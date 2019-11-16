@@ -7,6 +7,12 @@ COMPLETE = 1;
 % bool valid for each spin
 
 Adjacency = Nuclei_ValidPair(Cluster,Cluster);
+
+if all(Adjacency==0)
+  isvalid = false;
+  return;
+end
+
 Degree = diag( Adjacency*ones(clusterSize,1) );
 
 Laplacian = Degree - Adjacency;

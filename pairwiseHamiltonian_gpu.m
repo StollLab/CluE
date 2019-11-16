@@ -18,26 +18,40 @@
   mu0 = System.mu0;
   hbar = System.hbar;
 %}
-function [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar)
+function [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID)
 
   zeroIndex = min(Cluster) - 1;
   Indices = fliplr(Cluster);
   N = size(Cluster,2);
   Hamiltonian = zeros(3,3, N+1,N+1); % nspins by nspins
   inucleus = 0;
+  MethylSelectionRules = [0,0,0;0,0,0;0,0,1];
+  
+  % ENUM
+  EZEEMAN = 1; NZEEMAN = 2; HYPERFINE = 3; NDIPOLE = 4;
   
   % Electron Zeeman
-  Hamiltonian(:,:,1,1) =  constructElectronZeeman(magneticField,ge, muB, hbar);
+  if useHamiltonian(EZEEMAN)
+    Hamiltonian(:,:,1,1) =  constructElectronZeeman(magneticField,ge, muB, hbar);
+  end
   for i_index_nucleus = Indices
     %     inucleus = i_index_nucleus - zeroIndex;
     inucleus  = inucleus + 1;
     % Nuclear Zeeman
-    Hamiltonian(:,:,1+inucleus,1+inucleus) =   constructNuclearZeeman(Nuclei_g,i_index_nucleus,magneticField, muN, hbar);
- 
+    if useHamiltonian(NZEEMAN)
+      Hamiltonian(:,:,1+inucleus,1+inucleus) =  constructNuclearZeeman(Nuclei_g,i_index_nucleus,magneticField, muN, hbar);
+    end
+    
     % Hyperfine
-    Hamiltonian(:,:,1,1+inucleus )= constructHyperfine(Nuclei_g,Nuclei_Coordinates, i_index_nucleus,ge, muB, muN, mu0, hbar);
-   
+    if useHamiltonian(HYPERFINE)
+      Hamiltonian(:,:,1,1+inucleus )= constructHyperfine(Nuclei_g,Nuclei_Coordinates, i_index_nucleus,ge, muB, muN, mu0, hbar);
+    end
+    
     % Nucleus-Nucleus Coupling
+    if ~useHamiltonian(NDIPOLE)
+      continue;
+    end
+    
     jnucleus = 0;
     for j_index_nucleus = Indices
       % jnucleus = j_index_nucleus - zeroIndex;
@@ -48,6 +62,9 @@ function [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coor
  
       % Dipole Coupling
       Hamiltonian(:,:,1+inucleus,1+jnucleus) = constructNuclearDipoleCoupling(Nuclei_g,Nuclei_Coordinates,i_index_nucleus,j_index_nucleus, muN, mu0, hbar);      
+%       if MethylID(inucleus) > 0 && MethylID(inucleus) == MethylID(jnucleus)
+%         Hamiltonian(:,:,1+inucleus,1+jnucleus) = MethylSelectionRules.*Hamiltonian(:,:,1+inucleus,1+jnucleus);
+%       end
     end
   end
    
