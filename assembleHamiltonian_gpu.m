@@ -15,7 +15,7 @@ System_nuclear_dipole_EF = System.nuclear_dipole_EF;
 System_theory = ...
 [System.full_Sz_Hyperfine,System.fullDipoleTensor,System.nuclear_dipole_A,System.nuclear_dipole_B,System.nuclear_dipole_CD,System.nuclear_dipole_EF];
 %}
-function H_out = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize,MethylID,methyl_number)
+function H_out = assembleHamiltonian_gpu(Hamiltonian,SpinOp,SpinXiXjOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize,MethylID,methyl_number,HNQ,state_multiplicity)
 switch clusterSize
   case 1
     %--------------------------------------------------------------------------
@@ -177,6 +177,13 @@ switch clusterSize
     ZZEEEE = 62; RLEEEE = 63; LREEEE = 64;
     
 end
+
+% ENUM
+X_ = 1;  Y_ = 2; Z_ = 3;
+XX_ = 4; XY_ = 5;  XZ_ = 6;
+YX_ = 7; YY_ = 8;  YZ_ = 9;
+ZX_ = 10; ZY_ = 11;  ZZ_ = 12;
+
 Cluster = sort(unique(Cluster));
 
 if methyl_number==0 && abs(double(zeroIndex) + 1 - double(Cluster(1)) )>=1
@@ -193,16 +200,22 @@ end
 switch clusterSize
   case 1
     H_out = SpinOp(:,:,E);
+    H_nuclear_quadrupole = 0;
   case 2
     H_out = SpinOp(:,:,EE);
+    H_nuclear_quadrupole = SpinOp(:,:,EE);
   case 3
     H_out = SpinOp(:,:,EEE);
+    H_nuclear_quadrupole = 0;
   case 4
     H_out = SpinOp(:,:,EEEE);
+    H_nuclear_quadrupole = 0;
   case 5
     H_out = SpinOp(:,:,EEEEE);
+    H_nuclear_quadrupole = 0;
   case 6
     H_out = SpinOp(:,:,EEEEEE);
+    H_nuclear_quadrupole = 0;
 end
 
 % electron Zeeman splitting
@@ -245,11 +258,31 @@ for icluster = 1:n_cluster
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,RE) + SpinOp(:,:,LE) )/2;
           hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,RE) - SpinOp(:,:,LE) )/2i;
+          if state_multiplicity(Cluster(inucleus-1)) > 2
+          H_nuclear_quadrupole = ...
+            HNQ(1,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,XX_) + HNQ(1,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,XY_) + HNQ(1,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,XZ_) + ...
+            HNQ(2,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,YX_) + HNQ(2,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,YY_) + HNQ(2,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,YZ_) + ...
+            HNQ(3,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZX_) + HNQ(3,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZY_) + HNQ(3,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZZ_);
+            
+%             H_nuclear_quadrupole = HNQ(:,:, 1, Cluster(inucleus-1));
+          else
+            H_nuclear_quadrupole = 0;
+          end
         case 1
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZ);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZ);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,ER) + SpinOp(:,:,EL) )/2;
           hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,ER) - SpinOp(:,:,EL) )/2i;
+          if state_multiplicity(Cluster(inucleus-1)) > 2          
+            H_nuclear_quadrupole = ...
+            HNQ(1,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,XX_+ZZ_) + HNQ(1,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,XY_+ZZ_) + HNQ(1,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,XZ_+ZZ_) + ...
+            HNQ(2,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,YX_+ZZ_) + HNQ(2,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,YY_+ZZ_) + HNQ(2,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,YZ_+ZZ_) + ...
+            HNQ(3,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZX_+ZZ_) + HNQ(3,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZY_+ZZ_) + HNQ(3,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZZ_+ZZ_);
+
+%             H_nuclear_quadrupole = HNQ(:,:, 2, Cluster(inucleus-1));
+          else
+            H_nuclear_quadrupole = 0;
+          end
       end
       
     case 3
@@ -366,7 +399,7 @@ for icluster = 1:n_cluster
       
   end
   
-  H_out = H_out + nuclear_Zeeman_Sz + hyperfine_SzIz;
+  H_out = H_out + nuclear_Zeeman_Sz + hyperfine_SzIz + 1/2*(H_nuclear_quadrupole+H_nuclear_quadrupole');
   if System_full_Sz_Hyperfine
     H_out = H_out + hyperfine_SzIx + hyperfine_SzIy;
   end

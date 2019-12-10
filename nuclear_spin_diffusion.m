@@ -704,6 +704,9 @@ end
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics] = ...
   calculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,Gamma,verbose,OutputData,Progress)
 
+% ENUM
+E = 1;  Z = 2; RAISE = 3; LOWER = 4;
+
 % assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
 
@@ -712,12 +715,26 @@ Mol2LabRotation = rotateZYZ(Alpha,Beta,Gamma);
 % Rotate the PDB defined frame to lab frame rotation via the Euler angle defined earlier.
 Nuclei.Coordinates = Nuclei.Coordinates*Mol2LabRotation';
 
-% Rotate the g-matrix
+% Rotate nuclear quadrupole Hamiltonians.
+newZaxis = Mol2LabRotation*[0;0;1];
+for inucleus = 1:Nuclei.number
+  
+  Nuclei.Qtensor(:,:,inucleus) = Mol2LabRotation*Nuclei.Qtensor(:,:,inucleus)*Mol2LabRotation';
+  
+%   if ~isempty(Nuclei.HNQ{inucleus})
+%     Sz = Nuclei.SpinOperators{Nuclei.StateMultiplicity(inucleus)}{1}(:,:,Z);
+%     Sy = -1i/2*(Nuclei.SpinOperators{Nuclei.StateMultiplicity(inucleus)}{1}(:,:,RAISE) - Nuclei.SpinOperators{Nuclei.StateMultiplicity(inucleus)}{1}(:,:,LOWER));
+%     R = getSpinRotationMatrix(newZaxis,Sz,Sy);
+%     Nuclei.HNQ{inucleus} = R*Nuclei.HNQ{inucleus}*R';
+%     Nuclei.HNQ{inucleus} = (Nuclei.HNQ{inucleus}+Nuclei.HNQ{inucleus}')/2;
+%   end
+end
+% Rotate the g-matrix.
 if isfield(System,'gFrame')
-  % get rotation matrix
+  % Get rotation matrix.
   g2MolRotation = rotateZYZ(-System.gFrame(1),-System.gFrame(2),-System.gFrame(3));
   
-  % perform rotaion to molecular frame
+  % Perform rotaion to molecular frame.
   System.gMatrix = g2MolRotation*System.gMatrix_gFrame*g2MolRotation';
   
 end
@@ -725,7 +742,7 @@ end
 % Rotate the g-matrix to the lab frame.
 System.gMatrix = Mol2LabRotation*System.gMatrix_gFrame*Mol2LabRotation';
 
-% get the g-value along the magnetic field direction.
+% Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
 
 if Method.precalculateHamiltonian
@@ -1943,6 +1960,9 @@ if ~isfield(System,'kelvin')
   System.kelvin = 1; % K.
 end
 
+System.coulomb = System.joule*System.second/System.tesla/System.meter^2;
+System.volt = System.joule/System.coulomb;
+
 % Physical Constants (https://physics.nist.gov/cuu/Constants/index.html)
 % constant = SI value * SI units % SI units
 System.c = 299792458.0*System.meter/System.second; % m/s.
@@ -1952,8 +1972,9 @@ System.muN = 5.050783699e-27*System.joule/System.tesla; % J/T.
 System.muB = 927.400e-26*System.joule/System.tesla; % 927.400e-26; % J/T.
 System.mu0 = (4*pi*1e-7)*System.meter^3*System.tesla^2/System.joule; % 1.2566e-06; % J^-1 m^3 T^2. % 1.2566e-06
 System.kB = 1.38064852e-23*System.joule/System.kelvin; % 1.38064852e-23; % J/K.
-System.eV = 1.6021766208e-19*System.joule; % joule
-
+System.e = 1.6021766208e-19*System.coulomb;
+System.eV = System.e*System.volt; % joule
+System.barn = 1e-28*System.meter^2;
 % Other Constants
 System.angstrom = System.meter*1e-10; % m.
 System.wavenumber = System.h*(100*System.c); % J*cm;
@@ -2113,6 +2134,9 @@ if ~isfield(System,'nuclear_dipole_CD')
 end
 if ~isfield(System,'nuclear_dipole_EF')
   System.nuclear_dipole_EF = false;
+end
+if ~isfield(System,'nuclear_quadrupole')
+  System.nuclear_quadrupole = true;
 end
 
 if ~isfield(System,'useHamiltonian')

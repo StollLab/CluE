@@ -38,12 +38,19 @@ Nuclei_Abundance = Nuclei.Abundance;
 Nuclei_Spin = Nuclei.Spin;
 Nuclei_g = Nuclei.Nuclear_g;
 NumberStates = Nuclei.NumberStates;
+state_multiplicity = Nuclei.StateMultiplicity;
 ZeemanStates = Nuclei.ZeemanStates;
 max_basis = max(NumberStates);
 States = zeros(max_basis,Nuclei.number);
-for ii = 1:Nuclei.number
-  States(1:NumberStates(ii),ii) = Nuclei.State{ii};
-end
+% HNQ = zeros(9,9,2,Nuclei.number);
+% for ii = 1:Nuclei.number
+%   States(1:NumberStates(ii),ii) = Nuclei.State{ii};
+%   if ~isempty(Nuclei.HNQ{ii})
+%     HNQ(1:Nuclei.StateMultiplicity(ii)^2,1:Nuclei.StateMultiplicity(ii)^2, 1,ii ) = kron(Nuclei.HNQ{ii},eye(Nuclei.StateMultiplicity(ii)));
+%     HNQ(1:Nuclei.StateMultiplicity(ii)^2,1:Nuclei.StateMultiplicity(ii)^2, 2, ii) = kron(eye(Nuclei.StateMultiplicity(ii)) , Nuclei.HNQ{ii});
+%   end
+% end
+HNQ = Nuclei.Qtensor;
 Spin2Op1 = Nuclei.SpinOperators{2}{1};
 Spin2Op2 = Nuclei.SpinOperators{2}{2};
 Spin2Op3 = Nuclei.SpinOperators{2}{3};
@@ -67,6 +74,8 @@ Spin4Op6 = Nuclei.SpinOperators{4}{6};
 
 numberClusters = Nuclei.numberClusters(1:maxClusterSize);
 maxNumberClusters = max(numberClusters(1:maxClusterSize));
+
+[SpinXiXjOp_1,SpinXiXjOp_2,SpinXiXjOp_3,SpinXiXjOp_4,SpinXiXjOp_5,SpinXiXjOp_6]= generateXiXjSpinOperators(1);
 
 % CluserArray(iCluster,:,clusterSize) = nuclear indices.
 ClusterArray = zeros(maxNumberClusters,maxClusterSize,maxClusterSize);
@@ -226,60 +235,78 @@ for clusterSize = 1:Method_order
         switch Nuclei_Spin(Cluster(1))
           case 1/2
             SpinOp = Spin2Op1;
+            SpinXiXjOp = [];
           case 1
             SpinOp = Spin3Op1;
+            SpinXiXjOp = SpinXiXjOp_1;
           case 3/2
             SpinOp = Spin4Op1;
+            SpinXiXjOp = [];
         end
         
        case 2
-        switch Nuclei_Spin(Cluster(1))
-          case 1/2
-            SpinOp = Spin2Op2;
-          case 1
-            SpinOp = Spin3Op2;
-          case 3/2
-            SpinOp = Spin4Op2;
-        end
-        
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op2;
+             SpinXiXjOp = [];
+           case 1
+             SpinOp = Spin3Op2;
+             SpinXiXjOp = SpinXiXjOp_2;
+           case 3/2
+             SpinOp = Spin4Op2;
+             SpinXiXjOp = [];
+         end
+         
        case 3
-        switch Nuclei_Spin(Cluster(1))
-          case 1/2
-            SpinOp = Spin2Op3;
-          case 1
-            SpinOp = Spin3Op3;
-          case 3/2
-            SpinOp = Spin4Op3;
-        end
-        
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op3;
+             SpinXiXjOp = [];
+           case 1
+             SpinOp = Spin3Op3;
+             SpinXiXjOp = SpinXiXjOp_3;
+           case 3/2
+             SpinOp = Spin4Op3;
+             SpinXiXjOp = [];
+         end
+         
        case 4
-        switch Nuclei_Spin(Cluster(1))
-          case 1/2
-            SpinOp = Spin2Op4;
-          case 1
-            SpinOp = Spin3Op4;
-          case 3/2
-            SpinOp = Spin4Op4;
-        end
-        
+         switch Nuclei_Spin(Cluster(1))
+           case 1/2
+             SpinOp = Spin2Op4;
+             SpinXiXjOp = [];
+           case 1
+             SpinOp = Spin3Op4;
+             SpinXiXjOp = SpinXiXjOp_4;
+           case 3/2
+             SpinOp = Spin4Op4;
+             SpinXiXjOp = [];
+         end
+         
        case 5
          switch Nuclei_Spin(Cluster(1))
            case 1/2
              SpinOp = Spin2Op5;
+             SpinXiXjOp = [];
            case 1
              SpinOp = Spin3Op5;
+             SpinXiXjOp = SpinXiXjOp_5;
            case 3/2
              SpinOp = Spin4Op5;
+             SpinXiXjOp = [];
          end
          
        case 6
          switch Nuclei_Spin(Cluster(1))
            case 1/2
              SpinOp = Spin2Op6;
+             SpinXiXjOp = [];
            case 1
              SpinOp = Spin3Op6;
+             SpinXiXjOp = SpinXiXjOp_6;
            case 3/2
              SpinOp = Spin4Op6;
+             SpinXiXjOp = [];
          end
          
        otherwise
@@ -290,9 +317,9 @@ for clusterSize = 1:Method_order
     [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,ThisCluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID);
     
     ms = -1/2;
-    Hbeta = assembleHamiltonian_gpu(Hamiltonian,SpinOp,ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number);
+    Hbeta = assembleHamiltonian_gpu(Hamiltonian,SpinOp,SpinXiXjOp, ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number, HNQ,state_multiplicity);
     ms= 1/2;
-    Halpha = assembleHamiltonian_gpu(Hamiltonian,SpinOp,ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number);
+    Halpha = assembleHamiltonian_gpu(Hamiltonian,SpinOp, SpinXiXjOp,ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number, HNQ,state_multiplicity);
   
     % get density matrix
     DensityMatrix0 = getDensityMatrix(ZeemanStates,NumberStates,Cluster);
