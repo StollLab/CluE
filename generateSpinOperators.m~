@@ -299,53 +299,30 @@ for iop =8:10
   SpinOp_4(:,:,spin_index)= kron(SpinOp_2(:,:,iop),SpinOp_2(:,:,E));
 end
 
-SpinOp_4(:,:,EEZR) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,ZR));
-SpinOp_4(:,:,EEZL) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,ZL));
-SpinOp_4(:,:,EERZ) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,RZ));
-SpinOp_4(:,:,EELZ) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,LZ));
+SpinOp_4(:,:,EEZR) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,ZR));
+SpinOp_4(:,:,EEZL) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,ZL));
+SpinOp_4(:,:,EERZ) = kron(SpinOp_2(:,:,E), SpinOp_2(:,:,RZ));
+SpinOp_4(:,:,EELZ) = kron(SpinOp_2(:,:,E), SpinOp_2(:,:,LZ));
 
-SpinOp_4(:,:,EZER) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EZ));
-SpinOp_4(:,:,EZEL) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EL));
-SpinOp_4(:,:,EREZ) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EZ));
-SpinOp_4(:,:,ELEZ) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EZ));
+SpinOp_4(:,:,ZER) = kron(SpinOp_1(:,:,Z),     SpinOp_2(:,:,EZ));
+SpinOp_4(:,:,ZEL) = kron(SpinOp_1(:,:,Z),     SpinOp_2(:,:,EL));
+SpinOp_4(:,:,REZ) = kron(SpinOp_1(:,:,RAISE), SpinOp_2(:,:,EZ));
+SpinOp_4(:,:,LEZ) = kron(SpinOp_1(:,:,LOWER), SpinOp_2(:,:,EZ));
 
-SpinOp_4(:,:,ZEER) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,ER));
-SpinOp_4(:,:,ZEEL) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,EL));
-SpinOp_4(:,:,REEZ) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,EZ));
-SpinOp_4(:,:,LEEZ) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,EZ));
+SpinOp_4(:,:,ZRE) = kron(SpinOp_2(:,:,ZR), SpinOp_1(:,:,E));
+SpinOp_4(:,:,ZLE) = kron(SpinOp_2(:,:,ZL), SpinOp_1(:,:,E));
+SpinOp_4(:,:,RZE) = kron(SpinOp_2(:,:,RZ), SpinOp_1(:,:,E));
+SpinOp_4(:,:,LZE) = kron(SpinOp_2(:,:,LZ), SpinOp_1(:,:,E));
 
-SpinOp_4(:,:,EZRE) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,EZLE) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,LE));
-SpinOp_4(:,:,ERZE) = kron(SpinOp_2(:,:,ER), SpinOp_2(:,:,ZE));
-SpinOp_4(:,:,ELZE) = kron(SpinOp_2(:,:,EL), SpinOp_2(:,:,ZE));
 
-SpinOp_4(:,:,ZERE) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,ZELE) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,LE));
-SpinOp_4(:,:,REZE) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,ZE));
-SpinOp_4(:,:,LEZE) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,ZE));
+SpinOp_4(:,:,ERR) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,RR));
+SpinOp_4(:,:,ELL) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,LL));
 
-SpinOp_4(:,:,ZREE) = kron(SpinOp_2(:,:,ZR), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,ZLEE) = kron(SpinOp_2(:,:,ZL), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,RZEE) = kron(SpinOp_2(:,:,RZ), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,LZEE) = kron(SpinOp_2(:,:,LZ), SpinOp_2(:,:,EE));
+SpinOp_4(:,:,RER) = kron(SpinOp_1(:,:,RAISE), SpinOp_2(:,:,ER));
+SpinOp_4(:,:,LEL) = kron(SpinOp_1(:,:,LOWER), SpinOp_2(:,:,EL));
 
-SpinOp_4(:,:,EERR) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,RR));
-SpinOp_4(:,:,EELL) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,LL));
-
-SpinOp_4(:,:,ERER) = kron(SpinOp_2(:,:,ER), SpinOp_2(:,:,ER));
-SpinOp_4(:,:,ELEL) = kron(SpinOp_2(:,:,EL), SpinOp_2(:,:,EL));
-
-SpinOp_4(:,:,REER) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,ER));
-SpinOp_4(:,:,LEEL) = kron(SpinOp_2(:,:,LE) ,SpinOp_2(:,:,EL));
-
-SpinOp_4(:,:,ERRE) = kron(SpinOp_2(:,:,ER), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,ELLE) = kron(SpinOp_2(:,:,EL), SpinOp_2(:,:,LE));
-
-SpinOp_4(:,:,RERE) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,LELE) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,LE));
-
-SpinOp_4(:,:,RREE) = kron(SpinOp_2(:,:,RR), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,LLEE) = kron(SpinOp_2(:,:,LL) ,SpinOp_2(:,:,EE));
+SpinOp_4(:,:,RRE) = kron(SpinOp_2(:,:,RR), SpinOp_1(:,:,E));
+SpinOp_4(:,:,LLE) = kron(SpinOp_2(:,:,LL) ,SpinOp_1(:,:,E));
 
 %--------------------------------------------------------------------------
 % 5-Clusters: EEEEE EEEEO EEEOE EEOEE EOEEE OEEEE EEEOO EEOEO EOEEO OEEEO

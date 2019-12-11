@@ -42,6 +42,8 @@ switch clusterSize
     ZE = 5; RE = 6; LE =  7;
     ZZ = 8; RL = 9; LR = 10;
     
+    ZR = 11;  ZL = 12;  RZ = 13;  LZ = 14;
+    RR = 15;  LL = 16;
     
   case 3
     %--------------------------------------------------------------------------
@@ -62,6 +64,14 @@ switch clusterSize
     EZZ = 11; ERL = 12; ELR = 13;
     ZEZ = 14; REL = 15; LER = 16;
     ZZE = 17; RLE = 18; LRE = 19;
+
+    EZR = 20;  EZL = 21;  ERZ = 22;  ELZ = 23;
+    ZER = 24;  ZEL = 25;  REZ = 26;  LEZ = 27;
+    ZRE = 28;  ZLE = 29;  RZE = 30;  LZE = 31;
+    
+    ERR = 32;  ELL = 33;
+    RER = 34;  LEL = 35;
+    RRE = 36;  LLE = 37;
     
     
   case 4
@@ -92,6 +102,20 @@ switch clusterSize
     EZZE = 23; ERLE = 24; ELRE = 25;
     ZEZE = 26; RELE = 27; LERE = 28;
     ZZEE = 29; RLEE = 30; LREE = 31;
+    
+    EEZR = 31;  EEZL = 32;  EERZ = 33;  EELZ = 34;
+    EZER = 35;  EZEL = 36;  EREZ = 37;  ELEZ = 38;
+    ZEER = 39;  ZEEL = 40;  REEZ = 41;  LEEZ = 42;
+    EZRE = 43;  EZLE = 44;  ERZE = 45;  ELZE = 46;
+    ZERE = 47;  ZELE = 48;  REZE = 49;  LEZE = 50;
+    ZREE = 51;  ZLEE = 52;  RZEE = 53;  LZEE = 54;
+    
+    EERR = 55;  EELL = 56;
+    ERER = 57;  ELEL = 58;
+    REER = 59;  LEEL = 60;
+    ERRE = 61;  ELLE = 62;
+    RERE = 63;  LELE = 64;
+    RREE = 65;  LLEE = 66;
     
     
   case 5
@@ -242,6 +266,16 @@ for icluster = 1:n_cluster
   %------------------------------------------------------------------------
   % One Nucleus Spin Hamiltonian
   %------------------------------------------------------------------------
+          
+  if state_multiplicity(Cluster(inucleus-1)) > 2
+    H_nuclear_quadrupole = ...
+      HNQ(1,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,XX_+pre_operators*ZZ_) + HNQ(1,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,XY_+pre_operators*ZZ_) + HNQ(1,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,XZ_+pre_operators*ZZ_) + ...
+      HNQ(2,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,YX_+pre_operators*ZZ_) + HNQ(2,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,YY_+pre_operators*ZZ_) + HNQ(2,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,YZ_+pre_operators*ZZ_) + ...
+      HNQ(3,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZX_+pre_operators*ZZ_) + HNQ(3,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZY_+pre_operators*ZZ_) + HNQ(3,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZZ_+pre_operators*ZZ_);
+  else
+    H_nuclear_quadrupole = 0;
+  end
+  
   Hhf = Hamiltonian(:,:,1,inucleus)+Hamiltonian(:,:,inucleus,1);
   
   switch clusterSize
@@ -257,32 +291,12 @@ for icluster = 1:n_cluster
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,ZE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,RE) + SpinOp(:,:,LE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,RE) - SpinOp(:,:,LE) )/2i;
-          if state_multiplicity(Cluster(inucleus-1)) > 2
-          H_nuclear_quadrupole = ...
-            HNQ(1,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,XX_) + HNQ(1,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,XY_) + HNQ(1,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,XZ_) + ...
-            HNQ(2,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,YX_) + HNQ(2,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,YY_) + HNQ(2,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,YZ_) + ...
-            HNQ(3,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZX_) + HNQ(3,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZY_) + HNQ(3,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZZ_);
-            
-%             H_nuclear_quadrupole = HNQ(:,:, 1, Cluster(inucleus-1));
-          else
-            H_nuclear_quadrupole = 0;
-          end
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,RE) - SpinOp(:,:,LE) )/2i; 
         case 1
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZ);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZ);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,ER) + SpinOp(:,:,EL) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,ER) - SpinOp(:,:,EL) )/2i;
-          if state_multiplicity(Cluster(inucleus-1)) > 2          
-            H_nuclear_quadrupole = ...
-            HNQ(1,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,XX_+ZZ_) + HNQ(1,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,XY_+ZZ_) + HNQ(1,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,XZ_+ZZ_) + ...
-            HNQ(2,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,YX_+ZZ_) + HNQ(2,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,YY_+ZZ_) + HNQ(2,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,YZ_+ZZ_) + ...
-            HNQ(3,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZX_+ZZ_) + HNQ(3,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZY_+ZZ_) + HNQ(3,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZZ_+ZZ_);
-
-%             H_nuclear_quadrupole = HNQ(:,:, 2, Cluster(inucleus-1));
-          else
-            H_nuclear_quadrupole = 0;
-          end
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,ER) - SpinOp(:,:,EL) )/2i; 
       end
       
     case 3
@@ -292,18 +306,20 @@ for icluster = 1:n_cluster
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,ZEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,REE) + SpinOp(:,:,LEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REE) - SpinOp(:,:,LEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REE) - SpinOp(:,:,LEE) )/2i; 
+          
         case 1
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,ERE) + SpinOp(:,:,ELE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,ERE) - SpinOp(:,:,ELE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,ERE) - SpinOp(:,:,ELE) )/2i; 
+          
         case 2
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEZ);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEZ);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EER) + SpinOp(:,:,EEL) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EER) - SpinOp(:,:,EEL) )/2i;
-          
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EER) - SpinOp(:,:,EEL) )/2i; 
+      
       end
       
     case 4
@@ -312,22 +328,25 @@ for icluster = 1:n_cluster
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,ZEEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZEEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,REEE) + SpinOp(:,:,LEEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEE) - SpinOp(:,:,LEEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEE) - SpinOp(:,:,LEEE) )/2i; 
+          
         case 1
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EREE) + SpinOp(:,:,ELEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREE) - SpinOp(:,:,ELEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREE) - SpinOp(:,:,ELEE) )/2i; 
+          
         case 2
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEZE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEZE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EERE) + SpinOp(:,:,EELE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EERE) - SpinOp(:,:,EELE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EERE) - SpinOp(:,:,EELE) )/2i; 
+          
         case 3
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEZ);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEZ);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEER) + SpinOp(:,:,EEEL) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEER) - SpinOp(:,:,EEEL) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEER) - SpinOp(:,:,EEEL) )/2i; 
           
       end
     case 5
@@ -338,26 +357,30 @@ for icluster = 1:n_cluster
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZEEEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,REEEE) + SpinOp(:,:,LEEEE) )/2;
           hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEEE) - SpinOp(:,:,LEEEE) )/2i;
+          
         case 1
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZEEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZEEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EREEE) + SpinOp(:,:,ELEEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREEE) - SpinOp(:,:,ELEEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREEE) - SpinOp(:,:,ELEEE) )/2i; 
+          
         case 2
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEZEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEZEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEREE) + SpinOp(:,:,EELEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEREE) - SpinOp(:,:,EELEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEREE) - SpinOp(:,:,EELEE) )/2i; 
+          
         case 3
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEZE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEZE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEERE) + SpinOp(:,:,EEELE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEERE) - SpinOp(:,:,EEELE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEERE) - SpinOp(:,:,EEELE) )/2i; 
+         
         case 4
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEEZ);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEEZ);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEER) + SpinOp(:,:,EEEEL) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEER) - SpinOp(:,:,EEEEL) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEER) - SpinOp(:,:,EEEEL) )/2i; 
           
       end
       
@@ -368,28 +391,33 @@ for icluster = 1:n_cluster
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,ZEEEEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,ZEEEEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,REEEEE) + SpinOp(:,:,LEEEEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEEEE) - SpinOp(:,:,LEEEEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,REEEEE) - SpinOp(:,:,LEEEEE) )/2i; 
+          
         case 1
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EZEEEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EZEEEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EREEEE) + SpinOp(:,:,ELEEEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREEEE) - SpinOp(:,:,ELEEEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EREEEE) - SpinOp(:,:,ELEEEE) )/2i; 
+          
         case 2
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEZEEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEZEEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEREEE) + SpinOp(:,:,EELEEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEREEE) - SpinOp(:,:,EELEEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEREEE) - SpinOp(:,:,EELEEE) )/2i; 
+          
         case 3
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEZEE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEZEE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEREE) + SpinOp(:,:,EEELEE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEREE) - SpinOp(:,:,EEELEE) )/2i;
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEREE) - SpinOp(:,:,EEELEE) )/2i; 
+          
         case 4
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEEZE);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEEZE);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEERE) + SpinOp(:,:,EEEELE) )/2;
-          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEERE) - SpinOp(:,:,EEEELE) )/2i;
-        case 5
+          hyperfine_SzIy = -Hhf(2,3)*ms*(SpinOp(:,:,EEEERE) - SpinOp(:,:,EEEELE) )/2i; 
+          
+        case 5 
           nuclear_Zeeman_Sz = -Hamiltonian(3,3,inucleus,inucleus)*SpinOp(:,:,EEEEEZ);
           hyperfine_SzIz =  -Hhf(3,3)*ms*SpinOp(:,:,EEEEEZ);
           hyperfine_SzIx = -Hhf(1,3)*ms*(SpinOp(:,:,EEEEER) + SpinOp(:,:,EEEEEL) )/2;
@@ -428,21 +456,68 @@ for icluster = 1:n_cluster
         
         nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZZ);
         nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RL)+SpinOp(:,:,LR));
+        if useCD
+          nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                       *(SpinOp(:,:,ZR)+SpinOp(:,:,RZ)) ...
+                     + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                      *(SpinOp(:,:,ZL)+SpinOp(:,:,LZ));
+        end
+        if useEF
+          nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                        *SpinOp(:,:,RR)...
+                      + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                        *SpinOp(:,:,LL);
+        end
         
       case 3
         
         switch pre_operators
-          case 0
-            if post_operators==1
+          case 0 % OOE OR OEO
+            if post_operators==1 % OOE
               nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZZE);
               nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RLE)+SpinOp(:,:,LRE));
-            else
+              
+              if useCD
+                nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2))*(SpinOp(:,:,ZRE)+SpinOp(:,:,RZE));
+                nuclear_CD = nuclear_CD + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))*(SpinOp(:,:,ZLE)+SpinOp(:,:,LZE));
+              end
+              if useEF
+                nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                  *SpinOp(:,:,RRE)...
+                  + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                  *SpinOp(:,:,LLE);
+              end
+              
+            else % OEO
               nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEZ);
               nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REL)+SpinOp(:,:,LER));
+              
+              if useCD
+                nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2))*(SpinOp(:,:,ZER)+SpinOp(:,:,REZ));
+                nuclear_CD = nuclear_CD + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))*(SpinOp(:,:,ZEL)+SpinOp(:,:,LEZ));
+              end
+              if useEF
+                nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                  *SpinOp(:,:,RER)...
+                  + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                  *SpinOp(:,:,LEL);
+              end
             end
-          case 1
+            
+          case 1 % EOO
             nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZZ);
             nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERL)+SpinOp(:,:,ELR));
+            
+            if useCD
+              nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2))*(SpinOp(:,:,EZR)+SpinOp(:,:,ERZ));
+              nuclear_CD = nuclear_CD + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))*(SpinOp(:,:,EZL)+SpinOp(:,:,ELZ));
+            end
+            if useEF
+              nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                *SpinOp(:,:,ERR)...
+                + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                *SpinOp(:,:,ELL);
+            end
             
         end
         
@@ -450,77 +525,299 @@ for icluster = 1:n_cluster
         switch pre_operators
           case 0
             switch post_operators
-              case 0
+              case 0 % OEEO
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEZ);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEL)+SpinOp(:,:,LEER));
-              case 1
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEER)+SpinOp(:,:,REEZ)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZEEL)+SpinOp(:,:,LEEZ));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REER)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LEEL);
+                end
+                
+              case 1 % OEOE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEZE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RELE)+SpinOp(:,:,LERE));
-              case 2
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZERE)+SpinOp(:,:,REZE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZELE)+SpinOp(:,:,LEZE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,RERE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LELE);
+                end
+                
+              case 2 % OOEE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZZEE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RLEE)+SpinOp(:,:,LREE));
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZREE)+SpinOp(:,:,RZEE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZLEE)+SpinOp(:,:,LZEE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,RREE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LLEE);
+                end
+                
             end
+            
           case 1
             switch post_operators
-              case 0
+              case 0 % EOEO
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEZ);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EREL)+SpinOp(:,:,ELER));
-              case 1
+           
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EZER)+SpinOp(:,:,EREZ)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EZEL)+SpinOp(:,:,ELEZ));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ERER)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ELEL);
+                end
+                
+              case 1 % EOOE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZZE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERLE)+SpinOp(:,:,ELRE));
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EZRE)+SpinOp(:,:,ERZE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EZLE)+SpinOp(:,:,ELZE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ERRE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ELLE);
+                end
             end
-          case 2
+            
+          case 2 % EEOO
             nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZZ);
             nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERL)+SpinOp(:,:,EELR));
+            
+            if useCD
+              nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                *(SpinOp(:,:,EEZR)+SpinOp(:,:,EERZ)) ...
+                + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                *(SpinOp(:,:,EZL)+SpinOp(:,:,EELZ));
+            end
+            if useEF
+              nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                *SpinOp(:,:,EERR)...
+                + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                *SpinOp(:,:,EELL);
+            end
         end
         
       case 5
         switch pre_operators
           case 0
             switch post_operators
-              case 0
+              case 0 % OEEEO
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEEZ);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEEL)+SpinOp(:,:,LEEER));
-              case 1
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEEER)+SpinOp(:,:,REEEZ)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZEEEL)+SpinOp(:,:,LEEEZ));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REEER)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LEEEL);
+                end
+                
+              
+              case 1 % OEEOE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEZE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REELE)+SpinOp(:,:,LEERE));
-              case 2
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEERE)+SpinOp(:,:,REEZE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZEELE)+SpinOp(:,:,LEEZE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REERE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LEELE);
+                end
+                
+              case 2 % OEOEE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEZEE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RELEE)+SpinOp(:,:,LEREE));
-              case 3
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEREE)+SpinOp(:,:,REZEE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZELEE)+SpinOp(:,:,LEZEE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REREE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LELEE);
+                end
+                
+                
+              case 3 % OOEEE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZZEEE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RLEEE)+SpinOp(:,:,LREEE));
- 
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZREEE)+SpinOp(:,:,RZEEE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZLEEE)+SpinOp(:,:,LZEEE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,RREEE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LLEEE);
+                end
+                
                 
             end
           case 1
             switch post_operators
-              case 0
+              case 0 % EOEEO
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEEZ);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EREEL)+SpinOp(:,:,ELEER));
-              case 1
+        
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EZEER)+SpinOp(:,:,EREEZ)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EZEEL)+SpinOp(:,:,ELEEZ));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,EREER)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ELEEL);
+                end
+                
+              
+              case 1 % EOEOE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZEZE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERELE)+SpinOp(:,:,ELERE));
-              case 2
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EZERE)+SpinOp(:,:,EREZE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EZELE)+SpinOp(:,:,ELEZE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ERERE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ELELE);
+                end
+                
+              
+              case 2 % EOOEE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,EZZEE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,ERLEE)+SpinOp(:,:,ELREE));
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EZREE)+SpinOp(:,:,ERZEE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EZLEE)+SpinOp(:,:,ELZEE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ERREE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,ELLEE);
+                end
                 
             end
             
           case 2
             switch post_operators
-              case 0
-            nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZEZ);
-            nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEREL)+SpinOp(:,:,EELER));
-              case 1
-            nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZZE);
-            nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERLE)+SpinOp(:,:,EELRE));
+              case 0 % EEOEO
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZEZ);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEREL)+SpinOp(:,:,EELER));
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EEZER)+SpinOp(:,:,EEREZ)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EEZEL)+SpinOp(:,:,EELEZ));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,EERER)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,EELEL);
+                end
+                
+              case 1 % EEOOE
+                nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEZZE);
+                nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EERLE)+SpinOp(:,:,EELRE));
+            
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,EEZRE)+SpinOp(:,:,EERZE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,EEZLE)+SpinOp(:,:,EELZE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,EERRE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,EELLE);
+                end
+                
             end
             
-          case 3
+          case 3 % EEEOO
             
             nuclear_bath = Hdd(3,3)*SpinOp(:,:,EEEZZ);
             nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,EEERL)+SpinOp(:,:,EEELR));
+            
+            if useCD
+              nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                *(SpinOp(:,:,EEEZR)+SpinOp(:,:,EEERZ)) ...
+                + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                *(SpinOp(:,:,EEEZL)+SpinOp(:,:,EEELZ));
+            end
+            if useEF
+              nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                *SpinOp(:,:,EEERR)...
+                + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                *SpinOp(:,:,EEELL);
+            end
             
         end
         
@@ -528,15 +825,57 @@ for icluster = 1:n_cluster
         switch pre_operators
           case 0
             switch post_operators
-              case 0
+              case 0 % OEEEEO
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEEEZ);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEEEL)+SpinOp(:,:,LEEEER));
-              case 1
+                
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEEEER)+SpinOp(:,:,REEEEZ)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZEEEEL)+SpinOp(:,:,LEEEEZ));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REEEER)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LEEEEL);
+                end
+                
+              case 1 % OEEEOE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEEZE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REEELE)+SpinOp(:,:,LEEERE));
-              case 2
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEEERE)+SpinOp(:,:,REEEZE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZEEELE)+SpinOp(:,:,LEEEZE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REEERE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LEEELE);
+                end
+                
+                
+              case 2 % OEEOEE
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEEZEE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,REELEE)+SpinOp(:,:,LEEREE));
+              
+                if useCD
+                  nuclear_CD = 1/2*(Hdd(1,3) - 1i*Hdd(2,2)) ...
+                    *(SpinOp(:,:,ZEEREE)+SpinOp(:,:,REEZEE)) ...
+                    + 1/2*(Hdd(1,3) + 1i*Hdd(2,2))...
+                    *(SpinOp(:,:,ZEELEE)+SpinOp(:,:,LEEZEE));
+                end
+                if useEF
+                  nuclear_EF =  1/2*(Hdd(1,1) - Hdd(1,1) - 1i*Hdd(1,2) - 1i*Hdd(2,1))...
+                    *SpinOp(:,:,REEREE)...
+                    + 1/2*(Hdd(1,1) - Hdd(1,1) + 1i*Hdd(1,2) + 1i*Hdd(2,1))...
+                    *SpinOp(:,:,LEELEE);
+                end
+                
               case 3
                 nuclear_bath = Hdd(3,3)*SpinOp(:,:,ZEZEEE);
                 nuclear_flipflop = 0.25*(Hdd(1,1) + Hdd(2,2))*(SpinOp(:,:,RELEEE)+SpinOp(:,:,LEREEE));
@@ -591,9 +930,10 @@ for icluster = 1:n_cluster
         end
         
     end
+    
     H_out = H_out + nuclear_bath + nuclear_flipflop;
-    
-    
+    if useCD, H_out = H_out + nuclear_CD; end 
+    if useEF, H_out = H_out + nuclear_EF; end
   end
   
   
