@@ -976,35 +976,3 @@ end
 end
 
 
-
-function Iz = spinZ(spin)
-Iz = eye(2*spin+1);
-for ii = 1:(2*spin+1)
-  Iz(ii,ii) = spin+ 1 - ii;
-end
-end
-
-function Iminus = spinLower(spin)
-Iminus = zeros(2*spin+1);
-for ii = 1:(2*spin+1)-1
-  Iminus(ii+1,ii) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
-
-function Iplus = spinRaise(spin)
-Iplus = zeros(2*spin+1);
-for ii = 1:(2*spin+1)-1
-  Iplus(ii,ii+1) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
-
-function Ix = spinX(spin)
-Ix = (spinRaise(spin) + spinLower(spin))/2;
-end
-
-function Iy = spinY(spin)
-Iy = 1i*(-spinRaise(spin) + spinLower(spin))/2;
-end
-
-
-

@@ -1,4 +1,4 @@
-function [SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6]= generateSpinOperators(spin)
+function output = generateSpinOperators(spin)
 
 % enum
 E = 1;  Z = 2; RAISE = 3; LOWER = 4;
@@ -887,36 +887,11 @@ end
 % EOOEEEEE (62-64):  zzEEEEE +-EEEEE -+EEEEE
 % OEOEEEEE (62-64):  zzEEEEE +-EEEEE -+EEEEE
 % OOEEEEEE (62-112):  zzEEEEE +-EEEEE -+EEEEE
-end
 
-% ========================================================================
-% S- matrix
-% ========================================================================
+output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6};
 
-function Sz = spinZ(spin)
-Sz = eye(2*spin+1);
-for ii = 1:(2*spin+1)
-  Sz(ii,ii) = spin+ 1 - ii;
-end
 end
 
 
-% ========================================================================
-% S+ matrix
-% ========================================================================
-function Splus = spinRaise(spin)
-Splus = zeros(2*spin+1);
-for ii = 1:(2*spin+1)-1
-  Splus(ii,ii+1) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
 
-% ========================================================================
-% S- matrix
-% ========================================================================
-function Sminus = spinLower(spin)
-Sminus = zeros(2*spin+1);
-for ii = 1:(2*spin+1)-1
-  Sminus(ii+1,ii) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
+

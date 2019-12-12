@@ -51,31 +51,40 @@ States = zeros(max_basis,Nuclei.number);
 %   end
 % end
 HNQ = Nuclei.Qtensor;
-Spin2Op1 = Nuclei.SpinOperators{2}{1};
-Spin2Op2 = Nuclei.SpinOperators{2}{2};
-Spin2Op3 = Nuclei.SpinOperators{2}{3};
-Spin2Op4 = Nuclei.SpinOperators{2}{4};
-Spin2Op5 = Nuclei.SpinOperators{2}{5};
-Spin2Op6 = Nuclei.SpinOperators{2}{6};
 
-Spin3Op1 = Nuclei.SpinOperators{3}{1};
-Spin3Op2 = Nuclei.SpinOperators{3}{2};
-Spin3Op3 = Nuclei.SpinOperators{3}{3};
-Spin3Op4 = Nuclei.SpinOperators{3}{4};
-Spin3Op5 = Nuclei.SpinOperators{3}{5};
-Spin3Op6 = Nuclei.SpinOperators{3}{6};
+Op = Nuclei.SpinOperators;
+Spin2Op1 = Op{2}{1};
+Spin2Op2 = Op{2}{2};
+Spin2Op3 = Op{2}{3};
+Spin2Op4 = Op{2}{4};
+Spin2Op5 = Op{2}{5};
+Spin2Op6 = Op{2}{6};
 
-Spin4Op1 = Nuclei.SpinOperators{4}{1};
-Spin4Op2 = Nuclei.SpinOperators{4}{2};
-Spin4Op3 = Nuclei.SpinOperators{4}{3};
-Spin4Op4 = Nuclei.SpinOperators{4}{4};
-Spin4Op5 = Nuclei.SpinOperators{4}{5};
-Spin4Op6 = Nuclei.SpinOperators{4}{6};
+Spin3Op1 = Op{3}{1};
+Spin3Op2 = Op{3}{2};
+Spin3Op3 = Op{3}{3};
+Spin3Op4 = Op{3}{4};
+Spin3Op5 = Op{3}{5};
+Spin3Op6 = Op{3}{6};
+
+Spin4Op1 = Op{4}{1};
+Spin4Op2 = Op{4}{2};
+Spin4Op3 = Op{4}{3};
+Spin4Op4 = Op{4}{4};
+Spin4Op5 = Op{4}{5};
+Spin4Op6 = Op{4}{6};
+
+SpinXiXjOps = Nuclei.SpinXiXjOperators;
+SpinXiXjOp_1 = SpinXiXjOps{1};
+SpinXiXjOp_2 = SpinXiXjOps{2};
+SpinXiXjOp_3 = SpinXiXjOps{3};
+SpinXiXjOp_4 = SpinXiXjOps{4};
+SpinXiXjOp_5 = SpinXiXjOps{5};
+SpinXiXjOp_6 = SpinXiXjOps{6};
 
 numberClusters = Nuclei.numberClusters(1:maxClusterSize);
 maxNumberClusters = max(numberClusters(1:maxClusterSize));
 
-[SpinXiXjOp_1,SpinXiXjOp_2,SpinXiXjOp_3,SpinXiXjOp_4,SpinXiXjOp_5,SpinXiXjOp_6]= generateXiXjSpinOperators(1);
 
 % CluserArray(iCluster,:,clusterSize) = nuclear indices.
 ClusterArray = zeros(maxNumberClusters,maxClusterSize,maxClusterSize);
