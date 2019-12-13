@@ -15,11 +15,6 @@ multiplicity = 2*spin+1;
 
 % Initialize Spin multiplicity Cluster size arrays.
 maxSize = min(6,maxClusterSize);
-if maxSize < 1
-  output = {};
-  return;
-end
-
 NumSpinOps = 3/2*((1:maxSize).^2 + (1:maxSize)) +1; 
 SpinOp_1 = zeros(multiplicity,multiplicity,NumSpinOps(1));
 
@@ -29,10 +24,6 @@ SpinOp_1(:,:,Z) = spinZ(spin);
 SpinOp_1(:,:,RAISE) = spinRaise(spin);
 SpinOp_1(:,:,LOWER) = spinLower(spin);
 
-if maxSize < 2
-  output = {SpinOp_1};
-  return;
-end
 %--------------------------------------------------------------------------
 % 2-Clusters: EE EO OE OO
 %--------------------------------------------------------------------------
@@ -86,11 +77,6 @@ SpinOp_2(:,:,LZ) = kron(SpinOp_1(:,:,LOWER),SpinOp_1(:,:,Z));
 
 SpinOp_2(:,:,RR) = kron(SpinOp_1(:,:,RAISE),SpinOp_1(:,:,RAISE));
 SpinOp_2(:,:,LL) = kron(SpinOp_1(:,:,LOWER),SpinOp_1(:,:,LOWER));
-
-if maxSize < 3
-  output = {SpinOp_1,SpinOp_2};
-  return;
-end
 %--------------------------------------------------------------------------
 % 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
 %--------------------------------------------------------------------------
@@ -191,11 +177,6 @@ SpinOp_3(:,:,LEL) = kron(SpinOp_1(:,:,LOWER), SpinOp_2(:,:,EL));
 
 SpinOp_3(:,:,RRE) = kron(SpinOp_2(:,:,RR), SpinOp_1(:,:,E));
 SpinOp_3(:,:,LLE) = kron(SpinOp_2(:,:,LL) ,SpinOp_1(:,:,E));
-
-if maxSize < 4
-  output = {SpinOp_1,SpinOp_2,SpinOp_3};
-  return;
-end
 %--------------------------------------------------------------------------
 % 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
 %--------------------------------------------------------------------------
@@ -367,10 +348,6 @@ SpinOp_4(:,:,LELE) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,LE));
 SpinOp_4(:,:,RREE) = kron(SpinOp_2(:,:,RR), SpinOp_2(:,:,EE));
 SpinOp_4(:,:,LLEE) = kron(SpinOp_2(:,:,LL) ,SpinOp_2(:,:,EE));
 
-if maxSize < 5
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4};
-  return;
-end
 %--------------------------------------------------------------------------
 % 5-Clusters: EEEEE EEEEO EEEOE EEOEE EOEEE OEEEE EEEOO EEOEO EOEEO OEEEO
 % EEOOE EOEOE OEEOE EOOEE OEOEE OOEEE
@@ -542,10 +519,6 @@ for iop =Z:LOWER
 end
 
 
-if maxSize < 6
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5};
-  return;
-end
 %--------------------------------------------------------------------------
 % 6-Clusters: EEEEEE EEEEEO EEEEOE EEEOEE EEOEEE EOEEEE OEEEEE EEEEOO
 % EEEOEO EEOEEO EOEEEO OEEEEO EEEOOE EEOEOE EOEEOE OEEEOE EEOOEE EOEOEE OEEOEE EOOEEE OOEEEE
@@ -844,10 +817,7 @@ end
 
 
 
-if maxSize < 7
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6};
-  return;
-end
+
 %--------------------------------------------------------------------------
 % 7-Clusters: 
 %--------------------------------------------------------------------------
@@ -881,10 +851,6 @@ end
 % OEOEEEE (62-85):  zEzEEEE +E-EEEE -E+EEEE
 % OOEEEEE (62-88):  zzEEEEE +-EEEEE -+EEEEE
 
-if maxSize < 8
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6,SpinOp_7};
-  return;
-end
 %--------------------------------------------------------------------------
 % 8-Clusters: 
 %--------------------------------------------------------------------------

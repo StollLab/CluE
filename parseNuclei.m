@@ -22,14 +22,11 @@ Nuclei.SpinOperators{multiplicity} = 1;
 
 for multiplicity = 2:4
   S = (multiplicity-1)/2;
-  Nuclei.SpinOperators(multiplicity) = generateSpinOperators(S);
+  Nuclei.SpinOperators{multiplicity} = generateSpinOperators(S,maxClusterSize);
 end
-
-multiplicity = 3;
-Nuclei.SpinXiXjOperators(multiplicity) = generateXiXjSpinOperators(1,maxClusterSize);
-
-% ENUM
-E = 1;  Z = 2; RAISE = 3; LOWER = 4;
+ 
+Nuclei.SpinXiXjOperators = generateXiXjSpinOperators(1,maxClusterSize);
+ 
 
 % Copy graphCriterion to Nuclei.
 Nuclei.graphCriterion = Method.graphCriterion;
@@ -373,7 +370,7 @@ for uc = 1:nCells
         eta_ = eta(iNuc);
         e2qQh_ = e2qQh(iNuc);
         Qtensor_Q = e2qQh_/4/I/(2*I-1)*diag([-1+eta_, -1-eta_, 2]);
-        Qtensor_L = R_Q2L*Qtensor_Q*R_2L';
+        Qtensor_L = R_Q2L*Qtensor_Q*R_Q2L';
         
         Nuclei.quadrupole2lab(:,:,iNuc) = R_Q2L;
         Nuclei.Qtensor(:,:,iNuc) = Qtensor_L;

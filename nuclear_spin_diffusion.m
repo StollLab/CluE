@@ -720,14 +720,7 @@ newZaxis = Mol2LabRotation*[0;0;1];
 for inucleus = 1:Nuclei.number
   
   Nuclei.Qtensor(:,:,inucleus) = Mol2LabRotation*Nuclei.Qtensor(:,:,inucleus)*Mol2LabRotation';
-  
-%   if ~isempty(Nuclei.HNQ{inucleus})
-%     Sz = Nuclei.SpinOperators{Nuclei.StateMultiplicity(inucleus)}{1}(:,:,Z);
-%     Sy = -1i/2*(Nuclei.SpinOperators{Nuclei.StateMultiplicity(inucleus)}{1}(:,:,RAISE) - Nuclei.SpinOperators{Nuclei.StateMultiplicity(inucleus)}{1}(:,:,LOWER));
-%     R = getSpinRotationMatrix(newZaxis,Sz,Sy);
-%     Nuclei.HNQ{inucleus} = R*Nuclei.HNQ{inucleus}*R';
-%     Nuclei.HNQ{inucleus} = (Nuclei.HNQ{inucleus}+Nuclei.HNQ{inucleus}')/2;
-%   end
+
 end
 % Rotate the g-matrix.
 if isfield(System,'gFrame')

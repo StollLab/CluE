@@ -16,6 +16,11 @@ System_theory = ...
 [System.full_Sz_Hyperfine,System.fullDipoleTensor,System.nuclear_dipole_A,System.nuclear_dipole_B,System.nuclear_dipole_CD,System.nuclear_dipole_EF];
 %}
 function H_out = assembleHamiltonian_gpu(Hamiltonian,SpinOp,SpinXiXjOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize,MethylID,methyl_number,HNQ,state_multiplicity)
+
+% TEMPORARY: these will become user set toggles.
+useCD = false;
+useEF = false;
+
 switch clusterSize
   case 1
     %--------------------------------------------------------------------------
@@ -202,11 +207,10 @@ switch clusterSize
     
 end
 
-% ENUM
-X_ = 1;  Y_ = 2; Z_ = 3;
-XX_ = 4; XY_ = 5;  XZ_ = 6;
-YX_ = 7; YY_ = 8;  YZ_ = 9;
-ZX_ = 10; ZY_ = 11;  ZZ_ = 12;
+% ENUM for spin-operator indices.
+XX_ = 1;  XY_ = 4;  XZ_ = 7;
+YX_ = 2;  YY_ = 5;  YZ_ = 8;
+ZX_ = 3;  ZY_ = 6;  ZZ_ = 9;
 
 Cluster = sort(unique(Cluster));
 

@@ -42,45 +42,90 @@ state_multiplicity = Nuclei.StateMultiplicity;
 ZeemanStates = Nuclei.ZeemanStates;
 max_basis = max(NumberStates);
 States = zeros(max_basis,Nuclei.number);
-% HNQ = zeros(9,9,2,Nuclei.number);
-% for ii = 1:Nuclei.number
-%   States(1:NumberStates(ii),ii) = Nuclei.State{ii};
-%   if ~isempty(Nuclei.HNQ{ii})
-%     HNQ(1:Nuclei.StateMultiplicity(ii)^2,1:Nuclei.StateMultiplicity(ii)^2, 1,ii ) = kron(Nuclei.HNQ{ii},eye(Nuclei.StateMultiplicity(ii)));
-%     HNQ(1:Nuclei.StateMultiplicity(ii)^2,1:Nuclei.StateMultiplicity(ii)^2, 2, ii) = kron(eye(Nuclei.StateMultiplicity(ii)) , Nuclei.HNQ{ii});
-%   end
-% end
+ 
 HNQ = Nuclei.Qtensor;
 
+% Unpackspin operators.
 Op = Nuclei.SpinOperators;
-Spin2Op1 = Op{2}{1};
-Spin2Op2 = Op{2}{2};
-Spin2Op3 = Op{2}{3};
-Spin2Op4 = Op{2}{4};
-Spin2Op5 = Op{2}{5};
-Spin2Op6 = Op{2}{6};
-
-Spin3Op1 = Op{3}{1};
-Spin3Op2 = Op{3}{2};
-Spin3Op3 = Op{3}{3};
-Spin3Op4 = Op{3}{4};
-Spin3Op5 = Op{3}{5};
-Spin3Op6 = Op{3}{6};
-
-Spin4Op1 = Op{4}{1};
-Spin4Op2 = Op{4}{2};
-Spin4Op3 = Op{4}{3};
-Spin4Op4 = Op{4}{4};
-Spin4Op5 = Op{4}{5};
-Spin4Op6 = Op{4}{6};
-
 SpinXiXjOps = Nuclei.SpinXiXjOperators;
-SpinXiXjOp_1 = SpinXiXjOps{1};
-SpinXiXjOp_2 = SpinXiXjOps{2};
-SpinXiXjOp_3 = SpinXiXjOps{3};
-SpinXiXjOp_4 = SpinXiXjOps{4};
-SpinXiXjOp_5 = SpinXiXjOps{5};
-SpinXiXjOp_6 = SpinXiXjOps{6};
+
+% Set 1-cluster operators.
+if maxClusterSize > 0
+  Spin2Op1 = Op{2}{1};
+  Spin3Op1 = Op{3}{1};
+  Spin4Op1 = Op{4}{1};
+  SpinXiXjOp_1 = SpinXiXjOps{1};
+else
+  Spin2Op1 = [];
+  Spin3Op1 = [];
+  Spin4Op1 = [];
+  SpinXiXjOp_1 = [];
+end
+
+% Set 2-cluster operators.
+if maxClusterSize > 1
+  Spin2Op2 = Op{2}{2};
+  Spin3Op2 = Op{3}{2};
+  Spin4Op2 = Op{4}{2};
+  SpinXiXjOp_2 = SpinXiXjOps{2};
+else
+  Spin2Op2 = [];
+  Spin3Op2 = [];
+  Spin4Op2 = [];
+  SpinXiXjOp_2 =[];
+end
+
+% Set 3-cluster operators.
+if maxClusterSize > 2
+  Spin2Op3 = Op{2}{3};
+  Spin3Op3 = Op{3}{3};
+  Spin4Op3 = Op{4}{3};
+  SpinXiXjOp_3 = SpinXiXjOps{3};
+else
+  Spin2Op3 = [];
+  Spin3Op3 = [];
+  Spin4Op3 = [];
+  SpinXiXjOp_3 =[];
+end
+
+% Set 4-cluster operators.
+if maxClusterSize > 3
+  Spin3Op4 = Op{3}{4};
+  Spin2Op4 = Op{2}{4};
+  Spin4Op4 = Op{4}{4};
+  SpinXiXjOp_4 = SpinXiXjOps{4};
+else
+  Spin3Op4 = [];
+  Spin2Op4 = [];
+  Spin4Op4 = [];
+  SpinXiXjOp_4 =[];
+end
+
+% Set 5-cluster operators.
+if maxClusterSize > 4
+  Spin2Op5 = Op{2}{5};
+  Spin3Op5 = Op{3}{5};
+  Spin4Op5 = Op{4}{5};
+  SpinXiXjOp_5 = SpinXiXjOps{5};
+else
+  Spin2Op5 = [];
+  Spin3Op5 = [];
+  Spin4Op5 = [];
+  SpinXiXjOp_5 =[];
+end
+
+% Set 6-cluster operators.
+if maxClusterSize > 5
+  Spin2Op6 = Op{2}{6};
+  Spin3Op6 = Op{3}{6};
+  Spin4Op6 = Op{4}{6};
+  SpinXiXjOp_6 = SpinXiXjOps{6};
+else
+  Spin2Op6 = [];
+  Spin3Op6 = [];
+  Spin4Op6 = [];
+  SpinXiXjOp_6 =[];
+end
 
 numberClusters = Nuclei.numberClusters(1:maxClusterSize);
 maxNumberClusters = max(numberClusters(1:maxClusterSize));
