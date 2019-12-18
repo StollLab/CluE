@@ -61,8 +61,15 @@ if System.nuclear_quadrupole
     quadrupoleAxis{ii} = quadrupoleAxis{ii}/norm(quadrupoleAxis{ii});
   end
   %Vzz = -1.8*ones(1,Npdb)*0.97175e22;
-  eta = 0.2*ones(1,Npdb);
-  e2qQh = 220e3*ones(1,Npdb); % Hz
+  
+  % Water Quadrupole Values
+  % Edmonds, D. T.; Mackay, A. L. 
+  % The Pure Quadrupole Resonance of the Deuteron in Ice. 
+  % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519. 
+  % https://doi.org/10.1016/0022-2364(75)90008-6.
+  eta = 0.112*ones(1,Npdb);
+  e2qQh = 213.4e3*ones(1,Npdb); % Hz
+  
 end
 Nuclei.quadrupole2lab = zeros(3,3,numberH(2));
 Nuclei.Qtensor = zeros(3,3,numberH(2));

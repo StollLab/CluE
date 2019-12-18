@@ -18,8 +18,8 @@ System_theory = ...
 function H_out = assembleHamiltonian_gpu(Hamiltonian,SpinOp,SpinXiXjOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize,MethylID,methyl_number,HNQ,state_multiplicity)
 
 % TEMPORARY: these will become user set toggles.
-useCD = false;
-useEF = false;
+useCD = true;
+useEF = true;
 
 switch clusterSize
   case 1
@@ -276,6 +276,9 @@ for icluster = 1:n_cluster
       HNQ(1,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,XX_+pre_operators*ZZ_) + HNQ(1,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,XY_+pre_operators*ZZ_) + HNQ(1,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,XZ_+pre_operators*ZZ_) + ...
       HNQ(2,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,YX_+pre_operators*ZZ_) + HNQ(2,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,YY_+pre_operators*ZZ_) + HNQ(2,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,YZ_+pre_operators*ZZ_) + ...
       HNQ(3,1,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZX_+pre_operators*ZZ_) + HNQ(3,2,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZY_+pre_operators*ZZ_) + HNQ(3,3,Cluster(inucleus-1))*SpinXiXjOp(:,:,ZZ_+pre_operators*ZZ_);
+ 
+    % Hermitize.
+    H_nuclear_quadrupole = 1/2*(H_nuclear_quadrupole+H_nuclear_quadrupole');
   else
     H_nuclear_quadrupole = 0;
   end
@@ -431,7 +434,7 @@ for icluster = 1:n_cluster
       
   end
   
-  H_out = H_out + nuclear_Zeeman_Sz + hyperfine_SzIz + 1/2*(H_nuclear_quadrupole+H_nuclear_quadrupole');
+  H_out = H_out + nuclear_Zeeman_Sz + hyperfine_SzIz + H_nuclear_quadrupole;
   if System_full_Sz_Hyperfine
     H_out = H_out + hyperfine_SzIx + hyperfine_SzIy;
   end
@@ -943,40 +946,77 @@ for icluster = 1:n_cluster
   
   
 end
-
-if max(max(abs( H_out - H_out') ) )  >1e-12
-
-  if max(max(abs(nuclear_Zeeman_Sz -nuclear_Zeeman_Sz'))) > 1e-12
-    disp('The Hamiltonian component nuclear_Zeeman_Sz is not Hermitian.')
+threshold = 1e-12;
+[isHerm,nonHermiticity] = isHermitian(H_out,threshold);
+if ~isHerm
+  disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+  disp('Hamiltonian is not Hermitian.')
+  fprintf('Non-Hermiticity = %d Hz.\n',nonHermiticity);
+  disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+  disp('Hermiticity Tests.')
+  
+  if isHermitian(nuclear_Zeeman_Sz,threshold)
+    disp('nuclear_Zeeman_Sz    : pass')
+  else
+    disp('nuclear_Zeeman_Sz    : fail')
+  end
+  if isHermitian(hyperfine_SzIz,threshold)
+    disp('hyperfine_SzIz       : pass')
+  else
+    disp('hyperfine_SzIz       : fail')
   end
   
-  if max(max(abs(hyperfine_SzIz -hyperfine_SzIz'))) > 1e-12
-    disp('The Hamiltonian component hyperfine_SzIz is not Hermitian.')
+  if isHermitian(hyperfine_SzIx,threshold)
+    disp('hyperfine_SzIx       : pass')
+  else
+    disp('hyperfine_SzIx       : fail')
   end
   
-  if max(max(abs(hyperfine_SzIx -hyperfine_SzIx'))) > 1e-12
-    disp('The Hamiltonian component hyperfine_SzIx is not Hermitian.')
+  if isHermitian(hyperfine_SzIy,threshold)
+    disp('hyperfine_SzIy       : pass')
+  else
+    disp('hyperfine_SzIy       : fail')
   end
   
-  if max(max(abs(hyperfine_SzIy -hyperfine_SzIy'))) > 1e-12
-    disp('The Hamiltonian component hyperfine_SzIy is not Hermitian.')
+  if isHermitian(nuclear_bath,threshold)
+    disp('nuclear_bath         : pass')
+  else
+    disp('nuclear_bath         : fail')
   end
   
-  if max(max(abs( nuclear_bath - nuclear_bath' ))) > 1e-12
-    disp('The Hamiltonian component nuclear_bath is not Hermitian.')
+  if isHermitian(nuclear_flipflop,threshold)
+    disp('nuclear_flipflop     : pass')
+  else
+    disp('nuclear_flipflop     : fail')
   end
   
-  if max(max(abs( nuclear_flipflop - nuclear_flipflop' ))) > 1e-12
-    disp('The Hamiltonian component nuclear_flipflop is not Hermitian.')
+  if isHermitian(nuclear_CD,threshold)
+    disp('nuclear_CD           : pass')
+  else
+    disp('nuclear_CD           : fail')
+  end
+  
+  if isHermitian(nuclear_EF,threshold)
+    disp('nuclear_EF           : pass')
+  else
+    disp('nuclear_EF           : fail')
+  end
+  
+  if isHermitian(H_nuclear_quadrupole,threshold)
+    disp('H_nuclear_quadrupole : pass')
+  else
+    disp('H_nuclear_quadrupole : fail')
   end
   
   error('Cluster Hamiltonian is not Hermitian.');
 end
 
-if max(max(abs( H_out - H_out') ) )>1e-12
-  error('Cluster Hamiltonian is not Hermitian.');
 end
 
-end
-
-
+  function [ishermitian,nonHermiticity] = isHermitian(H,threshold)
+    ishermitian = true;
+    nonHermiticity = max(max(abs( H - H') ) );
+    if nonHermiticity>threshold
+      ishermitian = false;
+    end
+  end
