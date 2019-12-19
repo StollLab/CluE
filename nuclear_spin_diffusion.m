@@ -1408,7 +1408,7 @@ while iBundle <= Bundle(iCore,2)
   % Shuffle nuclei.
   shuffled_cluster = shuffle(par_cluster);
     
-  isvalid_1 = validateCluster(shuffled_cluster,Nuclei,Nuclei.graphCriterion);
+  isvalid_1 = validateCluster(shuffled_cluster,Nuclei.ValidPair,Nuclei.graphCriterion);
   
   if ~isvalid_1
     
@@ -1486,7 +1486,7 @@ while iBundle <= Bundle(iCore,2)
       
 %       cluster_ = Reduced_Clusters(jCluster,1:jsize,jsize);
       
-      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)),Nuclei,Nuclei.graphCriterion)
+      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)),Nuclei.ValidPair,Nuclei.graphCriterion)
         Reduced_Clusters{jSize}(jCluster,:) = zeros(size(Reduced_Clusters{jSize}(jCluster,:) ) );
       end
     end
