@@ -236,7 +236,7 @@ for clusterSize = 1:Method_order
   for iCluster = numClusters:-1:1
     Cluster = ClusterArray(iCluster,1:clusterSize,clusterSize); 
    
-    if Cluster(1,1) == 0 || ~validateCluster( Cluster  , Nuclei_ValidPair, graphCriterion, clusterSize)
+    if Cluster(1,1) == 0 || ~validateCluster(Cluster,Nuclei_ValidPair,graphCriterion)
       continue;
     end
     

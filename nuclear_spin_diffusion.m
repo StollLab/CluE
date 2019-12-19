@@ -682,21 +682,6 @@ end
 
 end
 
-% ========================================================================
-% Convert Euler angles to rotation matrix
-% ========================================================================
-
-function R = rotateZYZ(alpha,beta,gamma)
-sa = sin(alpha);
-ca = cos(alpha);
-sb = sin(beta);
-cb = cos(beta);
-sc = sin(gamma);
-cc = cos(gamma);
-R = [ cc*cb*ca - sc*sa,  cc*cb*sa + sc*ca, -cc*sb; ...
-     -sc*cb*ca - cc*sa, -sc*cb*sa + cc*ca,  sc*sb; ...
-         sb*ca,             sb*sa,             cb];
-end
 
 % ========================================================================
 % Calculate signal for one orientation
@@ -1423,7 +1408,7 @@ while iBundle <= Bundle(iCore,2)
   % Shuffle nuclei.
   shuffled_cluster = shuffle(par_cluster);
     
-  isvalid_1 = validateCluster(shuffled_cluster ,Nuclei, iorder);
+  isvalid_1 = validateCluster(shuffled_cluster,Nuclei,Nuclei.graphCriterion);
   
   if ~isvalid_1
     
@@ -1501,7 +1486,7 @@ while iBundle <= Bundle(iCore,2)
       
 %       cluster_ = Reduced_Clusters(jCluster,1:jsize,jsize);
       
-      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)) ,Nuclei, jSize)
+      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)),Nuclei,Nuclei.graphCriterion)
         Reduced_Clusters{jSize}(jCluster,:) = zeros(size(Reduced_Clusters{jSize}(jCluster,:) ) );
       end
     end
@@ -2180,41 +2165,6 @@ end
 
 end
 
-% ========================================================================
-% New Function
-% ========================================================================
-
-% Subet Enumeration via the Banker Method
-function newCluster = getNextCluster(Cluster,numberSpins)
-
-% Initialize the output.
-newCluster = Cluster;
-
-% Determine the size of the cluster.
-clusterSize = length(Cluster);
-
-% Start at final spin.
-for icluster = clusterSize:-1:1
-  
-  % Check if the element can be incremented
-  if Cluster(icluster) < (numberSpins + icluster- clusterSize )
-    
-    % Increment element.
-    newCluster(icluster) = newCluster(icluster) + 1;
-    for jcluster = icluster+1:clusterSize
-      % Reset the elements after the incremented element.
-      newCluster(jcluster) = newCluster(jcluster-1) + 1;
-    end
-    
-    % Return output.
-    return;
-  end
-end
-
-% There is no next cluster; return the empty set.
-newCluster = [];
-
-end
 
 % ========================================================================
 % New Function
@@ -2245,160 +2195,3 @@ for icluster = numberSpins:-1:1
   
 end
 end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-% Find all subsets of a sequential set, {1,2,...n}.
-function Clusters = getClusterSet_old(Cluster)
-
-% Determine cluster size.
-numberSpins = length(Cluster);
-
-% Loop over all proper sub-cluster sizes.
-for icluster = numberSpins:-1:1
-  
-  % Determine number of sub-clusters
-  n_clusters = nchoosek(numberSpins,icluster);
-  
-  % Initialize Clusters
-  Clusters{icluster} = zeros(n_clusters,icluster);
-  
-  % Set the first subset.
-  Clusters{icluster}(1,:) = Cluster(1:icluster);
-  
-  % Set the remaining subsets.
-  for ii = 2:n_clusters
-    Clusters{icluster}(ii,:) = getNextCluster(Clusters{icluster}(ii-1,:),numberSpins);
-  end
-  
-end
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function isvalid = validCluster(Cluster,Nuclei,r2,clusterSize,r2_min)
-
-% bool valid for each spin
-isvalid = true;
-valid = zeros(1,clusterSize);
-valid(1) = true;
-% spin coordinates
-R = Nuclei.Coordinates(Cluster,:);
-
-% Loop over all spins.
-for ii =1:clusterSize-1
-  
-  % Skip if spin has been validated.
-  if valid(ii)
-    %     continue;
-  end
-  
-  % Check ii spin against all otherspins.
-  for jj = (ii+1):clusterSize
-    if valid(jj)
-      continue;
-    end
-    % Calculate spin separation.
-    r2_ =  (R(ii,1) - R(jj,1))^2 + (R(ii,2) - R(jj,2))^2 + (R(ii,3) - R(jj,3))^2 ;
-    if r2_<r2_min
-      isvalid = false;
-      return;
-    end
-    % Check separationa against neighbot cutoff.
-    if r2_ <= r2
-      %       valid(ii) = true;
-      valid(jj) = true;
-      %       break;
-    end
-    
-  end
-  
-end
-
-if ~all( valid )
-  isvalid = false;
-  return
-end
-
-
-end
-
-
-% ========================================================================
-% New Function
-% ========================================================================
-function isvalid = validateCluster(Cluster,Nuclei,clusterSize)
-
-% bool valid for each spin
-
-Adjacency = Nuclei.ValidPair(Cluster,Cluster);
-Degree = diag( Adjacency*ones(clusterSize,1) );
-
-Laplacian = Degree - Adjacency;
-
-if strcmp(Nuclei.graphCriterion,'complete')
-  % Check if the cluster forms a complete graph.
-  
-  % Determine the size of the cluster.
-  clusterSize = length(Cluster);
-  if min(diag(Laplacian)) == clusterSize-1
-    isvalid = true;
-  else
-    isvalid = false;
-  end
-  return;
-end
-
-% Check if the cluster forms a connected graph.
-
-[~,eigenvalues] = eig(Laplacian);
-eigenvalues = diag(eigenvalues);
-
-number_of_zero_eigenvalues = sum(abs(eigenvalues) < 1e-12);
-
-if abs(number_of_zero_eigenvalues-1) < 1e-12
-  isvalid = true;
-elseif number_of_zero_eigenvalues > 1
-  isvalid = false;
-else
-  error('Laplacian matrix has no zero eigenvalues.');  
-end
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function isvalid= validateCluster_full_connected(Cluster,Nuclei,r0,clusterSize,r0_min)
-
-% bool valid for each spin
-
-deltaR = Nuclei.DistanceMatrix(Cluster,Cluster);
-if max(max(deltaR)) > r0
-  isvalid = false;
-  return;
-end
-
-if min(min(deltaR + r0*eye(clusterSize))) < r0_min
-  isvalid = false;
-  return;
-end
-
-if ~all(Nuclei.valid(Cluster))
-  isvalid = false;
-  return;
-end
-
-isvalid = true;
-
-end
-
-
-
-
-

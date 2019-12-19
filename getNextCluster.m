@@ -2,7 +2,7 @@
 % New Function
 % ========================================================================
 
-% Subet Enumeration via the Banker Method
+% Subset Enumeration via the Banker Method
 function newCluster = getNextCluster(Cluster,numberSpins)
 
 % Initialize the output.

@@ -66,7 +66,7 @@ while iBundle <= Bundle(iCore,2)
   shuffled_cluster = shuffle(par_cluster);
   
   % check cluster validity  
-  isvalid_1 = validateCluster(shuffled_cluster ,Nuclei_ValidPair,graphCriterion, iorder);
+  isvalid_1 = validateCluster(shuffled_cluster,Nuclei_ValidPair,graphCriterion);
   
   if ~isvalid_1
     
@@ -125,7 +125,7 @@ while iBundle <= Bundle(iCore,2)
     for jCluster = 1:maxPossibleNumberSubClusters(iorder,jsize)
       
       cluster_ = Reduced_Clusters(jCluster,1:jsize,jsize);
-      zero_cluster = cluster_(1)==0 || ~validateCluster( cluster_ , Nuclei_ValidPair, graphCriterion, jsize);
+      zero_cluster = cluster_(1)==0 || ~validateCluster(cluster_ ,Nuclei_ValidPair,graphCriterion);
       
       if zero_cluster
         
