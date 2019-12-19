@@ -43,7 +43,7 @@ ZeemanStates = Nuclei.ZeemanStates;
 max_basis = max(NumberStates);
 States = zeros(max_basis,Nuclei.number);
  
-HNQ = Nuclei.Qtensor;
+Qtensors = Nuclei.Qtensor;
 
 % Unpackspin operators.
 Op = Nuclei.SpinOperators;
@@ -241,7 +241,7 @@ for clusterSize = 1:Method_order
     end
     
     thisClusterSize = clusterSize + 2*sum(IsMethyl(Cluster));
-    ThisCluster = zeros(1,thisClusterSize);
+    thisCluster = zeros(1,thisClusterSize);
     thisIndex = 0;
     MethylID = zeros(1,thisClusterSize);
     methyl_number = 0;
@@ -253,13 +253,13 @@ for clusterSize = 1:Method_order
         methyl_number = methyl_number + 1;
         Methyl_gA(methyl_number) = Nuclei_Abundance(Cluster(ii));
         MethylID(thisIndex:thisIndex+2) = methyl_number;
-        ThisCluster(thisIndex) = Cluster(ii) + 1;
+        thisCluster(thisIndex) = Cluster(ii) + 1;
         thisIndex = thisIndex + 1;
-        ThisCluster(thisIndex) = Cluster(ii) + 2;
+        thisCluster(thisIndex) = Cluster(ii) + 2;
         thisIndex = thisIndex + 1;
-        ThisCluster(thisIndex) = Cluster(ii) + 3;
+        thisCluster(thisIndex) = Cluster(ii) + 3;
       else
-        ThisCluster(thisIndex) = Cluster(ii);
+        thisCluster(thisIndex) = Cluster(ii);
       end
       
     end
@@ -368,12 +368,12 @@ for clusterSize = 1:Method_order
          
      end
      
-    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,ThisCluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID);
+    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID);
     
-    ms = -1/2;
-    Hbeta = assembleHamiltonian_gpu(Hamiltonian,SpinOp,SpinXiXjOp, ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number, HNQ,state_multiplicity);
-    ms= 1/2;
-    Halpha = assembleHamiltonian_gpu(Hamiltonian,SpinOp, SpinXiXjOp,ThisCluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,thisClusterSize,MethylID,methyl_number, HNQ,state_multiplicity);
+    [Halpha,Hbeta] = ...
+      assembleHamiltonian_gpu(tensors,SpinOp,SpinXiXjOp,thisCluster,...
+      System_full_Sz_Hyperfine,zeroIndex,thisClusterSize,...
+      methyl_number,Qtensors,state_multiplicity);
   
     % get density matrix
     DensityMatrix0 = getDensityMatrix(ZeemanStates,NumberStates,Cluster);

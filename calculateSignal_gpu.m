@@ -157,12 +157,10 @@ for clusterSize = 1:Method_order
          
      end
      
-    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, useHamiltonian);
+    [tensors,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, useHamiltonian);
     
-    ms = -1/2;
-    Hb = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
-    ms= 1/2;
-    Ha = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
+    [Ha,Hb] = assembleHamiltonian_gpu(tensors,SpinOp,{},Cluster,NumberStates,...
+      System_full_Sz_Hyperfine,zeroIndex,clusterSize);
   
     % get density matrix
     DensityMatrix = getDensityMatrix(ZeemanStates,NumberStates,Cluster);

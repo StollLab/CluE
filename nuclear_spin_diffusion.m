@@ -704,36 +704,31 @@ end
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics] = ...
   calculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,Gamma,verbose,OutputData,Progress)
 
-% ENUM
-E = 1;  Z = 2; RAISE = 3; LOWER = 4;
-
-% assign temporary value to AuxiliarySignal
+% Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
 
-% get rotation matrix
-Mol2LabRotation = rotateZYZ(Alpha,Beta,Gamma);
-% Rotate the PDB defined frame to lab frame rotation via the Euler angle defined earlier.
-Nuclei.Coordinates = Nuclei.Coordinates*Mol2LabRotation';
+% Get rotation matrix from PDB frame to lab frame, via Euler angles
+R_pdb2lab = rotateZYZ(Alpha,Beta,Gamma);
 
-% Rotate nuclear quadrupole Hamiltonians.
-newZaxis = Mol2LabRotation*[0;0;1];
-for inucleus = 1:Nuclei.number
-  
-  Nuclei.Qtensor(:,:,inucleus) = Mol2LabRotation*Nuclei.Qtensor(:,:,inucleus)*Mol2LabRotation';
+% Rotate nuclear coordinates.
+Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 
+% Rotate nuclear quadrupole tensors.
+for inucleus = 1:Nuclei.number  
+  Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
 end
+
 % Rotate the g-matrix.
 if isfield(System,'gFrame')
   % Get rotation matrix.
   g2MolRotation = rotateZYZ(-System.gFrame(1),-System.gFrame(2),-System.gFrame(3));
   
-  % Perform rotaion to molecular frame.
+  % Rotate to molecular frame.
   System.gMatrix = g2MolRotation*System.gMatrix_gFrame*g2MolRotation';
-  
 end
 
 % Rotate the g-matrix to the lab frame.
-System.gMatrix = Mol2LabRotation*System.gMatrix_gFrame*Mol2LabRotation';
+System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 
 % Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
@@ -742,7 +737,7 @@ if Method.precalculateHamiltonian
   if strcmp(Method.HamiltonianType,'pairwise')
     
     % Generate Cartesian spin-spin coupling Hamiltonian.
-    Hamiltonian_pairwise = pairwiseHamiltonian(System,Nuclei,[1:Nuclei.number]);
+    Hamiltonian_pairwise = pairwiseHamiltonian(System,Nuclei,1:Nuclei.number);
     
   else
     

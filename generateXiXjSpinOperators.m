@@ -19,7 +19,8 @@ Iop{1} = spinX(S);
 Iop{2} = spinY(S);
 Iop{3} = spinZ(S);
 
-% Form all 9 IiIj operators.
+% Form all 9 IiIj operators, in the order XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ
+IiIj = cell(3,3);
 for i = 1:3
   for j = 1:3
     IiIj{i,j} = Iop{i}*Iop{j};
