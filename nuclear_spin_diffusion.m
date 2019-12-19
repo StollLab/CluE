@@ -2092,6 +2092,12 @@ end
 if ~isfield(System,'nuclear_quadrupole')
   System.nuclear_quadrupole = true;
 end
+if ~isfield(System,'nuclear_quadrupole_scale_e2qQh')
+  System.nuclear_quadrupole_scale_e2qQh = 1;
+end
+if ~isfield(System,'nuclear_quadrupole_scale_eta')
+  System.nuclear_quadrupole_scale_eta = 1;
+end
 
 if ~isfield(System,'useHamiltonian')
 System.useHamiltonian = [System.electron_Zeeman,...

@@ -949,7 +949,7 @@ for icluster = 1:nCluster
 end
 
 % Calculate electron Zeeman Hamiltonian
-eZeeman = ms*tensors(:,:,1,1); % Hz
+eZeeman = tensors(:,:,1,1); % Hz
 HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
 
 % Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
@@ -964,61 +964,72 @@ checkHermitianity;
     if ~isHerm
       disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
       disp('Hamiltonian is not Hermitian.')
-      fprintf('Non-Hermiticity = %d Hz.\n',nonHermiticity);
+      fprintf('Normalized non-Hermiticity = %d.\n',nonHermiticity);
       disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
       disp('Hermiticity Tests.')
       
-      if isHermitian(H_nuclear_Zeeman_Iz,threshold)
-        disp('nuclear_Zeeman_Sz    : pass')
+      if isHermitian(HEZ,threshold)
+        disp('H_electron_Zeeman      : pass')
       else
-        disp('nuclear_Zeeman_Sz    : fail')
+        disp('H_electron_Zeeman      : fail')
+      end
+      if isHermitian(Hhf,threshold)
+        disp('H_Hyperfine            : pass')
+      else
+        disp('H_Hyperfine            : fail')
+      end
+      
+      if isHermitian(Hnuc,threshold)
+        disp('H_Nuclear              : pass')
+      else
+        disp('H_Nuclear              : fail')
       end
       if isHermitian(H_hyperfine_SzIz,threshold)
-        disp('hyperfine_SzIz       : pass')
+        disp('H_hyperfine_SzIz       : pass')
       else
-        disp('hyperfine_SzIz       : fail')
+        disp('H_hyperfine_SzIz       : fail')
       end
       
       if isHermitian(H_hyperfine_SzIx,threshold)
-        disp('hyperfine_SzIx       : pass')
+        disp('H_hyperfine_SzIx       : pass')
       else
-        disp('hyperfine_SzIx       : fail')
+        disp('H_hyperfine_SzIx       : fail')
       end
       
       if isHermitian(H_hyperfine_SzIy,threshold)
-        disp('hyperfine_SzIy       : pass')
+        disp('H_hyperfine_SzIy       : pass')
       else
-        disp('hyperfine_SzIy       : fail')
+        disp('H_hyperfine_SzIy       : fail')
       end
       
       if isHermitian(Hnuc_zz,threshold)
-        disp('nuclear_bath         : pass')
+        disp('Hnuc_zz                : pass')
       else
-        disp('nuclear_bath         : fail')
+        disp('Hnuc_zz                : fail')
       end
       
       if isHermitian(Hnuc_flipflop,threshold)
-        disp('nuclear_flipflop     : pass')
+        disp('H_nuclear_flipflop     : pass')
       else
-        disp('nuclear_flipflop     : fail')
+        disp('H_nuclear_flipflop     : fail')
       end
       
       if isHermitian(Hnuc_CD,threshold)
-        disp('nuclear_CD           : pass')
+        disp('H_nuclear_CD           : pass')
       else
-        disp('nuclear_CD           : fail')
+        disp('H_nuclear_CD           : fail')
       end
       
       if isHermitian(Hnuc_EF,threshold)
-        disp('nuclear_EF           : pass')
+        disp('H_nuclear_EF           : pass')
       else
-        disp('nuclear_EF           : fail')
+        disp('H_nuclear_EF           : fail')
       end
       
       if isHermitian(H_nuclear_quadrupole,threshold)
-        disp('H_nuclear_quadrupole : pass')
+        disp('H_nuclear_quadrupole   : pass')
       else
-        disp('H_nuclear_quadrupole : fail')
+        disp('H_nuclear_quadrupole   : fail')
       end
       
       error('Cluster Hamiltonian is not Hermitian.');
@@ -1029,7 +1040,7 @@ end
 
 function [ishermitian,nonHermiticity] = isHermitian(H,threshold)
 ishermitian = true;
-nonHermiticity = max(max(abs( H - H') ) );
+nonHermiticity = max(max(abs( H - H') ) )/norm(H);
 if nonHermiticity>threshold
   ishermitian = false;
 end

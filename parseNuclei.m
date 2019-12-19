@@ -52,16 +52,7 @@ end
 
 % Get nuclear quadrupole parameters.
 if System.nuclear_quadrupole
-  
-  % TEMPORARY VALUES FOR TESTING
-  quadrupoleMoment = 0.00286*ones(1,Npdb)*System.barn;
-  quadrupoleAxis = cell(1,Npdb);
-  for ii =1:Npdb
-    quadrupoleAxis{ii} = rand(3,1);
-    quadrupoleAxis{ii} = quadrupoleAxis{ii}/norm(quadrupoleAxis{ii});
-  end
-  %Vzz = -1.8*ones(1,Npdb)*0.97175e22;
-  
+    
   % Water Quadrupole Values
   % Edmonds, D. T.; Mackay, A. L. 
   % The Pure Quadrupole Resonance of the Deuteron in Ice. 
@@ -70,6 +61,12 @@ if System.nuclear_quadrupole
   eta = 0.112*ones(1,Npdb);
   e2qQh = 213.4e3*ones(1,Npdb); % Hz
   
+  if System.nuclear_quadrupole_scale_e2qQh ~= 1
+    e2qQh = e2qQh.*System.nuclear_quadrupole_scale_e2qQh;
+  end
+  if System.nuclear_quadrupole_scale_eta ~= 1
+    eta = eta.*System.nuclear_quadrupole_scale_eta;
+  end
 end
 Nuclei.quadrupole2lab = zeros(3,3,numberH(2));
 Nuclei.Qtensor = zeros(3,3,numberH(2));
