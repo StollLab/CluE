@@ -253,7 +253,7 @@ for iSpin = 1:nCluster
   % One Nucleus Spin Hamiltonian
   %------------------------------------------------------------------------
   % Calculate nuclear quadrupole Hamiltonian
-  idx = Cluster(inucleus-1);
+  idx = Cluster(iSpin);
   if useNQ && state_multiplicity(idx) > 2
     Q_ = Qtensors(:,:,idx);
     off = (iSpin-1)*9;
@@ -275,46 +275,7 @@ for iSpin = 1:nCluster
   end
   
   % Calculate nuclear Zeeman and hyperfine Hamiltonians
-  switch clusterSize
-    case 1
-      zrl = [Z R L];
-    case 2
-      switch iSpin
-        case 1, zrl = [ZE RE LE];
-        case 2, zrl = [EZ ER EL];
-      end
-    case 3
-      switch iSpin
-        case 1, zrl = [ZEE REE LEE];          
-        case 2, zrl = [EZE ERE ELE];          
-        case 3, zrl = [EEZ EER EEL];          
-      end
-    case 4
-      switch iSpin
-        case 1, zrl = [ZEEE REEE LEEE];          
-        case 2, zrl = [EZEE EREE ELEE];          
-        case 3, zrl = [EEZE EERE EELE];          
-        case 4, zrl = [EEEZ EEER EEEL];          
-      end
-    case 5
-      switch iSpin
-        case 1, zrl = [ZEEEE REEEE LEEEE];
-        case 2, zrl = [EZEEE EREEE ELEEE];
-        case 3, zrl = [EEZEE EEREE EELEE];
-        case 4, zrl = [EEEZE EEERE EEELE];          
-        case 5, zrl = [EEEEZ EEEER EEEEL];          
-      end
-    case 6
-      switch iSpin
-        case 1, zrl = [ZEEEEE REEEEE LEEEEE];          
-        case 2, zrl = [EZEEEE EREEEE ELEEEE];
-        case 3, zrl = [EEZEEE EEREEE EELEEE];
-        case 4, zrl = [EEEZEE EEEREE EEELEE];
-        case 5, zrl = [EEEEZE EEEERE EEEELE];
-        case 6, zrl = [EEEEEZ EEEEER EEEEEL];
-      end      
-  end
-  z = zrl(1); r = zrl(2); l = zrl(3);
+  [z,r,l] = spinopidx(clusterSize,iSpin);
   Iz = SpinOp(:,:,z);
   Ix = (SpinOp(:,:,r) + SpinOp(:,:,l) )/2;
   Iy = (SpinOp(:,:,r) - SpinOp(:,:,l) )/2i;
@@ -357,13 +318,144 @@ for iSpin = 1:nCluster
     
     jnucleus = jnucleus + 1;
     % number of identity matrices following the jth nucleus
-    post_operators = clusterSize - jSpin;
     % get H_ij
     dd = tensors(:,:,inucleus,jnucleus) + tensors(:,:,jnucleus,inucleus);
     
+    [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin);
+    
+    IzJz = SpinOp(:,:,zz);
+    IrJl = SpinOp(:,:,rl);
+    IlJr = SpinOp(:,:,lr);
+    
+    IzJr = SpinOp(:,:,zr);
+    IrJz = SpinOp(:,:,rz);
+    
+    IzJl = SpinOp(:,:,zl);
+    IlJz = SpinOp(:,:,lz);
+    
+    IrJr = SpinOp(:,:,rr);
+    IlJl = SpinOp(:,:,ll);
+    if useNucA
+      Hnuc_zz = dd(3,3)*IzJz;
+    else
+      Hnuc_zz = 0;
+    end
+    
+    if useNucB
+      Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(IrJl+IlJr);
+    else
+      Hnuc_flipflop = 0;
+    end
+    
+    if useNucCD
+      Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2))*(IzJr+IrJz) ...
+        + 1/2*(dd(1,3) + 1i*dd(2,2))*(IzJl+IlJz);
+    else
+      Hnuc_CD = 0;
+    end
+    
+    if useNucEF
+      Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))*IrJr...
+        + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))*IlJl;
+    else
+      Hnuc_EF = 0;
+    end
+    
+    Hnuc = Hnuc + Hnuc_zz + Hnuc_flipflop + Hnuc_CD+ Hnuc_EF; 
+  end
+  
+end
+
+% Calculate electron Zeeman Hamiltonian
+if useEZ
+  eZeeman = tensors(:,:,1,1); % Hz
+  HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
+else
+  HEZ = 0;
+end
+
+% Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
+H_alpha = +1/2*(HEZ + Hhf) + Hnuc;
+H_beta = -1/2*(HEZ + Hhf) + Hnuc;
+
+checkHermitianity;
+
+  function checkHermitianity()
+    threshold = 1e-12;
+    [isHerm,nonHermiticity] = isHermitian(H_alpha,threshold);
+    if ~isHerm
+      disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+      disp('H_alpha Hamiltonian is not Hermitian.')
+      fprintf('Normalized non-Hermiticity = %d.\n',nonHermiticity);
+      disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+      disp('Hermiticity tests:')
+      
+      Hops = {HEZ,Hhf,Hnuc,H_nuclear_Zeeman_Iz,H_hyperfine_SzIz,H_hyperfine_SzIx,H_hyperfine_SzIy,...
+        Hnuc_zz,Hnuc_flipflop,Hnuc_CD,Hnuc_EF,H_nuclear_quadrupole};
+      Hopsnames = {'HEZ','Hhf','Hnuc','H_nuclear_Zeeman_Iz','H_hyperfine_SzIz','H_hyperfine_SzIx','H_hyperfine_SzIy',...
+        'Hnuc_zz','Hnuc_flipflop','Hnuc_CD','Hnuc_EF','H_nuclear_quadrupole'};
+      passfail = {'fail','pass'};
+      for k = 1:numel(Hops)
+        isHerm(k) = isHermitian(Hops{k},threshold);
+        fprintf('%-23s: %s\n',Hopsnames{k},passfail{isHerm(k)+1});
+      end
+      error('Cluster Hamiltonian is not Hermitian.');
+    end
+  end
+
+  function [z,r,l] = spinopidx(clusterSize,iSpin)
+    
+    switch clusterSize
+      case 1
+        zrl = [Z R L];
+      case 2
+        switch iSpin
+          case 1, zrl = [ZE RE LE];
+          case 2, zrl = [EZ ER EL];
+        end
+      case 3
+        switch iSpin
+          case 1, zrl = [ZEE REE LEE];
+          case 2, zrl = [EZE ERE ELE];
+          case 3, zrl = [EEZ EER EEL];
+        end
+      case 4
+        switch iSpin
+          case 1, zrl = [ZEEE REEE LEEE];
+          case 2, zrl = [EZEE EREE ELEE];
+          case 3, zrl = [EEZE EERE EELE];
+          case 4, zrl = [EEEZ EEER EEEL];
+        end
+      case 5
+        switch iSpin
+          case 1, zrl = [ZEEEE REEEE LEEEE];
+          case 2, zrl = [EZEEE EREEE ELEEE];
+          case 3, zrl = [EEZEE EEREE EELEE];
+          case 4, zrl = [EEEZE EEERE EEELE];
+          case 5, zrl = [EEEEZ EEEER EEEEL];
+        end
+      case 6
+        switch iSpin
+          case 1, zrl = [ZEEEEE REEEEE LEEEEE];
+          case 2, zrl = [EZEEEE EREEEE ELEEEE];
+          case 3, zrl = [EEZEEE EEREEE EELEEE];
+          case 4, zrl = [EEEZEE EEEREE EEELEE];
+          case 5, zrl = [EEEEZE EEEERE EEEELE];
+          case 6, zrl = [EEEEEZ EEEEER EEEEEL];
+        end
+    end
+    
+    z = zrl(1);
+    r = zrl(2);
+    l = zrl(3);
+  end
+
+  function [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin)
     switch clusterSize
   
-      case 2, IJ = [ZZ RL LR ZR ZL RZ LZ RR LL];
+      case 2
+        
+        IJ = [ZZ RL LR ZR ZL RZ LZ RR LL];
         
       case 3
         switch iSpin
@@ -445,93 +537,13 @@ for iSpin = 1:nCluster
           case 5, IJ = [EEEEZZ EEEERL EEEELR EEEEZR EEEEZL EEEERZ EEEELZ EEEERR EEEELL]; % EEEEOO
         end        
     end
-    
-  %   1  2  3  4  5  6  7  8  9 
-  % [ZZ RL LR ZR ZL RZ LZ RR LL]
+    %   1  2  3  4  5  6  7  8  9
+    % [ZZ RL LR ZR ZL RZ LZ RR LL]
     zz = IJ(1);
     rl = IJ(2); lr = IJ(3);
-    zr = IJ(4); zl = IJ(5); 
+    zr = IJ(4); zl = IJ(5);
     rz = IJ(6); lz = IJ(7);
     rr = IJ(8); ll = IJ(9);
-    
-    IzJz = SpinOp(:,:,zz);
-    IrJl = SpinOp(:,:,rl);
-    IlJr = SpinOp(:,:,lr);
-    
-    IzJr = SpinOp(:,:,zr);
-    IrJz = SpinOp(:,:,rz);
-    
-    IzJl = SpinOp(:,:,zl);
-    IlJz = SpinOp(:,:,lz);
-    
-    IrJr= SpinOp(:,:,rr);
-    IlJl = SpinOp(:,:,ll);
-    if useNucA
-      Hnuc_zz = dd(3,3)*IzJz;
-    else
-      Hnuc_zz = 0;
-    end
-    
-    if useNucB
-      Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(IrJl+IlJr);
-    else
-      Hnuc_flipflop = 0;
-    end
-    
-    if useNucCD
-      Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2))*(IzJr+IrJz) ...
-        + 1/2*(dd(1,3) + 1i*dd(2,2))*(IzJl+IlJz);
-    else
-      Hnuc_CD = 0;
-    end
-    
-    if useNucEF
-      Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))*IrJr...
-        + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))*IlJl;
-    else
-      Hnuc_EF = 0;
-    end
-    
-    Hnuc = Hnuc + Hnuc_zz + Hnuc_flipflop + Hnuc_CD+ Hnuc_EF; 
-  end
-  
-end
-
-% Calculate electron Zeeman Hamiltonian
-if useEZ
-  eZeeman = tensors(:,:,1,1); % Hz
-  HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
-else
-  HEZ = 0;
-end
-
-% Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
-H_alpha = +1/2*(HEZ + Hhf) + Hnuc;
-H_beta = -1/2*(HEZ + Hhf) + Hnuc;
-
-checkHermitianity;
-
-  function checkHermitianity()
-    threshold = 1e-12;
-    [isHerm,nonHermiticity] = isHermitian(H_alpha,threshold);
-    if ~isHerm
-      disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-      disp('H_alpha Hamiltonian is not Hermitian.')
-      fprintf('Normalized non-Hermiticity = %d.\n',nonHermiticity);
-      disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-      disp('Hermiticity tests:')
-      
-      Hops = {HEZ,Hhf,Hnuc,H_nuclear_Zeeman_Iz,H_hyperfine_SzIz,H_hyperfine_SzIx,H_hyperfine_SzIy,...
-        Hnuc_zz,Hnuc_flipflop,Hnuc_CD,Hnuc_EF,H_nuclear_quadrupole};
-      Hopsnames = {'HEZ','Hhf','Hnuc','H_nuclear_Zeeman_Iz','H_hyperfine_SzIz','H_hyperfine_SzIx','H_hyperfine_SzIy',...
-        'Hnuc_zz','Hnuc_flipflop','Hnuc_CD','Hnuc_EF','H_nuclear_quadrupole'};
-      passfail = {'fail','pass'};
-      for k = 1:numel(Hops)
-        isHerm(k) = isHermitian(Hops{k},threshold);
-        fprintf('%-23s: %s\n',Hopsnames{k},passfail{isHerm(k)+1});
-      end
-      error('Cluster Hamiltonian is not Hermitian.');
-    end
   end
 
 end
@@ -541,3 +553,4 @@ mma = @(A)max(max(abs(A)));
 nonHermiticity = mma(H-H')/mma(H);
 ishermitian = nonHermiticity<=threshold;
 end
+
