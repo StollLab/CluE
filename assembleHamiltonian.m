@@ -1,17 +1,16 @@
 function H_out = assembleHamiltonian(H_in,Cluster,System, eState,Nuclei,zeroIndex,clusterSize)
 
-
-  Cluster0 = Cluster;
-  for ispin = Cluster0
-    if strcmp('CH3', Nuclei.Type{ispin})
-      clusterSize = clusterSize +2;
-      %       Cluster = [Cluster, Nuclei.Auxiliary_ID(ispin,:)];
-      Cluster = [Cluster, [ispin+1,ispin+2,ispin+3]];
-      Cluster(Cluster==ispin)=[];
-    end
+Cluster0 = Cluster;
+for ispin = Cluster0
+  if strcmp('CH3', Nuclei.Type{ispin})
+    clusterSize = clusterSize +2;
+    %       Cluster = [Cluster, Nuclei.Auxiliary_ID(ispin,:)];
+    Cluster = [Cluster, [ispin+1,ispin+2,ispin+3]];
+    Cluster(Cluster==ispin)=[];
   end
+end
 
-  Cluster = sort(unique(Cluster));
+Cluster = sort(unique(Cluster));
 
 if abs(double(zeroIndex) + 1 -double(Cluster(1)))>=1
   error('Cluster reference failure.');
@@ -220,17 +219,17 @@ for icluster = 1:n_cluster
       matrix = kron(eye(pre_dim), spinRaise(Nuclei.Spin(ispin)) );
       matrix = kron(matrix, eye(mid_dim));
       matrix = kron(matrix, spinZ(Nuclei.Spin(jspin)) );
-      matrix = kron(matrix, eye(post_dim));      
+      matrix = kron(matrix, eye(post_dim));
       matrix_ = kron(eye(pre_dim), spinZ(Nuclei.Spin(ispin)) );
       matrix_ = kron(matrix_, eye(mid_dim));
       matrix_ = kron(matrix_, spinRaise(Nuclei.Spin(jspin)) );
-      matrix_ = kron(matrix_, eye(post_dim));      
+      matrix_ = kron(matrix_, eye(post_dim));
       
       matrix = 1/2*(K(1,3) - 1i*K(2,3))*(matrix + matrix_);
       H_out = H_out + matrix + matrix';
       
     end
-
+    
     if System.nuclear_dipole_EF
       %clear matrix;
       matrix = kron(eye(pre_dim), spinRaise(Nuclei.Spin(ispin)) );
@@ -240,7 +239,7 @@ for icluster = 1:n_cluster
       
       matrix  = 1/4*(K(1,1)  - K(2,2) - 1i*K(1,2) - 1i*K(2,1))*matrix;
       H_out = H_out + matrix + matrix';
-    end 
+    end
     
   end
 end
@@ -249,18 +248,18 @@ if max(max(abs( H_out - H_out') ) )>1e-12
 end
 
 
-% Find all methyls groups. 
+% Find all methyls groups.
 selectionRule = eye(size(H_out));
- for ispin = Cluster0
-    if strcmp('CH3', Nuclei.Type{ispin})
-      Methyl_Cluster = [ispin + 1,ispin + 2,ispin + 3];
-      pre_dim = prod(Nuclei.NumberStates(Cluster(Cluster<ispin)));
-      post_dim = prod(Nuclei.NumberStates(Cluster(Cluster>ispin+3)));
-      H_methyl = assembleHamiltonian(H_in,Methyl_Cluster,System, eState,Nuclei,ispin,3);
-      H_methyl = kron(eye(pre_dim),kron(H_methyl,eye(post_dim)));
-      H_out = H_out -H_methyl + H_methyl.*selectionRule;
-    end
- end
+for ispin = Cluster0
+  if strcmp('CH3', Nuclei.Type{ispin})
+    Methyl_Cluster = [ispin + 1,ispin + 2,ispin + 3];
+    pre_dim = prod(Nuclei.NumberStates(Cluster(Cluster<ispin)));
+    post_dim = prod(Nuclei.NumberStates(Cluster(Cluster>ispin+3)));
+    H_methyl = assembleHamiltonian(H_in,Methyl_Cluster,System, eState,Nuclei,ispin,3);
+    H_methyl = kron(eye(pre_dim),kron(H_methyl,eye(post_dim)));
+    H_out = H_out -H_methyl + H_methyl.*selectionRule;
+  end
+end
 
 if max(max(abs( H_out - H_out') ) )>1e-12
   error('Cluster Hamiltonian is not Hermitian.');
