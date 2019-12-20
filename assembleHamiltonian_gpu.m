@@ -71,8 +71,6 @@ for iSpin = 1:nCluster
       Q_(3,1)*SpinXiXjOp(:,:,zx) + ...
       Q_(3,2)*SpinXiXjOp(:,:,zy) + ...
       Q_(3,3)*SpinXiXjOp(:,:,zz);
-    % Hermitize.
-    H_nuclear_quadrupole = 1/2*(H_nuclear_quadrupole+H_nuclear_quadrupole');
   else
     H_nuclear_quadrupole = 0;
   end
@@ -176,30 +174,17 @@ end
 H_alpha = +1/2*(HEZ + Hhf) + Hnuc;
 H_beta  = -1/2*(HEZ + Hhf) + Hnuc;
 
-checkHermitianity;
+% Check Hermitianity
+threshold = 1e-12;
+isHermA = isHermitian(H_alpha,threshold);
+isHermB = isHermitian(H_beta,threshold);
+if ~isHermA || ~isHermB
+  error('Cluster Hamiltonian is not Hermitian.');
+end
 
-  function checkHermitianity()
-    threshold = 1e-12;
-    [isHerm,nonHermiticity] = isHermitian(H_alpha,threshold);
-    if ~isHerm
-      disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-      disp('H_alpha Hamiltonian is not Hermitian.')
-      fprintf('Normalized non-Hermiticity = %d.\n',nonHermiticity);
-      disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-      disp('Hermiticity tests:')
-      
-      Hops = {HEZ,Hhf,Hnuc,H_nuclear_Zeeman_Iz,H_hyperfine_SzIz,H_hyperfine_SzIx,H_hyperfine_SzIy,...
-        Hnn_A,Hnn_B,Hnn_CD,Hnn_EF,H_nuclear_quadrupole};
-      Hopsnames = {'HEZ','Hhf','Hnuc','H_nuclear_Zeeman_Iz','H_hyperfine_SzIz','H_hyperfine_SzIx','H_hyperfine_SzIy',...
-        'Hnuc_A','Hnuc_B','Hnuc_CD','Hnuc_EF','H_nuclear_quadrupole'};
-      passfail = {'fail','pass'};
-      for k = 1:numel(Hops)
-        isHerm(k) = isHermitian(Hops{k},threshold);
-        fprintf('%-23s: %s\n',Hopsnames{k},passfail{isHerm(k)+1});
-      end
-      error('Cluster Hamiltonian is not Hermitian.');
-    end
-  end
+% Hermitianize
+H_alpha = (H_alpha+H_alpha')/2;
+H_beta = (H_beta+H_beta')/2;
 
 end
 
