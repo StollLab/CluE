@@ -2069,10 +2069,10 @@ if ~isfield(System,'nuclear_dipole_B')
   System.nuclear_dipole_B = true;
 end
 if ~isfield(System,'nuclear_dipole_CD')
-  System.nuclear_dipole_CD = false;
+  System.nuclear_dipole_CD = true;
 end
 if ~isfield(System,'nuclear_dipole_EF')
-  System.nuclear_dipole_EF = false;
+  System.nuclear_dipole_EF = true;
 end
 if ~isfield(System,'nuclear_quadrupole')
   System.nuclear_quadrupole = true;
@@ -2089,6 +2089,15 @@ System.useHamiltonian = [System.electron_Zeeman,...
   System.nuclear_Zeeman,System.secular_Hyperfine, ...
   System.nuclear_dipole_B];
 end
+
+if ~isfield(System,'theory')
+System.theory = [System.electron_Zeeman,...
+  System.nuclear_Zeeman,...
+  System.secular_Hyperfine, System.full_Sz_Hyperfine, ...
+  System.nuclear_dipole_A, System.nuclear_dipole_B,System.nuclear_dipole_CD,System.nuclear_dipole_EF, ...
+  System.nuclear_quadrupole];
+end
+
 
 % System limiting options
 if ~isfield(System,'limitToSpinHalf')

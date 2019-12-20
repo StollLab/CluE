@@ -11,16 +11,26 @@ System_nuclear_dipole_B  = System.nuclear_dipole_B;
 System_nuclear_dipole_CD = System.nuclear_dipole_CD;
 System_nuclear_dipole_EF = System.nuclear_dipole_EF;
 
-System_theory = ...
-[System.full_Sz_Hyperfine,System.fullDipoleTensor,System.nuclear_dipole_A,System.nuclear_dipole_B,System.nuclear_dipole_CD,System.nuclear_dipole_EF];
+theory = ...
+ [electron_Zeeman,...
+  nuclear_Zeeman,...
+  secular_Hyperfine, System.full_Sz_Hyperfine, ...
+  nuclear_dipole_A, nuclear_dipole_B,nuclear_dipole_CD,nuclear_dipole_EF, ...
+  nuclear_quadrupole]
 %}
 function [H_alpha,H_beta] = assembleHamiltonian_gpu(tensors,SpinOp,SpinXiXjOp,Cluster,...
-  System_full_Sz_Hyperfine,zeroIndex,clusterSize,...
+  theory,zeroIndex,clusterSize,...
   methyl_number,Qtensors,state_multiplicity)
 
-% TEMPORARY: these will become user set toggles.
-useNucCD = true;
-useNucEF = true;
+useEZ       = theory(1); 
+useNZ       = theory(2);
+useHF_A     = theory(3);
+useHF_SxIxy = theory(4);
+useNucA     = theory(5);
+useNucB     = theory(6);
+useNucCD    = theory(7);
+useNucEF    = theory(8);
+useNQ       = theory(9);
 
 switch clusterSize
   case 1
@@ -244,7 +254,7 @@ for iSpin = 1:nCluster
   %------------------------------------------------------------------------
   % Calculate nuclear quadrupole Hamiltonian
   idx = Cluster(inucleus-1);
-  if state_multiplicity(idx) > 2
+  if useNQ && state_multiplicity(idx) > 2
     Q_ = Qtensors(:,:,idx);
     off = (iSpin-1)*9;
     H_nuclear_quadrupole = ...
@@ -309,19 +319,29 @@ for iSpin = 1:nCluster
   Ix = (SpinOp(:,:,r) + SpinOp(:,:,l) )/2;
   Iy = (SpinOp(:,:,r) - SpinOp(:,:,l) )/2i;
   
-  H_nuclear_Zeeman_Iz = -tensors(3,3,inucleus,inucleus)*Iz;
-  
+  if useNZ
+    H_nuclear_Zeeman_Iz = -tensors(3,3,inucleus,inucleus)*Iz;
+  else
+    H_nuclear_Zeeman_Iz = 0;
+  end
   A = tensors(:,:,1,inucleus) + tensors(:,:,inucleus,1);
-  H_hyperfine_SzIz = -A(3,3)*Iz;
-  H_hyperfine_SzIx = -A(1,3)*Ix;
-  H_hyperfine_SzIy = -A(2,3)*Iy;
+  if useHF_A
+    H_hyperfine_SzIz = -A(3,3)*Iz;
+  else
+    H_hyperfine_SzIz = 0;
+  end
+  if useHF_SxIxy
+    H_hyperfine_SzIx = -A(1,3)*Ix;
+    H_hyperfine_SzIy = -A(2,3)*Iy;
+  else
+    H_hyperfine_SzIx = 0;
+    H_hyperfine_SzIy = 0;
+  end
   
   % Assemble single-nucleus terms in nuclear Hamiltonian
   Hnuc = Hnuc + H_nuclear_Zeeman_Iz + H_nuclear_quadrupole;
-  Hhf = Hhf + H_hyperfine_SzIz;
-  if System_full_Sz_Hyperfine
-    Hhf = Hhf + H_hyperfine_SzIx + H_hyperfine_SzIy;
-  end
+  Hhf = Hhf + H_hyperfine_SzIz + H_hyperfine_SzIx + H_hyperfine_SzIy;
+
   
   %------------------------------------------------------------------------
   % Loop over all nuclei with index greater than the ith nucleus.
@@ -342,496 +362,148 @@ for iSpin = 1:nCluster
     dd = tensors(:,:,inucleus,jnucleus) + tensors(:,:,jnucleus,inucleus);
     
     switch clusterSize
-      
-      case 2
-        
-        Hnuc_zz = dd(3,3)*SpinOp(:,:,ZZ);
-        Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RL)+SpinOp(:,:,LR));
-        if useNucCD
-          Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                       *(SpinOp(:,:,ZR)+SpinOp(:,:,RZ)) ...
-                     + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                      *(SpinOp(:,:,ZL)+SpinOp(:,:,LZ));
-        end
-        if useNucEF
-          Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                        *SpinOp(:,:,RR)...
-                      + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                        *SpinOp(:,:,LL);
-        end
+  
+      case 2, IJ = [ZZ RL LR ZR ZL RZ LZ RR LL];
         
       case 3
-        
         switch iSpin
           case 1 % OOE or OEO
-            if post_operators==1 % OOE
-              Hnuc_zz = dd(3,3)*SpinOp(:,:,ZZE);
-              Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RLE)+SpinOp(:,:,LRE));
-              
-              if useNucCD
-                Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2))*(SpinOp(:,:,ZRE)+SpinOp(:,:,RZE));
-                Hnuc_CD = Hnuc_CD + 1/2*(dd(1,3) + 1i*dd(2,2))*(SpinOp(:,:,ZLE)+SpinOp(:,:,LZE));
-              end
-              if useNucEF
-                Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                  *SpinOp(:,:,RRE)...
-                  + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                  *SpinOp(:,:,LLE);
-              end
-              
-            else % OEO
-              Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEZ);
-              Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REL)+SpinOp(:,:,LER));
-              
-              if useNucCD
-                Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2))*(SpinOp(:,:,ZER)+SpinOp(:,:,REZ));
-                Hnuc_CD = Hnuc_CD + 1/2*(dd(1,3) + 1i*dd(2,2))*(SpinOp(:,:,ZEL)+SpinOp(:,:,LEZ));
-              end
-              if useNucEF
-                Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                  *SpinOp(:,:,RER)...
-                  + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                  *SpinOp(:,:,LEL);
-              end
+            switch jSpin
+              case 2, IJ = [ZEZ REL LER ZER ZEL REZ LEZ RER LEL]; % OEO
+              case 1, IJ = [ZZE RLE LRE ZRE ZLE RZE LZE RRE LLE]; % OOE
             end
-            
-          case 2 % EOO
-            Hnuc_zz = dd(3,3)*SpinOp(:,:,EZZ);
-            Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,ERL)+SpinOp(:,:,ELR));
-            
-            if useNucCD
-              Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2))*(SpinOp(:,:,EZR)+SpinOp(:,:,ERZ));
-              Hnuc_CD = Hnuc_CD + 1/2*(dd(1,3) + 1i*dd(2,2))*(SpinOp(:,:,EZL)+SpinOp(:,:,ELZ));
-            end
-            if useNucEF
-              Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                *SpinOp(:,:,ERR)...
-                + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                *SpinOp(:,:,ELL);
-            end
-            
+          case 2, IJ = [EZZ ERL ELR EZR EZL ERZ ELZ ERR ELL]; % EOO            
         end
         
       case 4
         switch iSpin
           case 1
-            switch post_operators
-              case 0 % OEEO
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REEL)+SpinOp(:,:,LEER));
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEER)+SpinOp(:,:,REEZ)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZEEL)+SpinOp(:,:,LEEZ));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REER)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LEEL);
-                end
-                
-              case 1 % OEOE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RELE)+SpinOp(:,:,LERE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZERE)+SpinOp(:,:,REZE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZELE)+SpinOp(:,:,LEZE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,RERE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LELE);
-                end
-                
-              case 2 % OOEE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZZEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RLEE)+SpinOp(:,:,LREE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZREE)+SpinOp(:,:,RZEE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZLEE)+SpinOp(:,:,LZEE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,RREE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LLEE);
-                end
-                
+            switch jSpin
+              case 4, IJ = [ZEEZ REEL LEER ZEER ZEEL REEZ LEEZ REER LEEL]; % OEEO
+              case 3, IJ = [ZEZE RELE LERE ZERE ZELE REZE LEZE RERE LELE]; % OEOE               
+              case 2, IJ = [ZZEE RLEE LREE ZREE ZLEE RZEE LZEE RREE LLEE]; % OOEE   
             end
-            
           case 2
-            switch post_operators
-              case 0 % EOEO
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EREL)+SpinOp(:,:,ELER));
-           
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EZER)+SpinOp(:,:,EREZ)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EZEL)+SpinOp(:,:,ELEZ));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,ERER)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,ELEL);
-                end
-                
-              case 1 % EOOE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,ERLE)+SpinOp(:,:,ELRE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EZRE)+SpinOp(:,:,ERZE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EZLE)+SpinOp(:,:,ELZE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,ERRE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,ELLE);
-                end
+            switch jSpin
+              case 4, IJ = [EZEZ EREL ELER EZER EZEL EREZ ELEZ ERER ELEL]; % EOEO
+              case 3, IJ = [EZZE ERLE ELRE EZRE EZLE ERZE ELZE ERRE ELLE]; % EOOE
             end
-            
-          case 3 % EEOO
-            Hnuc_zz = dd(3,3)*SpinOp(:,:,EEZZ);
-            Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EERL)+SpinOp(:,:,EELR));
-            
-            if useNucCD
-              Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                *(SpinOp(:,:,EEZR)+SpinOp(:,:,EERZ)) ...
-                + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                *(SpinOp(:,:,EZL)+SpinOp(:,:,EELZ));
-            end
-            if useNucEF
-              Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                *SpinOp(:,:,EERR)...
-                + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                *SpinOp(:,:,EELL);
-            end
+          case 3, IJ = [EEZZ EERL EELR EEZR EEZL EERZ EELZ EERR EELL]; % EEOO
         end
         
       case 5
         switch iSpin
           case 1
-            switch post_operators
-              case 0 % OEEEO
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEEEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REEEL)+SpinOp(:,:,LEEER));
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEEER)+SpinOp(:,:,REEEZ)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZEEEL)+SpinOp(:,:,LEEEZ));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REEER)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LEEEL);
-                end
-                
-              
-              case 1 % OEEOE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEEZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REELE)+SpinOp(:,:,LEERE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEERE)+SpinOp(:,:,REEZE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZEELE)+SpinOp(:,:,LEEZE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REERE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LEELE);
-                end
-                
-              case 2 % OEOEE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEZEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RELEE)+SpinOp(:,:,LEREE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEREE)+SpinOp(:,:,REZEE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZELEE)+SpinOp(:,:,LEZEE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REREE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LELEE);
-                end
-                
-                
-              case 3 % OOEEE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZZEEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RLEEE)+SpinOp(:,:,LREEE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZREEE)+SpinOp(:,:,RZEEE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZLEEE)+SpinOp(:,:,LZEEE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,RREEE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LLEEE);
-                end
-                
-                
+            switch jSpin
+              case 5, IJ = [ZEEEZ REEEL LEEER ZEEER ZEEEL REEEZ LEEEZ REEER LEEEL]; % OEEEO
+              case 4, IJ = [ZEEZE REELE LEERE ZEERE ZEELE REEZE LEEZE REERE LEELE]; % OEEOE
+              case 3, IJ = [ZEZEE REELE LEERE ZEREE ZELEE REZEE LEZEE REREE LELEE]; % OEOEE
+              case 2, IJ = [ZZEEE RLEEE LREEE ZREEE ZLEEE RZEEE LZEEE RREEE LLEEE]; % OOEEE
             end
           case 2
-            switch post_operators
-              case 0 % EOEEO
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZEEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EREEL)+SpinOp(:,:,ELEER));
-        
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EZEER)+SpinOp(:,:,EREEZ)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EZEEL)+SpinOp(:,:,ELEEZ));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,EREER)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,ELEEL);
-                end
-                
-              
-              case 1 % EOEOE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZEZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,ERELE)+SpinOp(:,:,ELERE));
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EZERE)+SpinOp(:,:,EREZE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EZELE)+SpinOp(:,:,ELEZE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,ERERE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,ELELE);
-                end
-                
-              
-              case 2 % EOOEE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZZEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,ERLEE)+SpinOp(:,:,ELREE));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EZREE)+SpinOp(:,:,ERZEE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EZLEE)+SpinOp(:,:,ELZEE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,ERREE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,ELLEE);
-                end
-                
+            switch jSpin
+              case 5, IJ = [EZEEZ EREEL ELEER EZEER EZEEL EREEZ ELEEZ EREER ELEEL]; % EOEEO
+              case 4, IJ = [EZEZE ERELE ELERE EZERE EZELE EREZE ELEZE ERERE ELELE]; % EOEOE
+              case 3, IJ = [EZZEE ERLEE ELREE EZREE EZLEE ERZEE ELZEE ERREE ELLEE]; % EOOEE
             end
-            
           case 3
-            switch post_operators
-              case 0 % EEOEO
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEZEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EEREL)+SpinOp(:,:,EELER));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EEZER)+SpinOp(:,:,EEREZ)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EEZEL)+SpinOp(:,:,EELEZ));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,EERER)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,EELEL);
-                end
-                
-              case 1 % EEOOE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEZZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EERLE)+SpinOp(:,:,EELRE));
-            
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,EEZRE)+SpinOp(:,:,EERZE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,EEZLE)+SpinOp(:,:,EELZE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,EERRE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,EELLE);
-                end
-                
+            switch jSpin
+              case 5, IJ = [EEZEZ EEREL EELER EEZER EEZEL EEREZ EELEZ EERER EELEL]; % EEOEO
+              case 4, IJ = [EEZZE EERLE EELRE EEZRE EEZLE EERZE EELZE EERRE EELLE]; % EEOOE
             end
-            
-          case 4 % EEEOO
-            
-            Hnuc_zz = dd(3,3)*SpinOp(:,:,EEEZZ);
-            Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EEERL)+SpinOp(:,:,EEELR));
-            
-            if useNucCD
-              Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                *(SpinOp(:,:,EEEZR)+SpinOp(:,:,EEERZ)) ...
-                + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                *(SpinOp(:,:,EEEZL)+SpinOp(:,:,EEELZ));
-            end
-            if useNucEF
-              Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                *SpinOp(:,:,EEERR)...
-                + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                *SpinOp(:,:,EEELL);
-            end
-            
+          case 4, IJ = [EEEZZ EEERL EEELR EEEZR EEEZL EEERZ EEELZ EEERR EEELL]; % EEEOO
         end
         
         case 6
         switch iSpin
           case 1
-            switch post_operators
-              case 0 % OEEEEO
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEEEEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REEEEL)+SpinOp(:,:,LEEEER));
-                
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEEEER)+SpinOp(:,:,REEEEZ)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZEEEEL)+SpinOp(:,:,LEEEEZ));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REEEER)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LEEEEL);
-                end
-                
-              case 1 % OEEEOE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEEEZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REEELE)+SpinOp(:,:,LEEERE));
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEEERE)+SpinOp(:,:,REEEZE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZEEELE)+SpinOp(:,:,LEEEZE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REEERE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LEEELE);
-                end
-                
-                
-              case 2 % OEEOEE
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEEZEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,REELEE)+SpinOp(:,:,LEEREE));
-              
-                if useNucCD
-                  Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2)) ...
-                    *(SpinOp(:,:,ZEEREE)+SpinOp(:,:,REEZEE)) ...
-                    + 1/2*(dd(1,3) + 1i*dd(2,2))...
-                    *(SpinOp(:,:,ZEELEE)+SpinOp(:,:,LEEZEE));
-                end
-                if useNucEF
-                  Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))...
-                    *SpinOp(:,:,REEREE)...
-                    + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))...
-                    *SpinOp(:,:,LEELEE);
-                end
-                
-              case 3
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZEZEEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RELEEE)+SpinOp(:,:,LEREEE));
-              case 4
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,ZZEEEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,RLEEEE)+SpinOp(:,:,LREEEE));
-                
-            end
+            switch jSpin
+              case 6, IJ = [ZEEEEZ REEEEL LEEEER ZEEEER ZEEEEL REEEEZ LEEEEZ REEEER LEEEEL]; % OEEEEO                
+              case 5, IJ = [ZEEEZE REEELE LEEERE ZEEERE ZEEELE REEEZE LEEEZE REEERE LEEELE]; % OEEEOE                
+              case 4, IJ = [ZEEZEE REELEE LEEREE ZEEREE ZEELEE REEZEE LEEZEE REEREE LEELEE]; % OEEOEE
+              case 3, IJ = [ZEZEEE RELEEE LEREEE ZEREEE ZELEEE REZEEE LEZEEE REREEE LELEEE]; % OEOEEE
+              case 2, IJ = [ZZEEEE RLEEEE LREEEE ZREEEE ZLEEEE RZEEEE LZEEEE RREEEE LLEEEE]; % OOEEEE                
+            end        
           case 2
-            switch post_operators
-              case 0
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZEEEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EREEEL)+SpinOp(:,:,ELEEER));
-              case 1
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZEEZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EREELE)+SpinOp(:,:,ELEERE)); 
-              case 2
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZEZEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,ERELEE)+SpinOp(:,:,ELEREE));
-              case 3
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EZZEEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,ERLEEE)+SpinOp(:,:,ELREEE));
-                
-            end
-            
+            switch jSpin
+              case 6, IJ = [EZEEEZ EREEEL ELEEER EZEEER EZEEEL EREEEZ ELEEEZ EREEER ELEEEL]; % EOEEEO
+              case 5, IJ = [EZEEZE EREELE ELEERE EZEERE EZEELE EREEZE ELEEZE EREERE ELEELE]; % EOEEOE
+              case 4, IJ = [EZEZEE ERELEE ELEREE EZEREE EZELEE EREEZE ELEZEE EREREE ELELEE]; % EOEOEE
+              case 3, IJ = [EZZEEE ERLEEE ELREEE EZREEE EZLEEE ERZEEE ELZEEE ERREEE ELLEEE]; % EOOEEE          
+            end            
           case 3
-            switch post_operators
-              case 0
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEZEEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EEREEL)+SpinOp(:,:,EELEER));
-              case 1
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEZEZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EERELE)+SpinOp(:,:,EELERE));
-              case 2
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEZZEE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EERLEE)+SpinOp(:,:,EELREE));
-            end
-            
+            switch jSpin
+              case 6, IJ = [EEZEEZ EEREEL EELEER EEZEER EEZEEL EEREEZ EELEEZ EEREER EELEEL]; % EEOEEO
+              case 5, IJ = [EEZEZE EERELE EELERE EEZERE EEZELE EEREZE EELEZE EERERE EELELE]; % EEOEOE
+              case 4, IJ = [EEZZEE EERLEE EELREE EEZREE EEZLEE EERZEE EELZEE EERREE EELLEE]; % EEOOEE
+            end            
           case 4
-            switch post_operators
-              case 0
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEEZEZ);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EEEREL)+SpinOp(:,:,EEELER));
-              case 1
-                Hnuc_zz = dd(3,3)*SpinOp(:,:,EEEZZE);
-                Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EEERLE)+SpinOp(:,:,EEELRE));
+            switch jSpin
+              case 6, IJ = [EEEZEZ EEEREL EEELER EEEZER EEEZEL EEEREZ EEELEZ EEERER EEELEL]; % EEEOEO 
+              case 5, IJ = [EEEZZE EEERLE EEELRE EEEZRE EEEZLE EEERZE EEELZE EEERRE EEELLE]; % EEEOOE
             end
-
-          case 5
-            Hnuc_zz = dd(3,3)*SpinOp(:,:,EEEEZZ);
-            Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(SpinOp(:,:,EEEERL)+SpinOp(:,:,EEEELR));
-        end
-        
+          case 5, IJ = [EEEEZZ EEEERL EEEELR EEEEZR EEEEZL EEEERZ EEEELZ EEEERR EEEELL]; % EEEEOO
+        end        
     end
     
-    Hnuc = Hnuc + Hnuc_zz + Hnuc_flipflop;
-    if useNucCD, Hnuc = Hnuc + Hnuc_CD; end 
-    if useNucEF, Hnuc = Hnuc + Hnuc_EF; end
+  %   1  2  3  4  5  6  7  8  9 
+  % [ZZ RL LR ZR ZL RZ LZ RR LL]
+    zz = IJ(1);
+    rl = IJ(2); lr = IJ(3);
+    zr = IJ(4); zl = IJ(5); 
+    rz = IJ(6); lz = IJ(7);
+    rr = IJ(8); ll = IJ(9);
+    
+    IzJz = SpinOp(:,:,zz);
+    IrJl = SpinOp(:,:,rl);
+    IlJr = SpinOp(:,:,lr);
+    
+    IzJr = SpinOp(:,:,zr);
+    IrJz = SpinOp(:,:,rz);
+    
+    IzJl = SpinOp(:,:,zl);
+    IlJz = SpinOp(:,:,lz);
+    
+    IrJr= SpinOp(:,:,rr);
+    IlJl = SpinOp(:,:,ll);
+    if useNucA
+      Hnuc_zz = dd(3,3)*IzJz;
+    else
+      Hnuc_zz = 0;
+    end
+    
+    if useNucB
+      Hnuc_flipflop = 0.25*(dd(1,1) + dd(2,2))*(IrJl+IlJr);
+    else
+      Hnuc_flipflop = 0;
+    end
+    
+    if useNucCD
+      Hnuc_CD = 1/2*(dd(1,3) - 1i*dd(2,2))*(IzJr+IrJz) ...
+        + 1/2*(dd(1,3) + 1i*dd(2,2))*(IzJl+IlJz);
+    else
+      Hnuc_CD = 0;
+    end
+    
+    if useNucEF
+      Hnuc_EF =  1/2*(dd(1,1) - dd(1,1) - 1i*dd(1,2) - 1i*dd(2,1))*IrJr...
+        + 1/2*(dd(1,1) - dd(1,1) + 1i*dd(1,2) + 1i*dd(2,1))*IlJl;
+    else
+      Hnuc_EF = 0;
+    end
+    
+    Hnuc = Hnuc + Hnuc_zz + Hnuc_flipflop + Hnuc_CD+ Hnuc_EF; 
   end
   
 end
 
 % Calculate electron Zeeman Hamiltonian
-eZeeman = tensors(:,:,1,1); % Hz
-HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
+if useEZ
+  eZeeman = tensors(:,:,1,1); % Hz
+  HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
+else
+  HEZ = 0;
+end
 
 % Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
 H_alpha = +1/2*(HEZ + Hhf) + Hnuc;

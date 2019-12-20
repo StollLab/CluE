@@ -10,7 +10,7 @@ maxSize = 6;
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
 Method_order = Method.order;  
-System_full_Sz_Hyperfine = System.full_Sz_Hyperfine;
+theory = System.theory;
 maxClusterSize = min(maxSize,Method_order);
 % Convert variable to gpu compatible forms
 dimensionality = 1;
@@ -372,7 +372,7 @@ for clusterSize = 1:Method_order
     
     [Halpha,Hbeta] = ...
       assembleHamiltonian_gpu(tensors,SpinOp,SpinXiXjOp,thisCluster,...
-      System_full_Sz_Hyperfine,zeroIndex,thisClusterSize,...
+      theory,zeroIndex,thisClusterSize,...
       methyl_number,Qtensors,state_multiplicity);
   
     % get density matrix
