@@ -82,11 +82,11 @@ for iSpin = 1:nCluster
   Iy = (SpinOp(:,:,r) - SpinOp(:,:,l) )/2i;
   
   if useNZ
-    H_nuclear_Zeeman_Iz = -tensors(3,3,iNucleus+1,iNucleus+1)*Iz;
+    H_nuclear_Zeeman_Iz = -tensors(3,3,iSpin+1,iSpin+1)*Iz;
   else
     H_nuclear_Zeeman_Iz = 0;
   end
-  A = tensors(:,:,1,iNucleus+1) + tensors(:,:,iNucleus+1,1);
+  A = tensors(:,:,1,iSpin+1) + tensors(:,:,iSpin+1,1);
   if useHF_A
     H_hyperfine_SzIz = -A(3,3)*Iz;
   else
@@ -111,13 +111,13 @@ for iSpin = 1:nCluster
   for jSpin = iSpin+1:nCluster
     
     % jNucleus is the index of the nuclear spin in the total system
-    jNucleus = Cluster(jcluster);
+    jNucleus = Cluster(jSpin);
     
     % the jth nuclear spin in the input Hamiltonian
     %jnucleus = jspin - zeroIndex + 1; % since the electron is given position 1
     
     % get dipolar coupling tensor
-    dd = tensors(:,:,iNucleus+1,jNucleus+1) + tensors(:,:,jNucleus+1,iNucleus+1);
+    dd = tensors(:,:,iSpin+1,jSpin+1) + tensors(:,:,jSpin+1,iSpin+1);
     
     [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin);
     
