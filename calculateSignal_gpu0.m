@@ -369,12 +369,12 @@ for clusterSize = 1:Method_order
      end
      
     [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID);
+    qtensors = Qtensors(:,:,thisCluster);
     
     [Halpha,Hbeta] = ...
-      assembleHamiltonian_gpu(tensors,SpinOp,SpinXiXjOp,thisCluster,...
-      theory,zeroIndex,thisClusterSize,...
-      methyl_number,Qtensors,state_multiplicity);
-  
+      assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
+      theory,zeroIndex,methyl_number);
+    
     % get density matrix
     DensityMatrix0 = getDensityMatrix(ZeemanStates,NumberStates,Cluster);
     

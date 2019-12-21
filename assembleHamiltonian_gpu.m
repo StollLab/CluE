@@ -17,10 +17,10 @@ theory = ...
   nuclear_dipole_A, nuclear_dipole_B,nuclear_dipole_CD,nuclear_dipole_EF, ...
   nuclear_quadrupole]
 %}
-function [H_alpha,H_beta] = assembleHamiltonian_gpu(tensors,SpinOp,SpinXiXjOp,Cluster,...
-  theory,zeroIndex,clusterSize,methyl_number,Qtensors,state_multiplicity)
+function [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,tensors,SpinOp,Qtensors,SpinXiXjOp,...
+  theory,zeroIndex,methyl_number)
 
-useEZ       = theory(1); 
+useEZ       = theory(1);
 useNZ       = theory(2);
 useHF_A     = theory(3);
 useHF_SxIxy = theory(4);
@@ -30,26 +30,23 @@ useNucCD    = theory(7);
 useNucEF    = theory(8);
 useNQ       = theory(9);
 
-Cluster = sort(unique(Cluster));
+clustersize = numel(state_multiplicity);
 
-if methyl_number==0 && abs(double(zeroIndex) + 1 - double(Cluster(1)) )>=1
-  error('Cluster reference failure.');
-end
+%Cluster = sort(unique(Cluster));
 
-nCluster = length(Cluster);
+%if methyl_number==0 && abs(double(zeroIndex) + 1 - double(Cluster(1)) )>=1
+%  error('Cluster reference failure.');
+%end
 
-if clusterSize ~= nCluster
-  error('Cluster reference failure.');
-end
+%if clusterSize ~= length(Cluster)
+%  error('Cluster reference failure.');
+%end
 
 Hnuc = 0;
 Hhf = 0;
 
 % iSpin is the index of the nuclear spin in the cluster
-for iSpin = 1:nCluster
-  
-  % iNucleus is the index of the nuclear spin in the total system
-  iNucleus = Cluster(iSpin);
+for iSpin = 1:clustersize
   
   % the ith nuclear spin in the input Hamiltonian
   % inucleus = ispin - zeroIndex + 1; % since the electron is given position 1
@@ -58,8 +55,8 @@ for iSpin = 1:nCluster
   % One Nucleus Spin Hamiltonian
   %------------------------------------------------------------------------
   % Calculate nuclear quadrupole Hamiltonian
-  if useNQ && state_multiplicity(iNucleus) > 2
-    Q_ = Qtensors(:,:,iNucleus);
+  if useNQ && state_multiplicity(iSpin) > 2
+    Q_ = Qtensors(:,:,iSpin);
     [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin);
     H_nuclear_quadrupole = ...
       Q_(1,1)*SpinXiXjOp(:,:,xx) + ...
@@ -108,11 +105,8 @@ for iSpin = 1:nCluster
   %------------------------------------------------------------------------
   % Loop over all nuclei with index greater than the ith nucleus.
   %------------------------------------------------------------------------
-  for jSpin = iSpin+1:nCluster
-    
-    % jNucleus is the index of the nuclear spin in the total system
-    jNucleus = Cluster(jSpin);
-    
+  for jSpin = iSpin+1:clustersize
+        
     % the jth nuclear spin in the input Hamiltonian
     %jnucleus = jspin - zeroIndex + 1; % since the electron is given position 1
     
@@ -195,86 +189,86 @@ ishermitian = nonHermiticity<=threshold;
 end
 
 %{
-%--------------------------------------------------------------------------
-% ENUM 1-Clusters: E O
-%--------------------------------------------------------------------------
-% E (1)  : E
-% O (2-4): z + -
-%--------------------------------------------------------------------------
-% 2-Clusters: EE EO OE OO
-%--------------------------------------------------------------------------
-% EE (1)   : EE
-% EO (2-4) : Ez E+ E-
-% OE (5-7) : zE +E -E
-% OO (8-10): zz +- -+
-%--------------------------------------------------------------------------
-% ENUM 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
-%--------------------------------------------------------------------------
-% EEE (1)    : EEE
-% EEO (2-4)  : EEz EE+ EE-
-% EOE (5-7)  : EzE E+E E-E
-% OEE (8-10) : zEE +EE -EE
-% EOO (11-13): Ezz E+- E-+
-% OEO (14-16): zEz +E- -E+
-% OOE (17-19): zzE +-E -+E
-%--------------------------------------------------------------------------
-% ENUM 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
-%--------------------------------------------------------------------------
-% EEEE (1)    :  EEEE
-% EEEO (2-4)  :  EEEz EEE+ EEE-
-% EEOE (5-7)  :  EEzE EE+E EE-E
-% EOEE (8-10) :  EzEE E+EE E-EE
-% OEEE (11-13):  zEEE +EEE -EEE
-% EEOO (14-16):  EEzz EE+- EE-+
-% EOEO (17-19):  EzEz E+E- -E+E
-% OEEO (20-22):  zEEz +EE- -EE+
-% EOOE (23-25):  EzzE E+-E E-+E
-% OEOE (26-28):  zEzE +E-E -E+E
-% OOEE (29-31):  zzEE +-EE -+EE
-%--------------------------------------------------------------------------
-% ENUM 5-Clusters
-%--------------------------------------------------------------------------
-% EEEEE (1)    :  EEEEE
-% EEEEO (2-4)  :  EEEEz EEEE+ EEEE-
-% EEEOE (5-7)  :  EEEzE EEE+E EEE-E
-% EEOEE (8-10) :  EEzEE EE+EE EE-EE
-% EOEEE (11-13):  EzEEE E+EEE E-EEE
-% OEEEE (14-16):  zEEEE +EEEE -EEEE
-% EEEOO (17-19):  EEEzz EEE+- EEE-+
-% EEOEO (20-22):  EEzEz EE+E- EE-E+
-% EOEEO (23-25):  EzEEz E+EE- E-EE+
-% OEEEO (26-28):  zEEEz +EEE- -EEE+
-% EEOOE (29-31):  EEzzE EE+-E EE-+E
-% EOEOE (32-34):  EzEzE E+E-E E-E+E
-% EOEOE (35-37):  zEEzE +EE-E -EE+E
-% EOOEE (38-40):  EzzEE E+-EE E-+EE
-% OEOEE (41-43):  zEzEE +E-EE -E+EE
-% OOEEE (44-46):  zzEEE +-EEE -+EEE
-%--------------------------------------------------------------------------
-% ENUM 6-Clusters
-%--------------------------------------------------------------------------
-% EEEEEE (1)    :  EEEEEE
-% EEEEEO (2-4)  :  EEEEEz EEEEE+ EEEEE-
-% EEEEOE (5-7)  :  EEEEzE EEEE+E EEEE-E
-% EEEOEE (8-10) :  EEEzEE EEE+EE EEE-EE
-% EEOEEE (11-13):  EEzEEE EE+EEE EE-EEE
-% EOEEEE (14-16):  EzEEEE +EEEEE -EEEEE
-% OEEEEE (17-19):  zEEEEE +EEEEE -EEEEE
-% EEEEOO (20-22):  EEEEzz EEEE+- EEEE-+
-% EEEOEO (23-25):  EEEzEz EEE+E- EEE-E+
-% EEOEEO (26-28):  EEzEEz EE+EE- EE-EE+
-% EOEEEO (29-31):  EzEEEz E+EEE- E-EEE+
-% OEEEEO (32-34):  zEEEEz +EEEE- -EEEE+
-% EEEOOE (35-37):  EEEzzE EEE+-E EEE-+E
-% EEOEOE (38-40):  EEzEzE EE+E-E EE-E+E
-% EOEEOE (41-43):  EzEEzE E+EE-E E-EE+E
-% OEEEOE (44-46):  zEEEzE +EEE-E -EEE+E
-% EEOOEE (47-49):  EEzzEE EE+-EE EE-+EE
-% EOEOEE (50-51):  EzEzEE E+E-EE E-E+EE
-% OEEOEE (53-55):  zEEzEE +EE-EE -EE+EE
-% EOOEEE (56-58):  EzzEEE E+-EEE E-+EEE
-% OEOEEE (59-61):  zEzEEE +E-EEE -E+EEE
-% OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
+--------------------------------------------------------------------------
+ENUM 1-Clusters: E O
+--------------------------------------------------------------------------
+E (1)  : E
+O (2-4): z + -
+--------------------------------------------------------------------------
+2-Clusters: EE EO OE OO
+--------------------------------------------------------------------------
+EE (1)   : EE
+EO (2-4) : Ez E+ E-
+OE (5-7) : zE +E -E
+OO (8-10): zz +- -+
+--------------------------------------------------------------------------
+ENUM 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
+--------------------------------------------------------------------------
+EEE (1)    : EEE
+EEO (2-4)  : EEz EE+ EE-
+EOE (5-7)  : EzE E+E E-E
+OEE (8-10) : zEE +EE -EE
+EOO (11-13): Ezz E+- E-+
+OEO (14-16): zEz +E- -E+
+OOE (17-19): zzE +-E -+E
+--------------------------------------------------------------------------
+ENUM 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
+--------------------------------------------------------------------------
+EEEE (1)    :  EEEE
+EEEO (2-4)  :  EEEz EEE+ EEE-
+EEOE (5-7)  :  EEzE EE+E EE-E
+EOEE (8-10) :  EzEE E+EE E-EE
+OEEE (11-13):  zEEE +EEE -EEE
+EEOO (14-16):  EEzz EE+- EE-+
+EOEO (17-19):  EzEz E+E- -E+E
+OEEO (20-22):  zEEz +EE- -EE+
+EOOE (23-25):  EzzE E+-E E-+E
+OEOE (26-28):  zEzE +E-E -E+E
+OOEE (29-31):  zzEE +-EE -+EE
+--------------------------------------------------------------------------
+ENUM 5-Clusters
+--------------------------------------------------------------------------
+EEEEE (1)    :  EEEEE
+EEEEO (2-4)  :  EEEEz EEEE+ EEEE-
+EEEOE (5-7)  :  EEEzE EEE+E EEE-E
+EEOEE (8-10) :  EEzEE EE+EE EE-EE
+EOEEE (11-13):  EzEEE E+EEE E-EEE
+OEEEE (14-16):  zEEEE +EEEE -EEEE
+EEEOO (17-19):  EEEzz EEE+- EEE-+
+EEOEO (20-22):  EEzEz EE+E- EE-E+
+EOEEO (23-25):  EzEEz E+EE- E-EE+
+OEEEO (26-28):  zEEEz +EEE- -EEE+
+EEOOE (29-31):  EEzzE EE+-E EE-+E
+EOEOE (32-34):  EzEzE E+E-E E-E+E
+EOEOE (35-37):  zEEzE +EE-E -EE+E
+EOOEE (38-40):  EzzEE E+-EE E-+EE
+OEOEE (41-43):  zEzEE +E-EE -E+EE
+OOEEE (44-46):  zzEEE +-EEE -+EEE
+--------------------------------------------------------------------------
+ENUM 6-Clusters
+--------------------------------------------------------------------------
+EEEEEE (1)    :  EEEEEE
+EEEEEO (2-4)  :  EEEEEz EEEEE+ EEEEE-
+EEEEOE (5-7)  :  EEEEzE EEEE+E EEEE-E
+EEEOEE (8-10) :  EEEzEE EEE+EE EEE-EE
+EEOEEE (11-13):  EEzEEE EE+EEE EE-EEE
+EOEEEE (14-16):  EzEEEE +EEEEE -EEEEE
+OEEEEE (17-19):  zEEEEE +EEEEE -EEEEE
+EEEEOO (20-22):  EEEEzz EEEE+- EEEE-+
+EEEOEO (23-25):  EEEzEz EEE+E- EEE-E+
+EEOEEO (26-28):  EEzEEz EE+EE- EE-EE+
+EOEEEO (29-31):  EzEEEz E+EEE- E-EEE+
+OEEEEO (32-34):  zEEEEz +EEEE- -EEEE+
+EEEOOE (35-37):  EEEzzE EEE+-E EEE-+E
+EEOEOE (38-40):  EEzEzE EE+E-E EE-E+E
+EOEEOE (41-43):  EzEEzE E+EE-E E-EE+E
+OEEEOE (44-46):  zEEEzE +EEE-E -EEE+E
+EEOOEE (47-49):  EEzzEE EE+-EE EE-+EE
+EOEOEE (50-51):  EzEzEE E+E-EE E-E+EE
+OEEOEE (53-55):  zEEzEE +EE-EE -EE+EE
+EOOEEE (56-58):  EzzEEE E+-EEE E-+EEE
+OEOEEE (59-61):  zEzEEE +E-EEE -E+EEE
+OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
 %}
 
 function [z,r,l] = spinopidx(clusterSize,iSpin)
