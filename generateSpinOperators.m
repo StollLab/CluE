@@ -1,11 +1,224 @@
 function output = generateSpinOperators(spin,maxClusterSize)
 
-% enum
-E = 1;  Z = 2; RAISE = 3; LOWER = 4;
-OO = [E,Z,LOWER,RAISE];
+% Initialize output.
+output = cell(1,maxClusterSize);
 
-% Set spin and spin multiplicity;
+% Set spin and spin multiplicity.
 multiplicity = 2*spin+1;
+
+% ENUM
+E = 1;  Z = 2; RAISE = 3; LOWER = 4;
+
+% Initialize 1-cluster operators.
+SpinOp_1 = zeros(multiplicity,multiplicity,4);
+
+% Set 1-cluster operators.
+SpinOp_1(:,:,E) = eye(multiplicity);
+SpinOp_1(:,:,Z) = spinZ(spin);
+SpinOp_1(:,:,RAISE) = spinRaise(spin);
+SpinOp_1(:,:,LOWER) = spinLower(spin);
+
+% Set 1-cluster operators to output.
+output{1} = SpinOp_1;
+ 
+% Loop throurh cluster sizes > 1.
+for clusterSize = 2:maxClusterSize
+  
+  % Get set of operator names.
+  OpNames = getOpNames(clusterSize);
+  
+  % Get number of operators for the given cluster size.
+  numOps_ = 1 + 3*clusterSize + 9*NchooseK(clusterSize,2);
+  
+  % Initialize output for the given cluster size.
+  output{clusterSize} = ...
+    zeros(multiplicity^clusterSize,multiplicity^clusterSize,numOps_);
+  
+  % Loop over operator indices. 
+  for iop =1:numOps_
+    
+    % Get the name of the indexed operator.
+    opstr = OpNames{iop};
+    
+    % Construct operator.
+    output{clusterSize}(:,:,iop) = assembleSpinOperator(opstr,SpinOp_1);
+  end
+end
+end
+
+%==========================================================================
+% Convert a string to a cluster spin-operator.
+%==========================================================================
+
+function spinOp = assembleSpinOperator(opstr,SpinOp_1)
+
+% ENUM
+E = 1;  Z = 2; RAISE = 3; LOWER = 4;
+
+% Initialize output.
+spinOp = 1;
+
+% Loop of single-spin operators in the provided string.
+for ichar = 1:numel(opstr)
+  
+  % Identify single-spin operator;
+  switch opstr(ichar)
+    case 'E'
+      op_ = E;
+    case 'Z'
+      op_ = Z;
+    case 'R'
+      op_ = RAISE;
+    case 'L'
+      op_ = LOWER;
+    otherwise
+      disp(['Unidentified reference ', opstr(ichar), '.']);
+      error('Could not identify spin operator.');
+  end
+  
+  % Krocker the operator into the output.
+  spinOp = kron(spinOp,SpinOp_1(:,:,op_));
+end
+
+end
+
+
+%==========================================================================
+% Generate a list of strings specifying the cluster spin-operator.
+%==========================================================================
+
+function opNames = getOpNames(clusterSize)
+
+% Get number of operators for the given cluster size.
+numOps = 1 + 3*clusterSize + 9*NchooseK(clusterSize,2);
+
+% Initialize output.
+opNames = cell(1,numOps);
+
+% Begin the identity string.
+opNames{1} = 'E';
+
+% Get the 1 identity operator EE....EE.
+for iSpin = 2:clusterSize
+  opNames{1} = [opNames{1},'E'];
+end
+
+% Set index.
+idx = 1;
+
+Op = {'Z','R','L'};
+% Add 3*clusterSize operators of the form EE...O...EE,
+% where O in {Z,R,L}.
+% Loop over spins.
+for iSpin = 1:clusterSize
+  
+  % Adjust for placement order.
+  ispin_index = clusterSize-iSpin + 1;
+  
+  % Loop over the operator set indices.
+  for iop = 1:3
+    idx = idx + 1;
+    % Initialize operator string with the identity string.
+    opNames{idx} = opNames{1};
+    % Set the non-identity element.
+    opNames{idx}(ispin_index) = Op{iop};
+  end
+end
+
+OpOp = {'ZZ','RL','LR'};
+
+% Add 3*NchooseK(clusterSize,2) operators of the form EE...O1...E...O2...EE,
+% where O1,2 in OpOp{}(1,2).
+% Loop over spins.
+for jSpin = 1:clusterSize-1
+  
+  % Adjust for placement order.
+  jspin_index = clusterSize-jSpin + 1;
+  
+  % Loop over spins.
+  for iSpin = jSpin+1:clusterSize
+    
+    % Adjust for placement order.
+    ispin_index = clusterSize-iSpin + 1;
+    
+    % Loop over the operator set indices.
+    for iop = 1:3
+      
+      % Increment index.
+      idx = idx + 1;
+      % Initialize operator string with the identity string.
+      opNames{idx} = opNames{1};
+      % Set the non-identity elements.
+      opNames{idx}(ispin_index) = OpOp{iop}(1);
+      opNames{idx}(jspin_index) = OpOp{iop}(2);
+    end
+  end
+end
+
+%
+
+Op_CD = {'ZR', 'ZL', 'RZ', 'LZ'};
+
+% Add 4*NchooseK(clusterSize,2) operators of the form EE...O1...E...O2...EE,
+% where O1,2 in Op_CD{}(1,2).
+% Loop over spins.
+for jSpin = 1:clusterSize-1
+  
+  % Adjust for placement order.
+  jspin_index = clusterSize-jSpin + 1;
+  
+  % Loop over spins.
+  for iSpin = jSpin+1:clusterSize
+    
+    % Adjust for placement order.
+    ispin_index = clusterSize-iSpin + 1;
+    
+    % Loop over the operator set indices.
+    for iop = 1:4
+      
+      % Increment index.
+      idx = idx + 1;
+      % Initialize operator string with the identity string.
+      opNames{idx} = opNames{1};
+      % Set the non-identity elements.
+      opNames{idx}(ispin_index) = Op_CD{iop}(1);
+      opNames{idx}(jspin_index) = Op_CD{iop}(2);
+    end
+  end
+end
+
+% RR and LL
+% Add 4*NchooseK(clusterSize,2) operators of the form EE...O...E...O...EE,
+% where O1,2 in {R,L}.
+% Loop over spins.
+for jSpin = 1:clusterSize-1
+  
+  % Adjust for placement order.
+  jspin_index = clusterSize-jSpin + 1;
+  
+  % Loop over spins.
+  for iSpin = jSpin+1:clusterSize
+    
+    % Adjust for placement order.
+    ispin_index = clusterSize-iSpin + 1;
+   
+    % Loop over the operator set indices.
+    for iop = 2:3
+      
+      % Increment index.
+      idx = idx + 1;
+      % Initialize operator string with the identity string.
+      opNames{idx} = opNames{1};
+      % Set the non-identity elements.
+      opNames{idx}(ispin_index) = Op{iop};
+      opNames{idx}(jspin_index) = Op{iop};
+    end
+  end
+end
+
+end
+
+% Information on Operator Indices
 
 %--------------------------------------------------------------------------
 % 1-Clusters: E O
@@ -13,30 +226,9 @@ multiplicity = 2*spin+1;
 % E (1)  : E
 % O (2-4): z + -
 
-% Initialize Spin multiplicity Cluster size arrays.
-maxSize = min(6,maxClusterSize);
-if maxSize < 1
-  output = {};
-  return;
-end
-
-NumSpinOps = 3/2*((1:maxSize).^2 + (1:maxSize)) +1; 
-SpinOp_1 = zeros(multiplicity,multiplicity,NumSpinOps(1));
-
-% Assign single spin operators.
-SpinOp_1(:,:,E) = eye(multiplicity);
-SpinOp_1(:,:,Z) = spinZ(spin);
-SpinOp_1(:,:,RAISE) = spinRaise(spin);
-SpinOp_1(:,:,LOWER) = spinLower(spin);
-
-if maxSize < 2
-  output = {SpinOp_1};
-  return;
-end
 %--------------------------------------------------------------------------
 % 2-Clusters: EE EO OE OO
 %--------------------------------------------------------------------------
-SpinOp_2 = zeros(multiplicity^2,multiplicity^2,NumSpinOps(2));
 
 % EE (1)   : EE
 % EO (2-4) : Ez E+ E-
@@ -46,55 +238,9 @@ SpinOp_2 = zeros(multiplicity^2,multiplicity^2,NumSpinOps(2));
 % OO (11-14): z+ z- +z -z
 % OO (15-16): ++ -- 
 
-EE =  1;
-EZ =  2;  ER =  3;  EL =  4;
-ZE =  5;  RE =  6;  LE =  7;
-ZZ =  8;  RL =  9;  LR = 10;
-
-ZR = 11;  ZL = 12;  RZ = 13;  LZ = 14;
-RR = 15;  LL = 16;
-
-% Assign 2-cluster operators that contain an identity.
-% EE
-
-spin_index = EE;
-SpinOp_2(:,:,EE) = eye(multiplicity^2);
-
-for iop =Z:LOWER
-  % EO
-  spin_index = spin_index + 1;
-  SpinOp_2(:,:,spin_index) = kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop));
-end
-
-for iop =Z:LOWER
-  % OE
-  spin_index = spin_index + 1;
-  SpinOp_2(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_1(:,:,E));
-end
-
-% Assign 2-cluster operators that do not contain an identity.
-%OO
-SpinOp_2(:,:,ZZ) = kron(SpinOp_1(:,:,Z),SpinOp_1(:,:,Z));
-SpinOp_2(:,:,RL) = kron(SpinOp_1(:,:,RAISE),SpinOp_1(:,:,LOWER));
-SpinOp_2(:,:,LR) = kron(SpinOp_1(:,:,LOWER),SpinOp_1(:,:,RAISE));
-
-SpinOp_2(:,:,ZR) = kron(SpinOp_1(:,:,Z),SpinOp_1(:,:,RAISE));
-SpinOp_2(:,:,ZL) = kron(SpinOp_1(:,:,Z),SpinOp_1(:,:,LOWER));
-SpinOp_2(:,:,RZ) = kron(SpinOp_1(:,:,RAISE),SpinOp_1(:,:,Z));
-SpinOp_2(:,:,LZ) = kron(SpinOp_1(:,:,LOWER),SpinOp_1(:,:,Z));
-
-
-SpinOp_2(:,:,RR) = kron(SpinOp_1(:,:,RAISE),SpinOp_1(:,:,RAISE));
-SpinOp_2(:,:,LL) = kron(SpinOp_1(:,:,LOWER),SpinOp_1(:,:,LOWER));
-
-if maxSize < 3
-  output = {SpinOp_1,SpinOp_2};
-  return;
-end
 %--------------------------------------------------------------------------
 % 3-Clusters: EEE EEO EOE OEE EOO OEO OOE
 %--------------------------------------------------------------------------
-SpinOp_3 = zeros(multiplicity^3,multiplicity^3,NumSpinOps(3));
 
 % EEE (1)    : EEE
 % EEO (2-4)  : EEz EE+ EE-
@@ -104,102 +250,25 @@ SpinOp_3 = zeros(multiplicity^3,multiplicity^3,NumSpinOps(3));
 % OEO (14-16): zEz +E- -E+
 % OOE (17-19): zzE +-E -+E
 
-EEE =  1;
-EEZ =  2; EER =  3; EEL =  4;
-EZE =  5; ERE =  6; ELE =  7;
-ZEE =  8; REE =  9; LEE = 10;
-EZZ = 11; ERL = 12; ELR = 13;
-ZEZ = 14; REL = 15; LER = 16;
-ZZE = 17; RLE = 18; LRE = 19;
+% EEE =  1;
+% EEZ =  2; EER =  3; EEL =  4;
+% EZE =  5; ERE =  6; ELE =  7;
+% ZEE =  8; REE =  9; LEE = 10;
+% EZZ = 11; ERL = 12; ELR = 13;
+% ZEZ = 14; REL = 15; LER = 16;
+% ZZE = 17; RLE = 18; LRE = 19;
+% 
+% EZR = 20;  EZL = 21;  ERZ = 22;  ELZ = 23;
+% ZER = 24;  ZEL = 25;  REZ = 26;  LEZ = 27;
+% ZRE = 28;  ZLE = 29;  RZE = 30;  LZE = 31;
+% 
+% ERR = 32;  ELL = 33;
+% RER = 34;  LEL = 35;
+% RRE = 36;  LLE = 37;
 
-EZR = 20;  EZL = 21;  ERZ = 22;  ELZ = 23;
-ZER = 24;  ZEL = 25;  REZ = 26;  LEZ = 27;
-ZRE = 28;  ZLE = 29;  RZE = 30;  LZE = 31;
-
-ERR = 32;  ELL = 33;
-RER = 34;  LEL = 35;
-RRE = 36;  LLE = 37;
-
-% Assign 3-cluster operators that contain one non-identity operator.
-SpinOp_3(:,:,E) = eye(multiplicity^3);
-spin_index = E;
-for iop =Z:LOWER
-  % EEO
-  spin_index = spin_index + 1;
-  SpinOp_3(:,:,spin_index) = kron(SpinOp_2(:,:,E),SpinOp_1(:,:,iop));
-end
-
-for iop =Z:LOWER  
-  % EOE
-  spin_index = spin_index + 1;
-  SpinOp_3(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop))  ,SpinOp_1(:,:,E));
-end
-
-for iop =Z:LOWER  
-  % OEE
-  spin_index = spin_index + 1;
-  SpinOp_3(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_2(:,:,E));
-  
-end
-
-% Assign 3-cluster operators that contain two non-identity operators.
-% EOO
-for iop =8:10
-  spin_index = spin_index + 1;
-  SpinOp_3(:,:,spin_index)= kron(SpinOp_1(:,:,E),SpinOp_2(:,:,iop));
-end
-
-% OEO
-
-spin_index = spin_index + 1;
-SpinOp_3(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,Z));
-
-spin_index = spin_index + 1;
-SpinOp_3(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,LOWER));
-
-spin_index = spin_index + 1;
-SpinOp_3(:,:,spin_index) = kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,RAISE));
-
-% OOE
-
-for iop =8:10
-  spin_index = spin_index + 1;
-  SpinOp_3(:,:,spin_index)= kron(SpinOp_2(:,:,iop),SpinOp_1(:,:,E));
-end
-
-SpinOp_3(:,:,EZR) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,ZR));
-SpinOp_3(:,:,EZL) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,ZL));
-SpinOp_3(:,:,ERZ) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,RZ));
-SpinOp_3(:,:,ELZ) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,LZ));
-
-SpinOp_3(:,:,ZER) = kron(SpinOp_1(:,:,Z),     SpinOp_2(:,:,EZ));
-SpinOp_3(:,:,ZEL) = kron(SpinOp_1(:,:,Z),     SpinOp_2(:,:,EL));
-SpinOp_3(:,:,REZ) = kron(SpinOp_1(:,:,RAISE), SpinOp_2(:,:,EZ));
-SpinOp_3(:,:,LEZ) = kron(SpinOp_1(:,:,LOWER), SpinOp_2(:,:,EZ));
-
-SpinOp_3(:,:,ZRE) = kron(SpinOp_2(:,:,ZR), SpinOp_1(:,:,E));
-SpinOp_3(:,:,ZLE) = kron(SpinOp_2(:,:,ZL), SpinOp_1(:,:,E));
-SpinOp_3(:,:,RZE) = kron(SpinOp_2(:,:,RZ), SpinOp_1(:,:,E));
-SpinOp_3(:,:,LZE) = kron(SpinOp_2(:,:,LZ), SpinOp_1(:,:,E));
-
-
-SpinOp_3(:,:,ERR) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,RR));
-SpinOp_3(:,:,ELL) = kron(SpinOp_1(:,:,E), SpinOp_2(:,:,LL));
-
-SpinOp_3(:,:,RER) = kron(SpinOp_1(:,:,RAISE), SpinOp_2(:,:,ER));
-SpinOp_3(:,:,LEL) = kron(SpinOp_1(:,:,LOWER), SpinOp_2(:,:,EL));
-
-SpinOp_3(:,:,RRE) = kron(SpinOp_2(:,:,RR), SpinOp_1(:,:,E));
-SpinOp_3(:,:,LLE) = kron(SpinOp_2(:,:,LL) ,SpinOp_1(:,:,E));
-
-if maxSize < 4
-  output = {SpinOp_1,SpinOp_2,SpinOp_3};
-  return;
-end
 %--------------------------------------------------------------------------
 % 4-Clusters: EEEE EEEO EEOE EOEE OEEE EEOO EOEO OEEO EOOE OEOE OOEE
 %--------------------------------------------------------------------------
-SpinOp_4 = zeros(multiplicity^4,multiplicity^4,NumSpinOps(4));
 
 % EEEE (1)    :  EEEE
 % EEEO (2-4)  :  EEEz EEE+ EEE-
@@ -213,169 +282,38 @@ SpinOp_4 = zeros(multiplicity^4,multiplicity^4,NumSpinOps(4));
 % OEOE (26-28):  zEzE +E-E -E+E
 % OOEE (29-31):  zzEE +-EE -+EE
 
-EEEE =  1;
-EEEZ =  2; EEER =  3; EEEL =  4;
-EEZE =  5; EERE =  6; EELE =  7;
-EZEE =  8; EREE =  9; ELEE = 10;
-ZEEE = 11; REEE = 12; LEEE = 13;
-EEZZ = 14; EERL = 15; EELR = 16;
-EZEZ = 17; EREL = 18; ELER = 19;
-ZEEZ = 20; REEL = 21; LEER = 22;
-EZZE = 23; ERLE = 24; ELRE = 25;
-ZEZE = 26; RELE = 27; LERE = 28;
-ZZEE = 29; RLEE = 30; LREE = 31;
+% EEEE =  1;
+% EEEZ =  2; EEER =  3; EEEL =  4;
+% EEZE =  5; EERE =  6; EELE =  7;
+% EZEE =  8; EREE =  9; ELEE = 10;
+% ZEEE = 11; REEE = 12; LEEE = 13;
+% EEZZ = 14; EERL = 15; EELR = 16;
+% EZEZ = 17; EREL = 18; ELER = 19;
+% ZEEZ = 20; REEL = 21; LEER = 22;
+% EZZE = 23; ERLE = 24; ELRE = 25;
+% ZEZE = 26; RELE = 27; LERE = 28;
+% ZZEE = 29; RLEE = 30; LREE = 31;
+% 
+% 
+% EEZR = 31;  EEZL = 32;  EERZ = 33;  EELZ = 34;
+% EZER = 35;  EZEL = 36;  EREZ = 37;  ELEZ = 38;
+% ZEER = 39;  ZEEL = 40;  REEZ = 41;  LEEZ = 42;
+% EZRE = 43;  EZLE = 44;  ERZE = 45;  ELZE = 46;
+% ZERE = 47;  ZELE = 48;  REZE = 49;  LEZE = 50;
+% ZREE = 51;  ZLEE = 52;  RZEE = 53;  LZEE = 54;
+% 
+% EERR = 55;  EELL = 56;
+% ERER = 57;  ELEL = 58;
+% REER = 59;  LEEL = 60;
+% ERRE = 61;  ELLE = 62;
+% RERE = 63;  LELE = 64;
+% RREE = 65;  LLEE = 66;
 
 
-EEZR = 31;  EEZL = 32;  EERZ = 33;  EELZ = 34;
-EZER = 35;  EZEL = 36;  EREZ = 37;  ELEZ = 38;
-ZEER = 39;  ZEEL = 40;  REEZ = 41;  LEEZ = 42;
-EZRE = 43;  EZLE = 44;  ERZE = 45;  ELZE = 46;
-ZERE = 47;  ZELE = 48;  REZE = 49;  LEZE = 50;
-ZREE = 51;  ZLEE = 52;  RZEE = 53;  LZEE = 54;
-
-EERR = 55;  EELL = 56;
-ERER = 57;  ELEL = 58;
-REER = 59;  LEEL = 60;
-ERRE = 61;  ELLE = 62;
-RERE = 63;  LELE = 64;
-RREE = 65;  LLEE = 66;
-% Assign 4-cluster operators that contain one non-identity operator.
-SpinOp_4(:,:,E) = eye(multiplicity^4);
-spin_index = E;
-for iop =Z:LOWER
-  % EEEO
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index) = kron(SpinOp_3(:,:,E),SpinOp_1(:,:,iop));
-end
-
-for iop =Z:LOWER
-  % EEOE
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_2(:,:,E),SpinOp_1(:,:,iop))  ,SpinOp_1(:,:,E));
-end
-
-for iop =Z:LOWER
-  % EOEE
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop))  ,SpinOp_2(:,:,E));
-end
-
-for iop =Z:LOWER
-  % OEEE
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_3(:,:,E));
-  
-end
-
-% Assign 4-cluster operators that contain two non-identity operators.
-% EEOO
-for iop =8:10
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index)= kron(SpinOp_2(:,:,E),SpinOp_2(:,:,iop));
-end
-
-% EOEO
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,E), kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,Z)));
-
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,E), kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,LOWER)));
-
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron(SpinOp_1(:,:,E), kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,RAISE)));
-
-% OEEO
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_2(:,:,E))  ,SpinOp_1(:,:,Z));
-
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_2(:,:,E))  ,SpinOp_1(:,:,LOWER));
-
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_2(:,:,E))  ,SpinOp_1(:,:,RAISE));
-
-
-% EOOE
-
-for iop =8:10
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index)=  kron(SpinOp_1(:,:,E), kron(SpinOp_2(:,:,iop),SpinOp_1(:,:,E)));
-end
-
-% OEOE
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron( kron(  kron(SpinOp_1(:,:,Z)     ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,Z)),SpinOp_1(:,:,E));
-
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron( kron(  kron(SpinOp_1(:,:,RAISE) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,LOWER)),SpinOp_1(:,:,E));
-
-spin_index = spin_index + 1;
-SpinOp_4(:,:,spin_index) = kron( kron( kron(SpinOp_1(:,:,LOWER) ,SpinOp_1(:,:,E))  ,SpinOp_1(:,:,RAISE)) ,SpinOp_1(:,:,E));
-
-% OOEE
-
-for iop =8:10
-  spin_index = spin_index + 1;
-  SpinOp_4(:,:,spin_index)= kron(SpinOp_2(:,:,iop),SpinOp_2(:,:,E));
-end
-
-SpinOp_4(:,:,EEZR) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,ZR));
-SpinOp_4(:,:,EEZL) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,ZL));
-SpinOp_4(:,:,EERZ) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,RZ));
-SpinOp_4(:,:,EELZ) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,LZ));
-
-SpinOp_4(:,:,EZER) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EZ));
-SpinOp_4(:,:,EZEL) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EL));
-SpinOp_4(:,:,EREZ) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EZ));
-SpinOp_4(:,:,ELEZ) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,EZ));
-
-SpinOp_4(:,:,ZEER) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,ER));
-SpinOp_4(:,:,ZEEL) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,EL));
-SpinOp_4(:,:,REEZ) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,EZ));
-SpinOp_4(:,:,LEEZ) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,EZ));
-
-SpinOp_4(:,:,EZRE) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,EZLE) = kron(SpinOp_2(:,:,EZ), SpinOp_2(:,:,LE));
-SpinOp_4(:,:,ERZE) = kron(SpinOp_2(:,:,ER), SpinOp_2(:,:,ZE));
-SpinOp_4(:,:,ELZE) = kron(SpinOp_2(:,:,EL), SpinOp_2(:,:,ZE));
-
-SpinOp_4(:,:,ZERE) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,ZELE) = kron(SpinOp_2(:,:,ZE), SpinOp_2(:,:,LE));
-SpinOp_4(:,:,REZE) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,ZE));
-SpinOp_4(:,:,LEZE) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,ZE));
-
-SpinOp_4(:,:,ZREE) = kron(SpinOp_2(:,:,ZR), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,ZLEE) = kron(SpinOp_2(:,:,ZL), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,RZEE) = kron(SpinOp_2(:,:,RZ), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,LZEE) = kron(SpinOp_2(:,:,LZ), SpinOp_2(:,:,EE));
-
-SpinOp_4(:,:,EERR) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,RR));
-SpinOp_4(:,:,EELL) = kron(SpinOp_2(:,:,EE), SpinOp_2(:,:,LL));
-
-SpinOp_4(:,:,ERER) = kron(SpinOp_2(:,:,ER), SpinOp_2(:,:,ER));
-SpinOp_4(:,:,ELEL) = kron(SpinOp_2(:,:,EL), SpinOp_2(:,:,EL));
-
-SpinOp_4(:,:,REER) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,ER));
-SpinOp_4(:,:,LEEL) = kron(SpinOp_2(:,:,LE) ,SpinOp_2(:,:,EL));
-
-SpinOp_4(:,:,ERRE) = kron(SpinOp_2(:,:,ER), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,ELLE) = kron(SpinOp_2(:,:,EL), SpinOp_2(:,:,LE));
-
-SpinOp_4(:,:,RERE) = kron(SpinOp_2(:,:,RE), SpinOp_2(:,:,RE));
-SpinOp_4(:,:,LELE) = kron(SpinOp_2(:,:,LE), SpinOp_2(:,:,LE));
-
-SpinOp_4(:,:,RREE) = kron(SpinOp_2(:,:,RR), SpinOp_2(:,:,EE));
-SpinOp_4(:,:,LLEE) = kron(SpinOp_2(:,:,LL) ,SpinOp_2(:,:,EE));
-
-if maxSize < 5
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4};
-  return;
-end
 %--------------------------------------------------------------------------
 % 5-Clusters: EEEEE EEEEO EEEOE EEOEE EOEEE OEEEE EEEOO EEOEO EOEEO OEEEO
 % EEOOE EOEOE OEEOE EOOEE OEOEE OOEEE
 %--------------------------------------------------------------------------
-SpinOp_5 = zeros(multiplicity^5,multiplicity^5,NumSpinOps(5));
 
 % EEEEE (1)    :  EEEEE
 % EEEEO (2-4)  :  EEEEz EEEE+ EEEE-
@@ -394,163 +332,10 @@ SpinOp_5 = zeros(multiplicity^5,multiplicity^5,NumSpinOps(5));
 % OEOEE (41-43):  zEzEE +E-EE -E+EE
 % OOEEE (44-46):  zzEEE +-EEE -+EEE
 
-% EEEEE (1)    :  EEEEE
-spin_index = 1;
-SpinOp_5(:,:,spin_index) = eye(multiplicity^5);
-
-% EEEEO (2-4)  :  EEEEz EEEE+ EEEE-
-for iop =Z:LOWER
-  % EEEO
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron(SpinOp_4(:,:,E),SpinOp_1(:,:,iop));
-end
-
-% EEEOE (5-7)  :  EEEzE EEE+E EEE-E
-for iop =Z:LOWER
-  % EEOE
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron(SpinOp_3(:,:,E),SpinOp_1(:,:,iop)),SpinOp_1(:,:,E));
-end
-
-% EEOEE (8-10) :  EEzEE EE+EE EE-EE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron(SpinOp_2(:,:,E),SpinOp_1(:,:,iop)),SpinOp_2(:,:,E));
-end
-
-% EOEEE (11-13):  EzEEE E+EEE E-EEE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron(SpinOp_1(:,:,E),SpinOp_1(:,:,iop)),SpinOp_3(:,:,E));
-end
-
-% OEEEE (14-16):  zEEEE +EEEE -EEEE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron(SpinOp_1(:,:,iop),SpinOp_4(:,:,E));
-end
-
-% EEEOO (17-19):  EEEzz EEE+- EEE-+
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron(SpinOp_3(:,:,E),SpinOp_1(:,:,iop)),SpinOp_1(:,:,jop));
-end
-
-% EEOEO (20-22):  EEzEz EE+E- EE-E+
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron(...
-    SpinOp_2(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E) ), ...
-    SpinOp_1(:,:,jop) );
-end
-
-% EOEEO (23-25):  EzEEz E+EE- E-EE+
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron(...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_2(:,:,E) ), ...
-    SpinOp_1(:,:,jop) );
-end
-
-% OEEEO (26-28):  zEEEz +EEE- -EEE+ 
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron(...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_2(:,:,E) ), ...
-    SpinOp_1(:,:,jop) );
-end
-
-% EEOOE (29-31):  EEzzE EE+-E EE-+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron(...
-    SpinOp_2(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,jop) ), ...
-    SpinOp_1(:,:,E) );
-end
-
-% EOEOE (32-34):  EzEzE E+E-E E-E+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-% EOEOE (35-37):  zEEzE +EE-E -EE+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-% EOOEE (38-40):  EzzEE E+-EE E-+EE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,jop)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-% OEOEE (41-43):  zEzEE +E-EE -E+EE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,jop)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-% OOEEE (44-46):  zzEEE +-EEE -+EEE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_5(:,:,spin_index) = kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,jop)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-if maxSize < 6
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5};
-  return;
-end
 %--------------------------------------------------------------------------
 % 6-Clusters: EEEEEE EEEEEO EEEEOE EEEOEE EEOEEE EOEEEE OEEEEE EEEEOO
 % EEEOEO EEOEEO EOEEEO OEEEEO EEEOOE EEOEOE EOEEOE OEEEOE EEOOEE EOEOEE OEEOEE EOOEEE OOEEEE
 %--------------------------------------------------------------------------
-SpinOp_6 = zeros(multiplicity^6,multiplicity^6,NumSpinOps(6));
 
 % EEEEEE (1)    :  EEEEEE
 % EEEEEO (2-4)  :  EEEEEz EEEEE+ EEEEE-
@@ -575,279 +360,6 @@ SpinOp_6 = zeros(multiplicity^6,multiplicity^6,NumSpinOps(6));
 % OEOEEE (59-61):  zEzEEE +E-EEE -E+EEE
 % OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
 
-% EEEEEE (1)    :  EEEEEE
-spin_index = 1;
-SpinOp_6(:,:,spin_index) = eye(multiplicity^6);
-
-% EEEEEO (2-4)  :  EEEEEz EEEEE+ EEEEE-
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( ...
-    SpinOp_4(:,:,E), ...
-    SpinOp_1(:,:,E) ), ...
-    SpinOp_1(:,:,iop) );
-end
-
-% EEEEOE (5-7)  :  EEEEzE EEEE+E EEEE-E
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( ...
-    SpinOp_4(:,:,E), ...
-    SpinOp_1(:,:,iop) ), ...
-    SpinOp_1(:,:,E) );
-end
-
-% EEEOEE (8-10) :  EEEzEE EEE+EE EEE-EE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( ...
-    SpinOp_3(:,:,E), ...
-    SpinOp_1(:,:,iop) ), ...
-    SpinOp_2(:,:,E) );
-end
-
-% EEOEEE (11-13):  EEzEEE EE+EEE EE-EEE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( ...
-    SpinOp_2(:,:,E), ...
-    SpinOp_1(:,:,iop) ), ...
-    SpinOp_3(:,:,E) );
-end
-
-% EOEEEE (14-16):  EzEEEE +EEEEE -EEEEE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop) ), ...
-    SpinOp_4(:,:,E) );
-end
-
-% OEEEEE (17-19):  zEEEEE +EEEEE -EEEEE
-for iop =Z:LOWER
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E) ), ...
-    SpinOp_4(:,:,E) );
-end
-
-% EEEEOO (20-22):  EEEEzz EEEE+- EEEE-+
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,iop)) , ...
-    SpinOp_1(:,:,jop) );
-end
-
-
-% EEEOEO (23-25):  EEEzEz EEE+E- EEE-E+
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,iop)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop) );
-end
-
-
-% EEOEEO (26-28):  EEzEEz EE+EE- EE-EE+
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop) );
-end
-
-
-% EOEEEO (29-31):  EzEEEz E+EEE- E-EEE+ 
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop) );
-end
-
-
-% OEEEEO (32-34):  zEEEEz +EEEE- -EEEE+ 
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop) );
-end
-
-
-% EEEOOE (35-37):  EEEzzE EEE+-E EEE-+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,iop)) , ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% EEOEOE (38-40):  EEzEzE EE+E-E EE-E+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% EOEEOE (41-43):  EzEEzE E+EE-E E-EE+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% OEEEOE (44-46):  zEEEzE +EEE-E -EEE+E
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% EEOOEE (47-49):  EEzzEE EE+-EE EE-+EE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% EOEOEE (50-51):  EzEzEE E+E-EE E-E+EE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% OEEOEE (53-55):  zEEzEE +EE-EE -EE+EE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,jop)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% EOOEEE (56-58):  EzzEEE E+-EEE E-+EEE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,E), ...
-    SpinOp_1(:,:,iop)), ...
-    SpinOp_1(:,:,jop)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% OEOEEE (59-61):  zEzEEE +E-EEE -E+EEE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,jop)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-% OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
-for iop =Z:LOWER
-  jop = OO(iop);
-  spin_index = spin_index + 1;
-  SpinOp_6(:,:,spin_index) = kron( kron( kron( kron( kron( ...
-    SpinOp_1(:,:,iop), ...
-    SpinOp_1(:,:,jop)), ...
-    SpinOp_1(:,:,E)), ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E)) , ...
-    SpinOp_1(:,:,E) );
-end
-
-
-
-if maxSize < 7
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6};
-  return;
-end
 %--------------------------------------------------------------------------
 % 7-Clusters: 
 %--------------------------------------------------------------------------
@@ -881,10 +393,6 @@ end
 % OEOEEEE (62-85):  zEzEEEE +E-EEEE -E+EEEE
 % OOEEEEE (62-88):  zzEEEEE +-EEEEE -+EEEEE
 
-if maxSize < 8
-  output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6,SpinOp_7};
-  return;
-end
 %--------------------------------------------------------------------------
 % 8-Clusters: 
 %--------------------------------------------------------------------------
@@ -926,11 +434,3 @@ end
 % EOOEEEEE (62-64):  zzEEEEE +-EEEEE -+EEEEE
 % OEOEEEEE (62-64):  zzEEEEE +-EEEEE -+EEEEE
 % OOEEEEEE (62-112):  zzEEEEE +-EEEEE -+EEEEE
-
-output = {SpinOp_1,SpinOp_2,SpinOp_3,SpinOp_4,SpinOp_5,SpinOp_6};
-
-end
-
-
-
-

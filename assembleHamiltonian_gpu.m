@@ -30,7 +30,7 @@ useNucCD    = theory(7);
 useNucEF    = theory(8);
 useNQ       = theory(9);
 
-clustersize = numel(state_multiplicity);
+clusterSize = numel(state_multiplicity);
 
 %Cluster = sort(unique(Cluster));
 
@@ -46,7 +46,7 @@ Hnuc = 0;
 Hhf = 0;
 
 % iSpin is the index of the nuclear spin in the cluster
-for iSpin = 1:clustersize
+for iSpin = 1:clusterSize
   
   % the ith nuclear spin in the input Hamiltonian
   % inucleus = ispin - zeroIndex + 1; % since the electron is given position 1
@@ -105,7 +105,7 @@ for iSpin = 1:clustersize
   %------------------------------------------------------------------------
   % Loop over all nuclei with index greater than the ith nucleus.
   %------------------------------------------------------------------------
-  for jSpin = iSpin+1:clustersize
+  for jSpin = iSpin+1:clusterSize
         
     % the jth nuclear spin in the input Hamiltonian
     %jnucleus = jspin - zeroIndex + 1; % since the electron is given position 1
