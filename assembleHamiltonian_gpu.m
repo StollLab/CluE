@@ -370,8 +370,8 @@ switch clusterSize
     switch iSpin
       case 1 % OOE or OEO
         switch jSpin
-          case 2, IJ = [ZEZ REL LER ZER ZEL REZ LEZ RER LEL]; % OEO
-          case 1, IJ = [ZZE RLE LRE ZRE ZLE RZE LZE RRE LLE]; % OOE
+          case 3, IJ = [ZEZ REL LER ZER ZEL REZ LEZ RER LEL]; % OEO
+          case 2, IJ = [ZZE RLE LRE ZRE ZLE RZE LZE RRE LLE]; % OOE
         end
       case 2, IJ = [EZZ ERL ELR EZR EZL ERZ ELZ ERR ELL]; % EOO
     end
@@ -423,6 +423,27 @@ switch clusterSize
     EZZEE = 38; ERLEE = 39; ELREE = 40;
     ZEZEE = 41; RELEE = 42; LEREE = 43;
     ZZEEE = 44; RLEEE = 45; LREEE = 46;
+    EEEZR = 47; EEEZL = 48; EEERZ = 49;
+    EEELZ = 50; EEZER = 51; EEZEL = 52;
+    EEREZ = 53; EELEZ = 54; EZEER = 55;
+    EZEEL = 56; EREEZ = 57; ELEEZ = 58;
+    ZEEER = 59; ZEEEL = 60; REEEZ = 61;
+    LEEEZ = 62; EEZRE = 63; EEZLE = 64;
+    EERZE = 65; EELZE = 66; EZERE = 67;
+    EZELE = 68; EREZE = 69; ELEZE = 70;
+    ZEERE = 71; ZEELE = 72; REEZE = 73;
+    LEEZE = 74; EZREE = 75; EZLEE = 76;
+    ERZEE = 77; ELZEE = 78; ZEREE = 79;
+    ZELEE = 80; REZEE = 81; LEZEE = 82;
+    ZREEE = 83; ZLEEE = 84; RZEEE = 85;
+    LZEEE = 86; EEERR = 87; EEELL = 88;
+    EERER = 89; EELEL = 90; EREER = 91;
+    ELEEL = 92; REEER = 93; LEEEL = 94;
+    EERRE = 95; EELLE = 96; ERERE = 97;
+    ELELE = 98; REERE = 99; LEELE = 100;
+    ERREE = 101; ELLEE = 102; REREE = 103;
+    LELEE = 104; RREEE = 105; LLEEE = 106;
+    
     switch iSpin
       case 1
         switch jSpin
@@ -462,6 +483,37 @@ switch clusterSize
     EZZEEE = 56; ERLEEE = 57; ELREEE = 58;
     ZEZEEE = 59; RELEEE = 60; LEREEE = 61;
     ZZEEEE = 62; RLEEEE = 63; LREEEE = 64;
+    EEEEZR = 65; EEEEZL = 66; EEEERZ = 67;
+    EEEELZ = 68; EEEZER = 69; EEEZEL = 70;
+    EEEREZ = 71; EEELEZ = 72; EEZEER = 73;
+    EEZEEL = 74; EEREEZ = 75; EELEEZ = 76;
+    EZEEER = 77; EZEEEL = 78; EREEEZ = 79;
+    ELEEEZ = 80; ZEEEER = 81; ZEEEEL = 82;
+    REEEEZ = 83; LEEEEZ = 84; EEEZRE = 85;
+    EEEZLE = 86; EEERZE = 87; EEELZE = 88;
+    EEZERE = 89; EEZELE = 90; EEREZE = 91;
+    EELEZE = 92; EZEERE = 93; EZEELE = 94;
+    EREEZE = 95; ELEEZE = 96; ZEEERE = 97;
+    ZEEELE = 98; REEEZE = 99; LEEEZE = 100;
+    EEZREE = 101; EEZLEE = 102; EERZEE = 103;
+    EELZEE = 104; EZEREE = 105; EZELEE = 106;
+    EREZEE = 107; ELEZEE = 108; ZEEREE = 109;
+    ZEELEE = 110; REEZEE = 111; LEEZEE = 112;
+    EZREEE = 113; EZLEEE = 114; ERZEEE = 115;
+    ELZEEE = 116; ZEREEE = 117; ZELEEE = 118;
+    REZEEE = 119; LEZEEE = 120; ZREEEE = 121;
+    ZLEEEE = 122; RZEEEE = 123; LZEEEE = 124;
+    EEEERR = 125; EEEELL = 126; EEERER = 127;
+    EEELEL = 128; EEREER = 129; EELEEL = 130;
+    EREEER = 131; ELEEEL = 132; REEEER = 133;
+    LEEEEL = 134; EEERRE = 135; EEELLE = 136;
+    EERERE = 137; EELELE = 138; EREERE = 139;
+    ELEELE = 140; REEERE = 141; LEEELE = 142;
+    EERREE = 143; EELLEE = 144; EREREE = 145;
+    ELELEE = 146; REEREE = 147; LEELEE = 148;
+    ERREEE = 149; ELLEEE = 150; REREEE = 151;
+    LELEEE = 152; RREEEE = 153; LLEEEE = 154;
+    
     switch iSpin
       case 1
         switch jSpin
