@@ -157,7 +157,7 @@ for clusterSize = 1:Method_order
          
      end
      
-    [tensors,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, useHamiltonian);
+    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, theory);
     
     [Ha,Hb] = assembleHamiltonian_gpu(tensors,SpinOp,{},Cluster,NumberStates,...
       theory,zeroIndex,clusterSize);

@@ -212,8 +212,6 @@ if strcmp(Nuclei.graphCriterion,'complete')
   graphCriterion = COMPLETE;
 end
 
-useHamiltonian = System.useHamiltonian;
-
 % Methyl Groups
 IsMethyl = strcmp(Nuclei.Type,'CH3');
 if ~isempty(Nuclei.Methyl_Data)
@@ -268,6 +266,8 @@ for clusterSize = 1:Method_order
       % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
       % the jth cluster of size subCluster_size that is a subcluster of
       % the ith ccluster of size clusterSize.
+      case 1
+        
       case 2
         SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);   
       case 3
@@ -279,6 +279,7 @@ for clusterSize = 1:Method_order
       case 6
         SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
       otherwise
+        fprintf('Cannot calculate clusters of size %d.\n', clusterSize)
         continue;
         
     end
@@ -368,7 +369,7 @@ for clusterSize = 1:Method_order
          
      end
      
-    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID);
+    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,magneticField, ge, muB, muN, mu0, hbar,theory,MethylID);
     qtensors = Qtensors(:,:,thisCluster);
     
     [Halpha,Hbeta] = ...
@@ -630,6 +631,7 @@ end
   SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,SubclusterIndices_5,SubclusterIndices_6,...
   timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
 % 
+
 % if EXPERIMENT == CPMG_2D
 %     Signal = reshape(Signals(Method_order,:).',timepoints,timepoints)';
 % else

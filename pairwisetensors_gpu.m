@@ -19,7 +19,7 @@
   hbar = System.hbar;
 %}
 function [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,...
-  Cluster,magneticField, ge, muB, muN, mu0, hbar,useHamiltonian,MethylID)
+  Cluster,magneticField, ge, muB, muN, mu0, hbar,theory,MethylID)
 
 zeroIndex = min(Cluster) - 1;
 Indices = fliplr(Cluster);
@@ -28,10 +28,13 @@ tensors = zeros(3,3, N+1,N+1); % nspins by nspins
 MethylSelectionRules = [0,0,0;0,0,0;0,0,1];
 
 % ENUM
-EZEEMAN = 1; NZEEMAN = 2; HYPERFINE = 3; NDIPOLE = 4;
+useEZ       = theory(1);
+useNZ       = theory(2);
+useHF       = any(theory(3:4));
+useNucDD    = any(theory(5:8));
 
 % Electron Zeeman
-if useHamiltonian(EZEEMAN)
+if useEZ
   tensors(:,:,1,1) = constructElectronZeeman(magneticField,ge, muB, hbar);
 end
 
@@ -40,17 +43,17 @@ for i_index_nucleus = Indices
   % inucleus = i_index_nucleus - zeroIndex;
   inucleus  = inucleus + 1;
   % Nuclear Zeeman
-  if useHamiltonian(NZEEMAN)
+  if useNZ
     tensors(:,:,1+inucleus,1+inucleus) = constructNuclearZeeman(Nuclei_g,i_index_nucleus,magneticField, muN, hbar);
   end
   
   % Hyperfine
-  if useHamiltonian(HYPERFINE)
+  if useHF
     tensors(:,:,1,1+inucleus )= constructHyperfine(Nuclei_g,Nuclei_Coordinates, i_index_nucleus,ge, muB, muN, mu0, hbar);
   end
   
   % Nucleus-Nucleus Coupling
-  if ~useHamiltonian(NDIPOLE), continue; end
+  if ~useNucDD, continue; end
   
   jnucleus = 0;
   for j_index_nucleus = Indices
@@ -69,22 +72,20 @@ end
 end
 
 function electronZeeman = constructElectronZeeman(magneticField,ge, muB, hbar)
-electronZeeman = ge*muB*magneticField; % J.
+electronZeeman = ge*muB*magneticField*eye(3); % J.
 electronZeeman = electronZeeman/(2*pi*hbar); % J -> Hz.
 end
 
 function NuclearZeeman = constructNuclearZeeman(Nuclei_g, i_index_nucleus, magneticField, muN, hbar)
-NuclearZeeman = Nuclei_g(i_index_nucleus)*magneticField*muN*eye(3); % J.
+gn = Nuclei_g(i_index_nucleus);
+NuclearZeeman = gn*muN*magneticField*eye(3); % J.
 NuclearZeeman = NuclearZeeman/(2*pi*hbar); % J -> Hz
 end
 
 function Hyperfine = constructHyperfine(Nuclei_g,Nuclei_Coordinates, i_index_nucleus,ge, muB, muN, mu0, hbar)
 
 gni = Nuclei_g(i_index_nucleus);
-r = Nuclei_Coordinates(i_index_nucleus,:);
-if size(r,2)==3
-  r=r';
-end
+r = Nuclei_Coordinates(i_index_nucleus,:)';
 n = r/norm(r);
 nnt = n*n';
 r3 = norm(r)^3;
@@ -99,10 +100,7 @@ function Hdd = constructNuclearDipoleCoupling(Nuclei_g,Nuclei_Coordinates,i_inde
 
 gni = Nuclei_g(i_index_nucleus);
 gnj = Nuclei_g(j_index_nucleus);
-r = Nuclei_Coordinates(i_index_nucleus,:)-Nuclei_Coordinates(j_index_nucleus,:);
-if size(r,2)==3
-  r=r';
-end
+r = Nuclei_Coordinates(i_index_nucleus,:)'-Nuclei_Coordinates(j_index_nucleus,:)';
 n = r/norm(r);
 nnt = n*n';
 r3 = norm(r)^3;
