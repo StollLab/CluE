@@ -6,7 +6,7 @@ function Indices = findSubclusters_gpu(Clusters,clusterSize,iCluster,reference_c
 % from Indices{subCluster_size} = list of all jCluster such that Clusters{subCluster_size}(jCluster,:) is a subcluster of Clusters{clusterSize}(iCluster,:)
 % to
 % Given the ith cluster of size clusterSize, 
-% Indices(jCluster,subCluster_size) = jth cluster of sizesubCluster_size
+% Indices(jCluster,subCluster_size) = jth cluster of size subCluster_size
 % that is a subcluster of the ith cluster of size clusterSize
 %
 % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
