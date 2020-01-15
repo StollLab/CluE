@@ -353,14 +353,22 @@ for uc = 1:nCells
       if System.nuclear_quadrupole
         for iconnect = Conect
           switch Type{iconnect}
-            case 'O'
+            case {'O','C'} 
               zQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
             case 'M'
               xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
           end
         end
-        if norm(zQ)==0 || norm(xQ)==0
-          error('Failed to set quadrupole tensor orientation.')
+        if norm(zQ)==0
+          warning('Failed to set quadrupole tensor orientation.')
+          continue;
+        end
+        if norm(xQ)==0
+          while xQ*zQ==0
+            warning('Failed to set quadrupole tensor orientation; using a random direction.')
+            xQ = rand(1,3);
+            xQ = xQ/norm(xQ);
+          end
         end
         
         zQ = zQ/norm(zQ);

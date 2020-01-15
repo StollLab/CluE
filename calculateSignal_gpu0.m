@@ -42,7 +42,7 @@ state_multiplicity = Nuclei.StateMultiplicity;
 ZeemanStates = Nuclei.ZeemanStates;
 max_basis = max(NumberStates);
 States = zeros(max_basis,Nuclei.number);
- 
+betaT = 2*pi*System.hbar /System.kT; % 1/Hz.
 Qtensors = Nuclei.Qtensor;
 
 % Unpackspin operators.
@@ -169,7 +169,8 @@ for isize = 1:Method_order
       
 end
 
-% Define placeholder variables.
+% Define placeholder variables for variables that need to be defined but do
+% not contribute to the calculation for the selected order.
 for isize = Method_order+1:maxSize
   
       switch isize 
@@ -267,7 +268,7 @@ for clusterSize = 1:Method_order
       % the jth cluster of size subCluster_size that is a subcluster of
       % the ith ccluster of size clusterSize.
       case 1
-        
+        % This is just to catch this case.  There is nothing to set. 
       case 2
         SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);   
       case 3
@@ -279,7 +280,8 @@ for clusterSize = 1:Method_order
       case 6
         SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
       otherwise
-        fprintf('Cannot calculate clusters of size %d.\n', clusterSize)
+        fprintf('Cannot calculate clusters of size %d.\n', clusterSize);
+        error('Cluster Error');
         continue;
         
     end
@@ -376,9 +378,6 @@ for clusterSize = 1:Method_order
       assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
       theory,zeroIndex,methyl_number);
     
-    % get density matrix
-    DensityMatrix0 = getDensityMatrix(ZeemanStates,NumberStates,Cluster);
-    
     switch methyl_number
       case 0
         PA = eye(size(Halpha));
@@ -465,25 +464,26 @@ for clusterSize = 1:Method_order
         
     end
     
+    % Project Hamiltonian onto the methyls' C3 A state,
+    % if there are methyls, otherwise multiply by the identity.
       Hb=PA*Hbeta*PA;
       Ha=PA*Halpha*PA;
-      DensityMatrix=PA*DensityMatrix0*PA;
 
     % get cluster coherence
     
     switch clusterSize
       case 1
-        Coherences_1(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+        Coherences_1(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
       case 2
-        Coherences_2(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+        Coherences_2(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
       case 3
-        Coherences_3(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+        Coherences_3(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
       case 4
-        Coherences_4(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+        Coherences_4(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
       case 5
-        Coherences_5(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+        Coherences_5(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
       case 6
-        Coherences_6(iCluster,:) = propagate(total_time, DensityMatrix,timepoints,dt,t0,Hb,Ha,EXPERIMENT); 
+        Coherences_6(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
 
     end 
     
@@ -491,50 +491,21 @@ for clusterSize = 1:Method_order
       continue;
     end
     
+    % Project beta Hamiltonian onto the methyl's C3 E state.
     Hb_E =   PEap*Hbeta*PEap + PEam*Hbeta*PEam ...
            + PEbp*Hbeta*PEbp + PEbm*Hbeta*PEbm ...
            + PEap*Hbeta*PEbm + PEam*Hbeta*PEbp ...
            + PEbp*Hbeta*PEam + PEbm*Hbeta*PEap;
-    
+         
+    % Project alpha Hamiltonian onto the methyl's C3 E state.
     Ha_E =   PEap*Halpha*PEap + PEam*Halpha*PEam ...
            + PEbp*Halpha*PEbp + PEbm*Halpha*PEbm ...
            + PEap*Halpha*PEbm + PEam*Halpha*PEbp ...
            + PEbp*Halpha*PEam + PEbm*Halpha*PEap;
+            
          
-    DensityMatrix_E =   PEap*DensityMatrix0*PEap + PEam*DensityMatrix0*PEam ...
-           + PEbp*DensityMatrix0*PEbp + PEbm*DensityMatrix0*PEbm ...
-           + PEap*DensityMatrix0*PEbm + PEam*DensityMatrix0*PEbp ...
-           + PEbp*DensityMatrix0*PEam + PEbm*DensityMatrix0*PEap;     
-         
-    %{
-    % Get dimensionality of the Hilbert space.
-    dimension = size(DensityMatrix,1);
-    StateNumbers = 1:dimension;
-    AStates = [];
-    
-    for imethyl = 1:methyl_number
-      state_cycles = 2.^find(MethylID==imethyl);
-      StateList = zeros(3,dimension);
-      
-      for iH = 1:3
-        n_=state_cycles(iH);
-        for ii = 1:dimension/n_
-%           StateList(iH, 1+ii*n_ :(ii+1)*n_/2)  = 0;
-          StateList(iH, (ii-1/2)*n_ + 1:ii*n_)  = 1;
-        end
-        
-      end
-      AStates = [AStates ,find((StateList(1,:)==StateList(2,:)) .* (StateList(1,:)==StateList(3,:)))];
-    end
-    AStates = unique(AStates);
-    keepStates= setdiff(StateNumbers,AStates);
-    DensityMatrix_E = DensityMatrix(keepStates,keepStates);
-    DensityMatrix_E =DensityMatrix_E/trace(DensityMatrix_E);
-    Hb_E = Hb(keepStates,keepStates);
-    Ha_E = Ha(keepStates,keepStates);
-    %}
-    
-    Coherences_E = propagate(total_time, DensityMatrix_E,timepoints,dt,t0,Hb_E,Ha_E,EXPERIMENT);
+    % Calculate the coherence.
+    Coherences_E = propagate(total_time,timepoints,dt,t0,Hb_E,Ha_E,EXPERIMENT,betaT);
     
     switch clusterSize
       case 1
@@ -555,6 +526,9 @@ for clusterSize = 1:Method_order
       continue;
      end
      
+     % Project the Hamiltonian onto an A state for  
+     % one methyl and an E state for the other.
+     
      Hb_AE =   PEap2*Hbeta*PEap2 + PEam*Hbeta*PEam2 ...
        + PEbp2*Hbeta*PEbp2 + PEbm2*Hbeta*PEbm2 ...
        + PEap2*Hbeta*PEbm2 + PEam2*Hbeta*PEbp2 ...
@@ -566,16 +540,13 @@ for clusterSize = 1:Method_order
        + PEap2*Halpha*PEbm + PEam2*Halpha*PEbp2 ...
        + PEbp2*Halpha*PEam + PEbm2*Halpha*PEap2;
      Ha_AE = PA1*Ha_AE*PA1;
+
      
-     DensityMatrix_AE =   PEap2*DensityMatrix0*PEap2 + PEam2*DensityMatrix0*PEam2 ...
-       + PEbp2*DensityMatrix0*PEbp2 + PEbm2*DensityMatrix0*PEbm2 ...
-       + PEap2*DensityMatrix0*PEbm2 + PEam2*DensityMatrix0*PEbp2 ...
-       + PEbp2*DensityMatrix0*PEam2 + PEbm2*DensityMatrix0*PEap2;
-     DensityMatrix_AE = PA1*DensityMatrix_AE*PA1;
-     
-     Coherences_AE = propagate(total_time, DensityMatrix_AE,timepoints,dt,t0,Hb_AE,Ha_AE,EXPERIMENT);
+     % Calculate the coherence.
+     Coherences_AE = propagate(total_time,timepoints,dt,t0,Hb_AE,Ha_AE,EXPERIMENT,betaT);
     
-     
+     % Project the Hamiltonian onto an A state for  
+     % the other methyl and an E state for one.
      Hb_EA =   PEap1*Hbeta*PEap1 + PEam*Hbeta*PEam1 ...
        + PEbp1*Hbeta*PEbp1 + PEbm1*Hbeta*PEbm1 ...
        + PEap1*Hbeta*PEbm1 + PEam1*Hbeta*PEbp1 ...
@@ -588,14 +559,11 @@ for clusterSize = 1:Method_order
        + PEbp1*Halpha*PEam + PEbm1*Halpha*PEap1;
      Ha_EA = PA2*Ha_EA*PA2;
      
-     DensityMatrix_EA =   PEap1*DensityMatrix0*PEap1 + PEam1*DensityMatrix0*PEam1 ...
-       + PEbp1*DensityMatrix0*PEbp1 + PEbm1*DensityMatrix0*PEbm1 ...
-       + PEap1*DensityMatrix0*PEbm1 + PEam1*DensityMatrix0*PEbp1 ...
-       + PEbp1*DensityMatrix0*PEam1 + PEbm1*DensityMatrix0*PEap1;
-     DensityMatrix_EA = PA2*DensityMatrix_EA*PA2;
-     
-     Coherences_EA = propagate(total_time, DensityMatrix_EA,timepoints,dt,t0,Hb_EA,Ha_EA,EXPERIMENT);
+     % Calculate the coherence.
+     Coherences_EA = propagate(total_time, timepoints,dt,t0,Hb_EA,Ha_EA,EXPERIMENT, betaT);
 
+     % Add the methyl coherences together, weighting the coherences by
+     % a statistical factor.
      switch clusterSize
        case 2
          Coherences_2(iCluster,:) = Coherences_2(iCluster,:)  ...
@@ -641,49 +609,20 @@ end
     Signal = Signals(Method_order,:);
 end
 
-% ========================================================================
-% Density Matrix Function
-% ========================================================================
-
-function DensityMatrix = getDensityMatrix(States,NumberStates, Cluster)
-
-dimension = prod(NumberStates(Cluster));
-
-DensityMatrix = eye(dimension);
-
-switchIndex = dimension;
-for inucleus = Cluster
-  switchIndex = switchIndex/NumberStates(inucleus);
-  counter = 0;
-  stateNumber = 1;
-  for jj = 1:dimension
-    if counter == switchIndex
-      stateNumber = mod(stateNumber,NumberStates(inucleus)) + 1;
-    end
-    counter = mod(counter,switchIndex) + 1;
-    DensityMatrix(jj,jj) = DensityMatrix(jj,jj)*States(inucleus,stateNumber)^2;
-  end
-end
-%DensityMatrix = DensityMatrix.^2;
-if abs(trace(DensityMatrix)-1)>1e-9
-  error('State is not normalized.');
-end
-
-end
 
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,DensityMatrix,timepoints,dt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT)
+function Signal = propagate(total_time,timepoints,dt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, betaT)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
-DensityMatrix = eye(size(DensityMatrix)).*DensityMatrix/trace(DensityMatrix);
-vecDensityMatrixT = reshape(DensityMatrix.',1,[]);
-
 Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
 Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
+
+DensityMatrix = propagator_eig((Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT);
+vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
 
 dU_beta = propagator_eig(Hamiltonian_beta,dt);
 dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
@@ -1103,181 +1042,3 @@ for isize = 1:clusterSize
 end
 end
 
-
-% ========================================================================
-% New Function
-% ========================================================================
-function Coherences = propagate0(System, Method, DensityMatrix,timepoints,dt,Hamiltonian_beta,Hamiltonian_alpha,isotopeProbability, linearTimeAxis,verbose)
-vecDensityMatrixT = reshape(DensityMatrix.',1,[]);
-
-if strcmp('time-domain',Method.propagationDomain)
-  
-if linearTimeAxis
-  dU_beta = propagator_eig(Hamiltonian_beta,dt);
-  dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
-    
-  nStates = length(Hamiltonian_beta);
-  U_beta = eye(nStates);
-  U_alpha = eye(nStates);
-  
-  if strcmp(System.experiment,'CPMG')
-    U_beta_2 = eye(nStates);
-    U_alpha_2 = eye(nStates);
-  end
-  
-  if strcmp(System.experiment,'CPMG-const')
-    U_beta_2 = propagator_eig(Hamiltonian_beta,System.total_time);
-    U_alpha_2 = propagator_eig(Hamiltonian_alpha,System.total_time);
-  end
-end
-
-Signal_= ones(1,timepoints);
-for iTime = 1:timepoints
-  if ~linearTimeAxis
-    t = System.Time(iTime);
-    U_beta = propagator_eig(Hamiltonian_beta,t);
-    U_alpha = propagator_eig(Hamiltonian_alpha,t);
-  end
-  
-  if strcmp(System.experiment,'FID')
-    U_ = U_beta'*U_alpha;
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-    
-  elseif strcmp(System.experiment,'Hahn')
-    U_ = U_beta'*U_alpha'*U_beta*U_alpha;
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-  elseif strcmp(System.experiment,'CPMG')
-    
-    U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
-    
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-    
-    U_beta_2 = dU_beta*U_beta_2;
-    U_alpha_2 = dU_alpha*U_alpha_2;
-    
-  elseif strcmp(System.experiment,'CPMG-const')
-    
-    U_beta = propagator_eig(Hamiltonian_beta,(iTime-1)*dt);
-    U_alpha = propagator_eig(Hamiltonian_alpha,(iTime-1)*dt);
-
-    U_beta_2 = propagator_eig(Hamiltonian_beta,System.total_time/4-(iTime-1)*dt);
-    U_alpha_2 = propagator_eig(Hamiltonian_alpha,System.total_time/4-(iTime-1)*dt);
-    U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
-      
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-    
-%     U_beta_2 = dU_beta'*U_beta_2;
-%     U_alpha_2 = dU_alpha'*U_alpha_2;
-    
-  elseif strcmp(System.experiment,'CPMG-2D')
-    
-    U_beta_2 = eye(nStates);
-    U_alpha_2 = eye(nStates);
-    
-    for jTime = 1:timepoints
-    
-      U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;  
-      
-      Signal_(iTime,jTime) = vecDensityMatrixT*U_(:);
-      
-      U_beta_2 = dU_beta*U_beta_2;
-      U_alpha_2 = dU_alpha*U_alpha_2;
-    end
-   
-  else
-    error('The experiment ''%s'' is not supported.',System.experiment);
-  end
-  
-%   Signal_(iTime) = vecDensityMatrixT*U_(:);
-  
-  if linearTimeAxis
-    U_beta = dU_beta*U_beta;
-    U_alpha = dU_alpha*U_alpha;
-  end
-  
-  
-end
- 
-elseif strcmp('frequency-domain',Method.propagationDomain)
- 
-% Diagonalize sub-Hamiltonians for alpha and beta electron manifolds
-[Vec_beta, E_beta] = eig(2*pi*Hamiltonian_beta);
-[Vec_alpha, E_alpha] = eig(2*pi*Hamiltonian_alpha);
-E_beta = diag(E_beta);
-E_alpha = diag(E_alpha);
-M = Vec_alpha'*Vec_beta; % Mims matrix = <a|b> overlap matrix
-Madj = M';
-
-prefactor = 1; % include orienation weights etc here
-
-G = prefactor*M; % prepared density matrix before first varied evolution time
-D = M; % detection matrix after last varied evolution time
-T1left = Madj; % left transfer matrix due to pi pulse
-T1right = Madj; % right transfer matrix due to pi pulse
-
-x=2^20;
-nPoints = x;
-
-IncSchemeID = 2; % for 2p ESEEM
-buffRe = zeros(1,nPoints); % real part of spectral histogram
-buffIm = zeros(1,nPoints); % imag part of spectral histogram
-dt = System.dt/2/pi; % time step, in microseconds
-
-sf_peaks(IncSchemeID,buffRe,buffIm,dt,[1 2],[2 1],E_alpha,E_beta,G,D,T1left,T1right);
-
-Signal_ =ifft(buffRe+1i*buffIm);
-
-Signal_ = Signal_(1:timepoints);
-Signal_=Signal_./Signal_(1);
-
-elseif strcmp('frequency-domain --matlab',Method.propagationDomain)
-  
-  nStates = length(Hamiltonian_beta);
-  
-  [Vec_beta, E_beta] = eig(2*pi*Hamiltonian_beta);
-  [Vec_alpha, E_alpha] = eig(2*pi*Hamiltonian_alpha);
-  E_beta = diag(E_beta);
-  E_alpha = diag(E_alpha);
-  dE_beta = E_beta - E_beta.';
-  dE_alpha = E_alpha - E_alpha.';
-  M = Vec_alpha'*Vec_beta; % Mims matrix
-  Madj = M';
-  
-  % frequency domain variables
-  n_omega = 2^20 - 1;
-
-  domega = 2*pi/dt/(n_omega-1);
-  
-  
-  omega_amp = zeros(1,n_omega);
-  
-  for ii = 1:nStates
-    for jj = 1:nStates
-      for kk = 1:nStates
-        for ll = 1:nStates
-
-          amplitude = Madj(ii,jj) * M(jj,kk) * Madj(kk,ll) * M(ll,ii)/2;
-          omega_ = -( dE_beta(ii,kk) + dE_alpha(jj,ll));
-          idx = mod(round(omega_./domega),n_omega) + 1;
-          
-          omega_amp(idx) = omega_amp(idx) + amplitude;
-          
-        end
-      end
-    end
-  end
-
-  Signal_ = ifft(omega_amp,n_omega);
-  Signal_ = Signal_(1:timepoints);
-  Signal_ =Signal_ /Signal_(1);
-end
-if Method.gpu && gpuDeviceCount > 0
-  Signal_ = gather(Signal_);
-end
-
-if any(abs(Signal_) - 1 > 1e-9)
-  error('Coherence error: coherence cannot be larger than 1.');
-end
-% Coherences = 1 + isotopeProbability*(Signal_ - 1);
-Coherences = Signal_;
-end
