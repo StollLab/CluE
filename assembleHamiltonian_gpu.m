@@ -170,9 +170,59 @@ H_beta  = -1/2*(HEZ + Hhf) + Hnuc;
 
 % Check Hermitianity
 threshold = 1e-12;
-isHermA = isHermitian(H_alpha,threshold);
-isHermB = isHermitian(H_beta,threshold);
+[isHermA,nonHermiticityA] = isHermitian(H_alpha,threshold);
+[isHermB,nonHermiticityB] = isHermitian(H_beta,threshold);
 if ~isHermA || ~isHermB
+  hline = '--------------------------------------------------------------';
+  disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+  fprintf('Non-Hermiticity = {%d,%d}.\n',nonHermiticityA,nonHermiticityB);
+  disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(HEZ,threshold);
+  fprintf('HEZ non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hhf,threshold);
+  fprintf('Hhf non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIz,threshold);
+  fprintf('  H_hyperfine_SzIz non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+
+  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIy,threshold);
+  fprintf('  H_hyperfine_SzIy non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIx,threshold);
+  fprintf('  H_hyperfine_SzIx non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+
+  [isHerm,nonHermiticity] = isHermitian(Hnuc,threshold);
+  fprintf('Hnuc non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_A,threshold);
+  fprintf('  Hnn_A non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_B,threshold);
+  fprintf('  Hnn_B non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_CD,threshold);
+  fprintf('  Hnn_CD non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_EF,threshold);
+  fprintf('  Hnn_EF non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+    
+  [isHerm,nonHermiticity] = isHermitian(H_nuclear_quadrupole,threshold);
+  fprintf('  H_nuclear_quadrupole non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   error('Cluster Hamiltonian is not Hermitian.');
 end
 
@@ -183,6 +233,11 @@ H_beta = (H_beta+H_beta')/2;
 end
 
 function [ishermitian,nonHermiticity] = isHermitian(H,threshold)
+if numel(H) == 1 && H==0
+  ishermitian = true;
+  nonHermiticity = nan;
+  return;
+end
 mma = @(A)max(max(abs(A)));
 nonHermiticity = mma(H-H')/mma(H);
 ishermitian = nonHermiticity<=threshold;
@@ -280,27 +335,27 @@ switch clusterSize
     zrl = [Z R L];
   case 2
     EE = 1;
-    EZ = 2; ER = 3; EL =  4;
-    ZE = 5; RE = 6; LE =  7;
+    EZ = 2; ER = 3; EL = 4;
+    ZE = 5; RE = 6; LE = 7;
     switch iSpin
       case 1, zrl = [ZE RE LE];
       case 2, zrl = [EZ ER EL];
     end
   case 3
-    EEE =  1;
-    EEZ =  2; EER =  3; EEL =  4;
-    EZE =  5; ERE =  6; ELE =  7;
-    ZEE =  8; REE =  9; LEE = 10;
+    EEE = 1;
+    EEZ = 2; EER = 3; EEL = 4;
+    EZE = 5; ERE = 6; ELE = 7;
+    ZEE = 8; REE = 9; LEE = 10;
     switch iSpin
       case 3, zrl = [EEZ EER EEL];
       case 2, zrl = [EZE ERE ELE];
       case 1, zrl = [ZEE REE LEE];
     end
   case 4
-    EEEE =  1;
-    EEEZ =  2; EEER =  3; EEEL =  4;
-    EEZE =  5; EERE =  6; EELE =  7;
-    EZEE =  8; EREE =  9; ELEE = 10;
+    EEEE = 1;
+    EEEZ = 2; EEER = 3; EEEL = 4;
+    EEZE = 5; EERE = 6; EELE = 7;
+    EZEE = 8; EREE = 9; ELEE = 10;
     ZEEE = 11; REEE = 12; LEEE = 13;
     switch iSpin
       case 4, zrl = [EEEZ EEER EEEL];
@@ -309,10 +364,10 @@ switch clusterSize
       case 1, zrl = [ZEEE REEE LEEE];
     end
   case 5
-    EEEEE =  1;
-    EEEEZ =  2; EEEER =  3; EEEEL =  4;
-    EEEZE =  5; EEERE =  6; EEELE =  7;
-    EEZEE =  8; EEREE =  9; EELEE = 10;
+    EEEEE = 1;
+    EEEEZ = 2; EEEER = 3; EEEEL = 4;
+    EEEZE = 5; EEERE = 6; EEELE = 7;
+    EEZEE = 8; EEREE = 9; EELEE = 10;
     EZEEE = 11; EREEE = 12; ELEEE = 13;
     ZEEEE = 14; REEEE = 15; LEEEE = 16;
     switch iSpin
@@ -323,10 +378,10 @@ switch clusterSize
       case 1, zrl = [ZEEEE REEEE LEEEE];
     end
   case 6
-    EEEEEE =  1;
-    EEEEEZ =  2; EEEEER =  3; EEEEEL =  4;
-    EEEEZE =  5; EEEERE =  6; EEEELE =  7;
-    EEEZEE =  8; EEEREE =  9; EEELEE = 10;
+    EEEEEE = 1;
+    EEEEEZ = 2; EEEEER = 3; EEEEEL = 4;
+    EEEEZE = 5; EEEERE = 6; EEEELE = 7;
+    EEEZEE = 8; EEEREE = 9; EEELEE = 10;
     EEZEEE = 11; EEREEE = 12; EELEEE = 13;
     EZEEEE = 14; EREEEE = 15; ELEEEE = 16;
     ZEEEEE = 17; REEEEE = 18; LEEEEE = 19;
@@ -348,25 +403,25 @@ end
 function [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin)
 switch clusterSize
   
-  case 2
+  case 2    
     ZZ = 8; RL = 9; LR = 10;
-    ZR = 11;  ZL = 12;  RZ = 13;  LZ = 14;
-    RR = 15;  LL = 16;
+    ZR = 11; ZL = 12; RZ = 13;
+    LZ = 14; RR = 15; LL = 16;
     
     IJ = [ZZ RL LR ZR ZL RZ LZ RR LL];
     
   case 3
+    
     EZZ = 11; ERL = 12; ELR = 13;
     ZEZ = 14; REL = 15; LER = 16;
     ZZE = 17; RLE = 18; LRE = 19;
+    EZR = 20; EZL = 21; ERZ = 22;
+    ELZ = 23; ZER = 24; ZEL = 25;
+    REZ = 26; LEZ = 27; ZRE = 28;
+    ZLE = 29; RZE = 30; LZE = 31;
+    ERR = 32; ELL = 33; RER = 34;
+    LEL = 35; RRE = 36; LLE = 37;
     
-    EZR = 20;  EZL = 21;  ERZ = 22;  ELZ = 23;
-    ZER = 24;  ZEL = 25;  REZ = 26;  LEZ = 27;
-    ZRE = 28;  ZLE = 29;  RZE = 30;  LZE = 31;
-    
-    ERR = 32;  ELL = 33;
-    RER = 34;  LEL = 35;
-    RRE = 36;  LLE = 37;
     switch iSpin
       case 1 % OOE or OEO
         switch jSpin
@@ -377,25 +432,28 @@ switch clusterSize
     end
     
   case 4
+    
+
     EEZZ = 14; EERL = 15; EELR = 16;
     EZEZ = 17; EREL = 18; ELER = 19;
     ZEEZ = 20; REEL = 21; LEER = 22;
     EZZE = 23; ERLE = 24; ELRE = 25;
     ZEZE = 26; RELE = 27; LERE = 28;
-    ZZEE = 29; RLEE = 30; LREE = 31;
-    EEZR = 31; EEZL = 32; EERZ = 33; EELZ = 34;
-    EZER = 35; EZEL = 36; EREZ = 37; ELEZ = 38;
-    ZEER = 39; ZEEL = 40; REEZ = 41; LEEZ = 42;
-    EZRE = 43; EZLE = 44; ERZE = 45; ELZE = 46;
-    ZERE = 47; ZELE = 48; REZE = 49; LEZE = 50;
-    ZREE = 51; ZLEE = 52; RZEE = 53; LZEE = 54;
+    ZZEE = 29; RLEE = 30; LREE = 31; 
+    EEZR = 32; EEZL = 33; EERZ = 34; EELZ = 35; 
+    EZER = 36; EZEL = 37; EREZ = 38; ELEZ = 39; 
+    ZEER = 40; ZEEL = 41; REEZ = 42; LEEZ = 43;
+    EZRE = 44; EZLE = 45; ERZE = 46; ELZE = 47; 
+    ZERE = 48; ZELE = 49; REZE = 50; LEZE = 51; 
+    ZREE = 52; ZLEE = 53; RZEE = 54; LZEE = 55;
     
-    EERR = 55; EELL = 56;
-    ERER = 57; ELEL = 58;
-    REER = 59; LEEL = 60;
-    ERRE = 61; ELLE = 62;
-    RERE = 63; LELE = 64;
-    RREE = 65; LLEE = 66;
+    EERR = 56; EELL = 57; 
+    ERER = 58; ELEL = 59; 
+    REER = 60; LEEL = 61; 
+    ERRE = 62; ELLE = 63; 
+    RERE = 64; LELE = 65; 
+    RREE = 66; LLEE = 67;
+    
     switch iSpin
       case 1
         switch jSpin
@@ -467,7 +525,6 @@ switch clusterSize
     end
     
   case 6
-    
     EEEEZZ = 20; EEEERL = 21; EEEELR = 22;
     EEEZEZ = 23; EEEREL = 24; EEELER = 25;
     EEZEEZ = 26; EEREEL = 27; EELEER = 28;
@@ -527,7 +584,7 @@ switch clusterSize
         switch jSpin
           case 6, IJ = [EZEEEZ EREEEL ELEEER EZEEER EZEEEL EREEEZ ELEEEZ EREEER ELEEEL]; % EOEEEO
           case 5, IJ = [EZEEZE EREELE ELEERE EZEERE EZEELE EREEZE ELEEZE EREERE ELEELE]; % EOEEOE
-          case 4, IJ = [EZEZEE ERELEE ELEREE EZEREE EZELEE EREEZE ELEZEE EREREE ELELEE]; % EOEOEE
+          case 4, IJ = [EZEZEE ERELEE ELEREE EZEREE EZELEE EREZEE ELEZEE EREREE ELELEE]; % EOEOEE
           case 3, IJ = [EZZEEE ERLEEE ELREEE EZREEE EZLEEE ERZEEE ELZEEE ERREEE ELLEEE]; % EOOEEE
         end
       case 3
