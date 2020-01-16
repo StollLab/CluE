@@ -69,7 +69,7 @@ if System.nuclear_quadrupole
   end
 end
 Nuclei.quadrupole2lab = zeros(3,3,numberH(2));
-Nuclei.Qtensor = zeros(3,3,numberH(2));
+Nuclei.Qtensor = zeros(3,3,Npdb);
 Nuclei.quadrupoleXaxis = zeros(numberH(2),3);
 Nuclei.quadrupoleYaxis = zeros(numberH(2),3);
 Nuclei.quadrupoleZaxis = zeros(numberH(2),3);
@@ -976,6 +976,9 @@ Nuclei.Same_g = eye(Nuclei.number);
 
 Nuclei.SpinSet = unique(Nuclei.Spin);
 
+Nuclei.timescale.HF_A = 0;
+Nuclei.timescale.HF_SxIxy = 0;
+Nuclei.timescale.NucB = 0;
 % loop over all nuclei
 for inucleus = 1:Nuclei.number
   
@@ -1029,7 +1032,16 @@ for inucleus = 1:Nuclei.number
     
     Nuclei.DeltaHyperfine(inucleus,jnucleus) = (Nuclei.Hyperfine(inucleus) - Nuclei.Hyperfine(jnucleus)); % Hz
     Nuclei.DeltaHyperfine(jnucleus,inucleus) = -Nuclei.DeltaHyperfine(inucleus,jnucleus);
+    
+    Nuclei.timescale.HF_A = Nuclei.timescale.HF_A + abs(Nuclei.DeltaHyperfine(jnucleus,inucleus));
+    Nuclei.timescale.NucB = Nuclei.timescale.NucB + abs(Nuclei.Nuclear_Dipole(jnucleus,inucleus));
   end
   
 end
+
+Nuclei.timescale.HF_SxIxy = 1/mean(abs(Nuclei.Hyperfine));
+numPair = double(Nuclei.number*(Nuclei.number+1))/2;
+Nuclei.timescale.NucB = numPair/Nuclei.timescale.NucB;
+Nuclei.timescale.HF_A = numPair/Nuclei.timescale.HF_A;
+
 end

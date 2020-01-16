@@ -40,7 +40,7 @@ if order<cluster_order, return; end
 for iCluster=1:numberClusters(cluster_order)
   
   % Update cluster signals.
-  for iorder=cluster_order:4
+  for iorder=cluster_order:maxSize
     
     % The isotope probability is used to determine the likelihood a
     % particular cluster will contain the assumed spins.
@@ -50,7 +50,7 @@ for iCluster=1:numberClusters(cluster_order)
     
     this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
     if this_cluster(1)==0
-      continue
+      break;
     end
     isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
     % v(t) = v'(t)*(  (1-p)  + p*v''(t) ) = v'(t)*(  1  + p*(  v''(t) -1 )  ).
@@ -72,7 +72,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_2(:,1,iCluster)'
     
    if subcluster_index <= 0
-    continue;
+    break;
    end
    
     AuxiliarySignal_2(iCluster,:) = AuxiliarySignal_2(iCluster,:)./AuxiliarySignal_1(subcluster_index,:);
@@ -84,7 +84,7 @@ for iCluster=1:numberClusters(cluster_order)
   for iorder=cluster_order:maxSize
     this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
     if this_cluster(1)==0
-      continue
+      break;
     end
     isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_2(iCluster,:) -1) );
@@ -104,7 +104,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_3(:,1,iCluster)'
     
    if subcluster_index <= 0
-    continue;
+    break;
    end
    
     AuxiliarySignal_3(iCluster,:) = AuxiliarySignal_3(iCluster,:)./AuxiliarySignal_1(subcluster_index,:);
@@ -115,7 +115,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_3(:,2,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_3(iCluster,:) = AuxiliarySignal_3(iCluster,:)./AuxiliarySignal_2(subcluster_index,:);
@@ -127,7 +127,7 @@ for iCluster=1:numberClusters(cluster_order)
   for iorder=cluster_order:maxSize
     this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
     if this_cluster(1)==0
-      continue
+      break;
     end
     isotopeProbability =prod(Nuclei_Abundance( this_cluster )); 
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_3(iCluster,:) -1) );
@@ -147,7 +147,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_4(:,1,iCluster)'
         
    if subcluster_index <= 0
-    continue;
+    break;
    end
    
    AuxiliarySignal_4(iCluster,:) = AuxiliarySignal_4(iCluster,:)./AuxiliarySignal_1(subcluster_index,:);
@@ -158,7 +158,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_4(:,2,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_4(iCluster,:) = AuxiliarySignal_4(iCluster,:)./AuxiliarySignal_2(subcluster_index,:);
@@ -169,7 +169,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_4(:,3,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_4(iCluster,:) = AuxiliarySignal_4(iCluster,:)./AuxiliarySignal_3(subcluster_index,:);
@@ -180,7 +180,7 @@ for iCluster=1:numberClusters(cluster_order)
   for iorder=cluster_order:maxSize
     this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
     if this_cluster(1)==0
-      continue
+      break;
     end
     isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_4(iCluster,:) -1) );
@@ -200,7 +200,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_5(:,1,iCluster)'
         
    if subcluster_index <= 0
-    continue;
+    break;
    end
    
    AuxiliarySignal_5(iCluster,:) = AuxiliarySignal_5(iCluster,:)./AuxiliarySignal_1(subcluster_index,:);
@@ -211,7 +211,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_5(:,2,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_5(iCluster,:) = AuxiliarySignal_5(iCluster,:)./AuxiliarySignal_2(subcluster_index,:);
@@ -222,7 +222,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_5(:,3,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_5(iCluster,:) = AuxiliarySignal_5(iCluster,:)./AuxiliarySignal_3(subcluster_index,:);
@@ -233,7 +233,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_5(:,4,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_5(iCluster,:) = AuxiliarySignal_5(iCluster,:)./AuxiliarySignal_4(subcluster_index,:);
@@ -243,7 +243,7 @@ for iCluster=1:numberClusters(cluster_order)
   for iorder=cluster_order:maxSize
     this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
     if this_cluster(1)==0
-      continue
+      break;
     end
     isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_5(iCluster,:) -1) );
@@ -264,7 +264,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_6(:,1,iCluster)'
         
    if subcluster_index <= 0
-    continue;
+    break;
    end
    
    AuxiliarySignal_6(iCluster,:) = AuxiliarySignal_6(iCluster,:)./AuxiliarySignal_1(subcluster_index,:);
@@ -275,7 +275,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_6(:,2,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_6(iCluster,:) = AuxiliarySignal_6(iCluster,:)./AuxiliarySignal_2(subcluster_index,:);
@@ -286,7 +286,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_6(:,3,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
     AuxiliarySignal_6(iCluster,:) = AuxiliarySignal_6(iCluster,:)./AuxiliarySignal_3(subcluster_index,:);
@@ -297,7 +297,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_6(:,4,iCluster)'
     
    if subcluster_index <= 0
-     continue;
+     break;
    end
    
    AuxiliarySignal_6(iCluster,:) = AuxiliarySignal_6(iCluster,:)./AuxiliarySignal_4(subcluster_index,:);
@@ -308,7 +308,7 @@ for iCluster=1:numberClusters(cluster_order)
   for subcluster_index = SubclusterIndices_6(:,5,iCluster)'
     
     if subcluster_index <= 0
-      continue;
+      break;
     end
     
     AuxiliarySignal_6(iCluster,:) = AuxiliarySignal_6(iCluster,:)./AuxiliarySignal_5(subcluster_index,:);
@@ -318,7 +318,7 @@ for iCluster=1:numberClusters(cluster_order)
   for iorder=cluster_order:maxSize
     this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
     if this_cluster(1)==0
-      continue
+      break;
     end
     isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_6(iCluster,:) -1) );
