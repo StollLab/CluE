@@ -1,29 +1,10 @@
-%{
-CHANGES
-Hamiltonian: cell(N+1,N+1) --> array(3,3,N+1,N+1)
-System
-Nuclei_Spin = Nuclei.Spin;
-Nuclei_NumberStates = Nuclei.NumberStates;
-System_full_Sz_Hyperfine = System.full_Sz_Hyperfine;
-System_nuclear_dipole_A  = System.nuclear_dipole_A;
-System_nuclear_dipole_B  = System.nuclear_dipole_B;
-System_nuclear_dipole_CD = System.nuclear_dipole_CD;
-System_nuclear_dipole_EF = System.nuclear_dipole_EF;
-
-theory = ...
- [electron_Zeeman,...
-  nuclear_Zeeman,...
-  secular_Hyperfine, System.full_Sz_Hyperfine, ...
-  nuclear_dipole_A, nuclear_dipole_B,nuclear_dipole_CD,nuclear_dipole_EF, ...
-  nuclear_quadrupole]
-%}
 function [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,tensors,SpinOp,Qtensors,SpinXiXjOp,...
   theory,zeroIndex,methyl_number)
 
 useEZ       = theory(1);
 useNZ       = theory(2);
-useHF_A     = theory(3);
-useHF_SxIxy = theory(4);
+useHF_SzIz  = theory(3);
+useHF_SzIxy = theory(4);
 useNucA     = theory(5);
 useNucB     = theory(6);
 useNucCD    = theory(7);
@@ -54,6 +35,34 @@ for iSpin = 1:clusterSize
   %------------------------------------------------------------------------
   % One Nucleus Spin Hamiltonian
   %------------------------------------------------------------------------
+
+  % Calculate nuclear Zeeman Hamiltonian
+  [z,p,m] = spinopidx(clusterSize,iSpin);
+  Iz = SpinOp(:,:,z);
+  Ix = (SpinOp(:,:,p) + SpinOp(:,:,m) )/2;
+  Iy = (SpinOp(:,:,p) - SpinOp(:,:,m) )/2i;
+  
+  if useNZ
+    H_nuclear_Zeeman_Iz = -tensors(3,3,iSpin+1,iSpin+1)*Iz;
+  else
+    H_nuclear_Zeeman_Iz = 0;
+  end
+  
+  % Calculate hyperfine Hamiltonian
+  A = tensors(:,:,1,iSpin+1) + tensors(:,:,iSpin+1,1);
+  if useHF_SzIz
+    H_hyperfine_SzIz = -A(3,3)*Iz;
+  else
+    H_hyperfine_SzIz = 0;
+  end
+  if useHF_SzIxy
+    H_hyperfine_SzIx = -A(3,1)*Ix;
+    H_hyperfine_SzIy = -A(3,2)*Iy;
+  else
+    H_hyperfine_SzIx = 0;
+    H_hyperfine_SzIy = 0;
+  end
+  
   % Calculate nuclear quadrupole Hamiltonian
   if useNQ && state_multiplicity(iSpin) > 2
     Q_ = Qtensors(:,:,iSpin);
@@ -70,31 +79,6 @@ for iSpin = 1:clusterSize
       Q_(3,3)*SpinXiXjOp(:,:,zz);
   else
     H_nuclear_quadrupole = 0;
-  end
-  
-  % Calculate nuclear Zeeman and hyperfine Hamiltonians
-  [z,r,l] = spinopidx(clusterSize,iSpin);
-  Iz = SpinOp(:,:,z);
-  Ix = (SpinOp(:,:,r) + SpinOp(:,:,l) )/2;
-  Iy = (SpinOp(:,:,r) - SpinOp(:,:,l) )/2i;
-  
-  if useNZ
-    H_nuclear_Zeeman_Iz = -tensors(3,3,iSpin+1,iSpin+1)*Iz;
-  else
-    H_nuclear_Zeeman_Iz = 0;
-  end
-  A = tensors(:,:,1,iSpin+1) + tensors(:,:,iSpin+1,1);
-  if useHF_A
-    H_hyperfine_SzIz = -A(3,3)*Iz;
-  else
-    H_hyperfine_SzIz = 0;
-  end
-  if useHF_SxIxy
-    H_hyperfine_SzIx = -A(1,3)*Ix;
-    H_hyperfine_SzIy = -A(2,3)*Iy;
-  else
-    H_hyperfine_SzIx = 0;
-    H_hyperfine_SzIy = 0;
   end
   
   % Assemble single-nucleus terms in nuclear Hamiltonian
@@ -122,30 +106,33 @@ for iSpin = 1:clusterSize
       Hnn_A = 0;
     end
     
+    % nucleus-nucleus pseudo-secular (B term)      
     if useNucB
-      IrJl = SpinOp(:,:,rl);
-      IlJr = SpinOp(:,:,lr);
-      Hnn_B = 0.25*(dd(1,1) + dd(2,2))*(IrJl+IlJr);
+      IpJm = SpinOp(:,:,rl);
+      ImJp = SpinOp(:,:,lr);
+      Hnn_B = 0.25*(dd(1,1) + dd(2,2))*(IpJm+ImJp);
     else
       Hnn_B = 0;
     end
     
+    % nucleus-nucleus dipolar C and D terms
     if useNucCD
-      IzJr = SpinOp(:,:,zr);
-      IrJz = SpinOp(:,:,rz);
-      IzJl = SpinOp(:,:,zl);
-      IlJz = SpinOp(:,:,lz);
+      IzJp = SpinOp(:,:,zr);
+      IpJz = SpinOp(:,:,rz);
+      IzJm = SpinOp(:,:,zl);
+      ImJz = SpinOp(:,:,lz);
       cd = 1/2*(dd(1,3) - 1i*dd(2,3));
-      Hnn_CD = cd*(IzJr+IrJz) + cd'*(IzJl+IlJz);
+      Hnn_CD = cd*(IzJp+IpJz) + cd'*(IzJm+ImJz);
     else
       Hnn_CD = 0;
     end
     
+    % nucleus-nucleus dipolar E and F terms
     if useNucEF
-      IrJr = SpinOp(:,:,rr);
-      IlJl = SpinOp(:,:,ll);
+      IpJp = SpinOp(:,:,rr);
+      ImJm = SpinOp(:,:,ll);
       ef = 1/4*(dd(1,1) - dd(2,2) - 1i*(dd(1,2) + dd(2,1)));
-      Hnn_EF = ef*IrJr + ef'*IlJl;
+      Hnn_EF = ef*IpJp + ef'*ImJm;
     else
       Hnn_EF = 0;
     end
@@ -230,17 +217,6 @@ end
 H_alpha = (H_alpha+H_alpha')/2;
 H_beta = (H_beta+H_beta')/2;
 
-end
-
-function [ishermitian,nonHermiticity] = isHermitian(H,threshold)
-if numel(H) == 1 && H==0
-  ishermitian = true;
-  nonHermiticity = nan;
-  return;
-end
-mma = @(A)max(max(abs(A)));
-nonHermiticity = mma(H-H')/mma(H);
-ishermitian = nonHermiticity<=threshold;
 end
 
 %{

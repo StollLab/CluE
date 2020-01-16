@@ -64,61 +64,33 @@ for iline = 1:nLines
     
   elseif strncmp(line_,'CONECT',6)
     if any(line_(7:end)=='*')
-      continue;
+      continue
     end
+    l = strtrim(line_);
+    l = reshape(l(7:end),5,[]).';
+    numbers = str2num(l).';
+    if isempty(numbers), continue; end
+    referenceNucleus = numbers(1);
+    ConnectedNuclei = numbers(2:end);
     
-    % ConnectedNuclei = sscanf(line_(7:end),'%f %f %f %f %f');
+    Connected{referenceNucleus} = unique([Connected{referenceNucleus},ConnectedNuclei]);
     
-    if length(line_) > 27
-      ConnectedNuclei(5) = sscanf(line_(27:31),'%f');
-    end
-    if length(line_) > 22
-      ConnectedNuclei(4) = sscanf(line_(22:26),'%f');
-    end
-    if length(line_) > 17
-      ConnectedNuclei(3) = sscanf(line_(17:21),'%f');
-    end
-    if length(line_) > 12
-      ConnectedNuclei(2) = sscanf(line_(12:16),'%f');
-    end
-    if length(line_) > 7
-      ConnectedNuclei(1) = sscanf(line_(7:11),'%f');
-    end
-    
-    if isempty(ConnectedNuclei)
-      continue;
-    end
-    referenceNuclei = ConnectedNuclei(1);
-    if referenceNuclei > iline % ignore connections where connections have no whitespaces.
-      continue;
-    end
-    %     try
-    if ~isempty(ConnectedNuclei)
-      if ~isempty(Connected{referenceNuclei})
-        Connected{referenceNuclei} = [Connected{referenceNuclei},ConnectedNuclei];
+    for index_ = Connected{referenceNucleus}
+      if index_ == referenceNucleus
+        continue
+      end
+      if index_>nLines
+        disp('CONECT data is not readable: check that whitspaces separate each number.');
+        continue
+      end
+      if ~isempty(Connected{index_})
+        Connected{index_} = [Connected{index_},referenceNucleus];
       else
-        Connected{referenceNuclei} = ConnectedNuclei;
+        Connected{index_} = referenceNucleus;
       end
-      Connected{referenceNuclei} = unique(Connected{referenceNuclei});
-      
-      for index_ = Connected{referenceNuclei}
-        if index_ == referenceNuclei
-          continue;
-        end
-        if index_>nLines
-          disp('CONECT data is not readable: check that whitspaces separate each number.');
-          continue
-        end
-        if ~isempty(Connected{index_})
-          Connected{index_} = [Connected{index_},referenceNuclei];
-        else
-          Connected{index_} = referenceNuclei;
-        end
-        Connected{index_} = unique(Connected{index_});
-      end
-      %     catch
-      %       Connected{referenceNuclei} = ConnectedNuclei';
+      Connected{index_} = unique(Connected{index_});
     end
+    
   elseif strncmp(line_,'CRYST1',6)
     % Parse information about unit cell
     

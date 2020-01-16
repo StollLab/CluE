@@ -298,7 +298,7 @@ for uc = 1:nCells
       %             Nuclei.Projection{nucleiCounter} = Methyl_Data.Projection_A;
       % CH3_E =========================================================
     elseif false %strcmp(type,'CH3_Ea') || strcmp(type,'CH3_Eb')
-      iNuc = iNuc +1;
+      iNuc = iNuc + 1;
       Nuclei.Index(iNuc) = iNuc;
       Nuclei.Type{iNuc} = type;
       Nuclei.Element{iNuc} = type;
@@ -351,6 +351,9 @@ for uc = 1:nCells
       
       % Set up quadrupole tensors for water deuterons
       if System.nuclear_quadrupole
+        if isempty(Conect)
+          error('Nucleus %d is not connected to anything - cannot build NQ tensor.',inucleus);
+        end
         for iconnect = Conect
           switch Type{iconnect}
             case {'O','C'} 
@@ -361,7 +364,7 @@ for uc = 1:nCells
         end
         if norm(zQ)==0
           warning('Failed to set quadrupole tensor orientation.')
-          continue;
+          continue
         end
         if norm(xQ)==0
           while xQ*zQ==0
@@ -977,7 +980,7 @@ Nuclei.Same_g = eye(Nuclei.number);
 Nuclei.SpinSet = unique(Nuclei.Spin);
 
 Nuclei.timescale.HF_A = 0;
-Nuclei.timescale.HF_SxIxy = 0;
+Nuclei.timescale.HF_SzIxy = 0;
 Nuclei.timescale.NucB = 0;
 % loop over all nuclei
 for inucleus = 1:Nuclei.number
@@ -1039,7 +1042,7 @@ for inucleus = 1:Nuclei.number
   
 end
 
-Nuclei.timescale.HF_SxIxy = 1/mean(abs(Nuclei.Hyperfine));
+Nuclei.timescale.HF_SzIxy = 1/mean(abs(Nuclei.Hyperfine));
 numPair = double(Nuclei.number*(Nuclei.number+1))/2;
 Nuclei.timescale.NucB = numPair/Nuclei.timescale.NucB;
 Nuclei.timescale.HF_A = numPair/Nuclei.timescale.HF_A;

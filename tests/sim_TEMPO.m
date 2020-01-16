@@ -22,7 +22,7 @@ Data.InputData = 'TEMPO_TIP4P_connect.pdb';
 Data.OutputData = ['SIM_TEMPO'];
 
 % save options :
-Data.saveMore = true;
+Data.saveLevel = 1;
 
 %==========================================================================
 % System Settings
@@ -69,15 +69,8 @@ System.magneticField  = 1.2; %1.2; % T.
 
 System.Methyl.include = false;
 
-System.fullDipoleTensor = false;
-
-System.nuclear_dipole_A = true;
-System.nuclear_dipole_B = true;
-System.nuclear_dipole_CD = false;
-System.nuclear_dipole_EF = false;
-
-System.full_Sz_Hyperfine= true;
-System.full_Hyperfine_Tensor = false;
+System.hyperfine = [true false]; % [zz, zx+zy]
+System.nuclear_dipole = [true true false false]; % [A, B, CD, EF]
 
 % System.g = 2.0023*[1,1,1];
 

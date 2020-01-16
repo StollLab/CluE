@@ -1,7 +1,13 @@
-% System is a struct with fields: magneticField, Electron, temperature, Time.
-% Electron is a struct with fields: spin, g, Coordinates, wavefunction.
-% Method is a struct with fields: method, r0, order.
-% InputData is a string, the name of a file.
+% nuclear_spin_diffusion   Calculate signals for nuclear spin diffusion
+%
+% Inputs:
+%   System is a struct with fields: magneticField, Electron, temperature, Time.
+%     Electron is a struct with fields: spin, g, Coordinates, wavefunction.
+%   Method is a struct with fields: method, r0, order.
+%   Data is a structure containing
+%    .InputData  name of pdb file
+%    .OutputData name of mat file to store results
+%    .saveLevel  0 (standard), 1 (more), 2 (all)
 
 function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean] = nuclear_spin_diffusion(System,Method,Data)
 
@@ -35,14 +41,15 @@ InputData = Data.InputData;
 if ~isfile(InputData)
   error(['Could not find the specified input file ', InputData, '.']);
 end
+
 % Determine the output file name.
-if isfield(Data,'OutputData')
+if isfield(Data,'OutputData') && ~isempty(Data.OutputData)
   OutputData = Data.OutputData;
   if ~strcmp(OutputData(end-3:end),'.mat')
     OutputData = [OutputData, '.mat'];
   end
 else
-  OutputData = 'maisave.mat';
+  OutputData = '';
 end
 
 % Initiate progress tracking.
@@ -50,10 +57,13 @@ Progress.started = true;
 Progress.complete = false;
 Progress.Completed_Orders = zeros(1,Method.order);
 
-Input.System = System;
-Input.Method = Method;
-Input.Data = Data;
-save(OutputData,'Input','experiment_time');
+% Save if filename is provided.
+if ~isempty(OutputData)
+  Input.System = System;
+  Input.Method = Method;
+  Input.Data = Data;
+  save(OutputData,'Input','experiment_time');
+end
 
 % Set verbosity.
 verbose = Method.verbose;
@@ -309,10 +319,10 @@ Temp_Order_n_Signals{numberOfSignals+1} = [];
 Statistics = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing && ~Method.conserveMemory;
+saveAll = Data.saveLevel==2;
 
 if parallelComputing
   
-  saveAll = Data.saveAll;
   parfor isignal = 1:numberOfSignals
     
     [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal}] ...
@@ -350,7 +360,7 @@ else
       TempSignals{isignal} = TempSignals_;
       Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
       
-      if Data.saveAll || Method.getNuclearContributions
+      if saveAll || Method.getNuclearContributions
         AuxiliarySignal{isignal} = AuxiliarySignal_;
       end
       
@@ -475,21 +485,24 @@ if verbose
 end
 
 % decide what to save
-if Method.sparseMemory
-  
-  if isfield(Data,'saveMore')  && Data.saveMore
-    save(OutputData,'Input','experiment_time','SignalMean','Order_n_SignalMean','TM_powder','Progress', 'Nuclei','Order_n_Signals');
-  else
-    save(OutputData,'Input','experiment_time','SignalMean','Order_n_SignalMean','TM_powder','Progress');
+if ~isempty(OutputData)
+  switch Data.saveLevel
+    case 0
+      if Method.sparseMemory
+        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','-append');
+      else
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','-append');
+      end
+    case 1
+      if Method.sparseMemory
+        save(OutputData,'Nuclei','Order_n_Signals','-append');
+      else
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
+          'Nuclei','Order_n_SignalMean','Order_n_Signals','-append');
+      end
+    case 2
+      save(OutputData);
   end
-  
-elseif isfield(Data,'saveAll')  && Data.saveAll
-  save(OutputData);
-elseif isfield(Data,'saveMore')  && Data.saveMore
-  save(OutputData,'Input','experiment_time','SignalMean','Signals','TM','TM_powder','Progress',...
-       'Nuclei','Order_n_SignalMean','Order_n_Signals');
-else
-  save(OutputData,'Input','experiment_time','SignalMean','Signals','TM','TM_powder','Progress');
 end
 
 % delete temporary files
@@ -1025,36 +1038,37 @@ for clusterSize = Method.order:-1:1
       SubclusterIndices{clusterSize,iCluster} = [];
     end
         
-    % Loop over electronic states.
-    for eState = (2*System.Electron.spin+1):-1:1
+    % Get cluster Hamiltonian.
+    if ~Method.precalculateHamiltonian && strcmp(Method.HamiltonianType,'pairwise')
       
-      % Get cluster Hamiltonian.
-      if ~Method.precalculateHamiltonian && strcmp(Method.HamiltonianType,'pairwise')
-        
-        % Generate Cartesian spin-spin coupling Hamiltonian.
-        [Hamiltonian_pairwise,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
-        % Generate spin Hamiltonian.
-        ClusterHamiltonian{eState} = assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,zeroIndex,clusterSize);
-        
-      elseif strcmp(Method.HamiltonianType,'pairwise')
-        
-        % Generate Cartesian spin-spin coupling Hamiltonian.
-        %ClusterHamiltonian{eState} = assemblePairwiseHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,Method.HamiltonianType);
-        zeroIndex =  Clusters{clusterSize}(iCluster,1) - 1;
-        ClusterHamiltonian{eState} = assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,zeroIndex,clusterSize);
-        
-      elseif ~Method.precalculateHamiltonian
-        
-        % Generate a diassembled spin Hamiltonian.
-        [Hamiltonian_diagonal,Hamiltonian_offDiagonal,zeroIndex] = constructHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
-        % Generate spin Hamiltonian.
+      % Generate Cartesian spin-spin coupling Hamiltonian.
+      [Hamiltonian_pairwise,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
+      % Generate spin Hamiltonian.
+      [ClusterHamiltonian{1},ClusterHamiltonian{2}] = ...
+        assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System,Nuclei,zeroIndex,clusterSize);
+      
+    elseif strcmp(Method.HamiltonianType,'pairwise')
+      
+      % Generate Cartesian spin-spin coupling Hamiltonian.
+      %ClusterHamiltonian{eState} = assemblePairwiseHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,Method.HamiltonianType);
+      zeroIndex =  Clusters{clusterSize}(iCluster,1) - 1;
+        [ClusterHamiltonian{1},ClusterHamiltonian{2}] = ...
+          assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System,Nuclei,zeroIndex,clusterSize);
+      
+    elseif ~Method.precalculateHamiltonian
+      
+      % Generate a diassembled spin Hamiltonian.
+      [Hamiltonian_diagonal,Hamiltonian_offDiagonal,zeroIndex] = constructHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
+      % Generate spin Hamiltonian.
+      for eState = (2*System.Electron.spin+1):-1:1
         ClusterHamiltonian{eState} = getClusterHamiltonian(Hamiltonian_diagonal,Hamiltonian_offDiagonal, eState, Clusters{clusterSize}(iCluster,:), Nuclei,zeroIndex);
-        
-      else
-        
-        % Generate spin Hamiltonian.
+      end
+      
+    else
+      
+      % Generate spin Hamiltonian.
+      for eState = (2*System.Electron.spin+1):-1:1
         ClusterHamiltonian{eState} = getClusterHamiltonian(Hamiltonian_diagonal,Hamiltonian_offDiagonal, eState, Clusters{clusterSize}(iCluster,:), Nuclei,zeroIndex);
-        
       end
       
     end
@@ -2048,32 +2062,14 @@ if ~isfield(System,'nuclear_Zeeman')
   System.nuclear_Zeeman = true;
 end
 
-if ~isfield(System,'secular_Hyperfine')
-  System.secular_Hyperfine = true;
-end
-if ~isfield(System,'full_Sz_Hyperfine')
-  System.full_Sz_Hyperfine = false;
-end
-if System.full_Sz_Hyperfine
-  System.secular_Hyperfine = true;
+if ~isfield(System,'hyperfine')
+  System.hyperfine = [true false];
 end
 
-if ~isfield(System,'fullDipoleTensor')
-  System.fullDipoleTensor = true;
+if ~isfield(System,'nuclear_dipole')
+  System.nuclear_dipole = [true true true true];
 end
 
-if ~isfield(System,'nuclear_dipole_A')
-  System.nuclear_dipole_A = true;
-end
-if ~isfield(System,'nuclear_dipole_B')
-  System.nuclear_dipole_B = true;
-end
-if ~isfield(System,'nuclear_dipole_CD')
-  System.nuclear_dipole_CD = true;
-end
-if ~isfield(System,'nuclear_dipole_EF')
-  System.nuclear_dipole_EF = true;
-end
 if ~isfield(System,'nuclear_quadrupole')
   System.nuclear_quadrupole = true;
 end
@@ -2084,20 +2080,14 @@ if ~isfield(System,'nuclear_quadrupole_scale_eta')
   System.nuclear_quadrupole_scale_eta = 1;
 end
 
-if ~isfield(System,'useHamiltonian')
-System.useHamiltonian = [System.electron_Zeeman,...
-  System.nuclear_Zeeman,System.secular_Hyperfine, ...
-  System.nuclear_dipole_B];
-end
-
 if ~isfield(System,'theory')
   System.theory = [System.electron_Zeeman,...
     System.nuclear_Zeeman,...
-    System.secular_Hyperfine, System.full_Sz_Hyperfine, ...
-    System.nuclear_dipole_A, System.nuclear_dipole_B,System.nuclear_dipole_CD,System.nuclear_dipole_EF, ...
+    System.hyperfine(1), System.hyperfine(2), ...
+    System.nuclear_dipole(1), System.nuclear_dipole(2), ...
+    System.nuclear_dipole(3), System.nuclear_dipole(4), ...
     System.nuclear_quadrupole];
 end
-
 
 % System limiting options
 if ~isfield(System,'limitToSpinHalf')
@@ -2164,12 +2154,8 @@ if ~isfield(Method,'vectorized')
 end
 
 % save options
-if ~isfield(Data,'saveMore')
-  Data.saveMore = true;
-end
-
-if ~isfield(Data,'saveAll')
-  Data.saveAll = false;
+if ~isfield(Data,'saveLevel')
+  Data.saveLevel = 0;
 end 
 
 end

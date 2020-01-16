@@ -125,21 +125,17 @@ nonMethyls = Cluster(methyl_IDs == 0);
 Methyls = Cluster(methyl_IDs > 0);
 
 if length(Methyls) > length(unique(Methyls))
-  return;
+  return
 end
 N = length(nonMethyls) + 3*length(Methyls);
-Cluster_ =1:N;
-
-
+Cluster_ = 1:N;
 Methyl_Spin.Type = {'1H','1H','1H'};
 for imethyl = Methyls
- Methyl_Spin.Nuclear_g = Nuclei.Nuclear_g(imethyl)*[1,1,1];
- Methyl_Spin.Coordinates = Nuclei.Auxiliary_Coordinates{imethyl};
- [H_in,zeroIndex] = pairwisetensors(System,Methyl_Spin,Cluster);
- H_out = assembleHamiltonian(H_in,Cluster,System, eState,Nuclei,zeroIndex,clusterSize);
- H_out = Nuclei.Projection(imethyl)*Nuclei.Transform{imethyl}*H_out*Nuclei.Projection(imethyl);
- 
+  Methyl_Spin.Nuclear_g = Nuclei.Nuclear_g(imethyl)*[1,1,1];
+  Methyl_Spin.Coordinates = Nuclei.Auxiliary_Coordinates{imethyl};
+  [H_in,zeroIndex] = pairwisetensors(System,Methyl_Spin,Cluster);
+  H_out = assembleHamiltonian(H_in,Cluster,System,Nuclei,zeroIndex,clusterSize);
+  H_out = Nuclei.Projection(imethyl)*Nuclei.Transform{imethyl}*H_out*Nuclei.Projection(imethyl);
 end
-
 
 end

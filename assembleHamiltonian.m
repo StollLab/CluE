@@ -1,5 +1,18 @@
-function H_out = assembleHamiltonian(H_in,Cluster,System, eState,Nuclei,zeroIndex,clusterSize)
+function [H_alpha,H_beta] = assembleHamiltonian(tensors,Cluster,System,Nuclei,zeroIndex,clusterSize)
 
+theory = System.theory;
+
+useEZ       = theory(1);
+useNZ       = theory(2);
+useHF_SzIz  = theory(3);
+useHF_SzIxy = theory(4);
+useNucA     = theory(5);
+useNucB     = theory(6);
+useNucCD    = theory(7);
+useNucEF    = theory(8);
+useNQ       = theory(9);
+
+%{
 Cluster0 = Cluster;
 for ispin = Cluster0
   if strcmp('CH3', Nuclei.Type{ispin})
@@ -9,21 +22,12 @@ for ispin = Cluster0
     Cluster(Cluster==ispin)=[];
   end
 end
-
+%}
 Cluster = sort(unique(Cluster));
 
 if abs(double(zeroIndex) + 1 -double(Cluster(1)))>=1
   error('Cluster reference failure.');
 end
-
-n_cluster = length(Cluster);
-
-if clusterSize ~= n_cluster
-  error('Cluster reference failure.');
-end
-
-% electron manifold
-ms = eState - 1  - System.Electron.spin;
 
 % dimension of the electron manifold
 dim = prod(Nuclei.NumberStates(Cluster));
@@ -31,93 +35,62 @@ dim = prod(Nuclei.NumberStates(Cluster));
 % initialize output cluster Hamiltonian
 H_out = eye(dim);
 
-% electron Zeeman splitting
-eZeeman = H_in{1,1}*eye(3); % Hz
-
-% electron Zeeman frequency
-H_out = ms*H_out*eZeeman(3,3); % Hz
-
+Hnuc = 0;
+Hhf = 0;
 
 % icluster is a index for the cluster
-for icluster = 1:n_cluster
+for iSpin = 1:clusterSize
   
-  % the ith nuclear spin in the system
-  ispin = Cluster(icluster) ;
+  % nuclear spin quantum number
+  I = Nuclei.Spin(Cluster(iSpin));
   
   % the ith nuclear spin in the input Hamiltonian
-  inucleus = ispin - zeroIndex + 1; % since the electron is given position 1;
+  inucleus = Cluster(iSpin) - zeroIndex + 1; % since the electron is given position 1;
   
-  % dimension of the identity matrix preceding the ith nucleus
-  pre_dim = prod(Nuclei.NumberStates(Cluster(1:icluster-1)));
-  
-  % dimension of the identity matrix following the ith nucleus
-  post_dim = prod(Nuclei.NumberStates(Cluster(icluster+1:end)));
-  
-  % dimension of the matrix of the ith nucleus
-  dim_i =  prod(Nuclei.NumberStates(ispin));
-  
-  
-  % nuclear Zeeman
-  
-  K = zeros(3);
-  if isempty(H_in{inucleus,inucleus})
-    continue;
-  end
-  K = K + H_in{inucleus,inucleus};
-  
-  % spin matrix
-  %clear matrix;
-  matrix = kron(eye(pre_dim), spinZ(Nuclei.Spin(ispin))) ;
-  matrix = kron(matrix, eye(post_dim));
-  
-  if abs(trace(matrix))>1e-12
-    error('Spin Matrix is not traceless.')
+  % Hilbert subspace dimensions nuclei 1:i-1, i+1:end
+  pre_dim = prod(Nuclei.NumberStates(Cluster(1:iSpin-1)));
+  post_dim = prod(Nuclei.NumberStates(Cluster(iSpin+1:end)));
+
+  if useNZ || HF
+    Iz = fullop(pre_dim,spinZ(I),post_dim);
   end
   
-  nZeeman_ = -K(3,3)*matrix; % e kron e ... kron Iz_inucleus kron ... kron e.
-  H_out = H_out + nZeeman_;
-  
-  % secular hyperfine
-  
-  % K = H_in{1,inucleus}*eye(3) + H_in{inucleus,1}*eye(3);
-  % but either H_in may be empty
-  K = zeros(3);
-  if ~isempty(H_in{1,inucleus})
-    K = K +   H_in{1,inucleus};
-  end
-  if ~isempty(H_in{inucleus,1})
-    K = K +   H_in{inucleus,1};
+  % Calculate nuclear Zeeman Hamiltonian
+  if useNZ
+    H_nuclear_Zeeman_Iz = -tensors{inucleus,inucleus}(3,3)*Iz;
   end
   
-  % hyperfine spin Hamiltonian
-  hyperfine_ =  -K(3,3)*ms*matrix; % e kron e ... kron Iz_inucleus kron ... kron e.
-  
-  if System.full_Sz_Hyperfine
-    % spin matrix
-    %clear matrix;
-    matrix = kron(eye(pre_dim), spinX(Nuclei.Spin(ispin))) ;
-    matrix = kron(matrix, eye(post_dim));
-    hyperfine_SzIx = -K(1,3)*ms*matrix;
+  % Calculate hyperfine Hamiltonian
+  A = zeros(3);
+  if ~isempty(tensors{1,inucleus})
+    A = A + tensors{1,inucleus};
+  end
+  if ~isempty(tensors{inucleus,1})
+    A = A + tensors{inucleus,1};
+  end
+  if useHF_SzIz
+    H_hyperfine_SzIz = -A(3,3)*Iz;
+  else
+    H_hyperfine_SzIz = 0;
+  end
+  if useHF_SzIxy
+    Ix = fullop(pre_dim,spinX(I),post_dim);
+    Iy = fullop(pre_dim,spinY(I),post_dim);
+    H_hyperfine_SzIx = -A(3,1)*Ix;
+    H_hyperfine_SzIy = -A(3,2)*Iy;
+  else
+    H_hyperfine_SzIx = 0;
+    H_hyperfine_SzIy = 0;
+  end
     
-    matrix = kron(eye(pre_dim), spinY(Nuclei.Spin(ispin))) ;
-    matrix = kron(matrix, eye(post_dim));
-    hyperfine_SzIy = -K(2,3)*ms*matrix;
-    
-    hyperfine_ =  hyperfine_  + hyperfine_SzIx + hyperfine_SzIy;
-    
-    %   hyperfine_SzIxy = +(K(1,3) + 1i*K(2,3))*ms*matrix/4;
-    %    hyperfine_SzIxy =  hyperfine_SzIxy +  hyperfine_SzIxy';
-    %   hyperfine_ =  hyperfine_  + hyperfine_SzIxy;
-  end
+  % Assemble single-nucleus terms in nuclear Hamiltonian
+  Hnuc = Hnuc + H_nuclear_Zeeman_Iz + H_nuclear_quadrupole;
+  Hhf = Hhf + H_hyperfine_SzIz + H_hyperfine_SzIx + H_hyperfine_SzIy;
   
   H_out = H_out + hyperfine_;
   
-  
   % loop over all nuclei with index greater than the ith nucleus
-  for jcluster = icluster+1:n_cluster
-    if jcluster <= icluster
-      continue;
-    end
+  for jcluster = iSpin+1:clusterSize
     
     % the jth nuclear spin in the system
     jspin = Cluster(jcluster);
@@ -126,7 +99,7 @@ for icluster = 1:n_cluster
     jnucleus = jspin - zeroIndex + 1; % since the electron is given position 1;
     
     % dimension of the identity matrix between the ith and jth nucleus
-    mid_dim = prod(Nuclei.NumberStates(Cluster(icluster+1:jcluster-1)));
+    mid_dim = prod(Nuclei.NumberStates(Cluster(iSpin+1:jcluster-1)));
     
     % dimension of the identity matrix following the jth nucleus
     post_dim = prod(Nuclei.NumberStates(Cluster(jcluster+1:end)));
@@ -134,120 +107,134 @@ for icluster = 1:n_cluster
     % dimension of the matrix of the ith nucleus
     dim_j =  prod(Nuclei.NumberStates(jspin));
     
-    % get H_ij
-    K = zeros(3);
-    if ~isempty(H_in{inucleus,jnucleus})
-      K = K +   H_in{inucleus,jnucleus};
+    % get dipolar coupling tensor
+    dd = zeros(3);
+    if ~isempty(tensors{inucleus,jnucleus})
+      dd = dd +   tensors{inucleus,jnucleus};
     end
-    if ~isempty(H_in{jnucleus,inucleus})
-      K = K +   H_in{jnucleus,inucleus};
-    end
-    
-    % use full dipole-dipole Hamiltonian
-    if System.fullDipoleTensor
-      % i spin vector
-      Spin_i = {spinX(Nuclei.Spin(ispin)),spinY(Nuclei.Spin(ispin)),spinZ(Nuclei.Spin(ispin))};
-      
-      % j spin vector
-      Spin_j = {spinX(Nuclei.Spin(jspin)),spinY(Nuclei.Spin(jspin)),spinZ(Nuclei.Spin(jspin))};
-      
-      % spin dipolar Hamilltonian
-      Hdd = zeros(dim);
-      
-      for ix = 1:3
-        for jx = 1:3
-          Gdd_left_ = kron(eye(pre_dim), eye(dim_i));
-          Gdd_left_ = kron( Gdd_left_, eye(mid_dim) );
-          Gdd_left_ = kron( Gdd_left_,Spin_j{jx}  );
-          Gdd_left_ = kron(Gdd_left_,eye(post_dim) );
-          
-          Gdd_right_ = kron(eye(pre_dim), Spin_i{ix});
-          Gdd_right_ = kron( Gdd_right_ , eye(mid_dim) );
-          Gdd_right_ = kron( Gdd_right_ ,eye(dim_j)  );
-          Gdd_right_ = kron(Gdd_right_ ,eye(post_dim) );
-          
-          %           Hdd = Hdd - kron( eye(dim_i),Spin_j{jx}  )'*K(jx,ix) * kron( Spin_i{ix},eye(dim_j) );
-          Hdd = Hdd + Gdd_left_'*K(jx,ix) * Gdd_right_;
-          
-        end
-      end
-      H_out = H_out + Hdd;
-      continue;
+    if ~isempty(tensors{jnucleus,inucleus})
+      dd = dd +   tensors{jnucleus,inucleus};
     end
     
-    % or just the secular and pseudo-secular
-    if System.nuclear_dipole_A
-      % nucleus-nucleus secular
-      
-      %clear matrix;
-      matrix = kron(eye(pre_dim), spinZ(Nuclei.Spin(ispin)) );
-      matrix = kron(matrix, eye(mid_dim));
-      matrix = kron(matrix, spinZ(Nuclei.Spin(jspin)) );
-      matrix = kron(matrix, eye(post_dim));
-      
-      if abs(trace(matrix))>1e-12
-        error('Spin Matrix is not traceless.')
-      end
-      
-      % select Iz*Iz
-      H_out = H_out + K(3,3)*matrix;
+    % nucleus-nucleus secular (A term)
+    if useNucA
+      IzJz = fullop2(pre_dim,spinZ(I),mid_dim,spinZ(Nuclei.Spin(jspin)),post_dim0);
+      Hnn_A = dd(3,3)*IzJz;
+    else
+      Hnn_A = 0;
     end
     
-    if System.nuclear_dipole_B
-      % nucleus-nucleus pseudo-secular
-      
-      %clear matrix;
-      matrix = kron(eye(pre_dim), spinRaise(Nuclei.Spin(ispin)) );
-      matrix = kron(matrix, eye(mid_dim));
-      matrix = kron(matrix, spinLower(Nuclei.Spin(jspin)) );
-      matrix = kron(matrix, eye(post_dim));
-      matrix = matrix + matrix';
-      
-      if abs(trace(matrix))>1e-12
-        error('Spin Matrix is not traceless.')
-      end
-      
-      
-      bath = 0.25*(K(1,1) + K(2,2)); % e kron e ... kron Iz_inucleus kron ... kron e ... kron Iz_jnucleus ... kron e.
-      
-      H_out = H_out + bath*matrix;
-      
+    % nucleus-nucleus pseudo-secular (B term)      
+    if useNucB
+      IpJm = fullop2(pre_dim,spinRaise(I),mid_dim,spinLower(Nuclei.Spin(jspin)),post_dim);
+      ImJp = IpJm';
+      Hnn_B = 0.25*(dd(1,1) + dd(2,2))*(IpJm+ImJp);
+    else
+      Hnn_B = 0;  
     end
     
-    if System.nuclear_dipole_CD
-      %clear matrix;
-      matrix = kron(eye(pre_dim), spinRaise(Nuclei.Spin(ispin)) );
-      matrix = kron(matrix, eye(mid_dim));
-      matrix = kron(matrix, spinZ(Nuclei.Spin(jspin)) );
-      matrix = kron(matrix, eye(post_dim));
-      matrix_ = kron(eye(pre_dim), spinZ(Nuclei.Spin(ispin)) );
-      matrix_ = kron(matrix_, eye(mid_dim));
-      matrix_ = kron(matrix_, spinRaise(Nuclei.Spin(jspin)) );
-      matrix_ = kron(matrix_, eye(post_dim));
-      
-      matrix = 1/2*(K(1,3) - 1i*K(2,3))*(matrix + matrix_);
-      H_out = H_out + matrix + matrix';
-      
+    % nucleus-nucleus dipolar C and D terms
+    if useNucCD
+      IzJp = fullop2(pre_dim,spinZ(I),mid_dim,spinRaise(Nuclei.Spin(jspin)),post_dim);      
+      IpJz = fullop2(pre_dim,spinRaise(I),mid_dim,spinZ(Nuclei.Spin(jspin)),post_dim);      
+      IzJm = IzJp';
+      ImJz = IpJz';
+      cd = 1/2*(dd(1,3) - 1i*dd(2,3));
+      Hnn_CD = cd*(IzJp+IpJz) + cd'*(IzJm+ImJz);
+    else
+      Hnn_CD = 0;      
     end
     
-    if System.nuclear_dipole_EF
-      %clear matrix;
-      matrix = kron(eye(pre_dim), spinRaise(Nuclei.Spin(ispin)) );
-      matrix = kron(matrix, eye(mid_dim));
-      matrix = kron(matrix, spinRaise(Nuclei.Spin(jspin)) );
-      matrix = kron(matrix, eye(post_dim));
-      
-      matrix  = 1/4*(K(1,1)  - K(2,2) - 1i*K(1,2) - 1i*K(2,1))*matrix;
-      H_out = H_out + matrix + matrix';
+    % nucleus-nucleus dipolar E and F terms
+    if useNucEF
+      IpJp = fullop2(pre_dim,spinRaise(I),mid_dim,spinRaise(Nuclei.Spin(jspin)),post_dim);
+      ImJm = IpJp';
+      ef = 1/4*(dd(1,1) - dd(2,2) - 1i*dd(1,2) - 1i*dd(2,1));
+      Hnn_EF = ef*IpJp + ef'*ImJm;
+    else
+      Hnn_EF = 0;
     end
+    
+    Hnuc = Hnuc + Hnn_A + Hnn_B + Hnn_CD + Hnn_EF;
     
   end
 end
-if max(max(abs( H_out - H_out') ) )>1e-12
+
+% Calculate electron Zeeman Hamiltonian
+if useEZ
+  eZeeman = tensors{1,1}*eye(3); % Hz
+  HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
+else
+  HEZ = 0;
+end
+
+% Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
+H_alpha = +1/2*(HEZ + Hhf) + Hnuc;
+H_beta  = -1/2*(HEZ + Hhf) + Hnuc;
+
+% Check Hermitianity
+threshold = 1e-12;
+[isHermA,nonHermiticityA] = isHermitian(H_alpha,threshold);
+[isHermB,nonHermiticityB] = isHermitian(H_beta,threshold);
+if ~isHermA || ~isHermB
+  hline = '--------------------------------------------------------------';
+  disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+  fprintf('Non-Hermiticity = {%d,%d}.\n',nonHermiticityA,nonHermiticityB);
+  disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(HEZ,threshold);
+  fprintf('HEZ non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hhf,threshold);
+  fprintf('Hhf non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIz,threshold);
+  fprintf('  H_hyperfine_SzIz non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+
+  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIy,threshold);
+  fprintf('  H_hyperfine_SzIy non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIx,threshold);
+  fprintf('  H_hyperfine_SzIx non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+
+  [isHerm,nonHermiticity] = isHermitian(Hnuc,threshold);
+  fprintf('Hnuc non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_A,threshold);
+  fprintf('  Hnn_A non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_B,threshold);
+  fprintf('  Hnn_B non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_CD,threshold);
+  fprintf('  Hnn_CD non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  [isHerm,nonHermiticity] = isHermitian(Hnn_EF,threshold);
+  fprintf('  Hnn_EF non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+    
+  [isHerm,nonHermiticity] = isHermitian(H_nuclear_quadrupole,threshold);
+  fprintf('  H_nuclear_quadrupole non-Hermiticity = %d.\n',nonHermiticity);
+  fprintf('  pass = %d.\n',isHerm); disp(hline);
+  
+  disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   error('Cluster Hamiltonian is not Hermitian.');
 end
 
+% Hermitianize
+H_alpha = (H_alpha+H_alpha')/2;
+H_beta = (H_beta+H_beta')/2;
 
+%{
 % Find all methyls groups.
 selectionRule = eye(size(H_out));
 for ispin = Cluster0
@@ -255,16 +242,25 @@ for ispin = Cluster0
     Methyl_Cluster = [ispin + 1,ispin + 2,ispin + 3];
     pre_dim = prod(Nuclei.NumberStates(Cluster(Cluster<ispin)));
     post_dim = prod(Nuclei.NumberStates(Cluster(Cluster>ispin+3)));
-    H_methyl = assembleHamiltonian(H_in,Methyl_Cluster,System, eState,Nuclei,ispin,3);
+    H_methyl = assembleHamiltonian(tensors,Methyl_Cluster,System, eState,Nuclei,ispin,3);
     H_methyl = kron(eye(pre_dim),kron(H_methyl,eye(post_dim)));
     H_out = H_out -H_methyl + H_methyl.*selectionRule;
   end
 end
-
-if max(max(abs( H_out - H_out') ) )>1e-12
-  error('Cluster Hamiltonian is not Hermitian.');
-end
+%}
 
 end
 
+function Op = fullop(n_pre,op,n_post)
+Op = eye(n_pre);
+Op = kron(Op,op);
+Op = kron(Op,eye(n_post));
+end
 
+function Op = fullop2(n_pre,op1,n_mid,op2,n_post)
+Op = eye(n_pre);
+Op = kron(Op,op1);
+Op = kron(Op,eye(n_mid));
+Op = kron(Op,op2);
+Op = kron(Op,eye(n_post));
+end
