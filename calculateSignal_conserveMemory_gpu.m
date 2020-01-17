@@ -15,7 +15,9 @@ Method_order_lower_bound = Method.order_lower_bound;
 Method_parallelComputing = Method.parallelComputing;
 Method_clear_partialSave = Method.clear_partialSave;
 theory = System.theory;
-% maxClusterSize = min(4,Method_order);
+
+maxClusterSize = min(6,Method_order);
+
 % Convert variable to gpu compatible forms
 dimensionality = 1;
 switch System.experiment
@@ -192,8 +194,6 @@ if strcmp(Nuclei.graphCriterion,'complete')
   graphCriterion = COMPLETE;
 end
 
-useHamiltonian = System.useHamiltonian;
-
 Method_record_clusters = Method.record_clusters;
 Method_partialSave = Method.partialSave;
 Method_MonteCarlo_Threshold = Method.MonteCarlo.Threshold;
@@ -356,7 +356,7 @@ for iorder = Method_order_lower_bound:Method_order
       Reduced_ClusterArray,...
       Reduced_SubclusterIndices_2,Reduced_SubclusterIndices_3,Reduced_SubclusterIndices_4, ...
       Reduced_SubclusterIndices_5,Reduced_SubclusterIndices_6, ...
-      Method_record_clusters,useHamiltonian);
+      Method_record_clusters);
     
     end
   else
@@ -379,7 +379,7 @@ for iorder = Method_order_lower_bound:Method_order
         Reduced_ClusterArray,...
         Reduced_SubclusterIndices_2,Reduced_SubclusterIndices_3,Reduced_SubclusterIndices_4, ...
         Reduced_SubclusterIndices_5,Reduced_SubclusterIndices_6, ...
-        Method_record_clusters,useHamiltonian);
+        Method_record_clusters);
       
     end
   end

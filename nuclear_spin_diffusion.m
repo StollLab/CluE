@@ -748,7 +748,7 @@ end
 if isfield(Method,'exportHamiltonian') && Method.exportHamiltonian
   
   % Generate Cartesian spin-spin coupling Hamiltonian.
-  [Hamiltonian,zeroIndex] = pairwiseHamiltonian(System,Nuclei,[1:Nuclei.number]);
+  [Hamiltonian,zeroIndex] = pairwisetensors(System,Nuclei,[1:Nuclei.number]);
   
   % set file name
   H_file = [OutputData(1:end-4), '_Hamiltonian.mat'];
@@ -1736,6 +1736,12 @@ end
 if ~isfield(Method,'gpu')
   Method.gpu = false;
 end
+if ~isfield(Method,'vectorized')
+  Method.vectorized = true;
+end
+if ~isfield(Method,'exportHamiltonian')
+  Method.exportHamiltonian = false;
+end
 if ~isfield(Method,'propagationDomain')
   Method.propagationDomain='time-domain'; % fastest method
 end
@@ -1894,7 +1900,9 @@ if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
   Method.precalculateHamiltonian = false;
 end
 
-
+if ~isfield(Method,'getNuclearContributions')
+  Method.getNuclearContributions = false;
+end
 
 % Base Units
 if ~isfield(System,'joule')

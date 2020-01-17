@@ -78,7 +78,7 @@ end
 
 function NuclearZeeman = constructNuclearZeeman(Nuclei_g, i_index_nucleus, magneticField, muN, hbar)
 gn = Nuclei_g(i_index_nucleus);
-NuclearZeeman = gn*muN*magneticField*eye(3); % J.
+NuclearZeeman = -gn*muN*magneticField*eye(3); % J.
 NuclearZeeman = NuclearZeeman/(2*pi*hbar); % J -> Hz
 end
 
@@ -89,8 +89,8 @@ r = Nuclei_Coordinates(i_index_nucleus,:)';
 n = r/norm(r);
 nnt = n*n';
 r3 = norm(r)^3;
-Hdd = mu0/(4*pi)*ge*muB*gni*muN/r3*(eye(3)-3*nnt);
-Hyperfine = -Hdd/(2*pi*hbar); % Hz.
+Hhf = mu0/(4*pi)*ge*muB*gni*muN/r3*(3*nnt - eye(3));
+Hyperfine = Hhf/(2*pi*hbar); % Hz.
 
 return
 
@@ -104,7 +104,7 @@ r = Nuclei_Coordinates(i_index_nucleus,:)'-Nuclei_Coordinates(j_index_nucleus,:)
 n = r/norm(r);
 nnt = n*n';
 r3 = norm(r)^3;
-Hdd = -mu0/(4*pi)*gni*gnj*muN^2/r3*(eye(3)-3*nnt);
+Hdd = -mu0/(4*pi)*gni*gnj*muN^2/r3*(3*nnt - eye(3));
 Hdd = Hdd/(2*pi*hbar); % Hz.
 
 end

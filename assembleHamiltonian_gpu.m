@@ -43,7 +43,7 @@ for iSpin = 1:clusterSize
   Iy = (SpinOp(:,:,p) - SpinOp(:,:,m) )/2i;
   
   if useNZ
-    H_nuclear_Zeeman_Iz = -tensors(3,3,iSpin+1,iSpin+1)*Iz;
+    H_nuclear_Zeeman_Iz = tensors(3,3,iSpin+1,iSpin+1)*Iz;
   else
     H_nuclear_Zeeman_Iz = 0;
   end
@@ -51,13 +51,13 @@ for iSpin = 1:clusterSize
   % Calculate hyperfine Hamiltonian
   A = tensors(:,:,1,iSpin+1) + tensors(:,:,iSpin+1,1);
   if useHF_SzIz
-    H_hyperfine_SzIz = -A(3,3)*Iz;
+    H_hyperfine_SzIz = A(3,3)*Iz;
   else
     H_hyperfine_SzIz = 0;
   end
   if useHF_SzIxy
-    H_hyperfine_SzIx = -A(3,1)*Ix;
-    H_hyperfine_SzIy = -A(3,2)*Iy;
+    H_hyperfine_SzIx = A(3,1)*Ix;
+    H_hyperfine_SzIy = A(3,2)*Iy;
   else
     H_hyperfine_SzIx = 0;
     H_hyperfine_SzIy = 0;

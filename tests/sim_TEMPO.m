@@ -14,7 +14,7 @@ path('../',oldpath);
 %  Data.InputData = './TEMPO_TIP4p_10A_conect.pdb';
 %Data.InputData = './TEMPO_TIP4P.pdb';
 % Data.InputData = 'TEMPO_TIP4P_Rsys_10A_pymol.pdb';
-Data.InputData = 'TEMPO_TIP4P_connect.pdb';
+Data.InputData = 'TEMPO_100K_dt100ps_01.pdb';
 
 % Data.InputData = '/home/kudarizaka/uw/stoll/spectral_diffusion/gromacs/TEMPO/rep_01b/TEMPO_TIP4P.pdb';
 
@@ -97,7 +97,7 @@ Method.divisions = 'numSpins';
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.r0 = 3e-10; % m. converges at 0.9 nm
+% Method.r0 = 3e-10; % m. converges at 0.9 nm
 Method.cutoff.distance = Method.r0;
 Method.cutoff.modulation = 0*1e-2;
 Method.cutoff.dipole = 1e3;
@@ -129,7 +129,7 @@ Method.precalculateHamiltonian = false;
 
 Method.shuffle = true;
 
-Method.conserveMemory = true;
+Method.conserveMemory = false;
 
 Method.mixed_eState = false;
 
