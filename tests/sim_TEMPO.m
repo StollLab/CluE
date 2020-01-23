@@ -182,6 +182,7 @@ options.verbose = true;
 disp('Calculating coherence.');
 System.deuterateProtein = false;
 % tic
+[SignalMean, twotau, TM_powder,Order_n_SignalMean,Nuclei]
 [SignalMean, twotau, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
 out = load(Data.OutputData);
 % toc

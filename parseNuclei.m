@@ -14,6 +14,7 @@ maxClusterSize = Method.order;
 % set values to unspecified fields
 System = setIsotopeDefaults(System);
 
+Nuclei.nStates = System.nStates;  
 % Define spin operators.
 Nuclei.SpinOperators = cell(1,4);
 
@@ -533,38 +534,40 @@ end
 Nuclei = getPairwiseStatistics(System, Nuclei);
 Nuclei.maxSpin = max(Nuclei.Spin);
 
-Nuclei.ValidPair = Nuclei.valid'*Nuclei.valid;
-Nuclei.ValidPair = Nuclei.ValidPair.*Nuclei.Same_g;
-% exclude_spins = find( isnan(Nuclei.Spin));
-% Nuclei.ValidPair(exclude_spins,:) = 0;
-% Nuclei.ValidPair(:,exclude_spins) = 0;
-
-num_criteria = numel(Method.Criteria);
-for ii = 1:num_criteria
-  switch Method.Criteria{ii}
-    case 'neighbor'
-      Max_Neighbor_ = Nuclei.DistanceMatrix <= Method.r0;
-      Min_Neighbor_ = Nuclei.DistanceMatrix > Method.r_min;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Max_Neighbor_.*Min_Neighbor_;
-      
-    case 'modulation'
-      Min_Mod_ = Nuclei.ModulationDepth >= Method.cutoff.modulation;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_Mod_;
-      
-    case 'dipole'
-      Min_dipole_ = abs(Nuclei.Nuclear_Dipole) >= Method.cutoff.dipole;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_dipole_;
-      
-    case 'minimum-frequency'
-      Min_Freq_ = abs(Nuclei.Frequency_Pair) >  Method.cutoff.minimum_frequency;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_Freq_;
-      
-    case 'hyperfine'
-      Min_DeltaA_ = abs(Nuclei.DeltaHyperfine) > Method.cutoff.hyperfine_inf;
-      Max_DeltaA_ = abs(Nuclei.DeltaHyperfine) < Method.cutoff.hyperfine_sup;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_DeltaA_.*Max_DeltaA_;
-  end
+Nuclei.ValidPair = ones(Nuclei.number,Nuclei.number,Method.order);
+for isize = 1:Method.order
+  Nuclei.ValidPair(:,:,isize) = Nuclei.valid'*Nuclei.valid;
+  Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Nuclei.Same_g;
+  % exclude_spins = find( isnan(Nuclei.Spin));
+  % Nuclei.ValidPair(exclude_spins,:) = 0;
+  % Nuclei.ValidPair(:,exclude_spins) = 0;
   
+  num_criteria = numel(Method.Criteria);
+  for ii = 1:num_criteria
+    switch Method.Criteria{ii}
+      case 'neighbor'
+        Max_Neighbor_ = Nuclei.DistanceMatrix <= Method.r0;
+        Min_Neighbor_ = Nuclei.DistanceMatrix > Method.r_min;
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Max_Neighbor_.*Min_Neighbor_;
+        
+      case 'modulation'
+        Min_Mod_ = Nuclei.ModulationDepth >= Method.cutoff.modulation(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_Mod_;
+        
+      case 'dipole'
+        Min_dipole_ = abs(Nuclei.Nuclear_Dipole) >= Method.cutoff.dipole(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_dipole_;
+        
+      case 'minimum-frequency'
+        Min_Freq_ = abs(Nuclei.Frequency_Pair) >  Method.cutoff.minimum_frequency(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_Freq_;
+        
+      case 'hyperfine'
+        Min_DeltaA_ = abs(Nuclei.DeltaHyperfine) > Method.cutoff.hyperfine_inf(isize);
+        Max_DeltaA_ = abs(Nuclei.DeltaHyperfine) < Method.cutoff.hyperfine_sup(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+    end
+  end
 end
 
 
@@ -614,8 +617,8 @@ end
 Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
-[Nuclei.State, Nuclei.ZeemanStates]= setState(System,Nuclei);
-
+[Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
+Nuclei.ZeemanStates = setRandomState(Nuclei);
 end
 
 % ========================================================================
@@ -675,7 +678,7 @@ end
 % Sets the initial bath state with a Boltzmann distribution.
 % Both output variables contain the same information, but are formated
 % differently.
-function [State,ZeemanStates] = setState(System,Nuclei)
+function [State,ZeemanStates] = setThermalEnsembleState(System,Nuclei)
 
 ZeemanStates = zeros(Nuclei.number, 2*Nuclei.maxSpin+1);
 
@@ -722,6 +725,27 @@ for iinucleus = Nuclei.number:-1:1
   normalization = sqrt(State{iinucleus}'*State{iinucleus});
   State{iinucleus} = State{iinucleus}/normalization;
   ZeemanStates(iinucleus,:) = ZeemanStates(iinucleus,:)./normalization;
+  
+end
+end
+
+% ========================================================================
+% Set random states.
+% ========================================================================
+
+% Sets the initial bath state with a Boltzmann distribution.
+% Both output variables contain the same information, but are formated
+% differently.
+function ZeemanState = setRandomState(Nuclei)
+
+nStates = Nuclei.nStates; 
+maxnStates = max(nStates);
+ZeemanState = zeros(maxnStates,Nuclei.number);
+
+% Loop through all nuclei.
+for iSpin = 1:Nuclei.number
+  I = Nuclei.Spin(iSpin);
+  ZeemanState(:,iSpin) =  randi(2*I+1,maxnStates,1); 
   
 end
 end
@@ -947,11 +971,11 @@ Nucleus_.Spin(1) = 3/2;
 Nucleus_.maxSpin = 3/2;
 Nucleus_.NumberStates(1) = int8(4);
 Nucleus_.number = 1;
-State_A = setState(System,Nucleus_);
+State_A = setThermalEnsembleState(System,Nucleus_);
 
 Nucleus_.Spin(1) = 1/2;
 Nucleus_.NumberStates(1) = int8(2);
-State_E = setState(System,Nucleus_);
+State_E = setThermalEnsembleState(System,Nucleus_);
 
 Spin_Density = [State_E{1}; State_E{1}; State_A{1}].^2;
 e_EkT= exp(-System.hbar*System.Methyl.tunnel_splitting/System.Methyl.kT);

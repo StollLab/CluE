@@ -40,11 +40,15 @@ Nuclei_g = Nuclei.Nuclear_g;
 NumberStates = Nuclei.NumberStates;
 state_multiplicity = Nuclei.StateMultiplicity;
 ZeemanStates = Nuclei.ZeemanStates;
+MeanFieldCoefficients = Nuclei.MeanFieldCoefficients;
+MeanFieldTotal = Nuclei.MeanFieldTotal;
 max_basis = max(NumberStates);
+useThermalEnsemble = System.useThermalEnsemble;
 States = zeros(max_basis,Nuclei.number);
 betaT = 2*pi*System.hbar /System.kT; % 1/Hz.
 Qtensors = Nuclei.Qtensor;
 
+nStates =System.nStates;
 % Unpackspin operators.
 Op = Nuclei.SpinOperators;
 SpinXiXjOps = Nuclei.SpinXiXjOperators;
@@ -148,23 +152,23 @@ for isize = 1:Method_order
         % the ith ccluster of size clusterSize.
         
         case 1
-          Coherences_1 = ones(numberClusters(isize),timepoints^dimensionality);  
+          Coherences_1 = zeros(numberClusters(isize),timepoints^dimensionality);  
         case 2
           SubclusterIndices_2 = zeros(nchoosek(isize,1), isize , Nuclei.numberClusters(isize)); 
-          Coherences_2 = ones(numberClusters(isize),timepoints^dimensionality);
+          Coherences_2 = zeros(numberClusters(isize),timepoints^dimensionality);
           
         case 3
           SubclusterIndices_3 = zeros(nchoosek(isize,1), isize , Nuclei.numberClusters(isize));
-          Coherences_3 = ones(numberClusters(isize),timepoints^dimensionality);
+          Coherences_3 = zeros(numberClusters(isize),timepoints^dimensionality);
         case 4
           SubclusterIndices_4 = zeros(nchoosek(isize,2), isize , Nuclei.numberClusters(isize));
-          Coherences_4 = ones(numberClusters(isize),timepoints^dimensionality);
+          Coherences_4 = zeros(numberClusters(isize),timepoints^dimensionality);
         case 5
           SubclusterIndices_5 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_5 = ones(numberClusters(isize),timepoints^dimensionality);
+          Coherences_5 = zeros(numberClusters(isize),timepoints^dimensionality);
         case 6
           SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_6 = ones(numberClusters(isize),timepoints^dimensionality);
+          Coherences_6 = zeros(numberClusters(isize),timepoints^dimensionality);
       end
       
 end
@@ -176,24 +180,24 @@ for isize = Method_order+1:maxSize
       switch isize 
         
         case 1
-          Coherences_1 = 1;  
+          Coherences_1 = 0;  
         case 2
           SubclusterIndices_2 = []; 
-          Coherences_2 = 1;
+          Coherences_2 = 0;
           
         case 3
           SubclusterIndices_3 = [];
-          Coherences_3 = 1;
+          Coherences_3 = 0;
         case 4
           SubclusterIndices_4 = 1;
-          Coherences_4 = 1;
+          Coherences_4 = 0;
           
         case 5
           SubclusterIndices_5 = [];
-          Coherences_5 = 1;
+          Coherences_5 = 0;
         case 6
           SubclusterIndices_6 = 1;
-          Coherences_6 = 1;
+          Coherences_6 = 0;
       end
       
 end
@@ -374,9 +378,17 @@ for clusterSize = 1:Method_order
     [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,magneticField, ge, muB, muN, mu0, hbar,theory,MethylID);
     qtensors = Qtensors(:,:,thisCluster);
     
-    [Halpha,Hbeta] = ...
+
+    [H_alpha,H_beta] = ...
       assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
       theory,zeroIndex,methyl_number);
+   
+    for iave = 1:nStates(clusterSize)
+      [H_alphaMF,H_betaMF] = assembleMeanFieldHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
+      theory,zeroIndex,methyl_number, MeanFieldCoefficients(:,:,:,iave), MeanFieldTotal(iave));
+   
+    Halpha = H_alpha + H_alphaMF;
+    Hbeta = H_beta + H_betaMF;
     
     switch methyl_number
       case 0
@@ -468,25 +480,35 @@ for clusterSize = 1:Method_order
     % if there are methyls, otherwise multiply by the identity.
       Hb=PA*Hbeta*PA;
       Ha=PA*Halpha*PA;
-
-    % get cluster coherence
-    
-    switch clusterSize
-      case 1
-        Coherences_1(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
-      case 2
-        Coherences_2(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
-      case 3
-        Coherences_3(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
-      case 4
-        Coherences_4(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
-      case 5
-        Coherences_5(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
-      case 6
-        Coherences_6(iCluster,:) = propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT, betaT); 
-
-    end 
-    
+        if useThermalEnsemble
+          densityMatrix = [];
+        else
+          densityMatrix = getDensityMatrix(ZeemanStates(iave,thisCluster),state_multiplicity(thisCluster),thisCluster);
+        end
+        % get cluster coherence
+        
+        switch clusterSize
+          case 1
+            Coherences_1(iCluster,:) = Coherences_1(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+          case 2
+            Coherences_2(iCluster,:) = Coherences_2(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+          case 3
+            Coherences_3(iCluster,:) = Coherences_3(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+          case 4
+            Coherences_4(iCluster,:) = Coherences_4(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+          case 5
+            Coherences_5(iCluster,:) = Coherences_5(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+          case 6
+            Coherences_6(iCluster,:) = Coherences_6(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            
+        end
+      end
     if methyl_number==0
       continue;
     end
@@ -505,7 +527,7 @@ for clusterSize = 1:Method_order
             
          
     % Calculate the coherence.
-    Coherences_E = propagate(total_time,timepoints,dt,t0,Hb_E,Ha_E,EXPERIMENT,betaT);
+    Coherences_E = propagate(total_time,timepoints,dt,t0,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
     
     switch clusterSize
       case 1
@@ -543,7 +565,7 @@ for clusterSize = 1:Method_order
 
      
      % Calculate the coherence.
-     Coherences_AE = propagate(total_time,timepoints,dt,t0,Hb_AE,Ha_AE,EXPERIMENT,betaT);
+     Coherences_AE = propagate(total_time,timepoints,dt,t0,Hb_AE,Ha_AE,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
     
      % Project the Hamiltonian onto an A state for  
      % the other methyl and an E state for one.
@@ -560,7 +582,7 @@ for clusterSize = 1:Method_order
      Ha_EA = PA2*Ha_EA*PA2;
      
      % Calculate the coherence.
-     Coherences_EA = propagate(total_time, timepoints,dt,t0,Hb_EA,Ha_EA,EXPERIMENT, betaT);
+     Coherences_EA = propagate(total_time, timepoints,dt,t0,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
 
      % Add the methyl coherences together, weighting the coherences by
      % a statistical factor.
@@ -608,20 +630,39 @@ end
 
     Signal = Signals(Method_order,:);
 end
+% ========================================================================
+% Generate Density Matrix
+% ========================================================================
+function densityMatrix = getDensityMatrix(states,multiplicities,Cluster)
 
+clustersize = length(Cluster);
 
+prod_state = states(clustersize);
+
+offset_factor = multiplicities(clustersize);
+for iSpin = clustersize-1:-1:1 
+  prod_state = prod_state + offset_factor*(states(iSpin) - 1);
+  offset_factor = offset_factor*multiplicities(iSpin);
+end
+densityMatrix = zeros(offset_factor);
+densityMatrix(prod_state,prod_state) = 1;
+
+end
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,timepoints,dt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, betaT)
+function Signal = propagate(total_time,timepoints,dt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
 Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
 Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
-
-DensityMatrix = propagator_eig((Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT);
+if useThermalEnsemble
+  DensityMatrix = propagator_eig((Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT);
+else
+  DensityMatrix = densityMatrix;
+end
 vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
 
 dU_beta = propagator_eig(Hamiltonian_beta,dt);

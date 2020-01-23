@@ -9,7 +9,7 @@
 %    .OutputData name of mat file to store results
 %    .saveLevel  0 (standard), 1 (more), 2 (all)
 
-function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean] = nuclear_spin_diffusion(System,Method,Data)
+function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei] = nuclear_spin_diffusion(System,Method,Data)
 
 tic
 
@@ -714,6 +714,8 @@ Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 % Rotate nuclear quadrupole tensors.
 for inucleus = 1:Nuclei.number  
   Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
+  % Elementwise Qtensor manipulation used for testing.  The default filer is ones(3); 
+  Nuclei.Qtensor(:,:,inucleus) = Nuclei.Qtensor(:,:,inucleus).*System.nuclear_quadrupole_filter;
 end
 
 % Rotate the g-matrix.
@@ -730,6 +732,8 @@ System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 
 % Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
+
+[Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal]= getMeanFieldCoefficients(Nuclei,System);
 
 if Method.precalculateHamiltonian
   if strcmp(Method.HamiltonianType,'pairwise')
@@ -1767,17 +1771,19 @@ if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
   Method.Criteria = {'neighbor'};
 end
 if ~isfield(Method,'cutoff') 
-  Method.cutoff.modulation = 0;
-  Method.cutoff.dipole = 0;
-  Method.cutoff.max_distance = inf;
-  Method.cutoff.min_distance = 0;
-  Method.cutoff.hyperfine_sup = inf;
-  Method.cutoff.hyperfine_inf = 0;
+  zer = zero(1,Method.order);
+  Method.cutoff.modulation = zer;
+  Method.cutoff.dipole = zer;
+  Method.cutoff.max_distance = inf + zer;
+  Method.cutoff.min_distance = zer;
+  Method.cutoff.hyperfine_sup = inf + zer;
+  Method.cutoff.hyperfine_inf = zer;
 end
 
-% if ~isfield(Method,'dipole_cutoff')
-%   Method.dipole_cutoff = 0;
-% end
+if numel(Method.cutoff.dipole) < Method.order
+  n_ = numel(Method.cutoff.dipole);
+  Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
+end
 
 % cluster order max
 if ~isfield(Method,'order')
@@ -1879,6 +1885,13 @@ if ~isfield(Method,'record_clusters')
   Method.record_clusters = false;
 end
 
+% number of product states to average over
+if ~isfield(System,'nStates')
+  System.nStates = ones(1,Method.order);
+end
+if numel(System.nStates) < Method.order
+  System.nStates(end+1:Method.order) = 1;
+end
 % Toggle between calculating the spin Hamiltonian or pairwise couplings.
 if ~isfield(Method,'HamiltonianType')
   Method.HamiltonianType = 'pairwise';
@@ -1892,6 +1905,9 @@ if ~isfield(Method,'precalculateHamiltonian')
 end
 
 % allowing for alternate inputs
+if ~isfield(Method,'method')
+  Method.method = 'CCE';
+end
 if strcmp(Method.method,'restrictedCE'),  Method.method = 'rCE';  end
 if strcmp(Method.method,'restrictedCCE'),  Method.method = 'rCCE';  end
 
@@ -2087,6 +2103,12 @@ end
 if ~isfield(System,'nuclear_quadrupole_scale_eta')
   System.nuclear_quadrupole_scale_eta = 1;
 end
+if ~isfield(System,'nuclear_quadrupole_filter')
+  System.nuclear_quadrupole_filter = ones(3);
+end
+if ~isfield(System,'useMeanField')
+  System.useMeanField = strcmp(Method.method,'CCE');
+end
 
 if ~isfield(System,'theory')
   System.theory = [System.electron_Zeeman,...
@@ -2094,9 +2116,13 @@ if ~isfield(System,'theory')
     System.hyperfine(1), System.hyperfine(2), ...
     System.nuclear_dipole(1), System.nuclear_dipole(2), ...
     System.nuclear_dipole(3), System.nuclear_dipole(4), ...
-    System.nuclear_quadrupole];
+    System.nuclear_quadrupole, ...
+    System.useMeanField];
 end
 
+if ~isfield(System,'useThermalEnsemble')
+  System.useThermalEnsemble = ~System.useMeanField;
+end
 % System limiting options
 if ~isfield(System,'limitToSpinHalf')
   System.limitToSpinHalf = false;

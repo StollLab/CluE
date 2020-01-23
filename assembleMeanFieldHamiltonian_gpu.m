@@ -1,4 +1,4 @@
-function [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,tensors,SpinOp,Qtensors,SpinXiXjOp,...
+function [H_alpha,H_beta] = assembleMeanFieldHamiltonian_gpu(state_multiplicity,tensors,SpinOp,Qtensors,SpinXiXjOp,...
   theory,zeroIndex,methyl_number, MeanFieldCoefficients, MeanFieldTotal)
 
 useEZ       = theory(1);
@@ -10,7 +10,7 @@ useNucB     = theory(6);
 useNucCD    = theory(7);
 useNucEF    = theory(8);
 useNQ       = theory(9);
-useMeanField= false;
+useMeanField= theory(10);
 
 clusterSize = numel(state_multiplicity);
 
@@ -57,59 +57,16 @@ for iSpin = 1:clusterSize
   Iz = SpinOp(:,:,z);
   Ix = (SpinOp(:,:,p) + SpinOp(:,:,m) )/2;
   Iy = (SpinOp(:,:,p) - SpinOp(:,:,m) )/2i;
-  
-  if useNZ
-    H_nuclear_Zeeman_Iz = tensors(3,3,iSpin+1,iSpin+1)*Iz;
-  else
-    H_nuclear_Zeeman_Iz = 0;
-  end
-  
-  % Calculate hyperfine Hamiltonian
-  A = tensors(:,:,1,iSpin+1) + tensors(:,:,iSpin+1,1);
-  if useHF_SzIz
-    H_hyperfine_SzIz = A(3,3)*Iz;
-  else
-    H_hyperfine_SzIz = 0;
-  end
-  if useHF_SzIxy
-    H_hyperfine_SzIx = A(3,1)*Ix;
-    H_hyperfine_SzIy = A(3,2)*Iy;
-  else
-    H_hyperfine_SzIx = 0;
-    H_hyperfine_SzIy = 0;
-  end
-  
-  % Calculate nuclear quadrupole Hamiltonian
-  if useNQ && state_multiplicity(iSpin) > 2
-    Q_ = Qtensors(:,:,iSpin);
-    [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin);
-    H_nuclear_quadrupole = ...
-      Q_(1,1)*SpinXiXjOp(:,:,xx) + ...
-      Q_(1,2)*SpinXiXjOp(:,:,xy) + ...
-      Q_(1,3)*SpinXiXjOp(:,:,xz) + ...
-      Q_(2,1)*SpinXiXjOp(:,:,yx) + ...
-      Q_(2,2)*SpinXiXjOp(:,:,yy) + ...
-      Q_(2,3)*SpinXiXjOp(:,:,yz) + ...
-      Q_(3,1)*SpinXiXjOp(:,:,zx) + ...
-      Q_(3,2)*SpinXiXjOp(:,:,zy) + ...
-      Q_(3,3)*SpinXiXjOp(:,:,zz);
-  else
-    H_nuclear_quadrupole = 0;
-  end
+ 
   
   if useMeanField
     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,E)*I0;
     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,Z)*Iz;
-    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)*SpinOp(:,:,p);
-    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)'*SpinOp(:,:,m);
+%     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)*SpinOp(:,:,p);
+%     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)'*SpinOp(:,:,m);
     Hmf = Hmf - MeanFieldCoefficients(iSpin,iSpin,SZ)*I0;
   end
   
-  
-  % Assemble single-nucleus terms in nuclear Hamiltonian
-  Hnuc = Hnuc + H_nuclear_Zeeman_Iz + H_nuclear_quadrupole;
-  Hhf = Hhf + H_hyperfine_SzIz + H_hyperfine_SzIx + H_hyperfine_SzIy;
-
   
   %------------------------------------------------------------------------
   % Loop over all nuclei with index greater than the ith nucleus.
@@ -124,76 +81,32 @@ for iSpin = 1:clusterSize
     
     [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin);
     
-    if useNucA
-      IzJz = SpinOp(:,:,zz);
-      Hnn_A = dd(3,3)*IzJz;
-    else
-      Hnn_A = 0;
-    end
-    
-    % nucleus-nucleus pseudo-secular (B term)      
-    if useNucB
-      IpJm = SpinOp(:,:,rl);
-      ImJp = SpinOp(:,:,lr);
-      Hnn_B = 0.25*(dd(1,1) + dd(2,2))*(IpJm+ImJp);
-    else
-      Hnn_B = 0;
-    end
-    
-    % nucleus-nucleus dipolar C and D terms
-    if useNucCD
-      IzJp = SpinOp(:,:,zr);
-      IpJz = SpinOp(:,:,rz);
-      IzJm = SpinOp(:,:,zl);
-      ImJz = SpinOp(:,:,lz);
-      cd = 1/2*(dd(1,3) - 1i*dd(2,3));
-      Hnn_CD = cd*(IzJp+IpJz) + cd'*(IzJm+ImJz);
-    else
-      Hnn_CD = 0;
-    end
-    
-    % nucleus-nucleus dipolar E and F terms
-    if useNucEF
-      IpJp = SpinOp(:,:,rr);
-      ImJm = SpinOp(:,:,ll);
-      ef = 1/4*(dd(1,1) - dd(2,2) - 1i*(dd(1,2) + dd(2,1)));
-      Hnn_EF = ef*IpJp + ef'*ImJm;
-    else
-      Hnn_EF = 0;
-    end
     
     if useMeanField
       
       Hmf0_ = MeanFieldCoefficients(jSpin,iSpin,Z)*Iz;
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)*SpinOp(:,:,p);
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)'*SpinOp(:,:,m);
+%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)*SpinOp(:,:,p);
+%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)'*SpinOp(:,:,m);
       
       [z_,p_,m_] = spinopidx(clusterSize,jSpin);
       
       Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,Z)*SpinOp(:,:,z_);
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)*SpinOp(:,:,p_);
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)'*SpinOp(:,:,m_);
+%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)*SpinOp(:,:,p_);
+%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)'*SpinOp(:,:,m_);
       
     end
     
     Hmf0 = Hmf0 + Hmf0_;
-    Hnuc = Hnuc + Hnn_A + Hnn_B + Hnn_CD + Hnn_EF;
+
     
   end
   
 end
 
-% Calculate electron Zeeman Hamiltonian
-if useEZ
-  eZeeman = tensors(:,:,1,1); % Hz
-  HEZ = eZeeman(3,3)*eye(size(Hnuc)); % Hz
-else
-  HEZ = 0;
-end
 
 % Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
-H_alpha = +1/2*(HEZ + Hhf + Hmf) + Hnuc + Hmf0;
-H_beta  = -1/2*(HEZ + Hhf + Hmf) + Hnuc + Hmf0;
+H_alpha = +1/2*Hmf + Hmf0;
+H_beta  = -1/2*Hmf + Hmf0;
 
 % Check Hermitianity
 threshold = 1e-12;
@@ -204,59 +117,6 @@ if ~isHermA || ~isHermB
   disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   fprintf('Non-Hermiticity = {%d,%d}.\n',nonHermiticityA,nonHermiticityB);
   disp(hline);
-  
-  [isHerm,nonHermiticity] = isHermitian(HEZ,threshold);
-  fprintf('HEZ non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('pass = %d.\n',isHerm); disp(hline);
-  
-  [isHerm,nonHermiticity] = isHermitian(Hhf,threshold);
-  fprintf('Hhf non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('pass = %d.\n',isHerm); disp(hline);
-  
-  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIz,threshold);
-  fprintf('  H_hyperfine_SzIz non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-
-  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIy,threshold);
-  fprintf('  H_hyperfine_SzIy non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-  
-  [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIx,threshold);
-  fprintf('  H_hyperfine_SzIx non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-
-    [isHerm,nonHermiticity] = isHermitian(Hmf0,threshold);
-  fprintf('  H_meanField_1 non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-
-    [isHerm,nonHermiticity] = isHermitian(Hmf,threshold);
-  fprintf('  H_meanField_Sz non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-
-  [isHerm,nonHermiticity] = isHermitian(Hnuc,threshold);
-  fprintf('Hnuc non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('pass = %d.\n',isHerm); disp(hline);
-  if clusterSize > 1
-    [isHerm,nonHermiticity] = isHermitian(Hnn_A,threshold);
-    fprintf('  Hnn_A non-Hermiticity = %d.\n',nonHermiticity);
-    fprintf('  pass = %d.\n',isHerm); disp(hline);
-    
-    [isHerm,nonHermiticity] = isHermitian(Hnn_B,threshold);
-    fprintf('  Hnn_B non-Hermiticity = %d.\n',nonHermiticity);
-    fprintf('  pass = %d.\n',isHerm); disp(hline);
-    
-    [isHerm,nonHermiticity] = isHermitian(Hnn_CD,threshold);
-    fprintf('  Hnn_CD non-Hermiticity = %d.\n',nonHermiticity);
-    fprintf('  pass = %d.\n',isHerm); disp(hline);
-    
-    [isHerm,nonHermiticity] = isHermitian(Hnn_EF,threshold);
-    fprintf('  Hnn_EF non-Hermiticity = %d.\n',nonHermiticity);
-    fprintf('  pass = %d.\n',isHerm); disp(hline);
-    
-    [isHerm,nonHermiticity] = isHermitian(H_nuclear_quadrupole,threshold);
-    fprintf('  H_nuclear_quadrupole non-Hermiticity = %d.\n',nonHermiticity);
-    fprintf('  pass = %d.\n',isHerm); disp(hline);
-  end
   disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   error('Cluster Hamiltonian is not Hermitian.');
 end
