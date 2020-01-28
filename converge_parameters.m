@@ -70,6 +70,13 @@ while ~are_R_r0_converged
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.radius
         is_R_converged = true;
         System.radius = System.radius - options.delta.radius;
@@ -174,6 +181,13 @@ end
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.modulation
         is_neighbor_converged = true;
         Method.cutoff.modulation = Method.cutoff.modulation*10^(-options.delta.modulation);
@@ -224,6 +238,13 @@ end
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
         disp(hline);
+      end
+      
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
       end
       
       if eta < options.threshold.dipole
@@ -332,6 +353,13 @@ end
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.hyperfine
         is_neighbor_converged = true;
         Method.cutoff.hyperfine_sup = Method.cutoff.hyperfine_sup*10^(-options.delta.hyperfine);
@@ -382,6 +410,14 @@ end
         fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
         disp(hline);
       end
+      
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       
       if eta < options.threshold.minimum_frequency
         is_neighbor_converged = true;
@@ -451,6 +487,14 @@ if options.converge.powder
       disp(hline);
       
     end
+      
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
     
     if eta < options.threshold.powder
       is_grid_converged = true;
@@ -600,7 +644,9 @@ end
 if ~isfield(options,'verbose')
   options.verbose = true;
 end
-
+if ~isfield(options,'doPlot')
+  options.doPlot = false;
+end
 end
 
 

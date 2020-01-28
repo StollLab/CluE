@@ -3,7 +3,7 @@
 %==========================================================================
 % General Setting
 %==========================================================================
-clear
+% clear
 
 oldpath = path;
 path('../',oldpath);
@@ -21,15 +21,15 @@ System.averaging = 'powder';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 5e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
-System.inner_radius = 3.0e-10; % m.
+System.radius = 8e-10; % m; 
+System.inner_radius = 0e-10; % m.
 
 % time points per delay period
 System.timepoints = 2^7;%11; %1e3 + 1;
 System.nitrogen = true;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 20e-6; % s.
+total_time = 30e-6; % s.
 System.dt = total_time/System.timepoints/2; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -47,7 +47,7 @@ System.D2O = false;
 System.electron_Zeeman = true;
 System.nuclear_Zeeman = true;
 System.nuclear_dipole = [true true false false]; % [A, B, CD, EF]
-System.hyperfine = [true true]; % [zz, zx+zy]
+System.hyperfine = [true false]; % [zz, zx+zy]
 System.nuclear_quadrupole = true;
 %System.nuclear_quadrupole_filter =[0,0,0;0,0,0;0,0,1]; 
 System.useMeanField = false;
@@ -64,7 +64,7 @@ System.nStates = [1,1];
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 3;
+Method.order = 2;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
@@ -88,16 +88,26 @@ Method.partialSave = false;
 %==========================================================================
 %% Run simulations
 %==========================================================================
-
+tic
 [SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = nuclear_spin_diffusion(System,Method,Data);
+t_CCE = toc
+
+
 fh = fopen('path_to_spinach.txt');
 allLines = textscan(fh,'%s','whitespace','','delimiter','\n');
 fclose(fh);
 path2spinach = allLines{1}{1};
 
+oldpath = path;
+
+tic
 fid = spinach_hahn_echo(System,Data,path2spinach);
+t_spinach = toc;
 
+path(oldpath);
 
+fprintf('\nTime for CCE = %d s.\n',t_CCE);
+fprintf('Time for spinach = %d s.\n',t_spinach);
 
 %--------------------------------------------------------------------------
 %% Plot.

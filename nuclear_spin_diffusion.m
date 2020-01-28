@@ -97,6 +97,11 @@ Progress.DataLoaded = true;
 
 if verbose, fprintf('Setup initialized %i nuclei.\n', Nuclei.number); end
 
+if Nuclei.number < Method.order
+  fprintf('Reducing the maximum cluster size to the system size of %d.\n',Nuclei.number)
+  Method.order = double(Nuclei.number);
+end
+
 % only possible for very small systems
 if strcmp(Method.method,'full')
   Method.order = Nuclei.number;
