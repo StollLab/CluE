@@ -95,8 +95,9 @@ for iline = 1:nLines
     % Parse information about unit cell
     
     UnitCell.isUnitCell = true;
-    UnitCell.ABC = sscanf(line_(7:33),'%f %f %f')*System.angstrom; % angstrom -> m
-    UnitCell.Angles = sscanf(line_(34:54),'%f %f %f')*pi/180;
+    values_ = sscanf(line_(7:54),'%f %f %f %f %f %f');
+    UnitCell.ABC = values_(1:3)*System.angstrom; % angstrom -> m
+    UnitCell.Angles = values_(4:6)*pi/180; % degree -> rad
     
   end
   

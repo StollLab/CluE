@@ -11,6 +11,9 @@ FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
 Method_order = Method.order;  
 theory = System.theory;
+
+useMeanField = theory(10);
+
 maxClusterSize = min(maxSize,Method_order);
 % Convert variable to gpu compatible forms
 dimensionality = 1;
@@ -384,9 +387,13 @@ for clusterSize = 1:Method_order
       theory,zeroIndex,methyl_number);
    
     for iave = 1:nStates(clusterSize)
-      [H_alphaMF,H_betaMF] = assembleMeanFieldHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
-      theory,zeroIndex,methyl_number, MeanFieldCoefficients(:,:,:,iave), MeanFieldTotal(iave));
-   
+      if useMeanField
+        [H_alphaMF,H_betaMF] = assembleMeanFieldHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
+          theory,zeroIndex,methyl_number, MeanFieldCoefficients(:,:,:,iave), MeanFieldTotal(iave));
+      else
+        H_alphaMF = 0;
+        H_betaMF = 0;
+      end
     Halpha = H_alpha + H_alphaMF;
     Hbeta = H_beta + H_betaMF;
     

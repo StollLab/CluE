@@ -51,29 +51,6 @@ else
   Nuclei.Methyl_Data = [];
 end
 
-% Get nuclear quadrupole parameters.
-if System.nuclear_quadrupole
-    
-  % Water Quadrupole Values
-  % Edmonds, D. T.; Mackay, A. L. 
-  % The Pure Quadrupole Resonance of the Deuteron in Ice. 
-  % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519. 
-  % https://doi.org/10.1016/0022-2364(75)90008-6.
-  eta = 0.112*ones(1,Npdb);
-  e2qQh = 213.4e3*ones(1,Npdb); % Hz
-  
-  if System.nuclear_quadrupole_scale_e2qQh ~= 1
-    e2qQh = e2qQh.*System.nuclear_quadrupole_scale_e2qQh;
-  end
-  if System.nuclear_quadrupole_scale_eta ~= 1
-    eta = eta.*System.nuclear_quadrupole_scale_eta;
-  end
-end
-Nuclei.quadrupole2lab = zeros(3,3,numberH(2));
-Nuclei.Qtensor = zeros(3,3,Npdb);
-Nuclei.quadrupoleXaxis = zeros(numberH(2),3);
-Nuclei.quadrupoleYaxis = zeros(numberH(2),3);
-Nuclei.quadrupoleZaxis = zeros(numberH(2),3);
 
 % Initialize the number of unit cells o include along each direction.
 a_limit = 1;
@@ -85,7 +62,7 @@ if ~isfield(System,'UnitCell') && UnitCell.isUnitCell
   System.UnitCell = UnitCell;
 end
 
-if (isfield(System,'UnitCell') && isfield(System,'radius'))
+if isfield(System,'UnitCell')
   Angles = System.UnitCell.Angles;
   
   ABC(1,:) = System.UnitCell.ABC(1)*[1,0,0];
@@ -95,15 +72,39 @@ if (isfield(System,'UnitCell') && isfield(System,'radius'))
   cz = sqrt(1-cx^2 - cy^2);
   ABC(3,:) = System.UnitCell.ABC(3)*[cx,cy,cz];
   
-  a_limit = ceil(System.radius/ABC(1,1)/scaleFactor);
-  b_limit = ceil(System.radius/ABC(2,2)/scaleFactor);
-  c_limit = ceil(System.radius/ABC(3,3)/scaleFactor);
-  
+  a_limit = ceil(2*System.radius/ABC(1,1)/2/scaleFactor + 1/2)-1;
+  b_limit = ceil(2*System.radius/ABC(2,2)/2/scaleFactor + 1/2)-1;
+  c_limit = ceil(2*System.radius/ABC(3,3)/2/scaleFactor + 1/2)-1;
+
 end
 if ~isfield(System,'radius')
   System.radius = inf;
 end
+numberUnitCells = (2*a_limit+1)*(2*b_limit+1)*(2*c_limit+1);
+% Get nuclear quadrupole parameters.
+if System.nuclear_quadrupole
+    
+  % Water Quadrupole Values
+  % Edmonds, D. T.; Mackay, A. L. 
+  % The Pure Quadrupole Resonance of the Deuteron in Ice. 
+  % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519. 
+  % https://doi.org/10.1016/0022-2364(75)90008-6.
+  eta = 0.112*ones(1,Npdb*numberUnitCells);
+  e2qQh = 213.4e3*ones(1,Npdb*numberUnitCells); % Hz
+  
+  if System.nuclear_quadrupole_scale_e2qQh ~= 1
+    e2qQh = e2qQh.*System.nuclear_quadrupole_scale_e2qQh;
+  end
+  if System.nuclear_quadrupole_scale_eta ~= 1
+    eta = eta.*System.nuclear_quadrupole_scale_eta;
+  end
+end
 
+Nuclei.quadrupole2lab = zeros(3,3,numberH(2)*numberUnitCells);
+Nuclei.Qtensor = zeros(3,3,Npdb*numberUnitCells);
+Nuclei.quadrupoleXaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.quadrupoleYaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.quadrupoleZaxis = zeros(numberH(2)*numberUnitCells,3);
 
 Initial_Electron_Coordinates = System.Electron.Coordinates;
 
@@ -138,11 +139,16 @@ iNuc = uint32(0);
 % replicate unit cell
 %-------------------------------------------------------------------------------
 idx = 1;
+cellshift(idx,:) = [0,0,0];
+      
 for a = -a_limit:a_limit
   for b = -b_limit:b_limit
     for c = -c_limit:c_limit
-      cellshift(idx,:) = ABC(1,:)*a + ABC(2,:)*b + ABC(3,:)*c;
+      if all([a,b,c]==0)
+        continue;
+      end
       idx = idx+1;
+      cellshift(idx,:) = ABC(1,:)*a + ABC(2,:)*b + ABC(3,:)*c;
     end
   end
 end
@@ -521,10 +527,15 @@ try
   Nuclei.number = uint32(size(Nuclei.Index,2));
 catch
   return
-end
+end 
+
+Nuclei.quadrupole2lab(:,:,Nuclei.number+1:end) = [];
+Nuclei.Qtensor(:,:,Nuclei.number+1:end) = [];
+Nuclei.quadrupoleXaxis(Nuclei.number+1:end,:) = [];
+Nuclei.quadrupoleYaxis(Nuclei.number+1:end,:) = [];
+Nuclei.quadrupoleZaxis(Nuclei.number+1:end,:) = [];
 
 Nuclei.DistanceMatrix = zeros(Nuclei.number);
-
 for ispin = 1:Nuclei.number
   for jspin = ispin+1:Nuclei.number
     Nuclei.DistanceMatrix(ispin,jspin) = norm(Nuclei.Coordinates(ispin,:) - Nuclei.Coordinates(jspin,:));

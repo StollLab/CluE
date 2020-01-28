@@ -3,13 +3,12 @@
 %==========================================================================
 % General Setting
 %==========================================================================
-clear;
-clc;
+clear
 
 oldpath = path;
 path('../',oldpath);
- 
-Data.InputData = 'TEMPO_100K_dt100ps_01.pdb';
+
+Data.InputData = './TEMPO_100K_dt100ps_01.pdb';
 Data.OutputData = '';
 Data.saveLevel = 0;
 
@@ -23,7 +22,7 @@ System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
 System.radius = 5e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
-System.inner_radius = 4.82e-10; % m.
+System.inner_radius = 3.0e-10; % m.
 
 % time points per delay period
 System.timepoints = 2^7;%11; %1e3 + 1;
@@ -65,7 +64,7 @@ System.nStates = [1,1];
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 1;
+Method.order = 3;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
@@ -87,37 +86,52 @@ Method.partialSave = false;
 [System, Tensors, Nuclei,Clusters] = setUpSystem(System,Data);
 
 %==========================================================================
-%% Run simulation
+%% Run simulations
 %==========================================================================
-SignalMean = zeros(1,System.timepoints);
-Nave = 1;
-for ii =1:Nave
-[SignalMean_, twotau, TM_powder,order_b_signals,Nuclei] = nuclear_spin_diffusion(System,Method,Data);
-SignalMean = SignalMean + 1/Nave*SignalMean_;
-end
+
+[SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = nuclear_spin_diffusion(System,Method,Data);
+fh = fopen('path_to_spinach.txt');
+allLines = textscan(fh,'%s','whitespace','','delimiter','\n');
+fclose(fh);
+path2spinach = allLines{1}{1};
+
+fid = spinach_hahn_echo(System,Data,path2spinach);
+
 
 
 %--------------------------------------------------------------------------
 %% Plot.
 %--------------------------------------------------------------------------
-% plot(twotau*1e6,abs(SignalMean/SignalMean(1)),'-','color',[0,1,1]*0.6,'linewidth',1.5);
+clf;
+v_spinach = fid./fid(1);
+
 
 subplot(2,1,1)
-plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5);
+plot(twotau*1e6,abs(SignalMean),'-','linewidth',3, 'color', discrete_color_map(5));
+hold on;
+plot(twotau*1e6,abs(v_spinach),'--','linewidth',3,'color', discrete_color_map(2));
 xlabel('2\tau (\mus)');
 ylabel('coherence');
 set(gca,'fontsize',12);
 grid on;  zoom on; 
 fontsize = 24;
 set(gca,'fontsize',fontsize);
-hold on;
+
+
 subplot(2,1,2)
 dt = twotau(2)-twotau(1);
 nt = size(twotau,2);
 nu  = linspace(0,1/dt,nt);
 F = fft(SignalMean);
-semilogx(nu*1e-6,abs(F),'-o','linewidth',1.5);
+FID = fft(v_spinach);
+plot(nu*1e-6,abs(F),'-','linewidth',3, 'color', discrete_color_map(5));
+hold on;
+plot(nu*1e-6,abs(FID),'--','linewidth',3, 'color', discrete_color_map(2));
+% set(gca,'xscale','log');
 xlabel('\nu (MHz)');
 grid on;  zoom on; 
 set(gca,'fontsize',fontsize);
 hold on;
+
+
+

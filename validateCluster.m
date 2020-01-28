@@ -1,11 +1,12 @@
 function isvalid = validateCluster(Cluster,Nuclei_ValidPair,completeGraph)
 
-if numel(Cluster)==1
+clusterSize  = numel(Cluster);
+if clusterSize == 1
   isvalid = true;
   return;
 end
 
-Adjacency = Nuclei_ValidPair(Cluster,Cluster);
+Adjacency = Nuclei_ValidPair(Cluster,Cluster,clusterSize);
 
 if all(Adjacency(:)==0)
   isvalid = false;
