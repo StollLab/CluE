@@ -57,7 +57,8 @@ subcluster_count = zeros(1,clusterSize);
 for isc = 1:2^(clusterSize)-1
   
   subcluster_str = dec2bin(isc);
-  subcluster_str = pad(subcluster_str,clusterSize,'left','0');
+  nZeros = clusterSize - length(subcluster_str);
+  subcluster_str = [repmat('0',1,nZeros) subcluster_str];
   sc_size = sum(subcluster_str=='1');
   
   switch sc_size
