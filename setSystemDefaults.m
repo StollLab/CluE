@@ -398,7 +398,7 @@ if ~isfield(System,'nuclear_quadrupole_filter')
   System.nuclear_quadrupole_filter = ones(3);
 end
 if ~isfield(System,'useMeanField')
-  System.useMeanField = strcmp(Method.method,'CCE');
+  System.useMeanField = false;
 end
 
 if ~isfield(System,'theory')
@@ -413,6 +413,9 @@ end
 
 if ~isfield(System,'useThermalEnsemble')
   System.useThermalEnsemble = ~System.useMeanField;
+end
+if System.useMeanField && System.useThermalEnsemble
+  error('The setting of useMeanField = useThermalEnsemble = true is not supported.');
 end
 % System limiting options
 if ~isfield(System,'limitToSpinHalf')
