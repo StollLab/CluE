@@ -189,7 +189,7 @@ for uc = 1:nCells
     
     % switch nuclear type
     % H =============================================================
-    if strcmp(type,'H') && System.protium
+    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && (rand() > System.deuteriumFraction) )
       iNuc = iNuc +1;
       Nuclei.Index(iNuc) = iNuc;
       Nuclei.Type{iNuc} = '1H';
@@ -777,6 +777,9 @@ if ~isfield(System,'protiumFractionProtein')
 end
 if ~isfield(System,'deuterium')
   System.deuterium = true;
+end
+if ~isfield(System,'deuteriumFraction')
+  System.deuteriumFraction = 1;
 end
 if isfield(System,'hydrogen')
   System.protium = System.hydrogen;

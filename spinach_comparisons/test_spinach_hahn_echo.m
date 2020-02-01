@@ -21,7 +21,7 @@ System.averaging = 'powder';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 8e-10; % m; 
+System.radius = 4e-10; % m; 
 System.inner_radius = 0e-10; % m.
 
 % time points per delay period
@@ -47,7 +47,7 @@ System.D2O = false;
 System.electron_Zeeman = true;
 System.nuclear_Zeeman = true;
 System.nuclear_dipole = [true true false false]; % [A, B, CD, EF]
-System.hyperfine = [true false]; % [zz, zx+zy]
+System.hyperfine = [true true]; % [zz, zx+zy]
 System.nuclear_quadrupole = true;
 %System.nuclear_quadrupole_filter =[0,0,0;0,0,0;0,0,1]; 
 System.useMeanField = false;
@@ -84,7 +84,7 @@ Method.partialSave = false;
 
 
 [System, Tensors, Nuclei,Clusters] = setUpSystem(System,Data);
-
+N = Nuclei.number 
 %==========================================================================
 %% Run simulations
 %==========================================================================
@@ -126,7 +126,7 @@ set(gca,'fontsize',12);
 grid on;  zoom on; 
 fontsize = 24;
 set(gca,'fontsize',fontsize);
-
+title([num2str(Nuclei.number) ' Nuclei System'])
 
 subplot(2,1,2)
 dt = twotau(2)-twotau(1);
@@ -137,7 +137,7 @@ FID = fft(v_spinach);
 plot(nu*1e-6,abs(F),'-','linewidth',3, 'color', discrete_color_map(5));
 hold on;
 plot(nu*1e-6,abs(FID),'--','linewidth',3, 'color', discrete_color_map(2));
-% set(gca,'xscale','log');
+set(gca,'xscale','log');
 xlabel('\nu (MHz)');
 grid on;  zoom on; 
 set(gca,'fontsize',fontsize);

@@ -62,7 +62,7 @@ if ~isempty(OutputData)
   Input.System = System;
   Input.Method = Method;
   Input.Data = Data;
-  save(OutputData,'Input','experiment_time');
+  save(OutputData,'Input','experiment_time','Progress');
 end
 
 % Set verbosity.

@@ -33,31 +33,55 @@ try
   %  inter   - interaction specification structure, see
   %            see the spin system specification section
   %            of the online manual
- 
+ useXYZ = true;
+  if useXYZ
+      inter.coordinates{1} = [0,0,0];
+  else
+    inter.coupling.matrix = cell(N+1,N+1);
+  end
+  
   inter.zeeman.matrix = cell(1,N+1);
-  inter.coupling.matrix = cell(N+1,N+1);
   inter.zeeman.matrix{1} = diag(System.g);
 
   for ispin = 1:N
 
     sys.isotopes{ispin + 1} = Nuclei.Type{ispin};
     
-    if System.nuclear_quadrupole
-      inter.coupling.matrix{ispin+1,ispin+1} = Nuclei.Qtensor(:,:,ispin);
+    if useXYZ
+      inter.coordinates{ispin+1}=Nuclei.Coordinates(ispin,:)*1e10;
+    else
+      if System.nuclear_quadrupole
+        inter.coupling.matrix{ispin+1,ispin+1} = Nuclei.Qtensor(:,:,ispin);
+      end
+      for jspin = ispin+1:N+1
+        inter.coupling.matrix{ispin,jspin} = Tensors{ispin,jspin};
+      end
     end
-    for jspin = ispin+1:N+1
-      inter.coupling.matrix{ispin,jspin} = Tensors{ispin,jspin};
-    end
-    
   end
   
   
   
   % Basis set
   bas.formalism='sphten-liouv';
-  bas.approximation = 'IK-0';
-  bas.level = 2;
+  %   bas.approximation = 'none';
+  if useXYZ
+    bas.approximation = 'IK-1';
+    bas.level = 2;
+    bas.space_level = 4;
+    sys.tols.prox_cutoff = 5;
+  else
+    bas.approximation = 'IK-0';
+    bas.level = 2;
+  end
+  bas.projections=[-1 0 1];
   bas.connectivity='full_tensors';
+  sys.tols.inter_cutoff = 1e-2;
+  sys.tols.liouv_zero = 1e-5;
+  sys.tols.prop_chop = 1e-8; 
+  sys.tols.subs_drop = 1e-5;
+  sys.tols.irrep_drop = 1e-2; 
+  sys.tols.path_drop = 1e-2;
+  
 %   sys.tols.prox_cutoff=5.0;
   % Generate spin system.
   spin_system=create(sys,inter);
@@ -74,7 +98,7 @@ try
   % Apply the offsets
   params.decouple={};
   params.rframes={};
-  params.verbose=0;
+  params.verbose=1;
   params.offset=zeros(size(params.spins));
   I=frqoffset(spin_system,I,params);
   

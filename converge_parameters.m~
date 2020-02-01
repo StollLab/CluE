@@ -469,8 +469,6 @@ if options.converge.powder
     end
     
     if System.gridSize > options.limit.grid_points
-      grid_point = grid_point - 1;
-      System.gridSize = grid_options(grid_point);
       disp('Powder grid did not converge within set bounds.')
       break;
     end
@@ -503,12 +501,12 @@ if options.converge.powder
       
     end
       
-    if options.doPlot
-      plot(experiment_time*1e6,abs(SignalMean));
-      xlabel('time of echo (\mus)');
-      ylabel('coherence');
-      drawnow;
-    end
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
       
     
     if eta < options.threshold.powder
