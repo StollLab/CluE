@@ -90,8 +90,8 @@ n = r/norm(r);
 nnt = n*n';
 r3 = norm(r)^3;
 Hhf = mu0/(4*pi)*ge*muB*gni*muN/r3*(3*nnt - eye(3));
+Hhf = Hhf + eFermiContact()
 Hyperfine = Hhf/(2*pi*hbar); % Hz.
-Hyperfine = Hyperfine + eye(3)*FermiContact(i_index_nucleus);
 
 return
 

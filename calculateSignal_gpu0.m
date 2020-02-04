@@ -51,6 +51,7 @@ States = zeros(max_basis,Nuclei.number);
 betaT = 2*pi*System.hbar /System.kT; % 1/Hz.
 Qtensors = Nuclei.Qtensor;
 
+FermiContact = Nuclei.FermiContact;
 nStates =System.nStates;
 % Unpackspin operators.
 Op = Nuclei.SpinOperators;
@@ -378,7 +379,7 @@ for clusterSize = 1:Method_order
          
      end
      
-    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,magneticField, ge, muB, muN, mu0, hbar,theory,MethylID);
+    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,FermiContact,magneticField, ge, muB, muN, mu0, hbar,theory,MethylID);
     qtensors = Qtensors(:,:,thisCluster);
     
 

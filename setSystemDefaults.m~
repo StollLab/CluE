@@ -320,8 +320,7 @@ System.Electron.State(ii) = exp((-System.Electron.spin+ii-1)*System.omega_Larmor
 end
 
 if ~isfield(System,'spinCenter')
-  System.spinCenter = 'unknown';
-end
+  System.
 % Set pulse sequence.
 if ~isfield(System,'experiment')
   System.experiment = 'Hahn';
