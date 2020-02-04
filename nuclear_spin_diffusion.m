@@ -506,7 +506,7 @@ if ~isempty(OutputData)
           'Nuclei','Order_n_SignalMean','Order_n_Signals','-append');
       end
     case 2
-      save(OutputData);
+      save(OutputData,'-v7.3');
   end
 end
 
