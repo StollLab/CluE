@@ -1,7 +1,34 @@
-function Nuclei = parseNuclei(System, Method,datafile)
+% Load pdb file into structure
+%
+%  Nuclei = parseNuclei(System,Method,datafile)
+%
+% Input:
+%   System       structure with fields for the spin system
+%   Method       structure with fields for the method
+%   pdbFileName  name of PDB file
+
+function Nuclei = parseNuclei(System,Method,pdbFileName)
+
+maxClusterSize = Method.order;
 
 % set values to unspecified fields
-System = setDefault(System);
+System = setIsotopeDefaults(System);
+spinCenter = System.spinCenter;
+
+Nuclei.nStates = System.nStates;  
+% Define spin operators.
+Nuclei.SpinOperators = cell(1,4);
+
+multiplicity = 1;
+Nuclei.SpinOperators{multiplicity} = 1;
+
+for multiplicity = 2:4
+  S = (multiplicity-1)/2;
+  Nuclei.SpinOperators{multiplicity} = generateSpinOperators(S,maxClusterSize);
+end
+ 
+Nuclei.SpinXiXjOperators = generateXiXjSpinOperators(1,maxClusterSize);
+ 
 
 % Copy graphCriterion to Nuclei.
 Nuclei.graphCriterion = Method.graphCriterion;
@@ -9,16 +36,15 @@ Nuclei.graphCriterion = Method.graphCriterion;
 % scale volume
 scaleFactor = System.scale;
 
-if strcmp(datafile,'user')
-  Nuclei = System.Nuclei - System.Electron.Coordinates;
-  Nuclei.kT = System.kT;
-else
-  
-  Nuclei.dataSource = datafile;
-  Nuclei.number = 0;
-  % open data file
-  [Coordinates,Type,UnitCell,Connected,Indices_nonWater] = parsePDB(datafile,System);
-  % Connected = formConnection(Connected_,Indices_nonWater);
+Nuclei.dataSource = pdbFileName;
+
+% open data file
+[Coordinates,Type,UnitCell,Connected,Indices_nonWater,pdbID,numberH] = parsePDB(pdbFileName,System);
+% Connected = formConnection(Connected_,Indices_nonWater);
+
+% number of PDB entries used
+Npdb = length(Type);
+
 if System.Methyl.include
   [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater);
   Nuclei.Methyl_Data = Methyl_Data;
@@ -26,397 +52,437 @@ else
   Nuclei.Methyl_Data = [];
 end
 
-  % Initialize the number of unit cells o include along each direction.
-  a_limit = 1;
-  b_limit = 1;
-  c_limit = 1;
-  ABC = eye(3); % unit cell edge vectors.
-  
-  if ~isfield(System,'UnitCell') && UnitCell.isUnitCell
-    System.UnitCell = UnitCell;
-  end
-  
-  if (isfield(System,'UnitCell') && isfield(System,'radius'))
-    Angles = System.UnitCell.Angles;
-    
-    ABC(1,:) = System.UnitCell.ABC(1)*[1,0,0];
-    ABC(2,:) = System.UnitCell.ABC(2)*[cos(Angles(3)),sin(Angles(3)),0];
-    cx = cos(Angles(2));
-    cy = ( cos(Angles(1)) - cos(Angles(2))*cos(Angles(3)) )/sin(Angles(3));
-    cz = sqrt(1-cx^2 - cy^2);
-    ABC(3,:) = System.UnitCell.ABC(3)*[cx,cy,cz];
-    
-    a_limit = 1 + 2*ceil(System.radius/ABC(1,1)/scaleFactor);
-    b_limit = 1 + 2*ceil(System.radius/ABC(2,2)/scaleFactor);
-    c_limit = 1 + 2*ceil(System.radius/ABC(3,3)/scaleFactor);
-    
-  end
-  if ~isfield(System,'radius')
-    System.radius = inf;
-  end
-  
 
+% Initialize the number of unit cells o include along each direction.
+a_limit = 1;
+b_limit = 1;
+c_limit = 1;
+ABC = eye(3); % unit cell edge vectors.
+
+if ~isfield(System,'UnitCell') && UnitCell.isUnitCell
+  System.UnitCell = UnitCell;
+end
+
+if isfield(System,'UnitCell')
+  Angles = System.UnitCell.Angles;
+  
+  ABC(1,:) = System.UnitCell.ABC(1)*[1,0,0];
+  ABC(2,:) = System.UnitCell.ABC(2)*[cos(Angles(3)),sin(Angles(3)),0];
+  cx = cos(Angles(2));
+  cy = ( cos(Angles(1)) - cos(Angles(2))*cos(Angles(3)) )/sin(Angles(3));
+  cz = sqrt(1-cx^2 - cy^2);
+  ABC(3,:) = System.UnitCell.ABC(3)*[cx,cy,cz];
+  
+  a_limit = ceil(2*System.radius/ABC(1,1)/2/scaleFactor + 1/2)-1;
+  b_limit = ceil(2*System.radius/ABC(2,2)/2/scaleFactor + 1/2)-1;
+  c_limit = ceil(2*System.radius/ABC(3,3)/2/scaleFactor + 1/2)-1;
+
+end
+if ~isfield(System,'radius')
+  System.radius = inf;
+end
+numberUnitCells = (2*a_limit+1)*(2*b_limit+1)*(2*c_limit+1);
+% Get nuclear quadrupole parameters.
+if System.nuclear_quadrupole
+    
+  % Water Quadrupole Values
+  % Edmonds, D. T.; Mackay, A. L. 
+  % The Pure Quadrupole Resonance of the Deuteron in Ice. 
+  % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519. 
+  % https://doi.org/10.1016/0022-2364(75)90008-6.
+  eta = 0.112*ones(1,Npdb*numberUnitCells);
+  e2qQh = 213.4e3*ones(1,Npdb*numberUnitCells); % Hz
+  
+  if System.nuclear_quadrupole_scale_e2qQh ~= 1
+    e2qQh = e2qQh.*System.nuclear_quadrupole_scale_e2qQh;
+  end
+  if System.nuclear_quadrupole_scale_eta ~= 1
+    eta = eta.*System.nuclear_quadrupole_scale_eta;
+  end
+end
+
+Nuclei.quadrupole2lab = zeros(3,3,numberH(2)*numberUnitCells);
+Nuclei.Qtensor = zeros(3,3,Npdb*numberUnitCells);
+Nuclei.quadrupoleXaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.quadrupoleYaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.quadrupoleZaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.FermiContact = zeros(Npdb*numberUnitCells,1);
+Initial_Electron_Coordinates = System.Electron.Coordinates;
+
+if iscell(Initial_Electron_Coordinates)
+  % find nuclei to average over
+  replaceNuclei = [Initial_Electron_Coordinates{:}];
+  
+  % place the electron at the mean coordinates
+  System.Electron.Coordinates = mean( Coordinates(replaceNuclei,:),1);
+  
+  % set initial electron coordinates to a 3-vector
   Initial_Electron_Coordinates = System.Electron.Coordinates;
+  
+  
+  
+elseif length(System.Electron.Coordinates) == 1
+  
+  replaceNucleus = System.Electron.Coordinates;
+  System.Electron.Coordinates = Coordinates(replaceNucleus,:);
+  Initial_Electron_Coordinates = Coordinates(replaceNucleus,:);
+  
+elseif length(System.Electron.Coordinates) == 2
+  
+  replaceNucleus1 = System.Electron.Coordinates(1);
+  replaceNucleus2 = System.Electron.Coordinates(2);
+  System.Electron.Coordinates = 0.5*( Coordinates(replaceNucleus1,:) +Coordinates(replaceNucleus2,:));
+  Initial_Electron_Coordinates = System.Electron.Coordinates;
+  
+end
+iNuc = uint32(0);
 
-  if iscell(Initial_Electron_Coordinates)
-    % find nuclei to average over
-    replaceNuclei = [Initial_Electron_Coordinates{:}];
-
-    % place the electron at the mean coordinates
-    System.Electron.Coordinates = mean( Coordinates(replaceNuclei,:),1);
-    
-    % set initial electron coordinates to a 3-vector
-    Initial_Electron_Coordinates = System.Electron.Coordinates;
-    
-
-    
-  elseif length(System.Electron.Coordinates) == 1
- 
-    replaceNucleus = System.Electron.Coordinates;
-    System.Electron.Coordinates = Coordinates(replaceNucleus,:);
-    Initial_Electron_Coordinates = Coordinates(replaceNucleus,:);
-    
-  elseif length(System.Electron.Coordinates) == 2
- 
-    replaceNucleus1 = System.Electron.Coordinates(1);
-    replaceNucleus2 = System.Electron.Coordinates(2);
-    System.Electron.Coordinates = 0.5*( Coordinates(replaceNucleus1,:) +Coordinates(replaceNucleus2,:));
-    Initial_Electron_Coordinates = System.Electron.Coordinates;
-    
+% replicate unit cell
+%-------------------------------------------------------------------------------
+idx = 1;
+cellshift(idx,:) = [0,0,0];
+      
+for a = -a_limit:a_limit
+  for b = -b_limit:b_limit
+    for c = -c_limit:c_limit
+      if all([a,b,c]==0)
+        continue;
+      end
+      idx = idx+1;
+      cellshift(idx,:) = ABC(1,:)*a + ABC(2,:)*b + ABC(3,:)*c;
+    end
   end
-  nucleiCounter = uint32(0);
+end
+R = vecnorm(cellshift,2,2);
+[~,idx] = sort(R);
+cellshift = cellshift(idx,:);
+
+% loop over x unit cell spacings
+nCells = size(cellshift,1);
+for uc = 1:nCells
   
-  % initialize A edge vector of unit cell
-  Delta_A = 0*ABC(1,:);
+  % 3-vector offset to put each nucleus in the correct unit cell
+  Delta_R = cellshift(uc,:);
   
-  % loop over x unit cell spacings
-  for xx =1:a_limit
+  ElectronCenteredCoordinates = scaleFactor*(Coordinates + Delta_R - System.Electron.Coordinates);
+  
+  % loop over all nuclei
+  for inucleus = 1:size(Type,2)
+    type = Type{inucleus};
     
-    % initialize B edge vector of unit cell
-    Delta_B=0*ABC(2,:);
+    % get nuclear connection data
+    try
+      Conect = Connected{inucleus};
+    catch
+      Conect = {};
+    end
     
-    % loop over y unit cell spacings
-    for yy=1:b_limit
-      
-      % initialize C edge vector of unit cell
-      Delta_C = 0*ABC(3,:);
-      
-      % loop over z unit cell spacings
-      for zz =1:c_limit
-        
-        % 3-vector offset to put each nucleus in the correct unit cell
-        Delta_R = Delta_A+Delta_B+Delta_C;
-        
-        % loop over all nuclei
-        for inucleus = 1:size(Type,2)
-          type = Type{inucleus};
-          
-          % get nuclear connetion data
-          try
-            Conect = Connected{inucleus};
-          catch
-            Conect = {};
-          end
-          
-          % set nuclear coordinates relative to the electron
-          NuclearCorrdinates = scaleFactor*(Coordinates(inucleus,:) + Delta_R - System.Electron.Coordinates);
-          
-          % skip if the electron-nuclear separation is over the set cutoff
-          if norm(NuclearCorrdinates)>System.radius
-            continue;
-          end
-          if norm(NuclearCorrdinates)<System.inner_radius
-            continue;
-          end
-          % switch nuclear type
- 
-          % H =============================================================
-          if strcmp(type,'H') && System.protium
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = '1H';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= true;
-            if any(Indices_nonWater==inucleus)
-              Nuclei.Abundance(nucleiCounter) = System.protiumFractionProtein;
-            else
-              Nuclei.Abundance(nucleiCounter) = System.protiumFractionSolvent;
-            end
-            
-            if isfield(System.Electron,'P')
-              x = Nuclei.Coordinates(nucleiCounter,1);
-              y = Nuclei.Coordinates(nucleiCounter,2);
-              z = Nuclei.Coordinates(nucleiCounter,3);
-              c = (2*System.mu0/3)*System.Electron.g*System.muB*Nuclei.Nuclear_g(nucleiCounter)*System.muN/(2*pi*System.hbar);
-              Nuclei.Hyperfine(nucleiCounter) = System.Electron.P(x,y,z)*c;
-            elseif norm( Nuclei.Coordinates((nucleiCounter) ))< System.angstrom*1e-2
-              Nuclei.Hyperfine(nucleiCounter) = 1420e6; % Hz.
-            else
-              Nuclei.Hyperfine(nucleiCounter) = 0;
-            end
-          % CH3_A =========================================================
-          elseif strcmp(type,'CH3')
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = 'CH3';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 1/2; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(8);
-            Nuclei.valid(nucleiCounter)= true;
-            
-            ID_ref_ = find(Methyl_Data.ID(:,1)==inucleus);
-            Nuclei.Group_ID{nucleiCounter} = Methyl_Data.ID(ID_ref_,2);
-            Nuclei.Auxiliary_ID(nucleiCounter,:) = Methyl_Data.Hydron_ID{inucleus};
-%             Nuclei.Auxiliary_Coordinates{nucleiCounter} = Methyl_Data.Hydron_Coordinates{inucleus};
-
-            [Nuclei.State{nucleiCounter}, Nuclei.Abundance(nucleiCounter)] = getMethylState(System); 
-            
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = 'CH3_1H';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
-            Nuclei.Coordinates((nucleiCounter),:) = ...
-              scaleFactor*(Methyl_Data.Hydron_Coordinates{inucleus}(1,:) + Delta_R - System.Electron.Coordinates);
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Methyl_Data.Hydron_Coordinates{inucleus}(1,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= false;
-            Nuclei.Abundance(nucleiCounter) = 1;
-            
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = 'CH3_1H';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
-            Nuclei.Coordinates((nucleiCounter),:) = ...
-              scaleFactor*(Methyl_Data.Hydron_Coordinates{inucleus}(2,:) + Delta_R - System.Electron.Coordinates);
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Methyl_Data.Hydron_Coordinates{inucleus}(2,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= false;
-            Nuclei.Abundance(nucleiCounter) = 1;
-            
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = 'CH3_1H';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
-            Nuclei.Coordinates((nucleiCounter),:) = ...
-              scaleFactor*(Methyl_Data.Hydron_Coordinates{inucleus}(3,:) + Delta_R - System.Electron.Coordinates);
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Methyl_Data.Hydron_Coordinates{inucleus}(3,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= false;
-            Nuclei.Abundance(nucleiCounter) = 1;
-
-%             
-%             nucleiCounter = nucleiCounter + 1;
-%             Nuclei.Type{nucleiCounter} = 'CH3_Ea';;
-%             Nuclei.Element{nucleiCounter} = 'CH3_Ea';
-%             Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates*inf;
-%             
-%             nucleiCounter = nucleiCounter + 1;
-%             Nuclei.Type{nucleiCounter}= 'CH3_Eb';
-%             Nuclei.Element{nucleiCounter} = 'CH3_Eb';
-%             Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates*inf;
-            
-%             Nuclei.SelectionRules{nucleiCounter} = eye(4);
-%             Nuclei.Transform{nucleiCounter} = MethylTransform;
-%             Nuclei.Projection{nucleiCounter} = zeros(4,8);
-%             Nuclei.Projection{nucleiCounter} = Methyl_Data.Projection_A;
-          % CH3_E =========================================================
-          elseif false %strcmp(type,'CH3_Ea') || strcmp(type,'CH3_Eb')
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = type;
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 1/2; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 5.58569;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates*inf;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            ID_ref_ = find(Methyl_Data.ID(:,1)==inucleus);
-            Nuclei.MethylID(nucleiCounter) = Methyl_Data.ID(ID_ref_,2);
-            Nuclei.Hydron_Coordinates{nucleiCounter} = Methyl_Data.Hydron_Coordinates{Nuclei.MethylID};
-            Nuclei.SelectionRules{nucleiCounter} = eye(2);
-            Nuclei.Transform{nucleiCounter} = Methyl_Data.Transform;
-            if strcmp(type,'CH3_Ea')
-              Nuclei.Projection{nucleiCounter} = Methyl_Data.Projection_Ea;
-            else
-              Nuclei.Projection{nucleiCounter} = Methyl_Data.Projection_Eb;
-            end
-          % D =============================================================
-          elseif strcmp(type,'D') && System.deuterium && ~System.limitToSpinHalf
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = '2H';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 1; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 0.857438;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(3);
-            Nuclei.valid(nucleiCounter)= true;
-            
-            Nuclei.Abundance(nucleiCounter) = 1;
-            if isfield(System.Electron,'P')
-              x = Nuclei.Coordinates(nucleiCounter,1);
-              y = Nuclei.Coordinates(nucleiCounter,2);
-              z = Nuclei.Coordinates(nucleiCounter,3);
-              c = (2*System.mu0/3)*System.Electron.g*System.muB*Nuclei.Nuclear_g(nucleiCounter)*System.muN/(2*pi*System.hbar);
-              Nuclei.Hyperfine(nucleiCounter) = System.Electron.P(x,y,z)*c;
-            elseif norm(Nuclei.Coordinates((nucleiCounter) )) < System.angstrom*1e-2
-              
-              Nuclei.Hyperfine(nucleiCounter) = 220e6; % Hz.
-            else
-              Nuclei.Hyperfine(nucleiCounter) = 0;
-            end
-            % C ============================================================
-          elseif strcmp(type,'C') && System.carbon
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = '13C';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 1.4048;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= true;
-            
-            Nuclei.Abundance(nucleiCounter) = 0.0107;
-            
-            Nuclei.Hyperfine(nucleiCounter) = 0;
-            
-  
-          % N =============================================================  
-          elseif strcmp(type,'N') && System.nitrogen  && ~System.limitToSpinHalf
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = '14N';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 1; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 0.403761;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(3);
-            Nuclei.valid(nucleiCounter)= true;
-            Nuclei.Abundance(nucleiCounter) = 0.99632;
-            if isfield(System.Electron,'P')
-              x = Nuclei.Coordinates(nucleiCounter,1);
-              y = Nuclei.Coordinates(nucleiCounter,2);
-              z = Nuclei.Coordinates(nucleiCounter,3);
-              c = (2*System.mu0/3)*System.Electron.g*System.muB*Nuclei.Nuclear_g(nucleiCounter)*System.muN/(2*pi*System.hbar);
-              Nuclei.Hyperfine(nucleiCounter) = System.Electron.P(x,y,z)*c;
-            elseif norm(Nuclei.Coordinates((nucleiCounter))) < System.angstrom*1e-2
-              
-              Nuclei.Hyperfine(nucleiCounter) = 1811e6; % Hz.
-            else
-              Nuclei.Hyperfine(nucleiCounter) = 0;
-            end
-          % Si ============================================================  
-          elseif strcmp(type,'Si') && System.silicon
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = '29Si';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = -1.11058;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= true;
-            
-            Nuclei.Abundance(nucleiCounter) = 0.046832;
-            if isfield(System.Electron,'P')
-              x = Nuclei.Coordinates(nucleiCounter,1);
-              y = Nuclei.Coordinates(nucleiCounter,2);
-              z = Nuclei.Coordinates(nucleiCounter,3);
-              c = (2*System.mu0/3)*System.Electron.g*System.muB*Nuclei.Nuclear_g(nucleiCounter)*System.muN/(2*pi*System.hbar);
-              Nuclei.Hyperfine(nucleiCounter) = System.Electron.P(x,y,z)*c;
-            elseif norm(Nuclei.Coordinates((nucleiCounter))) < System.angstrom*1e-2
-              
-              Nuclei.Hyperfine(nucleiCounter) = 2.96292e6; % Hz.
-            else
-              Nuclei.Hyperfine(nucleiCounter) = 0;
-            end
-            
-          % electron ======================================================  
-          elseif strcmp(type,'e')
-            
-            % electron, not a nucleus
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = 'e';
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0.5; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 2.0023;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= true;
-            Nuclei.Abundance(nucleiCounter) = 1;
-            Nuclei.Hyperfine(nucleiCounter) = 0;
-             
-          elseif System.allAtoms
-            nucleiCounter = nucleiCounter +1;
-            Nuclei.Index(nucleiCounter) = nucleiCounter;
-            Nuclei.Tile{nucleiCounter} = [sign(Delta_A(1))*norm(Delta_A)/norm(ABC(1,:) ),sign(Delta_B(2))*norm(Delta_B)/norm(ABC(2,:) ),sign(Delta_C(3))*norm(Delta_C)/norm(ABC(3,:) )];
-            Nuclei.Type{nucleiCounter} = type;
-            Nuclei.Element{nucleiCounter} = type;
-            Nuclei.Connected{nucleiCounter} = Conect;
-            Nuclei.Spin(nucleiCounter) = 0; % hbar
-            Nuclei.Nuclear_g(nucleiCounter) = 0;
-            Nuclei.Coordinates((nucleiCounter),:) = NuclearCorrdinates;
-            Nuclei.PDBCoordinates((nucleiCounter),:)= Coordinates(inucleus,:);
-            Nuclei.NumberStates(nucleiCounter) = int8(2);
-            Nuclei.valid(nucleiCounter)= true;
-            Nuclei.Abundance(nucleiCounter) = 1;
-            Nuclei.Hyperfine(nucleiCounter) = 0;
-          end
-
-        end
-        
-        % increment  C edge vector of unit cell
-        Delta_C = -Delta_C + 0.5*(1-sign(Delta_C(3))+1-abs(sign(Delta_C(3))) )*ABC(3,:);
+    % set nuclear coordinates relative to the electron
+    NuclearCoordinates = ElectronCenteredCoordinates(inucleus,:);
+    
+    % skip if the electron-nuclear separation is over the set cutoff
+    if norm(NuclearCoordinates)>System.radius
+      continue
+    end
+    if norm(NuclearCoordinates)<System.inner_radius
+      continue
+    end
+    
+    % switch nuclear type
+    % H =============================================================
+    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && (rand() > System.deuteriumFraction) )
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = '1H';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 5.58569;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= true;
+      if any(Indices_nonWater==inucleus)
+        Nuclei.Abundance(iNuc) = System.protiumFractionProtein;
+      else
+        Nuclei.Abundance(iNuc) = System.protiumFractionSolvent;
       end
       
-      % increment  B edge vector of unit cell
-      Delta_B = -Delta_B + 0.5*(1-sign(Delta_B(2))+1-abs(sign(Delta_B(2))) )*ABC(2,:);
+      % CH3_A =========================================================
+    elseif strcmp(type,'CH3')
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = 'CH3';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 1/2; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 5.58569;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(8);
+      Nuclei.valid(iNuc)= true;
+      
+      ID_ref_ = find(Methyl_Data.ID(:,1)==inucleus);
+      Nuclei.Group_ID{iNuc} = Methyl_Data.ID(ID_ref_,2);
+      Nuclei.Auxiliary_ID(iNuc,:) = Methyl_Data.Hydron_ID{inucleus};
+      %             Nuclei.Auxiliary_Coordinates{nucleiCounter} = Methyl_Data.Hydron_Coordinates{inucleus};
+      
+      [Nuclei.State{iNuc}, Nuclei.Abundance(iNuc)] = getMethylState(System);
+      
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = 'CH3_1H';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 5.58569;
+      Nuclei.Coordinates((iNuc),:) = ...
+        scaleFactor*(Methyl_Data.Hydron_Coordinates{inucleus}(1,:) + Delta_R - System.Electron.Coordinates);
+      Nuclei.PDBCoordinates((iNuc),:)= Methyl_Data.Hydron_Coordinates{inucleus}(1,:);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= false;
+      Nuclei.Abundance(iNuc) = 1;
+      
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = 'CH3_1H';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 5.58569;
+      Nuclei.Coordinates((iNuc),:) = ...
+        scaleFactor*(Methyl_Data.Hydron_Coordinates{inucleus}(2,:) + Delta_R - System.Electron.Coordinates);
+      Nuclei.PDBCoordinates((iNuc),:)= Methyl_Data.Hydron_Coordinates{inucleus}(2,:);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= false;
+      Nuclei.Abundance(iNuc) = 1;
+      
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = 'CH3_1H';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 5.58569;
+      Nuclei.Coordinates((iNuc),:) = ...
+        scaleFactor*(Methyl_Data.Hydron_Coordinates{inucleus}(3,:) + Delta_R - System.Electron.Coordinates);
+      Nuclei.PDBCoordinates((iNuc),:)= Methyl_Data.Hydron_Coordinates{inucleus}(3,:);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= false;
+      Nuclei.Abundance(iNuc) = 1;
+      
+      %
+      %             nucleiCounter = nucleiCounter + 1;
+      %             Nuclei.Type{nucleiCounter} = 'CH3_Ea';;
+      %             Nuclei.Element{nucleiCounter} = 'CH3_Ea';
+      %             Nuclei.Coordinates((nucleiCounter),:) = NuclearCoordinates*inf;
+      %
+      %             nucleiCounter = nucleiCounter + 1;
+      %             Nuclei.Type{nucleiCounter}= 'CH3_Eb';
+      %             Nuclei.Element{nucleiCounter} = 'CH3_Eb';
+      %             Nuclei.Coordinates((nucleiCounter),:) = NuclearCoordinates*inf;
+      
+      %             Nuclei.SelectionRules{nucleiCounter} = eye(4);
+      %             Nuclei.Transform{nucleiCounter} = MethylTransform;
+      %             Nuclei.Projection{nucleiCounter} = zeros(4,8);
+      %             Nuclei.Projection{nucleiCounter} = Methyl_Data.Projection_A;
+      % CH3_E =========================================================
+    elseif false %strcmp(type,'CH3_Ea') || strcmp(type,'CH3_Eb')
+      iNuc = iNuc + 1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = type;
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 1/2; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 5.58569;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates*inf;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      ID_ref_ = find(Methyl_Data.ID(:,1)==inucleus);
+      Nuclei.MethylID(iNuc) = Methyl_Data.ID(ID_ref_,2);
+      Nuclei.Hydron_Coordinates{iNuc} = Methyl_Data.Hydron_Coordinates{Nuclei.MethylID};
+      Nuclei.SelectionRules{iNuc} = eye(2);
+      Nuclei.Transform{iNuc} = Methyl_Data.Transform;
+      if strcmp(type,'CH3_Ea')
+        Nuclei.Projection{iNuc} = Methyl_Data.Projection_Ea;
+      else
+        Nuclei.Projection{iNuc} = Methyl_Data.Projection_Eb;
+      end
+      % D =============================================================
+    elseif strcmp(type,'D') && System.deuterium && ~System.limitToSpinHalf
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = '2H';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 1; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 0.857438;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(3);
+      Nuclei.valid(iNuc)= true;
+      
+      Nuclei.Abundance(iNuc) = 1;
+      
+      
+      % Set up quadrupole tensors for water deuterons
+      if System.nuclear_quadrupole
+        if isempty(Conect)
+          error('Nucleus %d is not connected to anything - cannot build NQ tensor.',inucleus);
+        end
+        for iconnect = Conect
+          switch Type{iconnect}
+            case {'O','C'} 
+              zQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
+            case 'M'
+              xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
+          end
+        end
+        if norm(zQ)==0
+          warning('Failed to set quadrupole tensor orientation.')
+          continue
+        end
+        if norm(xQ)==0
+          while xQ*zQ==0
+            warning('Failed to set quadrupole tensor orientation; using a random direction.')
+            xQ = rand(1,3);
+            xQ = xQ/norm(xQ);
+          end
+        end
+        
+        zQ = zQ/norm(zQ);
+        xQ = xQ - (xQ*zQ')*zQ;
+        xQ = xQ/norm(xQ);
+        yQ = cross(zQ,xQ);
+        yQ = yQ/norm(yQ);        
+        R_Q2L = [xQ; yQ; zQ]; % rotation matrix from Q to lab frame
+        
+        I = Nuclei.Spin(iNuc);
+        eta_ = eta(iNuc);
+        e2qQh_ = e2qQh(iNuc);
+        Qtensor_Q = e2qQh_/4/I/(2*I-1)*diag([-1+eta_, -1-eta_, 2]);
+        Qtensor_L = R_Q2L*Qtensor_Q*R_Q2L';
+        
+        Nuclei.quadrupole2lab(:,:,iNuc) = R_Q2L;
+        Nuclei.Qtensor(:,:,iNuc) = Qtensor_L;
+        
+      end
+      
+      % C ============================================================
+    elseif strcmp(type,'C') && System.carbon
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = '13C';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 1.4048;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= true;
+      
+      Nuclei.Abundance(iNuc) = 0.0107;
+      
+      
+      
+      % N =============================================================
+    elseif strcmp(type,'N') && System.nitrogen  && ~System.limitToSpinHalf
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = '14N';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 1; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 0.403761;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(3);
+      Nuclei.valid(iNuc)= true;
+      Nuclei.Abundance(iNuc) = 0.99632;
+      
+      
+      switch spinCenter
+        case 'TEMPO'
+          if norm(Nuclei.Coordinates((iNuc))) < System.angstrom
+          % Aurich, H. G.; Hahn, K.; Stork, K.; Weiss, W. Aminyloxide 
+          % (nitroxide)—XXIV. 
+          %Tetrahedron 1977, 33 (9), 969–975. https://doi.org/10.1016/0040-4020(77)80210-X.
+          
+          Nuclei.FermiContact(iNuc) = 42.7*1e6; % Hz
+          end
+        otherwise
+          Nuclei.FermiContact(iNuc) = 0;
+      end
+      
+      % Si ============================================================
+    elseif strcmp(type,'Si') && System.silicon
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = '29Si';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = -1.11058;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= true;
+      
+      Nuclei.Abundance(iNuc) = 0.046832;
+      
+      
+      % electron ======================================================
+    elseif strcmp(type,'e')
+      
+      % electron, not a nucleus
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = 'e';
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0.5; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 2.0023;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= true;
+      Nuclei.Abundance(iNuc) = 1; 
+      
+    elseif System.allAtoms
+      iNuc = iNuc +1;
+      Nuclei.Index(iNuc) = iNuc;
+      Nuclei.Type{iNuc} = type;
+      Nuclei.Element{iNuc} = type;
+      Nuclei.Connected{iNuc} = Conect;
+      Nuclei.Spin(iNuc) = 0; % hbar
+      Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
+      Nuclei.Nuclear_g(iNuc) = 0;
+      Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
+      Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.NumberStates(iNuc) = int8(2);
+      Nuclei.valid(iNuc)= true;
+      Nuclei.Abundance(iNuc) = 1; 
     end
-    % increment  A edge vector of unit cell
-    Delta_A = -Delta_A + 0.5*(1-sign(Delta_A(1))+1-abs(sign(Delta_A(1))) )*ABC(1,:);
+    
   end
   
 end
@@ -428,11 +494,17 @@ System.Electron.Coordinates = [0,0,0];
 try
   Nuclei.number = uint32(size(Nuclei.Index,2));
 catch
-  return;
-end
+  return
+end 
+
+Nuclei.quadrupole2lab(:,:,Nuclei.number+1:end) = [];
+Nuclei.Qtensor(:,:,Nuclei.number+1:end) = [];
+Nuclei.quadrupoleXaxis(Nuclei.number+1:end,:) = [];
+Nuclei.quadrupoleYaxis(Nuclei.number+1:end,:) = [];
+Nuclei.quadrupoleZaxis(Nuclei.number+1:end,:) = [];
+Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
 
 Nuclei.DistanceMatrix = zeros(Nuclei.number);
-
 for ispin = 1:Nuclei.number
   for jspin = ispin+1:Nuclei.number
     Nuclei.DistanceMatrix(ispin,jspin) = norm(Nuclei.Coordinates(ispin,:) - Nuclei.Coordinates(jspin,:));
@@ -442,49 +514,43 @@ end
 Nuclei = getPairwiseStatistics(System, Nuclei);
 Nuclei.maxSpin = max(Nuclei.Spin);
 
-Nuclei.ValidPair = Nuclei.valid'*Nuclei.valid;
-Nuclei.ValidPair = Nuclei.ValidPair.*Nuclei.Same_g;
-% exclude_spins = find( isnan(Nuclei.Spin));
-% Nuclei.ValidPair(exclude_spins,:) = 0;
-% Nuclei.ValidPair(:,exclude_spins) = 0;
-
-num_criteria = numel(Method.Criteria);
-for ii = 1:num_criteria
-  switch Method.Criteria{ii}
-    case 'neighbor'
-      Max_Neighbor_ = Nuclei.DistanceMatrix <= Method.r0;
-      Min_Neighbor_ = Nuclei.DistanceMatrix > Method.r_min;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Max_Neighbor_.*Min_Neighbor_;
+Nuclei.ValidPair = ones(Nuclei.number,Nuclei.number,Method.order);
+for isize = 1:Method.order
+  Nuclei.ValidPair(:,:,isize) = Nuclei.valid'*Nuclei.valid;
+  Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Nuclei.Same_g;
+  % exclude_spins = find( isnan(Nuclei.Spin));
+  % Nuclei.ValidPair(exclude_spins,:) = 0;
+  % Nuclei.ValidPair(:,exclude_spins) = 0;
   
-    case 'modulation'
-      Min_Mod_ = Nuclei.ModulationDepth >= Method.cutoff.modulation;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_Mod_;
-    
-    case 'dipole'
-      Min_dipole_ = abs(Nuclei.Nuclear_Dipole) >= Method.cutoff.dipole;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_dipole_;
-  
-    case 'minimum-frequency'  
-      Min_Freq_ = abs(Nuclei.Frequency_Pair) >  Method.cutoff.minimum_frequency;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_Freq_;
-  
-    case 'hyperfine'
-      Min_DeltaA_ = abs(Nuclei.DeltaHyperfine) > Method.cutoff.hyperfine_inf;
-      Max_DeltaA_ = abs(Nuclei.DeltaHyperfine) < Method.cutoff.hyperfine_sup;
-      Nuclei.ValidPair = Nuclei.ValidPair.*Min_DeltaA_.*Max_DeltaA_;
+  num_criteria = numel(Method.Criteria);
+  for ii = 1:num_criteria
+    switch Method.Criteria{ii}
+      case 'neighbor'
+        Max_Neighbor_ = Nuclei.DistanceMatrix <= Method.r0;
+        Min_Neighbor_ = Nuclei.DistanceMatrix > Method.r_min;
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Max_Neighbor_.*Min_Neighbor_;
+        
+      case 'modulation'
+        Min_Mod_ = Nuclei.ModulationDepth >= Method.cutoff.modulation(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_Mod_;
+        
+      case 'dipole'
+        Min_dipole_ = abs(Nuclei.Nuclear_Dipole) >= Method.cutoff.dipole(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_dipole_;
+        
+      case 'minimum-frequency'
+        Min_Freq_ = abs(Nuclei.Frequency_Pair) >  Method.cutoff.minimum_frequency(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_Freq_;
+        
+      case 'hyperfine'
+        Min_DeltaA_ = abs(Nuclei.DeltaHyperfine) > Method.cutoff.hyperfine_inf(isize);
+        Max_DeltaA_ = abs(Nuclei.DeltaHyperfine) < Method.cutoff.hyperfine_sup(isize);
+        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+    end
   end
-  
 end
 
-Nuclei.SpinOperators{1}=1;
-[Spin2Op_1,Spin2Op_2,Spin2Op_3,Spin2Op_4,Spin2Op_5,Spin2Op_6] = generateSpinOperators(1/2);
-[Spin3Op_1,Spin3Op_2,Spin3Op_3,Spin3Op_4,Spin3Op_5,Spin3Op_6] = generateSpinOperators(1);
-[Spin4Op_1,Spin4Op_2,Spin4Op_3,Spin4Op_4,Spin4Op_5,Spin4Op_6] = generateSpinOperators(1);
 
-Nuclei.SpinOperators{2} = {1,1,1,1};
-Nuclei.SpinOperators{2} = {Spin2Op_1,Spin2Op_2,Spin2Op_3,Spin2Op_4,Spin2Op_5,Spin2Op_6};
-Nuclei.SpinOperators{3} = {Spin3Op_1,Spin3Op_2,Spin3Op_3,Spin3Op_4,Spin3Op_5,Spin3Op_6};
-Nuclei.SpinOperators{4} = {Spin4Op_1,Spin4Op_2,Spin4Op_3,Spin4Op_4,Spin4Op_5,Spin4Op_6};
 
 Nuclei.startSpin = max(1, floor(Method.startSpin));
 Nuclei.endSpin = min(Nuclei.number, floor(Method.endSpin));
@@ -497,29 +563,32 @@ end
 
 Nuclei.numberStartSpins = min(Nuclei.number, Nuclei.endSpin - Nuclei.startSpin + 1);
 
-% check if unit vectors have been specified by the user
-if (isfield(System,'X')&&isfield(System,'Z')) || (isfield(System,'X')&&isfield(System,'Y')) || (isfield(System,'Y')&&isfield(System,'Z'))
+% Rotate coordinates if requested by user via System.X/Y/Z
+%-------------------------------------------------------------------------------
+containsXYZ = [isfield(System,'X') isfield(System,'Y') isfield(System,'Z')];
+if sum(containsXYZ)>=2
   
-  % translate unit vector to the elecron centered frame
-  if isfield(System,'Z')&&(length(System.Z)==1)
+  % if nucleus index is given in X/Y/Z, calculate vector from electron to that
+  % nucleus
+  if containsXYZ(3) && (length(System.Z)==1)
     System.Z = Coordinates(System.Z,:)*1e-10 - Initial_Electron_Coordinates;
   end
-  if isfield(System,'Y')&&(length(System.Y)==1)
+  if containsXYZ(2) && (length(System.Y)==1)
     System.Y = Coordinates(System.Y,:)*1e-10 - Initial_Electron_Coordinates;
   end
-  if isfield(System,'X')&&(length(System.X)==1)
+  if containsXYZ(1) && (length(System.X)==1)
     System.X = Coordinates(System.X,:)*1e-10 - Initial_Electron_Coordinates;
   end
   
   % find the x and z unit vectors if one was not specified
-  if ~isfield(System,'X')
+  if ~containsXYZ(1)
     System.X = cross(System.Y,System.Z);
-  elseif ~isfield(System,'Z')
+  elseif ~containsXYZ(3)
     System.Z = cross(System.X,System.Y);
   end
   
   % rotate system
-  Rotation = alignCoordinates(System.X',System.Z');
+  Rotation = alignCoordinates(System.X,System.Z);
   Nuclei.Coordinates = Nuclei.Coordinates*Rotation';
   
 end
@@ -528,104 +597,8 @@ end
 Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
-[Nuclei.State, Nuclei.ZeemanStates]= setState(System,Nuclei);
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function [Coordinates,Type,UnitCell,Connected, Indices_nonWater] = parsePDB(filename,System)
-fh = fopen(filename);
-allLines = textscan(fh,'%s','whitespace','','delimiter','\n');
-fclose(fh);
-allLines = allLines{1};
-nLines = numel(allLines);
-Connected = {};
-Indices_nonWater = [];
-UnitCell.isUnitCell = false;
-
-iNucleus = 0;
-for iline = 1:nLines
-  
-  line_ = allLines{iline};
-  
-  if strncmp(line_,'ATOM',4) || strncmp(line_,'HETATM',6)
-    % Parse information about atom
-    iNucleus = iNucleus + 1;
-    Connected{iNucleus} = [];
-    Coordinates(iNucleus,:) = sscanf(line_(31:54),'%f %f %f')*System.angstrom; % angstrom -> m
-    ResidueName_ = line_(18:20);
-    Element_ = strtrim(line_(77:78));
-    if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL')
-      if isempty(Indices_nonWater)
-        Indices_nonWater = iNucleus;
-      else
-        Indices_nonWater = [Indices_nonWater,iNucleus];
-      end
-    end
-    if strcmp(Element_,'H')
-      if strcmp(ResidueName_,'WAT') || strcmp(ResidueName_,'SOL')
-        if System.D2O, Element_ = 'D'; end
-      else
-        if System.deuterateProtein, Element_ = 'D'; end
-        if System.solventOnly, Element_ = 'null'; end
-      end
-    end
-    
-    Type{iNucleus} = Element_;
-    
-  elseif strncmp(line_,'CONECT',6)
-    if any(line_(7:end)=='*')
-      continue;
-    end
-    ConnectedNuclei = sscanf(line_(7:end),'%f %f %f %f %f');
-    if isempty(ConnectedNuclei)
-      continue;
-    end
-    referenceNuclei = ConnectedNuclei(1);
-    if referenceNuclei > iline % ignore connections where connections have no whitespaces.
-      continue;
-    end
-%     try
-    if ~isempty(ConnectedNuclei)
-      if ~isempty(Connected{referenceNuclei})
-        Connected{referenceNuclei} = [Connected{referenceNuclei},ConnectedNuclei'];
-      else
-        Connected{referenceNuclei} = ConnectedNuclei';
-      end
-      Connected{referenceNuclei} = unique(Connected{referenceNuclei});
-
-      for index_ = Connected{referenceNuclei}
-        if index_ == referenceNuclei
-          continue;
-        end
-        if index_>nLines
-          disp('CONECT data is not readable: check that whitspaces separate each number.');
-          continue;
-        end
-        if ~isempty(Connected{index_})
-          Connected{index_} = [Connected{index_},referenceNuclei];
-        else
-          Connected{index_} = referenceNuclei;
-        end
-        Connected{index_} = unique(Connected{index_});
-      end
-%     catch
-%       Connected{referenceNuclei} = ConnectedNuclei';
-    end
-  elseif strncmp(line_,'CRYST1',6)
-    % Parse information about unit cell
-    
-    UnitCell.isUnitCell = true;
-    UnitCell.ABC = sscanf(line_(7:33),'%f %f %f')*System.angstrom; % angstrom -> m
-    UnitCell.Angles = sscanf(line_(34:54),'%f %f %f')*pi/180;
-    
-  end
-  
-end
-
+[Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
+Nuclei.ZeemanStates = setRandomState(Nuclei);
 end
 
 % ========================================================================
@@ -634,8 +607,8 @@ end
 
 function R = alignCoordinates(MolecularX,MolecularZ)
 
-NormZ = MolecularZ/norm(MolecularZ);
-NormX = MolecularX/norm(MolecularX);
+NormZ = MolecularZ(:)/norm(MolecularZ);
+NormX = MolecularX(:)/norm(MolecularX);
 if abs(NormX'*NormZ) > 1e-12
   %warning('Coordinate axes are not orthogonal.  Removing the z-component from the x-direction...')
   projectionXonZ = NormX'*NormZ;
@@ -677,35 +650,6 @@ end
 
 end
 
-% ========================================================================
-% New Function
-% ========================================================================
-
-function Rx = rotateX(gamma)
-Rx  =   [1,  0,            0; ...
-  0,  cos(gamma),  -sin(gamma); ...
-  0,  sin(gamma),   cos(gamma )];
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function Ry = rotateY(theta)
-Ry =   [ cos(theta),  0,         sin(theta); ...
-  0,           1,         0;          ...
-  -sin(theta),  0,         cos(theta)];
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function Rz = rotateZ(phi)
-Rz  =   [cos(phi ), -sin(phi ), 0; ...
-  sin(phi ),  cos(phi ), 0; ...
-  0,          0,         1];
-end
 
 % ========================================================================
 % Set thermal states.
@@ -714,25 +658,25 @@ end
 % Sets the initial bath state with a Boltzmann distribution.
 % Both output variables contain the same information, but are formated
 % differently.
-function [State,ZeemanStates] = setState(System,Nuclei)
+function [State,ZeemanStates] = setThermalEnsembleState(System,Nuclei)
 
 ZeemanStates = zeros(Nuclei.number, 2*Nuclei.maxSpin+1);
 
 % Loop through all nuclei.
-for iinucleus = Nuclei.number:-1:1 
- 
+for iinucleus = Nuclei.number:-1:1
+  
   spin_multiplicity = Nuclei.NumberStates(iinucleus);
   
   if isfield(Nuclei,'State') && (length(Nuclei.State) >= iinucleus) && ~isempty(Nuclei.State{iinucleus})
-  
-    % Assign state. 
+    
+    % Assign state.
     State{iinucleus} = Nuclei.State{iinucleus};
     
     ZeemanStates(iinucleus,1:length(Nuclei.State{iinucleus})) = Nuclei.State{iinucleus};
-    continue;
-  
-  end
+    continue
     
+  end
+  
   % Initialize state.
   State{iinucleus} = zeros(spin_multiplicity,1);
   
@@ -740,11 +684,11 @@ for iinucleus = Nuclei.number:-1:1
   % Set spin antiparallel to the magnetic field.
   mI = -double(Nuclei.Spin(iinucleus));
   
-  % Set reference energy. 
+  % Set reference energy.
   en0 = -mI*System.magneticField*System.muN*Nuclei.Nuclear_g(iinucleus);
   
   % Loop through spin states.
-  for ithresh = 1:spin_multiplicity 
+  for ithresh = 1:spin_multiplicity
     % Increment z-projection.
     mI = double(ithresh - Nuclei.Spin(iinucleus) - 1);
     
@@ -759,8 +703,29 @@ for iinucleus = Nuclei.number:-1:1
   
   % Normalize states.
   normalization = sqrt(State{iinucleus}'*State{iinucleus});
-  State{iinucleus} = State{iinucleus}/normalization; 
+  State{iinucleus} = State{iinucleus}/normalization;
   ZeemanStates(iinucleus,:) = ZeemanStates(iinucleus,:)./normalization;
+  
+end
+end
+
+% ========================================================================
+% Set random states.
+% ========================================================================
+
+% Sets the initial bath state with a Boltzmann distribution.
+% Both output variables contain the same information, but are formated
+% differently.
+function ZeemanState = setRandomState(Nuclei)
+
+nStates = Nuclei.nStates; 
+maxnStates = max(nStates);
+ZeemanState = zeros(maxnStates,Nuclei.number);
+
+% Loop through all nuclei.
+for iSpin = 1:Nuclei.number
+  I = Nuclei.Spin(iSpin);
+  ZeemanState(:,iSpin) =  randi(2*I+1,maxnStates,1); 
   
 end
 end
@@ -769,40 +734,7 @@ end
 % New Function
 % ========================================================================
 
-function Connected = formConnection(Connected_,Indices_nonWater)
-N = length(Indices_nonWater);
-if N<1
-  Connected = {};
-  return;
-end
-Connected{N} = {};
-if  isempty(Connected_)
-  return;
-end
-for ii=1:Indices_nonWater
-  if  isempty(Connected_{ii})
-    continue;
-  end
-  referenceNuclei = Connected_{ii}(1);
-  Connected{referenceNuclei} = [Connected{referenceNuclei}, Connected_{ii}(2:end)];
-  Connected{referenceNuclei} = unique(Connected{referenceNuclei});
-  for jj = 1:length(Connected{referenceNuclei})
-    conenctTo = Connected{referenceNuclei}(jj);
-    Connected{conenctTo} = [Connected{conenctTo},referenceNuclei];
-    if iscell(Connected{conenctTo})
-      Connected{conenctTo} = Connected{conenctTo}{:};
-    end
-    Connected{conenctTo} = unique(Connected{conenctTo});
-  end
-end
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function System = setDefault(System)
+function System = setIsotopeDefaults(System)
 if ~isfield(System,'protium')
   System.protium = true;
 end
@@ -815,9 +747,12 @@ end
 if ~isfield(System,'deuterium')
   System.deuterium = true;
 end
+if ~isfield(System,'deuteriumFraction')
+  System.deuteriumFraction = 1;
+end
 if isfield(System,'hydrogen')
   System.protium = System.hydrogen;
-  System.dueterium = System.hydrogen;
+  System.deuterium = System.hydrogen;
 end
 if ~isfield(System,'carbon')
   System.carbon = true;
@@ -852,10 +787,10 @@ Methyl_Data.Hydron_Coordinates = cell(1);
 Methyl_Data.ID = [];
 
 for ispin = 1:Number_Nuclei
-
+  
   % Check for a carbon.
   if ~strcmp(Type{ispin},'C')
-     continue;
+    continue;
   end
   
   % Get connected nuclei.
@@ -876,7 +811,7 @@ for ispin = 1:Number_Nuclei
     if strcmp(methyl,'CHHH')
       % Record indices.
       indexH = Connected{ispin}([ 2,3,4 ]);
-      % Adjust for the forth carbon bond. 
+      % Adjust for the forth carbon bond.
       indexH = indexH + (indexH >=ii);
       break;
     elseif strcmp(methyl,'HCHH')
@@ -901,14 +836,14 @@ for ispin = 1:Number_Nuclei
   end
   
   new_index = Number_Nuclei + Methyl_Data.number_methyls + 1;
-%   Methyl_Data
-%   Coordinates
-%   Type,
-%   UnitCell
-    Connected{new_index} =  Connected{ispin};
-%   Indices_nonWater
+  %   Methyl_Data
+  %   Coordinates
+  %   Type,
+  %   UnitCell
+  Connected{new_index} =  Connected{ispin};
+  %   Indices_nonWater
   Methyl_Data.number_methyls = Methyl_Data.number_methyls + 1;
-  Methyl_Data.ID = [Methyl_Data.ID; new_index,Methyl_Data.number_methyls];  
+  Methyl_Data.ID = [Methyl_Data.ID; new_index,Methyl_Data.number_methyls];
   
   Methyl_Data.Hydron_Coordinates{new_index} = zeros(3,3);
   Methyl_Data.Hydron_ID{new_index} = indexH;
@@ -931,14 +866,14 @@ ep = exp(2*1i*pi/3);
 sq3 = sqrt(3);
 %                       [aaa, aab, aba, abb, baa, bab, bba, bbb]
 Methyl_Data.Transform = [0  , 1  , ep , 0  , ep', 0  , 0  , 0  ; ... % |+1/2 Ea>
-                         0  , 0  , 0  , ep', 0  , ep , 1  , 0  ; ... % |-1/2 Ea>
-                         0  , 1  , ep', 0  , ep , 0  , 0  , 0  ; ... % |+1/2 Eb>
-                         0  , 0  , 0  , ep , 0  , ep', 1  , 0  ; ... % |-1/2 Eb>
-                         sq3, 0  , 0  , 0  , 0  , 0  , 0  , 0  ; ... % |+3/2 A >
-                         0  , 1  , 1  , 0  , 1  , 0  , 0  , 0  ; ... % |+1/2 A >
-                         0  , 0  , 0  , 1  , 0  , 1  , 1  , 0  ; ... % |-1/2 A >
-                         0  , 0  , 0  , 0  , 0  , 0  , 0  , sq3]/sq3;% |-3/2 A >
-                       
+  0  , 0  , 0  , ep', 0  , ep , 1  , 0  ; ... % |-1/2 Ea>
+  0  , 1  , ep', 0  , ep , 0  , 0  , 0  ; ... % |+1/2 Eb>
+  0  , 0  , 0  , ep , 0  , ep', 1  , 0  ; ... % |-1/2 Eb>
+  sq3, 0  , 0  , 0  , 0  , 0  , 0  , 0  ; ... % |+3/2 A >
+  0  , 1  , 1  , 0  , 1  , 0  , 0  , 0  ; ... % |+1/2 A >
+  0  , 0  , 0  , 1  , 0  , 1  , 1  , 0  ; ... % |-1/2 A >
+  0  , 0  , 0  , 0  , 0  , 0  , 0  , sq3]/sq3;% |-3/2 A >
+
 Methyl_Data.Projection_A = zeros(4,8);
 Methyl_Data.Projection_A(5,5) = 1;  Methyl_Data.Projection_A(6,6) = 1;
 Methyl_Data.Projection_A(7,7) = 1;  Methyl_Data.Projection_A(8,8) = 1;
@@ -1003,8 +938,8 @@ for ii=3:4
     PEb=PEb +Methyl_Data.Transform(ii,:)'*Methyl_Data.Transform(jj,:);
   end
 end
-%}
-
+  %}
+  
 end
 
 % ========================================================================
@@ -1019,11 +954,11 @@ Nucleus_.Spin(1) = 3/2;
 Nucleus_.maxSpin = 3/2;
 Nucleus_.NumberStates(1) = int8(4);
 Nucleus_.number = 1;
-State_A = setState(System,Nucleus_);
+State_A = setThermalEnsembleState(System,Nucleus_);
 
 Nucleus_.Spin(1) = 1/2;
 Nucleus_.NumberStates(1) = int8(2);
-State_E = setState(System,Nucleus_);
+State_E = setThermalEnsembleState(System,Nucleus_);
 
 Spin_Density = [State_E{1}; State_E{1}; State_A{1}].^2;
 e_EkT= exp(-System.hbar*System.Methyl.tunnel_splitting/System.Methyl.kT);
@@ -1051,23 +986,26 @@ Nuclei.Same_g = eye(Nuclei.number);
 
 Nuclei.SpinSet = unique(Nuclei.Spin);
 
+Nuclei.timescale.HF_A = 0;
+Nuclei.timescale.HF_SzIxy = 0;
+Nuclei.timescale.NucB = 0;
 % loop over all nuclei
 for inucleus = 1:Nuclei.number
   
-
+  
   % Calculating hyperfine coupling
   
   gamma_e = -System.Electron.g*System.muB/System.hbar;
   Rn = norm(System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:) );
   gamma_n = Nuclei.Nuclear_g(inucleus)*System.muN/System.hbar;
-
+  
   R = System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:);
   cosTheta2 = (R*[0;0;1]/norm(R))^2;
   
-  Hyperfine(inucleus) = Nuclei.Hyperfine(inucleus)-(System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;
+  Hyperfine(inucleus) = Nuclei.FermiContact(inucleus)*(2*pi)-(System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;
   Nuclei.Hyperfine(inucleus) = Hyperfine(inucleus)/(2*pi); % Hz;
   % Calculating bath coupling
-  for jnucleus = 1:inucleus-1 
+  for jnucleus = 1:inucleus-1
     
     if strcmp(Nuclei.Type{inucleus},Nuclei.Type{jnucleus})
       Nuclei.SameType(inucleus,jnucleus) = true;
@@ -1087,7 +1025,7 @@ for inucleus = 1:Nuclei.number
     r3 = r^3;
     b = -b*(3*cosThetaSquared - 1)/r3; % J.
     b = b/(System.hbar); % rad/s.
-
+    
     
     c = ( Hyperfine(inucleus)-Hyperfine(jnucleus) )/(4*b);
     
@@ -1104,7 +1042,16 @@ for inucleus = 1:Nuclei.number
     
     Nuclei.DeltaHyperfine(inucleus,jnucleus) = (Nuclei.Hyperfine(inucleus) - Nuclei.Hyperfine(jnucleus)); % Hz
     Nuclei.DeltaHyperfine(jnucleus,inucleus) = -Nuclei.DeltaHyperfine(inucleus,jnucleus);
+    
+    Nuclei.timescale.HF_A = Nuclei.timescale.HF_A + abs(Nuclei.DeltaHyperfine(jnucleus,inucleus));
+    Nuclei.timescale.NucB = Nuclei.timescale.NucB + abs(Nuclei.Nuclear_Dipole(jnucleus,inucleus));
   end
   
 end
+
+Nuclei.timescale.HF_SzIxy = 1/mean(abs(Nuclei.Hyperfine));
+numPair = double(Nuclei.number*(Nuclei.number+1))/2;
+Nuclei.timescale.NucB = numPair/Nuclei.timescale.NucB;
+Nuclei.timescale.HF_A = numPair/Nuclei.timescale.HF_A;
+
 end

@@ -1,0 +1,6 @@
+EE = 1;
+EZ = 2; ER = 3; EL = 4;
+ZE = 5; RE = 6; LE = 7;
+ZZ = 8; RL = 9; LR = 10;
+ZR = 11; ZL = 12; RZ = 13;
+LZ = 14; RR = 15; LL = 16;

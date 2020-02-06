@@ -31,9 +31,11 @@ if options.verbose
   disp(hline);
 end
 % System size, R ----------------------------------------------------------
-are_R_r0_converged = false;
-while ~are_R_r0_converged
-  are_R_r0_converged = true;
+are_R_neighbor_converged = false;
+while ~are_R_neighbor_converged
+  
+  are_R_neighbor_converged = true;
+  
   if options.converge.radius
     is_R_converged = false;
     while ~is_R_converged
@@ -42,11 +44,12 @@ while ~are_R_r0_converged
         fprintf('R = %d nm.\n',System.radius*1e9);
       end
       if System.radius > options.limit.radius
+        System.radius = System.radius - options.delta.radius;
         disp('System radius could did not converge within set bounds.')
         break;
       end
       
-      ID = ID + 1; 
+      ID = ID + 1; Progress.complete = false; 
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), 'R_', num2str(System.radius*1e10)];
       
       calculate_signal = true;
@@ -70,11 +73,18 @@ while ~are_R_r0_converged
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.radius
         is_R_converged = true;
         System.radius = System.radius - options.delta.radius;
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
@@ -94,10 +104,11 @@ while ~are_R_r0_converged
       end
       
       if Method.r0 > options.limit.r0
+        Method.r0 = Method.r0 - options.delta.r0;
         disp('Neighbor cutoff r0 did not converge within set bounds.')
         break;
       end
-      ID = ID + 1;
+      ID = ID + 1; Progress.complete = false;
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_r0_', num2str(Method.r0*1e10)];
       
       calculate_signal = true;
@@ -125,14 +136,14 @@ while ~are_R_r0_converged
         is_neighbor_converged = true;
         Method.r0 = Method.r0 - options.delta.r0;
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
       end
     end
   end
-end
+
 
 % Neighbor cutoff modulation ----------------------------------------------
   
@@ -147,10 +158,11 @@ end
       end
       
       if Method.cutoff.modulation < 10^(options.limit.modulation)
+        Method.cutoff.modulation = Method.cutoff.modulation./10^(options.delta.modulation);
         disp('Neighbor cutoff modulation did not converge within set bounds.')
         break;
       end
-      ID = ID + 1;
+      ID = ID + 1; Progress.complete = false;
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_mod_', num2str(num2str(log(Method.cutoff.modulation)/log(10)))];
       
       calculate_signal = true;
@@ -174,11 +186,18 @@ end
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.modulation
         is_neighbor_converged = true;
         Method.cutoff.modulation = Method.cutoff.modulation*10^(-options.delta.modulation);
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
@@ -195,14 +214,15 @@ end
       Method.cutoff.dipole = Method.cutoff.dipole*10^(options.delta.dipole);
       
       if options.verbose
-        fprintf('dipole coupling = %d Hz.\n',Method.cutoff.dipole);
+       fprintf('dipole coupling = %d Hz.\n',Method.cutoff.dipole);
       end
       
       if Method.cutoff.dipole < 10^(options.limit.dipole)
+        Method.cutoff.dipole = Method.cutoff.dipole./10^(options.delta.dipole);
         disp('Neighbor cutoff dipole coupling did not converge within set bounds.')
         break;
       end
-      ID = ID + 1;
+      ID = ID + 1; Progress.complete = false;
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_dip_', num2str(num2str(log(Method.cutoff.dipole)/log(10)))];
       
       calculate_signal = true;
@@ -226,11 +246,18 @@ end
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.dipole
         is_neighbor_converged = true;
         Method.cutoff.dipole = Method.cutoff.dipole*10^(-options.delta.dipole);
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
@@ -251,11 +278,12 @@ end
         fprintf('hyperfine coupling = %d Hz.\n',Method.cutoff.hyperfine_inf);
       end
       
-      if Method.cutoff.hyperfine_inf < 10^(options.limit.hyperfine)
+      if Method.cutoff.hyperfine_inf < 10^(options.limit.hyperfine)  
+        Method.cutoff.hyperfine_inf = Method.cutoff.hyperfine_inf./10^(options.delta.hyperfine);
         disp('Neighbor cutoff hyperfine coupling did not converge within set bounds.')
         break;
       end
-      ID = ID + 1;
+      ID = ID + 1; Progress.complete = false;
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_hf_', num2str(num2str(log(Method.cutoff.hyperfine_inf)/log(10)))];
       
       calculate_signal = true;
@@ -283,7 +311,7 @@ end
         is_neighbor_converged = true;
         Method.cutoff.hyperfine_inf = Method.cutoff.hyperfine_inf*10^(-options.delta.hyperfine);
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
@@ -305,10 +333,11 @@ end
       end
       
       if Method.cutoff.hyperfine_sup > 10^(options.limit.hyperfine)
+        Method.cutoff.hyperfine_sup = Method.cutoff.hyperfine_sup./10^(options.delta.hyperfine);
         disp('Neighbor cutoff hyperfine coupling did not converge within set bounds.')
         break;
       end
-      ID = ID + 1;
+      ID = ID + 1; Progress.complete = false;
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_hf_', num2str(num2str(log(Method.cutoff.hyperfine_sup)/log(10)))];
       
       calculate_signal = true;
@@ -332,11 +361,18 @@ end
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
       if eta < options.threshold.hyperfine
         is_neighbor_converged = true;
         Method.cutoff.hyperfine_sup = Method.cutoff.hyperfine_sup*10^(-options.delta.hyperfine);
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
@@ -356,10 +392,11 @@ end
       end
       
       if Method.cutoff.minimum_frequency < 10^(options.limit.minimum_frequency)
+        Method.cutoff.minimum_frequency = Method.cutoff.minimum_frequency./10^(options.delta.minimum_frequency);
         disp('Neighbor cutoff minimum frequency coupling did not converge within set bounds.')
         break;
       end
-      ID = ID + 1;
+      ID = ID + 1; Progress.complete = false;
       Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_freq_', num2str(num2str(log(Method.cutoff.minimum_frequency)/log(10)))];
       
       calculate_signal = true;
@@ -383,11 +420,19 @@ end
         disp(hline);
       end
       
+      if options.doPlot
+        plot(experiment_time*1e6,abs(SignalMean));
+        xlabel('time of echo (\mus)');
+        ylabel('coherence');
+        drawnow;
+      end
+      
+      
       if eta < options.threshold.minimum_frequency
         is_neighbor_converged = true;
         Method.cutoff.minimum_frequency = Method.cutoff.minimum_frequency*10^(-options.delta.minimum_frequency);
       else
-        are_R_r0_converged = false;
+        are_R_neighbor_converged = false;
         SignalMean_ = SignalMean;
         experiment_time_ = experiment_time;
         TM_powder_ = TM_powder;
@@ -395,8 +440,11 @@ end
     end
   end
   
+end
 
 % Powder orientations
+Method.parallelComputing = options.parpow;
+
 grid_options = [1,6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
   266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702, ...
   3074, 3470, 3890, 4334, 4802, 5294, 5810];
@@ -409,6 +457,7 @@ if options.converge.powder
     grid_point = grid_point + 1;
     
     if grid_point > limit.grid_index
+      grid_point = grid_point - 1;
       disp('Powder grid could not converge.')
       break;
     end
@@ -420,12 +469,14 @@ if options.converge.powder
     end
     
     if System.gridSize > options.limit.grid_points
+      grid_point = grid_point - 1;
+      System.gridSize = grid_options(grid_point);
       disp('Powder grid did not converge within set bounds.')
       break;
     end
     
     
-    ID = ID + 1;
+    ID = ID + 1; Progress.complete = false;
     
     Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_powder_', num2str(System.gridSize)];
 
@@ -451,6 +502,14 @@ if options.converge.powder
       disp(hline);
       
     end
+      
+    if options.doPlot
+      plot(experiment_time*1e6,abs(SignalMean));
+      xlabel('time of echo (\mus)');
+      ylabel('coherence');
+      drawnow;
+    end
+      
     
     if eta < options.threshold.powder
       is_grid_converged = true;
@@ -596,11 +655,16 @@ end
 if ~isfield(options.limit,'grid_points')
   options.limit.grid_points = 5810;
 end
+if ~isfield(options,'parpow')
+  options.parpow = true;
+end
 % verbosity
 if ~isfield(options,'verbose')
   options.verbose = true;
 end
-
+if ~isfield(options,'doPlot')
+  options.doPlot = false;
+end
 end
 
 

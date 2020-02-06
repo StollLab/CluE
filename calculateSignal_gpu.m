@@ -5,7 +5,7 @@ function [Signal, ...
           AuxiliarySignal_1,AuxiliarySignal_2,...
           AuxiliarySignal_3,AuxiliarySignal_4,...
           AuxiliarySignal_5,AuxiliarySignal_6, Signals] ...
-  = calculateSignal_gpu(timepoints,dt, Method_order, EXPERIMENT,dimensionality,System_full_Sz_Hyperfine,total_time, ...
+  = calculateSignal_gpu(timepoints,dt, Method_order, EXPERIMENT,dimensionality,theory,total_time, ...
   Nuclei_Coordinates, Nuclei_ValidPair, graphCriterion, Nuclei_Abundance, Nuclei_Spin, Nuclei_g, NumberStates, ZeemanStates, ...
   Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin2Op5, Spin2Op6, ...
   Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, Spin3Op5, Spin3Op6, ...
@@ -88,7 +88,7 @@ for clusterSize = 1:Method_order
   for iCluster = 1:numClusters
     Cluster = ClusterArray(iCluster,1:clusterSize,clusterSize); 
        
-    if Cluster(1,1) == 0 || ~validateCluster( Cluster  , Nuclei_ValidPair, graphCriterion, clusterSize)
+    if Cluster(1,1) == 0 || ~validateCluster(Cluster,Nuclei_ValidPair,graphCriterion)
       continue;
     end
     
@@ -157,12 +157,10 @@ for clusterSize = 1:Method_order
          
      end
      
-    [Hamiltonian,zeroIndex] = pairwiseHamiltonian_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, useHamiltonian);
+    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,Cluster,magneticField, ge, muB, muN, mu0, hbar, theory);
     
-    ms = -1/2;
-    Hb = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
-    ms= 1/2;
-    Ha = assembleHamiltonian_gpu(Hamiltonian,SpinOp,Cluster,NumberStates,System_full_Sz_Hyperfine, ms,zeroIndex,clusterSize);
+    [Ha,Hb] = assembleHamiltonian_gpu(tensors,SpinOp,{},Cluster,NumberStates,...
+      theory,zeroIndex,clusterSize);
   
     % get density matrix
     DensityMatrix = getDensityMatrix(ZeemanStates,NumberStates,Cluster);

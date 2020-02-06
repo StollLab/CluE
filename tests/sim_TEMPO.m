@@ -14,7 +14,7 @@ path('../',oldpath);
 %  Data.InputData = './TEMPO_TIP4p_10A_conect.pdb';
 %Data.InputData = './TEMPO_TIP4P.pdb';
 % Data.InputData = 'TEMPO_TIP4P_Rsys_10A_pymol.pdb';
-Data.InputData = 'TEMPO_TIP4P_connect.pdb';
+Data.InputData = 'TEMPO_100K_dt100ps_01.pdb';
 
 % Data.InputData = '/home/kudarizaka/uw/stoll/spectral_diffusion/gromacs/TEMPO/rep_01b/TEMPO_TIP4P.pdb';
 
@@ -22,7 +22,7 @@ Data.InputData = 'TEMPO_TIP4P_connect.pdb';
 Data.OutputData = ['SIM_TEMPO'];
 
 % save options :
-Data.saveMore = true;
+Data.saveLevel = 1;
 
 %==========================================================================
 % System Settings
@@ -69,15 +69,8 @@ System.magneticField  = 1.2; %1.2; % T.
 
 System.Methyl.include = false;
 
-System.fullDipoleTensor = false;
-
-System.nuclear_dipole_A = true;
-System.nuclear_dipole_B = true;
-System.nuclear_dipole_CD = false;
-System.nuclear_dipole_EF = false;
-
-System.full_Sz_Hyperfine= true;
-System.full_Hyperfine_Tensor = false;
+System.hyperfine = [true false]; % [zz, zx+zy]
+System.nuclear_dipole = [true true false false]; % [A, B, CD, EF]
 
 % System.g = 2.0023*[1,1,1];
 
@@ -104,7 +97,7 @@ Method.divisions = 'numSpins';
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.r0 = 3e-10; % m. converges at 0.9 nm
+% Method.r0 = 3e-10; % m. converges at 0.9 nm
 Method.cutoff.distance = Method.r0;
 Method.cutoff.modulation = 0*1e-2;
 Method.cutoff.dipole = 1e3;
@@ -136,7 +129,7 @@ Method.precalculateHamiltonian = false;
 
 Method.shuffle = true;
 
-Method.conserveMemory = true;
+Method.conserveMemory = false;
 
 Method.mixed_eState = false;
 
@@ -189,6 +182,7 @@ options.verbose = true;
 disp('Calculating coherence.');
 System.deuterateProtein = false;
 % tic
+[SignalMean, twotau, TM_powder,Order_n_SignalMean,Nuclei]
 [SignalMean, twotau, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
 out = load(Data.OutputData);
 % toc

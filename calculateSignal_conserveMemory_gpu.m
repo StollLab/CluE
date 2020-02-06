@@ -14,8 +14,10 @@ Method_order = Method.order;
 Method_order_lower_bound = Method.order_lower_bound;
 Method_parallelComputing = Method.parallelComputing;
 Method_clear_partialSave = Method.clear_partialSave;
-System_full_Sz_Hyperfine = System.full_Sz_Hyperfine;
-% maxClusterSize = min(4,Method_order);
+theory = System.theory;
+
+maxClusterSize = min(6,Method_order);
+
 % Convert variable to gpu compatible forms
 dimensionality = 1;
 switch System.experiment
@@ -54,26 +56,91 @@ States = zeros(max_basis,Nuclei.number);
 for ii = 1:Nuclei.number
   States(1:NumberStates(ii),ii) = Nuclei.State{ii};
 end
-Spin2Op1 = Nuclei.SpinOperators{2}{1};
-Spin2Op2 = Nuclei.SpinOperators{2}{2};
-Spin2Op3 = Nuclei.SpinOperators{2}{3};
-Spin2Op4 = Nuclei.SpinOperators{2}{4};
-Spin2Op5 = Nuclei.SpinOperators{2}{5};
-Spin2Op6 = Nuclei.SpinOperators{2}{6};
 
-Spin3Op1 = Nuclei.SpinOperators{3}{1};
-Spin3Op2 = Nuclei.SpinOperators{3}{2};
-Spin3Op3 = Nuclei.SpinOperators{3}{3};
-Spin3Op4 = Nuclei.SpinOperators{3}{4};
-Spin3Op5 = Nuclei.SpinOperators{3}{5};
-Spin3Op6 = Nuclei.SpinOperators{3}{6};
 
-Spin4Op1 = Nuclei.SpinOperators{4}{1};
-Spin4Op2 = Nuclei.SpinOperators{4}{2};
-Spin4Op3 = Nuclei.SpinOperators{4}{3};
-Spin4Op4 = Nuclei.SpinOperators{4}{4};
-Spin4Op5 = Nuclei.SpinOperators{4}{5};
-Spin4Op6 = Nuclei.SpinOperators{4}{6};
+HNQ = Nuclei.Qtensor;
+
+% Unpackspin operators.
+Op = Nuclei.SpinOperators;
+SpinXiXjOps = Nuclei.SpinXiXjOperators;
+
+% Set 1-cluster operators.
+if maxClusterSize > 0
+  Spin2Op1 = Op{2}{1};
+  Spin3Op1 = Op{3}{1};
+  Spin4Op1 = Op{4}{1};
+  SpinXiXjOp_1 = SpinXiXjOps{1};
+else
+  Spin2Op1 = [];
+  Spin3Op1 = [];
+  Spin4Op1 = [];
+  SpinXiXjOp_1 = [];
+end
+
+% Set 2-cluster operators.
+if maxClusterSize > 1
+  Spin2Op2 = Op{2}{2};
+  Spin3Op2 = Op{3}{2};
+  Spin4Op2 = Op{4}{2};
+  SpinXiXjOp_2 = SpinXiXjOps{2};
+else
+  Spin2Op2 = [];
+  Spin3Op2 = [];
+  Spin4Op2 = [];
+  SpinXiXjOp_2 =[];
+end
+
+% Set 3-cluster operators.
+if maxClusterSize > 2
+  Spin2Op3 = Op{2}{3};
+  Spin3Op3 = Op{3}{3};
+  Spin4Op3 = Op{4}{3};
+  SpinXiXjOp_3 = SpinXiXjOps{3};
+else
+  Spin2Op3 = [];
+  Spin3Op3 = [];
+  Spin4Op3 = [];
+  SpinXiXjOp_3 =[];
+end
+
+% Set 4-cluster operators.
+if maxClusterSize > 3
+  Spin3Op4 = Op{3}{4};
+  Spin2Op4 = Op{2}{4};
+  Spin4Op4 = Op{4}{4};
+  SpinXiXjOp_4 = SpinXiXjOps{4};
+else
+  Spin3Op4 = [];
+  Spin2Op4 = [];
+  Spin4Op4 = [];
+  SpinXiXjOp_4 =[];
+end
+
+% Set 5-cluster operators.
+if maxClusterSize > 4
+  Spin2Op5 = Op{2}{5};
+  Spin3Op5 = Op{3}{5};
+  Spin4Op5 = Op{4}{5};
+  SpinXiXjOp_5 = SpinXiXjOps{5};
+else
+  Spin2Op5 = [];
+  Spin3Op5 = [];
+  Spin4Op5 = [];
+  SpinXiXjOp_5 =[];
+end
+
+% Set 6-cluster operators.
+if maxClusterSize > 5
+  Spin2Op6 = Op{2}{6};
+  Spin3Op6 = Op{3}{6};
+  Spin4Op6 = Op{4}{6};
+  SpinXiXjOp_6 = SpinXiXjOps{6};
+else
+  Spin2Op6 = [];
+  Spin3Op6 = [];
+  Spin4Op6 = [];
+  SpinXiXjOp_6 =[];
+end
  
 % maxPossibleNumberSubClusters = [0,2,3,6,10,20,35,70,126,252];
 maxPossibleNumberSubClusters = zeros(Method_order);
@@ -126,8 +193,6 @@ graphCriterion = CONNECTED;
 if strcmp(Nuclei.graphCriterion,'complete')
   graphCriterion = COMPLETE;
 end
-
-useHamiltonian = System.useHamiltonian;
 
 Method_record_clusters = Method.record_clusters;
 Method_partialSave = Method.partialSave;
@@ -281,7 +346,7 @@ for iorder = Method_order_lower_bound:Method_order
       Division_Cluster_Limit, Division_Cluster_Fraction, Division_Cluster_Increment, ...
       shuffle, timepoints,dt, ... % Method_order,
       EXPERIMENT, dimensionality, ...
-      System_full_Sz_Hyperfine,total_time, ...
+      theory,total_time, ...
       Nuclei_Coordinates, Nuclei_ValidPair, Nuclei_Abundance, Nuclei_Spin, Nuclei_g, NumberStates, ZeemanStates, ...
       Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin2Op5, Spin2Op6,...
       Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, Spin3Op5, Spin3Op6, ...
@@ -291,7 +356,7 @@ for iorder = Method_order_lower_bound:Method_order
       Reduced_ClusterArray,...
       Reduced_SubclusterIndices_2,Reduced_SubclusterIndices_3,Reduced_SubclusterIndices_4, ...
       Reduced_SubclusterIndices_5,Reduced_SubclusterIndices_6, ...
-      Method_record_clusters,useHamiltonian);
+      Method_record_clusters);
     
     end
   else
@@ -304,7 +369,7 @@ for iorder = Method_order_lower_bound:Method_order
         Division_Cluster_Limit, Division_Cluster_Fraction, Division_Cluster_Increment, ...
         shuffle, timepoints,dt, ... % Method_order,
         EXPERIMENT, dimensionality, ...
-        System_full_Sz_Hyperfine,total_time, ...
+        theory,total_time, ...
         Nuclei_Coordinates, Nuclei_ValidPair, Nuclei_Abundance, Nuclei_Spin, Nuclei_g, NumberStates, ZeemanStates, ...
         Spin2Op1, Spin2Op2, Spin2Op3, Spin2Op4, Spin2Op5, Spin2Op6,...
         Spin3Op1, Spin3Op2, Spin3Op3, Spin3Op4, Spin3Op5, Spin3Op6, ...
@@ -314,7 +379,7 @@ for iorder = Method_order_lower_bound:Method_order
         Reduced_ClusterArray,...
         Reduced_SubclusterIndices_2,Reduced_SubclusterIndices_3,Reduced_SubclusterIndices_4, ...
         Reduced_SubclusterIndices_5,Reduced_SubclusterIndices_6, ...
-        Method_record_clusters,useHamiltonian);
+        Method_record_clusters);
       
     end
   end

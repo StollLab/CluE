@@ -4,7 +4,7 @@
 % A cluster Hamiltonian, which is used, is the direct product over all
 % nuclei in the cluster of the sum over all couplings in the cluster.
 
-function [Hamiltonian,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Cluster)
+function [tensors,zeroIndex] = pairwisetensors(System,Nuclei,Cluster)
 
 %   methyl_IDs = zeros(size(Cluster));
   Cluster_ = Cluster;
@@ -26,17 +26,17 @@ function [Hamiltonian,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Cluster)
   zeroIndex = min(Cluster) - 1;
   Indices = fliplr(Cluster);
   N = size(Cluster,2);
-  Hamiltonian = cell(N+1,N+1); % nspins by nspins
+  tensors = cell(N+1,N+1); % nspins by nspins
   
   % Electron Zeeman
-  Hamiltonian{1,1} =  constructElectronZeeman(System);
+  tensors{1,1} =  constructElectronZeeman(System);
   for i_index_nucleus = Indices
     inucleus = i_index_nucleus - zeroIndex;
     % Nuclear Zeeman
-    Hamiltonian{1+inucleus,1+inucleus} =   constructNuclearZeeman(System, Nuclei,i_index_nucleus);
+    tensors{1+inucleus,1+inucleus} =   constructNuclearZeeman(System, Nuclei,i_index_nucleus);
  
     % Hyperfine
-    Hamiltonian{1,1+inucleus}= constructHyperfine(System, Nuclei, i_index_nucleus);
+    tensors{1,1+inucleus}= constructHyperfine(System, Nuclei, i_index_nucleus);
    
     % Nucleus-Nucleus Coupling
     for j_index_nucleus = Indices
@@ -46,7 +46,7 @@ function [Hamiltonian,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Cluster)
       end
  
       % Dipole Coupling
-      Hamiltonian{1+inucleus,1+jnucleus} = constructNuclearDipoleCoupling(System, Nuclei,i_index_nucleus,j_index_nucleus);      
+      tensors{1+inucleus,1+jnucleus} = constructNuclearDipoleCoupling(System, Nuclei,i_index_nucleus,j_index_nucleus);      
     end
   end
    
@@ -125,21 +125,17 @@ nonMethyls = Cluster(methyl_IDs == 0);
 Methyls = Cluster(methyl_IDs > 0);
 
 if length(Methyls) > length(unique(Methyls))
-  return;
+  return
 end
 N = length(nonMethyls) + 3*length(Methyls);
-Cluster_ =1:N;
-
-
+Cluster_ = 1:N;
 Methyl_Spin.Type = {'1H','1H','1H'};
 for imethyl = Methyls
- Methyl_Spin.Nuclear_g = Nuclei.Nuclear_g(imethyl)*[1,1,1];
- Methyl_Spin.Coordinates = Nuclei.Auxiliary_Coordinates{imethyl};
- [H_in,zeroIndex] = pairwiseHamiltonian(System,Methyl_Spin,Cluster);
- H_out = assembleHamiltonian(H_in,Cluster,System, eState,Nuclei,zeroIndex,clusterSize);
- H_out = Nuclei.Projection(imethyl)*Nuclei.Transform{imethyl}*H_out*Nuclei.Projection(imethyl);
- 
+  Methyl_Spin.Nuclear_g = Nuclei.Nuclear_g(imethyl)*[1,1,1];
+  Methyl_Spin.Coordinates = Nuclei.Auxiliary_Coordinates{imethyl};
+  [H_in,zeroIndex] = pairwisetensors(System,Methyl_Spin,Cluster);
+  H_out = assembleHamiltonian(H_in,Cluster,System,Nuclei,zeroIndex,clusterSize);
+  H_out = Nuclei.Projection(imethyl)*Nuclei.Transform{imethyl}*H_out*Nuclei.Projection(imethyl);
 end
-
 
 end

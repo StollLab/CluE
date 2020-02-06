@@ -1,48 +1,42 @@
-function isvalid = validateCluster(Cluster,Nuclei_ValidPair,graphCriterion,clusterSize)
+function isvalid = validateCluster(Cluster,Nuclei_ValidPair,completeGraph)
 
-% ENUM
-% CONNECTED = 0;  
-COMPLETE = 1;
-
-% bool valid for each spin
-
-Adjacency = Nuclei_ValidPair(Cluster,Cluster);
-
-if all(Adjacency==0)
-  isvalid = false;
+clusterSize  = numel(Cluster);
+if clusterSize == 1
+  isvalid = true;
   return;
 end
 
-Degree = diag( Adjacency*ones(clusterSize,1) );
+Adjacency = Nuclei_ValidPair(Cluster,Cluster,clusterSize);
 
+if all(Adjacency(:)==0)
+  isvalid = false;
+  return
+end
+
+Degree = diag(sum(Adjacency,2));
 Laplacian = Degree - Adjacency;
 
-if graphCriterion == COMPLETE
+if completeGraph
   % Check if the cluster forms a complete graph.
   
-  % Determine the size of the cluster.
   clusterSize = length(Cluster);
-  if min(diag(Laplacian)) == clusterSize-1
-    isvalid = true;
-  else
-    isvalid = false;
-  end
-  return;
-end
+  isvalid = min(diag(Laplacian)) == clusterSize-1;
 
-% Check if the cluster forms a connected graph.
-
-[~,eigenvalues] = eig(Laplacian);
-eigenvalues = diag(eigenvalues);
-
-number_of_zero_eigenvalues = sum(abs(eigenvalues) < 1e-12);
-
-if abs(number_of_zero_eigenvalues-1) < 1e-12
-  isvalid = true;
-elseif number_of_zero_eigenvalues > 1
-  isvalid = false;
 else
-  error('Laplacian matrix has no zero eigenvalues.');  
+
+  % Check if the cluster forms a connected graph.
+  eigenvalues = eig(Laplacian);
+
+  nZeroEigenvalues = sum(abs(eigenvalues) < 1e-12);
+
+  if abs(nZeroEigenvalues-1) < 1e-12
+    isvalid = true;
+  elseif nZeroEigenvalues > 1
+    isvalid = false;
+  else
+    error('Laplacian matrix has no zero eigenvalues.');  
+  end
+
 end
 
 end

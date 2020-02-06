@@ -1,14 +1,20 @@
-% System is a struct with fields: magneticField, Electron, temperature, Time.
-% Electron is a struct with fields: spin, g, Coordinates, wavefunction.
-% Method is a struct with fields: method, r0, order.
-% InputData is a string, the name of a file.
+% nuclear_spin_diffusion   Calculate signals for nuclear spin diffusion
+%
+% Inputs:
+%   System is a struct with fields: magneticField, Electron, temperature, Time.
+%     Electron is a struct with fields: spin, g, Coordinates, wavefunction.
+%   Method is a struct with fields: method, r0, order.
+%   Data is a structure containing
+%    .InputData  name of pdb file
+%    .OutputData name of mat file to store results
+%    .saveLevel  0 (standard), 1 (more), 2 (all)
 
-function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean] = nuclear_spin_diffusion(System,Method,Data)
+function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei] = nuclear_spin_diffusion(System,Method,Data)
 
 tic
 
 % set defaults base on specified parameters and for unspecified parameters
-[System, Method, Data] = setDefaults(System,Method,Data);
+[System, Method, Data] = setSystemDefaults(System,Method,Data);
 
 if ~isfield(Method,'r_min')
   Method.r_min = 0.1*System.meter*1e-10; % m.
@@ -35,14 +41,15 @@ InputData = Data.InputData;
 if ~isfile(InputData)
   error(['Could not find the specified input file ', InputData, '.']);
 end
+
 % Determine the output file name.
-if isfield(Data,'OutputData')
+if isfield(Data,'OutputData') && ~isempty(Data.OutputData)
   OutputData = Data.OutputData;
   if ~strcmp(OutputData(end-3:end),'.mat')
     OutputData = [OutputData, '.mat'];
   end
 else
-  OutputData = 'maisave.mat';
+  OutputData = '';
 end
 
 % Initiate progress tracking.
@@ -50,10 +57,13 @@ Progress.started = true;
 Progress.complete = false;
 Progress.Completed_Orders = zeros(1,Method.order);
 
-Input.System = System;
-Input.Method = Method;
-Input.Data = Data;
-save(OutputData,'Input','experiment_time');
+% Save if filename is provided.
+if ~isempty(OutputData)
+  Input.System = System;
+  Input.Method = Method;
+  Input.Data = Data;
+  save(OutputData,'Input','experiment_time','Progress');
+end
 
 % Set verbosity.
 verbose = Method.verbose;
@@ -70,7 +80,7 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
 elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user')
   Nuclei = parseNuclei(System, Method, InputData);
   System.Electron.Coordinates = [0,0,0];
-  if Nuclei.number < 2
+  if Nuclei.number < 1
     Signals{1} = ones(size(System.Time));
     SignalMean = Signals{1};
     fprintf(2,'\n There are too few magnetic nuclei in the system for nuclear spin diffusion.\n')
@@ -86,6 +96,11 @@ end
 Progress.DataLoaded = true;
 
 if verbose, fprintf('Setup initialized %i nuclei.\n', Nuclei.number); end
+
+if Nuclei.number < Method.order
+  fprintf('Reducing the maximum cluster size to the system size of %d.\n',Nuclei.number)
+  Method.order = double(Nuclei.number);
+end
 
 % only possible for very small systems
 if strcmp(Method.method,'full')
@@ -309,10 +324,10 @@ Temp_Order_n_Signals{numberOfSignals+1} = [];
 Statistics = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing && ~Method.conserveMemory;
+saveAll = Data.saveLevel==2;
 
 if parallelComputing
   
-  saveAll = Data.saveAll;
   parfor isignal = 1:numberOfSignals
     
     [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal}] ...
@@ -350,7 +365,7 @@ else
       TempSignals{isignal} = TempSignals_;
       Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
       
-      if Data.saveAll || Method.getNuclearContributions
+      if saveAll || Method.getNuclearContributions
         AuxiliarySignal{isignal} = AuxiliarySignal_;
       end
       
@@ -475,21 +490,24 @@ if verbose
 end
 
 % decide what to save
-if Method.sparseMemory
-  
-  if isfield(Data,'saveMore')  && Data.saveMore
-    save(OutputData,'Input','experiment_time','SignalMean','Order_n_SignalMean','TM_powder','Progress', 'Nuclei','Order_n_Signals');
-  else
-    save(OutputData,'Input','experiment_time','SignalMean','Order_n_SignalMean','TM_powder','Progress');
+if ~isempty(OutputData)
+  switch Data.saveLevel
+    case 0
+      if Method.sparseMemory
+        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','-append');
+      else
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','-append');
+      end
+    case 1
+      if Method.sparseMemory
+        save(OutputData,'Nuclei','Order_n_Signals','-append');
+      else
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
+          'Nuclei','Order_n_SignalMean','Order_n_Signals','-append');
+      end
+    case 2
+      save(OutputData,'-v7.3');
   end
-  
-elseif isfield(Data,'saveAll')  && Data.saveAll
-  save(OutputData);
-elseif isfield(Data,'saveMore')  && Data.saveMore
-  save(OutputData,'Input','experiment_time','SignalMean','Signals','TM','TM_powder','Progress',...
-       'Nuclei','Order_n_SignalMean','Order_n_Signals');
-else
-  save(OutputData,'Input','experiment_time','SignalMean','Signals','TM','TM_powder','Progress');
 end
 
 % delete temporary files
@@ -682,21 +700,6 @@ end
 
 end
 
-% ========================================================================
-% Convert Euler angles to rotation matrix
-% ========================================================================
-
-function R = rotateZYZ(alpha,beta,gamma)
-sa = sin(alpha);
-ca = cos(alpha);
-sb = sin(beta);
-cb = cos(beta);
-sc = sin(gamma);
-cc = cos(gamma);
-R = [ cc*cb*ca - sc*sa,  cc*cb*sa + sc*ca, -cc*sb; ...
-     -sc*cb*ca - cc*sa, -sc*cb*sa + cc*ca,  sc*sb; ...
-         sb*ca,             sb*sa,             cb];
-end
 
 % ========================================================================
 % Calculate signal for one orientation
@@ -704,35 +707,49 @@ end
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics] = ...
   calculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,Gamma,verbose,OutputData,Progress)
 
-% assign temporary value to AuxiliarySignal
+% Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
 
-% get rotation matrix
-Mol2LabRotation = rotateZYZ(Alpha,Beta,Gamma);
-% Rotate the PDB defined frame to lab frame rotation via the Euler angle defined earlier.
-Nuclei.Coordinates = Nuclei.Coordinates*Mol2LabRotation';
+% Get rotation matrix from PDB frame to lab frame, via Euler angles
+R_pdb2lab = rotateZYZ(Alpha,Beta,Gamma);
 
-% Rotate the g-matrix
+% Rotate nuclear coordinates.
+Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
+
+% Rotate nuclear quadrupole tensors.
+for inucleus = 1:Nuclei.number  
+  Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
+  % Elementwise Qtensor manipulation used for testing.  The default filer is ones(3); 
+  Nuclei.Qtensor(:,:,inucleus) = Nuclei.Qtensor(:,:,inucleus).*System.nuclear_quadrupole_filter;
+end
+
+% Rotate the g-matrix.
 if isfield(System,'gFrame')
-  % get rotation matrix
+  % Get rotation matrix.
   g2MolRotation = rotateZYZ(-System.gFrame(1),-System.gFrame(2),-System.gFrame(3));
   
-  % perform rotaion to molecular frame
+  % Rotate to molecular frame.
   System.gMatrix = g2MolRotation*System.gMatrix_gFrame*g2MolRotation';
-  
 end
 
 % Rotate the g-matrix to the lab frame.
-System.gMatrix = Mol2LabRotation*System.gMatrix_gFrame*Mol2LabRotation';
+System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 
-% get the g-value along the magnetic field direction.
+% Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
+
+if System.useMeanField
+  [Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal]= getMeanFieldCoefficients(Nuclei,System);
+else
+  Nuclei.MeanFieldCoefficients = [];
+  Nuclei.MeanFieldTotal = [];
+end
 
 if Method.precalculateHamiltonian
   if strcmp(Method.HamiltonianType,'pairwise')
     
     % Generate Cartesian spin-spin coupling Hamiltonian.
-    Hamiltonian_pairwise = pairwiseHamiltonian(System,Nuclei,[1:Nuclei.number]);
+    Hamiltonian_pairwise = pairwiseHamiltonian(System,Nuclei,1:Nuclei.number);
     
   else
     
@@ -745,7 +762,7 @@ end
 if isfield(Method,'exportHamiltonian') && Method.exportHamiltonian
   
   % Generate Cartesian spin-spin coupling Hamiltonian.
-  [Hamiltonian,zeroIndex] = pairwiseHamiltonian(System,Nuclei,[1:Nuclei.number]);
+  [Hamiltonian,zeroIndex] = pairwisetensors(System,Nuclei,[1:Nuclei.number]);
   
   % set file name
   H_file = [OutputData(1:end-4), '_Hamiltonian.mat'];
@@ -1035,36 +1052,37 @@ for clusterSize = Method.order:-1:1
       SubclusterIndices{clusterSize,iCluster} = [];
     end
         
-    % Loop over electronic states.
-    for eState = (2*System.Electron.spin+1):-1:1
+    % Get cluster Hamiltonian.
+    if ~Method.precalculateHamiltonian && strcmp(Method.HamiltonianType,'pairwise')
       
-      % Get cluster Hamiltonian.
-      if ~Method.precalculateHamiltonian && strcmp(Method.HamiltonianType,'pairwise')
-        
-        % Generate Cartesian spin-spin coupling Hamiltonian.
-        [Hamiltonian_pairwise,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
-        % Generate spin Hamiltonian.
-        ClusterHamiltonian{eState} = assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,zeroIndex,clusterSize);
-        
-      elseif strcmp(Method.HamiltonianType,'pairwise')
-        
-        % Generate Cartesian spin-spin coupling Hamiltonian.
-        %ClusterHamiltonian{eState} = assemblePairwiseHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,Method.HamiltonianType);
-        zeroIndex =  Clusters{clusterSize}(iCluster,1) - 1;
-        ClusterHamiltonian{eState} = assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,zeroIndex,clusterSize);
-        
-      elseif ~Method.precalculateHamiltonian
-        
-        % Generate a diassembled spin Hamiltonian.
-        [Hamiltonian_diagonal,Hamiltonian_offDiagonal,zeroIndex] = constructHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
-        % Generate spin Hamiltonian.
+      % Generate Cartesian spin-spin coupling Hamiltonian.
+      [Hamiltonian_pairwise,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
+      % Generate spin Hamiltonian.
+      [ClusterHamiltonian{1},ClusterHamiltonian{2}] = ...
+        assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System,Nuclei,zeroIndex,clusterSize);
+      
+    elseif strcmp(Method.HamiltonianType,'pairwise')
+      
+      % Generate Cartesian spin-spin coupling Hamiltonian.
+      %ClusterHamiltonian{eState} = assemblePairwiseHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,Method.HamiltonianType);
+      zeroIndex =  Clusters{clusterSize}(iCluster,1) - 1;
+        [ClusterHamiltonian{1},ClusterHamiltonian{2}] = ...
+          assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System,Nuclei,zeroIndex,clusterSize);
+      
+    elseif ~Method.precalculateHamiltonian
+      
+      % Generate a diassembled spin Hamiltonian.
+      [Hamiltonian_diagonal,Hamiltonian_offDiagonal,zeroIndex] = constructHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
+      % Generate spin Hamiltonian.
+      for eState = (2*System.Electron.spin+1):-1:1
         ClusterHamiltonian{eState} = getClusterHamiltonian(Hamiltonian_diagonal,Hamiltonian_offDiagonal, eState, Clusters{clusterSize}(iCluster,:), Nuclei,zeroIndex);
-        
-      else
-        
-        % Generate spin Hamiltonian.
+      end
+      
+    else
+      
+      % Generate spin Hamiltonian.
+      for eState = (2*System.Electron.spin+1):-1:1
         ClusterHamiltonian{eState} = getClusterHamiltonian(Hamiltonian_diagonal,Hamiltonian_offDiagonal, eState, Clusters{clusterSize}(iCluster,:), Nuclei,zeroIndex);
-        
       end
       
     end
@@ -1418,7 +1436,7 @@ while iBundle <= Bundle(iCore,2)
   % Shuffle nuclei.
   shuffled_cluster = shuffle(par_cluster);
     
-  isvalid_1 = validateCluster(shuffled_cluster ,Nuclei, iorder);
+  isvalid_1 = validateCluster(shuffled_cluster,Nuclei.ValidPair,Nuclei.graphCriterion);
   
   if ~isvalid_1
     
@@ -1496,7 +1514,7 @@ while iBundle <= Bundle(iCore,2)
       
 %       cluster_ = Reduced_Clusters(jCluster,1:jsize,jsize);
       
-      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)) ,Nuclei, jSize)
+      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)),Nuclei.ValidPair,Nuclei.graphCriterion)
         Reduced_Clusters{jSize}(jCluster,:) = zeros(size(Reduced_Clusters{jSize}(jCluster,:) ) );
       end
     end
@@ -1567,670 +1585,8 @@ end
 
 end
 
-% ========================================================================
-% Find decay time (where signal drops to 1/e of initial amplitude
-% ========================================================================
-function TM = getTM(t,Signal)
 
-% normalize signal maximum to 1
-Signal = abs(Signal/Signal(1));
 
-if any(isnan(Signal))
-  TM = inf;
-  return
-end
-
-e_inv = exp(-1);
-if min(Signal) > e_inv
-  TM = inf;
-  return
-end
-
-% translate signal to put TM at the x-intercept
-searchVec = abs(Signal) - e_inv;
-negatives = find(searchVec<=0);
-if isempty(negatives)
-  TM = inf;
-  return
-end
-
-% initial search index
-iTM = negatives(1);
-if length(iTM)>1
-  iTM = iTM(1);
-end
-% number of time points
-N = length(t);
-
-% initial TM guess
-TM = t(iTM);
-
-% search
-searching = true;
-while searching
-  
-  % get TM guess
-  v1 = Signal(iTM);
-  i_mismatch = 0;
-  
-  % examine guess
-  if v1 == e_inv
-    
-    % TM found
-    searching = false;
-    break;
-    
-  elseif v1 > e_inv
-    
-    % TM guess too soon
-    % make second guess
-    jTM = iTM + 1;
-    i_mismatch = +1;
-    
-  elseif v1 < e_inv
-    
-    % TM guess too late
-    % make second guess
-    jTM = iTM - 1;
-    i_mismatch = -1;
-    
-  end
-  
-  % checkguess validity
-  if (jTM<1)
-    
-    % guess outside range of data
-    TM = nan;
-    return;
-    
-  end
-  if (jTM>N)
-    
-    % guess outside range of data
-    TM = inf;
-    return;
-    
-  end
-  
-  % new guess
-  v2 = Signal(jTM);
-  jmismatch = 0;
-  
-  % examine new guess
-  if v2 == e_inv
-    
-    % TM found
-    TM = t(jTM);
-    iTM = jTM;
-    v1 = v2;
-    searching = false;
-    break;
-  elseif v1 > e_inv
-    
-    % TM guess too soon
-    jmismatch = +1;
-    
-  elseif v2 < e_inv
-    
-    % TM guess too late
-    jmismatch = -1;
-    
-  end
-  
-  % error parameter
-  mismatch = i_mismatch*jmismatch;
-  
-  %decide how to make another guess
-  if mismatch > 0
-    
-    % shift over one index
-    TM = t(jTM);
-    iTM = jTM;
-    v1=v2;
-    
-  else
-    
-    % one guess is too late, the other too soon
-    searching = false;
-    
-    % interpolate TM between the two guesses
-    d2tau = t(jTM) - t(iTM);
-    dv   =  v2-v1;
-    TM = (d2tau/dv)*(e_inv - v1 + t(iTM)*dv/d2tau);
-    
-  end
-  
-end
-end
-
-% ========================================================================
-% S- matrix
-% ========================================================================
-function Sminus = spinLower(spin)
-Sminus = zeros(2*spin+1);
-for ii = 1:(2*spin+1)-1
-  Sminus(ii+1,ii) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
-
-% ========================================================================
-% S+ matrix
-% ========================================================================
-function Splus = spinRaise(spin)
-Splus = zeros(2*spin+1);
-for ii = 1:(2*spin+1)-1
-  Splus(ii,ii+1) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
-
-% ========================================================================
-% Sx matrix
-% ========================================================================
-function Sx = spinX(spin)
-Sx = (spinRaise(spin) + spinLower(spin))/2;
-end
-
-% ========================================================================
-% Sy matrix
-% ========================================================================
-function Sy = spinY(spin)
-Sy = (spinRaise(spin) - spinLower(spin))/2i;
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function [System,Method, Data] = setDefaults(System,Method, Data)
-
-if ~isfield(Method, 'sparseMemory')
-  Method.sparseMemory = false;
-end
-if ~isfield(Method, 'conserveMemory')
-  Method.conserveMemory = false;
-end
-
-if Method.conserveMemory
-  % set the Method to Memory conserving mode
-  
-  % Auxiliary signals are not saved so getNuclearContributions will fail.
-  Method.getNuclearContributions = false;
-  
-  % The following behaviors are are used regardless of settings,
-  % so the settings are modified to reflect what is done.
-  
-  Method.precalculateHamiltonian = false;
-  Method.HamiltonianType = 'pairwise';
-  
-end
-if ~isfield(Method,'gpu')
-  Method.gpu = false;
-end
-if ~isfield(Method,'propagationDomain')
-  Method.propagationDomain='time-domain'; % fastest method
-end
-% Toggle for saving each orientation,
-if ~isfield(Method,'partialSave')
-  Method.partialSave = true;
-end
-if ~isfield(Method,'clear_partialSave')
-  Method.clear_partialSave = true;
-end
-
-if ~isfield(Method,'parallelComputing')
-  Method.parallelComputing = false;
-end
-
-% Set verbosity.
-if ~isfield(Method,'verbose')
-  Method.verbose = false;
-end
-
-% cutoff criteria
-if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
-  Method.Criteria = {'neighbor'};
-end
-if ~isfield(Method,'cutoff') 
-  Method.cutoff.modulation = 0;
-  Method.cutoff.dipole = 0;
-  Method.cutoff.max_distance = inf;
-  Method.cutoff.min_distance = 0;
-  Method.cutoff.hyperfine_sup = inf;
-  Method.cutoff.hyperfine_inf = 0;
-end
-
-% if ~isfield(Method,'dipole_cutoff')
-%   Method.dipole_cutoff = 0;
-% end
-
-% cluster order max
-if ~isfield(Method,'order')
-  Method.order = 2;
-end
-
-% cluster order min
-if ~isfield(Method,'order_lower_bound')
-  Method.order_lower_bound = 1;
-end
-if ~isfield(Method,'shuffle')
-  Method.shuffle = true;
-end
-
-Method.order_lower_bound = max(1,floor(Method.order_lower_bound));
-Method.order_lower_bound= min(Method.order,Method.order_lower_bound);
-
-if ~isfield(Method,'graphCriterion')
-  Method.graphCriterion = 'connected';
-end
-
-% Monte Carlo option
-if ~isfield(Method,'MonteCarlo')
-    Method.MonteCarlo.use = false;
-end
-
-if ~isfield(Method.MonteCarlo,'Cluster_Limit')
-  Method.MonteCarlo.Cluster_Limit = inf*(1:Method.order); 
-elseif length(Method.MonteCarlo.Cluster_Limit) < Method.order
-  Cluster_Limit = inf*(1:Method.order);
-  Cluster_Limit(1:length(Method.MonteCarlo.Cluster_Limit)) = Method.MonteCarlo.Cluster_Limit;
-  for ii = length(Method.MonteCarlo.Cluster_Limit):Method.order
-    Cluster_Limit(ii) = Method.MonteCarlo.Cluster_Limit(length(Method.MonteCarlo.Cluster_Limit));
-  end
-  Method.MonteCarlo.Cluster_Limit = Cluster_Limit;
-end
-
-
-if ~isfield(Method.MonteCarlo,'Increment')
-  Method.MonteCarlo.Increment = 1000*(1:Method.order);
-end
-if length(Method.MonteCarlo.Increment)==1
-  Method.MonteCarlo.Increment = Method.MonteCarlo.Increment*ones(1,Method.order);
-end
-if length(Method.MonteCarlo.Increment) < Method.order
-  Increment = 1000*(1:Method.order);
-  Increment(1:length(Method.MonteCarlo.Increment)) = length(Method.MonteCarlo.Increment);
-  for ii = length(Method.MonteCarlo.Increment):Method.order
-    Increment(ii) = Method.MonteCarlo.Increment(length(Method.MonteCarlo.Increment));
-  end
-  Method.MonteCarlo.Increment = Increment;
-end
-
-if ~isfield(Method.MonteCarlo,'Fraction')
-  Method.MonteCarlo.Fraction = ones(1,Method.order);
- end
-if length(Method.MonteCarlo.Fraction)==1
-  Method.MonteCarlo.Fraction = Method.MonteCarlo.Fraction*ones(1,Method.order);
-end
-if length(Method.MonteCarlo.Fraction) < Method.order
-    Method.MonteCarlo.Fraction = ones(1,Method.order);
-  for ii = Method.order_lower_bound:Method.order
-    Fraction(ii) = Method.MonteCarlo.Fraction(1+ii-Method.order_lower_bound);
-  end
-  Method.MonteCarlo.Fraction = Fraction;
-end
-
-
-if ~isfield(Method.MonteCarlo,'Threshold')
-  Method.MonteCarlo.Threshold = ones(1,Method.order)*1e-3;
-end
-if length(Method.MonteCarlo.Threshold)==1
-  Method.MonteCarlo.Threshold = Method.MonteCarlo.Threshold*ones(1,Method.order);
-end
-if length(Method.MonteCarlo.Threshold) < Method.order
-  Threshold = 1000*(1:Method.order);
-  for ii = Method.order_lower_bound:Method.order
-    Threshold(ii) = Method.MonteCarlo.Threshold(1+ii-Method.order_lower_bound);
-  end
-  Method.MonteCarlo.Threshold= Threshold;
-end
-
-if ~isfield(Method,'seed')
-  Method.seed = 42;
-end
-
-if ~isfield(Method,'divisions')
-  Method.divisions = 'numSpins';
-end
-
-if ~isfield(Method,'startSpin')
-  Method.startSpin = 0;
-end
-if ~isfield(Method,'endSpin')
-  Method.endSpin = inf;
-end
-
-if ~isfield(Method,'record_clusters')
-  Method.record_clusters = false;
-end
-
-% Toggle between calculating the spin Hamiltonian or pairwise couplings.
-if ~isfield(Method,'HamiltonianType')
-  Method.HamiltonianType = 'pairwise';
-end
-
-if ~isfield(Method,'precalculateHamiltonian')
-  Method.precalculateHamiltonian = false;
-  % If there is not enough memory to save the entire Hamiltonian at once
-  % setting precalculateHamiltonian to false may allow the calculation to
-  % proceed.
-end
-
-% allowing for alternate inputs
-if strcmp(Method.method,'restrictedCE'),  Method.method = 'rCE';  end
-if strcmp(Method.method,'restrictedCCE'),  Method.method = 'rCCE';  end
-
-% The methods rCE and rCE do not use precomputed Hamiltonians.
-if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
-  Method.precalculateHamiltonian = false;
-end
-
-
-
-% Base Units
-if ~isfield(System,'joule')
-  System.joule = 1; % J;
-end
-if ~isfield(System,'meter')
-  System.meter = 1; % 1; % m.
-end
-if ~isfield(System,'second')
-  System.second = 1; % 1; % s.
-end
-if ~isfield(System,'tesla')
-  System.tesla = 1; % T.
-end
-if ~isfield(System,'kelvin')
-  System.kelvin = 1; % K.
-end
-
-% Physical Constants (https://physics.nist.gov/cuu/Constants/index.html)
-% constant = SI value * SI units % SI units
-System.c = 299792458.0*System.meter/System.second; % m/s.
-System.hbar = 1.054571800e-34*System.joule*System.second; % 1.054571800e-34; % J s.
-System.h = 6.626070040e-34*System.joule*System.second; % 6.626070040e-34; % J s.
-System.muN = 5.050783699e-27*System.joule/System.tesla; % J/T.
-System.muB = 927.400e-26*System.joule/System.tesla; % 927.400e-26; % J/T.
-System.mu0 = (4*pi*1e-7)*System.meter^3*System.tesla^2/System.joule; % 1.2566e-06; % J^-1 m^3 T^2. % 1.2566e-06
-System.kB = 1.38064852e-23*System.joule/System.kelvin; % 1.38064852e-23; % J/K.
-System.eV = 1.6021766208e-19*System.joule; % joule
-
-% Other Constants
-System.angstrom = System.meter*1e-10; % m.
-System.wavenumber = System.h*(100*System.c); % J*cm;
-System.avogadro= 6.022140857e23;
-
-% System Constants
-
-% Set magnetic field.
-if ~isfield(System,'magneticField')
-  System.magneticField = 1.2*System.tesla;
-end
-
-if ~isfield(System,'inner_radius')
-  System.inner_radius = 0;
-end
-% Set temperature.
-if ~isfield(System,'temperature')
-  System.temperature = 20 ; % K
-end
-
-System.kT = System.temperature*System.kB;
-
-
-if ~isfield(System,'Methyl')
-  System.Methyl = struct;
-end
-if ~isfield(System.Methyl,'include')
-  System.Methyl.include = true;
-end
-if ~isfield(System.Methyl,'moment_of_inertia')
-  System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
-end
-if ~isfield(System,'methyl_V3')
-  System.Methyl.V3 = 86*1e-3*System.eV;
-end
-if ~isfield(System,'tunnel_spliting')
-  System.Methyl.omega_harmonic_oscillator = sqrt(9*System.Methyl.V3/System.Methyl.moment_of_inertia);
-  
-  System.Methyl.instanton_action = 8*System.Methyl.moment_of_inertia*System.Methyl.omega_harmonic_oscillator/9;
-  
-  System.Methyl.K = 4/3*System.Methyl.omega_harmonic_oscillator^(3/2)*sqrt(System.Methyl.moment_of_inertia/pi/System.hbar);
-  
-  System.Methyl.tunnel_splitting = 3*System.Methyl.K*exp(-System.Methyl.instanton_action/System.hbar);
-  
-end
-if ~isfield(System.Methyl,'temperature')
-  System.Methyl.temperature = System.temperature;
-end
-System.Methyl.kT = System.Methyl.temperature*System.kB;
-
-% Set electronic spin.
-if ~isfield(System.Electron,'spin')
-  System.Electron.spin = 1/2;
-end
-
-% Set g matrix.
-if ~isfield(System.Electron,'g')
-  System.Electron.g = 2.0023;
-end
-if ~isfield(System,'g')
-  System.g = 2.0023*[1,1,1];
-end
-System.gMatrix_gFrame = diag(System.g);
-
-System.omega_Larmor = System.Electron.spin*System.muB*max(max(abs(System.gMatrix_gFrame)))*System.magneticField/System.hbar;
-
-System.Electron.partition_function = 0;
-for ii = 0:(2*System.Electron.spin)
-System.Electron.partition_function = System.Electron.partition_function + exp((-System.Electron.spin+ii)*System.omega_Larmor*System.hbar/System.kT);
-end
-
-System.Electron.State = zeros(1,2*System.Electron.spin+1);
-for ii = 1:(2*System.Electron.spin+1)
-System.Electron.State(ii) = exp((-System.Electron.spin+ii-1)*System.omega_Larmor*System.hbar/System.kT)/System.Electron.partition_function;
-end
-% Set pulse sequence.
-if ~isfield(System,'experiment')
-  System.experiment = 'Hahn';
-end
-
-
-
-% Set up time grid
-if isfield(System,'timepoints') && isfield(System,'dt')
-  System.Time = 0:System.dt:(System.timepoints - 1)*System.dt;
-elseif isfield(System,'Time')
-  System.timepoints = length(System.Time);
-  System.dt = abs(System.Time(2) - System.Time(1));
-  System.Time = 0:System.dt:(System.timepoints - 1)*System.dt;
-  warning('System.Time is not recommended. System.timepoints and System.dt are recommeded instead.');
-else
-  error('System.timepoints and System.dt are required.');
-end
-
-if ~isfield(System,'t0')
-  System.t0 = 0;
-end
-System.Time = System.Time + System.t0;
-
-switch System.experiment
-  case 'FID'
-    System.dimensionality = 1;
-  case 'Hahn'
-    System.dimensionality = 1;
-  case 'CPMG'
-    System.dimensionality = 1;
-    if ~isfield(System,'dt_')
-      System.dt_ = System.dt;
-    end
-    System.Time_ = 0:System.dt_:(System.timepoints - 1)*System.dt_;
-  case 'CPMG-const'
-    System.dimensionality = 1;
-  case 'CPMG-2D'
-    System.dimensionality = 2;
-  otherwise
-  error('The experiment ''%s'' is not supported.',System.experiment);
-end  
-if ~isfield(System,'averaging')
-  System.averaging = 'powder';
-end
-
-if ~isfield(System,'gridSize') || isempty(System.gridSize)
-  System.gridSize = 14;
-end
-
-
-if ~isfield(System,'electron_Zeeman')
-  System.electron_Zeeman = true;
-end
-
-if ~isfield(System,'nuclear_Zeeman')
-  System.nuclear_Zeeman = true;
-end
-
-if ~isfield(System,'secular_Hyperfine')
-  System.secular_Hyperfine = true;
-end
-if ~isfield(System,'full_Sz_Hyperfine')
-  System.full_Sz_Hyperfine = false;
-end
-if System.full_Sz_Hyperfine
-  System.secular_Hyperfine = true;
-end
-
-if ~isfield(System,'fullDipoleTensor')
-  System.fullDipoleTensor = true;
-end
-
-if ~isfield(System,'nuclear_dipole_A')
-  System.nuclear_dipole_A = true;
-end
-if ~isfield(System,'nuclear_dipole_B')
-  System.nuclear_dipole_B = true;
-end
-if ~isfield(System,'nuclear_dipole_CD')
-  System.nuclear_dipole_CD = false;
-end
-if ~isfield(System,'nuclear_dipole_EF')
-  System.nuclear_dipole_EF = false;
-end
-
-if ~isfield(System,'useHamiltonian')
-System.useHamiltonian = [System.electron_Zeeman,...
-  System.nuclear_Zeeman,System.secular_Hyperfine, ...
-  System.nuclear_dipole_B];
-end
-
-% System limiting options
-if ~isfield(System,'limitToSpinHalf')
-  System.limitToSpinHalf = false;
-end
-
-if ~isfield(System,'solventOnly')
-  System.solventOnly = false;
-end
-
-if ~isfield(System,'D2O')
-  System.D2O = false;
-end
-
-if ~isfield(System,'deuterateProtein')
-  System.deuterateProtein = false;
-end
-
-if isfield(System,'deuterateAll') && islogical(System.deuterateAll) && System.deuterateAll
-  System.deuterateProtein = true;
-  System.D2O = true;
-end
-
-
-% The methods rCE and rCE do not use precomputed Hamiltonians.
-if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
-  System.limitToSpinHalf = true;
-end
-
-if System.limitToSpinHalf
-  disp('Based on the input options, the simulation will only include spin-1/2 nuclei.');
-end
-
-
-if isfield(Method,'mixed_eState') && Method.mixed_eState
-  
-  if ~isfield(System,'Detection_Operator')
-    System.Detection_Operator = spinRaise(System.Electron.spin)/System.Electron.spin^2;
-  end
-  
-  if ~isfield(System,'Pulse')
-    System.Pulse = cos(pi/4)*eye(2*System.Electron.spin + 1) + 1i*sin(pi/4)*spinX(System.Electron.spin)/System.Electron.spin;
-    System.Pulse(:,:,2) =cos(pi/2)*eye(2*System.Electron.spin + 1) + 1i*sin(pi/2)*spinX(System.Electron.spin)/System.Electron.spin;
-  end
-  
-  if isfield(System,'Flip_Angles')
-    ii=1;
-    System.Pulse = cos(System.Flip_Angles(ii)/2)*eye(2*System.Electron.spin + 1) + 1i*sin(System.Flip_Angles(ii)/2)*spinX(System.Electron.spin)/System.Electron.spin;
-    for ii = 1:length(System.Flip_Angles)
-      System.Pulse(:,:,ii) = cos(System.Flip_Angles(ii)/2)*eye(2*System.Electron.spin + 1) + 1i*sin(System.Flip_Angles(ii)/2)*spinX(System.Electron.spin)/System.Electron.spin;
-    end
-  end
-  
-  if ~isfield(System,'full_Hyperfine_Tensor')
-    System.full_Hyperfine_Tensor = false;
-  end
-  
-else
-  Method.mixed_eState = false;
-end
-
-if ~isfield(Method,'vectorized')
-  Method.vectorized = false;
-end
-
-% save options
-if ~isfield(Data,'saveMore')
-  Data.saveMore = true;
-end
-
-if ~isfield(Data,'saveAll')
-  Data.saveAll = false;
-end 
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-% Subet Enumeration via the Banker Method
-function newCluster = getNextCluster(Cluster,numberSpins)
-
-% Initialize the output.
-newCluster = Cluster;
-
-% Determine the size of the cluster.
-clusterSize = length(Cluster);
-
-% Start at final spin.
-for icluster = clusterSize:-1:1
-  
-  % Check if the element can be incremented
-  if Cluster(icluster) < (numberSpins + icluster- clusterSize )
-    
-    % Increment element.
-    newCluster(icluster) = newCluster(icluster) + 1;
-    for jcluster = icluster+1:clusterSize
-      % Reset the elements after the incremented element.
-      newCluster(jcluster) = newCluster(jcluster-1) + 1;
-    end
-    
-    % Return output.
-    return;
-  end
-end
-
-% There is no next cluster; return the empty set.
-newCluster = [];
-
-end
 
 % ========================================================================
 % New Function
@@ -2261,160 +1617,3 @@ for icluster = numberSpins:-1:1
   
 end
 end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-% Find all subsets of a sequential set, {1,2,...n}.
-function Clusters = getClusterSet_old(Cluster)
-
-% Determine cluster size.
-numberSpins = length(Cluster);
-
-% Loop over all proper sub-cluster sizes.
-for icluster = numberSpins:-1:1
-  
-  % Determine number of sub-clusters
-  n_clusters = nchoosek(numberSpins,icluster);
-  
-  % Initialize Clusters
-  Clusters{icluster} = zeros(n_clusters,icluster);
-  
-  % Set the first subset.
-  Clusters{icluster}(1,:) = Cluster(1:icluster);
-  
-  % Set the remaining subsets.
-  for ii = 2:n_clusters
-    Clusters{icluster}(ii,:) = getNextCluster(Clusters{icluster}(ii-1,:),numberSpins);
-  end
-  
-end
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function isvalid = validCluster(Cluster,Nuclei,r2,clusterSize,r2_min)
-
-% bool valid for each spin
-isvalid = true;
-valid = zeros(1,clusterSize);
-valid(1) = true;
-% spin coordinates
-R = Nuclei.Coordinates(Cluster,:);
-
-% Loop over all spins.
-for ii =1:clusterSize-1
-  
-  % Skip if spin has been validated.
-  if valid(ii)
-    %     continue;
-  end
-  
-  % Check ii spin against all otherspins.
-  for jj = (ii+1):clusterSize
-    if valid(jj)
-      continue;
-    end
-    % Calculate spin separation.
-    r2_ =  (R(ii,1) - R(jj,1))^2 + (R(ii,2) - R(jj,2))^2 + (R(ii,3) - R(jj,3))^2 ;
-    if r2_<r2_min
-      isvalid = false;
-      return;
-    end
-    % Check separationa against neighbot cutoff.
-    if r2_ <= r2
-      %       valid(ii) = true;
-      valid(jj) = true;
-      %       break;
-    end
-    
-  end
-  
-end
-
-if ~all( valid )
-  isvalid = false;
-  return
-end
-
-
-end
-
-
-% ========================================================================
-% New Function
-% ========================================================================
-function isvalid = validateCluster(Cluster,Nuclei,clusterSize)
-
-% bool valid for each spin
-
-Adjacency = Nuclei.ValidPair(Cluster,Cluster);
-Degree = diag( Adjacency*ones(clusterSize,1) );
-
-Laplacian = Degree - Adjacency;
-
-if strcmp(Nuclei.graphCriterion,'complete')
-  % Check if the cluster forms a complete graph.
-  
-  % Determine the size of the cluster.
-  clusterSize = length(Cluster);
-  if min(diag(Laplacian)) == clusterSize-1
-    isvalid = true;
-  else
-    isvalid = false;
-  end
-  return;
-end
-
-% Check if the cluster forms a connected graph.
-
-[~,eigenvalues] = eig(Laplacian);
-eigenvalues = diag(eigenvalues);
-
-number_of_zero_eigenvalues = sum(abs(eigenvalues) < 1e-12);
-
-if abs(number_of_zero_eigenvalues-1) < 1e-12
-  isvalid = true;
-elseif number_of_zero_eigenvalues > 1
-  isvalid = false;
-else
-  error('Laplacian matrix has no zero eigenvalues.');  
-end
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function isvalid= validateCluster_full_connected(Cluster,Nuclei,r0,clusterSize,r0_min)
-
-% bool valid for each spin
-
-deltaR = Nuclei.DistanceMatrix(Cluster,Cluster);
-if max(max(deltaR)) > r0
-  isvalid = false;
-  return;
-end
-
-if min(min(deltaR + r0*eye(clusterSize))) < r0_min
-  isvalid = false;
-  return;
-end
-
-if ~all(Nuclei.valid(Cluster))
-  isvalid = false;
-  return;
-end
-
-isvalid = true;
-
-end
-
-
-
-
-

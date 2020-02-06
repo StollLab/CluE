@@ -1,0 +1,13 @@
+EEE = 1;
+EEZ = 2; EER = 3; EEL = 4;
+EZE = 5; ERE = 6; ELE = 7;
+ZEE = 8; REE = 9; LEE = 10;
+EZZ = 11; ERL = 12; ELR = 13;
+ZEZ = 14; REL = 15; LER = 16;
+ZZE = 17; RLE = 18; LRE = 19;
+EZR = 20; EZL = 21; ERZ = 22;
+ELZ = 23; ZER = 24; ZEL = 25;
+REZ = 26; LEZ = 27; ZRE = 28;
+ZLE = 29; RZE = 30; LZE = 31;
+ERR = 32; ELL = 33; RER = 34;
+LEL = 35; RRE = 36; LLE = 37;

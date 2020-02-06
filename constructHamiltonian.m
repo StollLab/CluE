@@ -148,27 +148,6 @@ function Bath = constructNuclearBathFlipFlop(System,Nuclei, i_index_nucleus, j_i
  end
 end
 
-function Iz = spinZ(spin)
-Iz = eye(2*spin+1);
-for ii = [1:(2*spin+1)]
-  Iz(ii,ii) = spin+ 1 - ii;
-end
-end
-
-function Iminus = spinLower(spin)
-Iminus = zeros(2*spin+1);
-for ii = [1:(2*spin+1)-1]
-  Iminus(ii+1,ii) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
-
-function Iplus = spinRaise(spin)
-Iplus = zeros(2*spin+1);
-for ii = [1:(2*spin+1)-1]
-  Iplus(ii,ii+1) = sqrt(spin*(spin+1)-(spin - ii)*(spin+ 1 - ii));
-end
-end
-
 function cos_theta = cosFieldAngle(ParticleCoordinates_1,ParticleCoordinates_2)
    R = ParticleCoordinates_2 - ParticleCoordinates_1;
    cos_theta = R*[0;0;1]/norm(R); 

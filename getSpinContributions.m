@@ -177,32 +177,32 @@ function writeNuclerContributionPDB(Nuclei,NuclerContribution,outfilename)
    N = Nuclei.number;
    for n = 1:N
      line = 'ATOM';
-     line = pad(line,6);
+     line = padstring(line,6);
      
      str = num2str(n);
-     str = pad(str,11-6,'left');
+     str = padstring(str,11-6,'left');
      line = [line, str];
-     line = pad(line,11);
+     line = padstring(line,11);
      
      str = Nuclei.Element{n};
-     str = pad(str,16-11,'left');
+     str = padstring(str,16-11,'left');
      line = [line, str];
-     line = pad(line,16);
+     line = padstring(line,16);
      
      %line = [line, ' '];
-     line = pad(line,17);
+     line = padstring(line,17);
      
      line = [line, 'RES'];
      
      %line = [line, ' '];
-     line = pad(line,22);
+     line = padstring(line,22);
      
      str = '0';
-     str = pad(str,26-22,'left');
+     str = padstring(str,26-22,'left');
      line = [line, str];
-     line = pad(line,26);
+     line = padstring(line,26);
      
-     line = pad(line,30);
+     line = padstring(line,30);
      for ix = 1:3
        x = Nuclei.PDBCoordinates(n,ix)*1e10;
        if x<0
@@ -228,7 +228,7 @@ function writeNuclerContributionPDB(Nuclei,NuclerContribution,outfilename)
        if length(str) > 7
          str = str(1:7);
        end
-       str = pad(str,8);
+       str = padstring(str,8);
        if abs(x-str2num(str))>1e-3
          error('Could not get nuclear coordinates.');
        end
@@ -239,18 +239,18 @@ function writeNuclerContributionPDB(Nuclei,NuclerContribution,outfilename)
      if abs(NuclerContribution(n)-str2num(str))>1e-3
        error('Could not get nuclear coordinates.');
      end
-     str = pad(str,6,'left');
+     str = padstring(str,6,'left');
      line = [line, str];
-     line = pad(line,60);
+     line = padstring(line,60);
      
      line = [line, '  0.00'];
-     line = pad(line,76);
+     line = padstring(line,76);
      str = Nuclei.Element{n};
-     str = pad(str,78-76,'left');
+     str = padstring(str,78-76,'left');
      line = [line, str];
      
      
-     line = pad(line,80);
+     line = padstring(line,80);
      fprintf(fileID,[line, '\n']);
    end
    
@@ -259,4 +259,22 @@ function writeNuclerContributionPDB(Nuclei,NuclerContribution,outfilename)
    
 end
 
+function out = padstring(str,len,side)
 
+if nargin<3, side = 'right'; end
+
+nPadChars = len-length(str);
+
+chr = ' ';
+padding = repmat(chr,1,nPadChars);
+
+switch side
+  case 'right'
+    out = [str padding];
+  case 'left'
+    out = [padding str];
+  otherwise
+    error('Unrecognized side specification - must be ''left'' or ''right''.');
+end
+
+end
