@@ -327,11 +327,20 @@ if ~isfield(System,'experiment')
   System.experiment = 'Hahn';
 end
 
-
+if ~isfield(System,'t0')
+  System.t0 = 0;
+end
 
 % Set up time grid
 if isfield(System,'timepoints') && isfield(System,'dt')
-  System.Time = 0:System.dt:(System.timepoints - 1)*System.dt;
+  if System.t0 > 0
+    System.Time = zeros(1,System.timepoints);
+    System.Time(2:end) = ...
+      System.t0 + (0:System.dt:(System.timepoints - 2)*System.dt);
+  else
+    System.Time = 0:System.dt:(System.timepoints - 1)*System.dt;
+  end
+
 elseif isfield(System,'Time')
   System.timepoints = length(System.Time);
   System.dt = abs(System.Time(2) - System.Time(1));
@@ -340,11 +349,6 @@ elseif isfield(System,'Time')
 else
   error('System.timepoints and System.dt are required.');
 end
-
-if ~isfield(System,'t0')
-  System.t0 = 0;
-end
-System.Time = System.Time + System.t0;
 
 switch System.experiment
   case 'FID'

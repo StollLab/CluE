@@ -805,8 +805,7 @@ elseif strcmp(Method.method,'rCCE')
 end
 
 timepoints = size(System.Time,2);
-dt = System.Time(2)-System.Time(1);
-t0 = System.t0;
+dt = System.dt;
 linearTimeAxis = true; % Code should be changed to enforce this.
 
 % Calculate signal
@@ -833,7 +832,7 @@ else
   
   if Method.vectorized
     [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu0(System, Method, Nuclei,Clusters, timepoints,dt,t0);
+       = calculateSignal_gpu0(System, Method, Nuclei,Clusters);
     AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
     
     Statistics = [];

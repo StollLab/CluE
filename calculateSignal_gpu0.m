@@ -2,7 +2,18 @@
 % Clusters(cluster index , size > order ,order) = 0.
 
 function [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu0(System, Method, Nuclei,Clusters, timepoints,dt,t0)
+       = calculateSignal_gpu0(System, Method, Nuclei,Clusters)
+
+ge=System.ge;
+geff=System.gMatrix(3,3);
+magneticField = System.magneticField;
+muB = System.muB;
+muN = System.muN;
+mu0 = System.mu0;
+hbar = System.hbar;
+timepoints = System.timepoints;
+dt = System.dt;
+t0 = System.t0;
 
 maxSize = 6;     
      
@@ -207,13 +218,6 @@ for isize = Method_order+1:maxSize
       end
       
 end
-ge=System.ge;
-geff=System.gMatrix(3,3);
-magneticField = System.magneticField;
-muB = System.muB;
-muN = System.muN;
-mu0 = System.mu0;
-hbar = System.hbar;
 
 Nuclei_ValidPair = Nuclei.ValidPair;
 % ENUM
@@ -681,9 +685,11 @@ dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
 
 nStates = length(Hamiltonian_beta);
 if t0 > 0
+  timeStart = 2;
   U_beta = propagator_eig(Hamiltonian_beta,t0);
   U_alpha = propagator_eig(Hamiltonian_alpha,t0);
 else
+  timeStart = 1;
   U_beta = eye(nStates);
   U_alpha = eye(nStates);
 end
@@ -704,8 +710,8 @@ if EXPERIMENT == CPMG_CONST
 end
 
 
-v= ones(1,timepoints);
-for iTime = 1:timepoints
+v= ones(1 ,timepoints);
+for iTime = timeStart:timepoints
   
   switch EXPERIMENT
     case FID
