@@ -106,7 +106,12 @@ Nuclei.Qtensor = zeros(3,3,Npdb*numberUnitCells);
 Nuclei.quadrupoleXaxis = zeros(numberH(2)*numberUnitCells,3);
 Nuclei.quadrupoleYaxis = zeros(numberH(2)*numberUnitCells,3);
 Nuclei.quadrupoleZaxis = zeros(numberH(2)*numberUnitCells,3);
+
+Nuclei.hyperfine2lab = zeros(3,3,numberH(2)*numberUnitCells);
+Nuclei.Atensor = zeros(3,3,Npdb*numberUnitCells);
 Nuclei.FermiContact = zeros(Npdb*numberUnitCells,1);
+Nuclei.Azz = zeros(Npdb*numberUnitCells,1);
+
 Initial_Electron_Coordinates = System.Electron.Coordinates;
 
 if iscell(Initial_Electron_Coordinates)
@@ -348,6 +353,15 @@ for uc = 1:nCells
               xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
           end
         end
+        % Water Quadrupole Values
+        % Edmonds, D. T.; Mackay, A. L.
+        % The Pure Quadrupole Resonance of the Deuteron in Ice.
+        % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519.
+        % https://doi.org/10.1016/0022-2364(75)90008-6.
+        eta_ = 0.112;
+        e2qQh_ = 213.4e3; % Hz
+        Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei);
+        %{
         if norm(zQ)==0
           warning('Failed to set quadrupole tensor orientation.')
           continue
@@ -375,7 +389,7 @@ for uc = 1:nCells
         
         Nuclei.quadrupole2lab(:,:,iNuc) = R_Q2L;
         Nuclei.Qtensor(:,:,iNuc) = Qtensor_L;
-        
+        %}
       end
       
       % C ============================================================
@@ -419,12 +433,65 @@ for uc = 1:nCells
       switch spinCenter
         case 'TEMPO'
           if norm(Nuclei.Coordinates((iNuc))) < System.angstrom
-          % Aurich, H. G.; Hahn, K.; Stork, K.; Weiss, W. Aminyloxide 
-          % (nitroxide)—XXIV. 
-          %Tetrahedron 1977, 33 (9), 969–975. https://doi.org/10.1016/0040-4020(77)80210-X.
-          
-          Nuclei.FermiContact(iNuc) = 42.7*1e6; % Hz
+            % Aurich, H. G.; Hahn, K.; Stork, K.; Weiss, W. Aminyloxide
+            % (nitroxide)—XXIV.
+            %Tetrahedron 1977, 33 (9), 969–975. https://doi.org/10.1016/0040-4020(77)80210-X.            
+            % Nuclei.FermiContact(iNuc) = 42.7*1e6; % Hz
+            
+            % Owenius, R.; Engström, M.; Lindgren, M.; Huber, M. 
+            % Influence of Solvent Polarity and Hydrogen Bonding on the EPR
+            % Parameters of a Nitroxide Spin Label Studied by 9-GHz and 
+            % 95-GHz EPR Spectroscopy and DFT Calculations. 
+            %J. Phys. Chem. A 2001, 105 (49), 10967–10977. 
+            % https://doi.org/10.1021/jp0116914.
+            Nuclei.FermiContact(iNuc) = 31.528e+06; %Hz
+            Nuclei.Azz(iNuc) = 90.801e+06; % Hz
+            
+
+              if isempty(Conect)
+                error('Nucleus %d is not connected to anything - cannot build NQ tensor.',inucleus);
+              end
+              for iconnect = Conect
+                % Marsh, D. 
+                % Bonding in Nitroxide Spin Labels from 14 N 
+                % Electric–Quadrupole Interactions. 
+                % J. Phys. Chem. A 2015, 119 (5), 919–921. 
+                % https://doi.org/10.1021/jp512764w.
+
+                switch Type{iconnect}
+                  case 'O'
+                    xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
+                  case 'C'
+                    yQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
+                end
+              end
+              zQ = cross(xQ,yQ);
+              Nuclei = setHyperfineTensor(Nuclei.Azz(iNuc),Nuclei.FermiContact(iNuc),zQ,xQ,iNuc,Nuclei);
+
+              % Jeong, J.; Briere, T.; Sahoo, N.; Das, T. P.;
+              % Ohira, S.; Nishiyama, O.
+              % Theory of Nuclear Quadrupole Interactions of 14 N, 17O,
+              % and 35 CI Nuclei in p-Cl-Ph-CH-N=TEMPO.
+              % Z. Naturforsch 2002.
+              
+              if System.nuclear_quadrupole
+              % e2qQh_ = 4.807*1e6; % Hz
+              % eta_ = 0.408;
+              
+              % de Oliveira, M.; Knitsch, R.; Sajid, M.; Stute, A.; 
+              % Elmer, L.-M.; Kehr, G.; Erker, G.; Magon, C. J.; Jeschke, G.; Eckert, H. 
+              % Aminoxyl Radicals of B/P Frustrated Lewis Pairs: 
+              % Refinement of the Spin-Hamiltonian Parameters by Field- and Temperature-Dependent Pulsed EPR Spectroscopy. 
+              % PLoS ONE 2016, 11 (6), e0157944. https://doi.org/10.1371/journal.pone.0157944.
+
+              e2qQh_ = 3.5*1e6; % Hz
+              eta_ = 0.68;
+              
+              Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei);
+            end
+            
           end
+          
         otherwise
           Nuclei.FermiContact(iNuc) = 0;
       end
@@ -497,12 +564,17 @@ catch
   return
 end 
 
+% Clear excess entries.
 Nuclei.quadrupole2lab(:,:,Nuclei.number+1:end) = [];
 Nuclei.Qtensor(:,:,Nuclei.number+1:end) = [];
 Nuclei.quadrupoleXaxis(Nuclei.number+1:end,:) = [];
 Nuclei.quadrupoleYaxis(Nuclei.number+1:end,:) = [];
 Nuclei.quadrupoleZaxis(Nuclei.number+1:end,:) = [];
+
+Nuclei.hyperfine2lab(:,:,Nuclei.number+1:end) = [];
+Nuclei.Atensor(:,:,Nuclei.number+1:end) = [];
 Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
+Nuclei.Azz(Nuclei.number+1:end,:) = [];
 
 Nuclei.DistanceMatrix = zeros(Nuclei.number);
 for ispin = 1:Nuclei.number
@@ -597,6 +669,7 @@ end
 Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
+Nuclei.maxSpin = max(Nuclei.Spin);
 [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
 Nuclei.ZeemanStates = setRandomState(Nuclei);
 end
@@ -968,90 +1041,3 @@ State = sqrt(Density);
 gA = 1/(1+e_EkT);
 end
 
-% ========================================================================
-% New Function
-% ========================================================================
-
-function Nuclei = getPairwiseStatistics(System, Nuclei)
-
-Hyperfine = zeros(1,Nuclei.number);
-
-Nuclei.ModulationDepth = zeros(Nuclei.number);
-Nuclei.Hyperfine = zeros(Nuclei.number,1);
-Nuclei.Nuclear_Dipole = zeros(Nuclei.number);
-Nuclei.Frequency_Pair = zeros(Nuclei.number);
-Nuclei.DeltaHyperfine = zeros(Nuclei.number);
-Nuclei.SameType = eye(Nuclei.number);
-Nuclei.Same_g = eye(Nuclei.number);
-
-Nuclei.SpinSet = unique(Nuclei.Spin);
-
-Nuclei.timescale.HF_A = 0;
-Nuclei.timescale.HF_SzIxy = 0;
-Nuclei.timescale.NucB = 0;
-% loop over all nuclei
-for inucleus = 1:Nuclei.number
-  
-  
-  % Calculating hyperfine coupling
-  
-  gamma_e = -System.Electron.g*System.muB/System.hbar;
-  Rn = norm(System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:) );
-  gamma_n = Nuclei.Nuclear_g(inucleus)*System.muN/System.hbar;
-  
-  R = System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:);
-  cosTheta2 = (R*[0;0;1]/norm(R))^2;
-  
-  Hyperfine(inucleus) = Nuclei.FermiContact(inucleus)*(2*pi)-(System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;
-  Nuclei.Hyperfine(inucleus) = Hyperfine(inucleus)/(2*pi); % Hz;
-  % Calculating bath coupling
-  for jnucleus = 1:inucleus-1
-    
-    if strcmp(Nuclei.Type{inucleus},Nuclei.Type{jnucleus})
-      Nuclei.SameType(inucleus,jnucleus) = true;
-      Nuclei.SameType(jnucleus,inucleus) = true;
-    end
-    
-    if abs(Nuclei.Nuclear_g(inucleus)-Nuclei.Nuclear_g(jnucleus)) < 1e-9
-      Nuclei.Same_g(inucleus,jnucleus) = true;
-      Nuclei.Same_g(jnucleus,inucleus) = true;
-    end
-    
-    % calculate dipolar coupling
-    delta_r = Nuclei.Coordinates(inucleus,:) -Nuclei.Coordinates(jnucleus,:);
-    cosThetaSquared = ( delta_r(3)/norm(delta_r) )^2;
-    b = 0.25*(System.mu0/4/pi)*Nuclei.Nuclear_g(inucleus)*Nuclei.Nuclear_g(jnucleus)*System.muN^2; % J m^3.
-    r = norm(Nuclei.Coordinates(inucleus,:) - Nuclei.Coordinates(jnucleus,:));
-    r3 = r^3;
-    b = -b*(3*cosThetaSquared - 1)/r3; % J.
-    b = b/(System.hbar); % rad/s.
-    
-    
-    c = ( Hyperfine(inucleus)-Hyperfine(jnucleus) )/(4*b);
-    
-    mod_amp = 4*c^2/(1+c^2)^2;
-    
-    Nuclei.Frequency_Pair(inucleus,jnucleus) = 2*b*sqrt(1+c^2)/(2*pi);
-    Nuclei.Frequency_Pair(jnucleus,inucleus)=    Nuclei.Frequency_Pair(inucleus,jnucleus);
-    
-    Nuclei.ModulationDepth(inucleus,jnucleus) = mod_amp;
-    Nuclei.ModulationDepth(jnucleus,inucleus) = Nuclei.ModulationDepth(inucleus,jnucleus);
-    
-    Nuclei.Nuclear_Dipole(inucleus,jnucleus) = 4*b/(2*pi); % Hz.
-    Nuclei.Nuclear_Dipole(jnucleus,inucleus) = Nuclei.Nuclear_Dipole(inucleus,jnucleus);
-    
-    Nuclei.DeltaHyperfine(inucleus,jnucleus) = (Nuclei.Hyperfine(inucleus) - Nuclei.Hyperfine(jnucleus)); % Hz
-    Nuclei.DeltaHyperfine(jnucleus,inucleus) = -Nuclei.DeltaHyperfine(inucleus,jnucleus);
-    
-    Nuclei.timescale.HF_A = Nuclei.timescale.HF_A + abs(Nuclei.DeltaHyperfine(jnucleus,inucleus));
-    Nuclei.timescale.NucB = Nuclei.timescale.NucB + abs(Nuclei.Nuclear_Dipole(jnucleus,inucleus));
-  end
-  
-end
-
-Nuclei.timescale.HF_SzIxy = 1/mean(abs(Nuclei.Hyperfine));
-numPair = double(Nuclei.number*(Nuclei.number+1))/2;
-Nuclei.timescale.NucB = numPair/Nuclei.timescale.NucB;
-Nuclei.timescale.HF_A = numPair/Nuclei.timescale.HF_A;
-
-end

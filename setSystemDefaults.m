@@ -247,7 +247,7 @@ System.barn = 1e-28*System.meter^2;
 System.angstrom = System.meter*1e-10; % m.
 System.wavenumber = System.h*(100*System.c); % J*cm;
 System.avogadro= 6.022140857e23;
-
+System.ge = 2.00231930436256;% https://physics.nist.gov/cgi-bin/cuu/Value?gem 2020-02-08
 % System Constants
 
 % Set magnetic field.

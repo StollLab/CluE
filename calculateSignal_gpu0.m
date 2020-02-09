@@ -50,6 +50,8 @@ useThermalEnsemble = System.useThermalEnsemble;
 States = zeros(max_basis,Nuclei.number);
 betaT = 2*pi*System.hbar /System.kT; % 1/Hz.
 Qtensors = Nuclei.Qtensor;
+Atensors = Nuclei.Atensor;
+
 
 FermiContact = Nuclei.FermiContact;
 nStates =System.nStates;
@@ -205,7 +207,8 @@ for isize = Method_order+1:maxSize
       end
       
 end
-ge=System.gMatrix(3,3);
+ge=System.ge;
+geff=System.gMatrix(3,3);
 magneticField = System.magneticField;
 muB = System.muB;
 muN = System.muN;
@@ -379,7 +382,7 @@ for clusterSize = 1:Method_order
          
      end
      
-    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,FermiContact,magneticField, ge, muB, muN, mu0, hbar,theory,MethylID);
+    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory,MethylID);
     qtensors = Qtensors(:,:,thisCluster);
     
 

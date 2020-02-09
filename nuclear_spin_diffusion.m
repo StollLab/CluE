@@ -322,6 +322,7 @@ TempSignals{numberOfSignals+1} = [];
 Temp_Order_n_Signals{numberOfSignals+1} = [];
 
 Statistics = cell(numberOfSignals,1);
+graphs = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing && ~Method.conserveMemory;
 saveAll = Data.saveLevel==2;
@@ -330,7 +331,7 @@ if parallelComputing
   
   parfor isignal = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal},graphs{isignal}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
       Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
     
@@ -346,7 +347,7 @@ else
   
   for isignal = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal},graphs{isignal}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
       Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
     
@@ -395,6 +396,7 @@ if ~isempty(pool)
 end
 
 Nuclei.Statistics = Statistics;
+Nuclei.graphs = graphs;
 % ========================================================================
 % End of main loop
 % ========================================================================
@@ -573,7 +575,7 @@ end
 % ========================================================================
 % Calculates signal for a set of orientations
 % ========================================================================
-function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal] ...
+function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal] ...
     = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,iSignal_max)
      
 % grid point indices
@@ -582,7 +584,7 @@ index_gamma = mod(adjusted_isignal-1,gammaGridSize) + 1;
 igrid = 1 + (adjusted_isignal - index_gamma)/gammaGridSize;
 
 % calculate coherence signal
-[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal] = ...
+[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal] = ...
   calculateSignal(System,Method,Nuclei,Clusters,...
   Alpha(igrid),Beta(igrid),Gamma(index_gamma),verbose,OutputData,Progress);
 
@@ -704,7 +706,7 @@ end
 % ========================================================================
 % Calculate signal for one orientation
 % ========================================================================
-function [Signal, AuxiliarySignal,Order_n_Signal,Statistics] = ...
+function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs] = ...
   calculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,Gamma,verbose,OutputData,Progress)
 
 % Assign temporary value to AuxiliarySignal
@@ -716,11 +718,13 @@ R_pdb2lab = rotateZYZ(Alpha,Beta,Gamma);
 % Rotate nuclear coordinates.
 Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 
-% Rotate nuclear quadrupole tensors.
-for inucleus = 1:Nuclei.number  
+% Rotate bath spin tensors.
+for inucleus = 1:Nuclei.number
+  Nuclei.Atensor(:,:,inucleus) = R_pdb2lab*Nuclei.Atensor(:,:,inucleus)*R_pdb2lab';
   Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
   % Elementwise Qtensor manipulation used for testing.  The default filer is ones(3); 
   Nuclei.Qtensor(:,:,inucleus) = Nuclei.Qtensor(:,:,inucleus).*System.nuclear_quadrupole_filter;
+  
 end
 
 % Rotate the g-matrix.
@@ -737,6 +741,8 @@ System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 
 % Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
+
+graphs = []; % getBathGraphs(Nuclei);
 
 if System.useMeanField
   [Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal]= getMeanFieldCoefficients(Nuclei,System);

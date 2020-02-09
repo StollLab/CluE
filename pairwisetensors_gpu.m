@@ -19,7 +19,7 @@
   hbar = System.hbar;
 %}
 function [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,...
-  Cluster,FermiContact, magneticField, ge, muB, muN, mu0, hbar,theory,MethylID)
+  Cluster,HF_tensor, magneticField, ge, geff, muB, muN, mu0, hbar,theory,MethylID)
 
 zeroIndex = min(Cluster) - 1;
 Indices = fliplr(Cluster);
@@ -35,7 +35,7 @@ useNucDD    = any(theory(5:8));
 
 % Electron Zeeman
 if useEZ
-  tensors(:,:,1,1) = constructElectronZeeman(magneticField,ge, muB, hbar);
+  tensors(:,:,1,1) = constructElectronZeeman(magneticField,geff, muB, hbar);
 end
 
 inucleus = 0;
@@ -49,7 +49,12 @@ for i_index_nucleus = Indices
   
   % Hyperfine
   if useHF
-    tensors(:,:,1,1+inucleus )= constructHyperfine(Nuclei_g,Nuclei_Coordinates, FermiContact, i_index_nucleus,ge, muB, muN, mu0, hbar);
+    hf_tensor = HF_tensor(:,:,i_index_nucleus);
+    if any(hf_tensor~=0)
+      tensors(:,:,1,1+inucleus ) =  hf_tensor;
+    else
+    tensors(:,:,1,1+inucleus )= constructHyperfine(Nuclei_g,Nuclei_Coordinates, i_index_nucleus,ge, muB, muN, mu0, hbar);
+    end
   end
   
   % Nucleus-Nucleus Coupling
@@ -82,7 +87,7 @@ NuclearZeeman = -gn*muN*magneticField*eye(3); % J.
 NuclearZeeman = NuclearZeeman/(2*pi*hbar); % J -> Hz
 end
 
-function Hyperfine = constructHyperfine(Nuclei_g,Nuclei_Coordinates,FermiContact, i_index_nucleus,ge, muB, muN, mu0, hbar)
+function Hyperfine = constructHyperfine(Nuclei_g,Nuclei_Coordinates, i_index_nucleus,ge, muB, muN, mu0, hbar)
 
 gni = Nuclei_g(i_index_nucleus);
 r = Nuclei_Coordinates(i_index_nucleus,:)';
@@ -90,8 +95,7 @@ n = r/norm(r);
 nnt = n*n';
 r3 = norm(r)^3;
 Hhf = mu0/(4*pi)*ge*muB*gni*muN/r3*(3*nnt - eye(3));
-Hyperfine = Hhf/(2*pi*hbar); % Hz.
-Hyperfine = Hyperfine + eye(3)*FermiContact(i_index_nucleus);
+Hyperfine = Hhf/(2*pi*hbar); % Hz. 
 
 return
 
