@@ -4,7 +4,7 @@ if norm(zQ)==0
   return;
 end
 if norm(xQ)==0
-  while xQ*zQ==0
+  while xQ*zQ'==0
     warning('Failed to set quadrupole tensor orientation; using a random direction.')
     xQ = rand(1,3);
     xQ = xQ/norm(xQ);

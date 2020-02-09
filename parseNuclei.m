@@ -342,6 +342,8 @@ for uc = 1:nCells
       
       % Set up quadrupole tensors for water deuterons
       if System.nuclear_quadrupole
+      
+        
         if isempty(Conect)
           error('Nucleus %d is not connected to anything - cannot build NQ tensor.',inucleus);
         end
@@ -353,14 +355,24 @@ for uc = 1:nCells
               xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
           end
         end
-        % Water Quadrupole Values
-        % Edmonds, D. T.; Mackay, A. L.
-        % The Pure Quadrupole Resonance of the Deuteron in Ice.
-        % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519.
-        % https://doi.org/10.1016/0022-2364(75)90008-6.
-        eta_ = 0.112;
-        e2qQh_ = 213.4e3; % Hz
+        isOnWater = ~any(inucleus==Indices_nonWater);
+        if isOnWater
+          
+          % Water Quadrupole Values
+          % Edmonds, D. T.; Mackay, A. L.
+          % The Pure Quadrupole Resonance of the Deuteron in Ice.
+          % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519.
+          % https://doi.org/10.1016/0022-2364(75)90008-6.
+          eta_ = 0.112;
+          e2qQh_ = 213.4e3; % Hz
+        else
+          % ORCA
+          eta_ = 0; % from eta_ = 0.0161;
+          e2qQh_ = 0.1945e6; % Hz
+          xQ = [0,0,0];
+        end
         Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei);
+        
         %{
         if norm(zQ)==0
           warning('Failed to set quadrupole tensor orientation.')
