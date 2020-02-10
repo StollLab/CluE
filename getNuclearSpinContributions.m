@@ -1,6 +1,7 @@
 function out = getNuclearSpinContributions(matfile)
 
 % Load data file.
+disp(matfile);
 indata = load(matfile);
 
 Nuclei             = indata.Nuclei;
@@ -47,6 +48,8 @@ cluster_distance{1}=r(Clusters{1})';
 
 % Loop thourgh orientations used in powder averaging.
 parfor ii = 1:nOrientations
+  fprintf('Orientations: %d/%d.\n', ii,nOrientations);
+  
   Vtest{ii} = ones(size(time));
   
   % Loop through all bath spins.
@@ -113,13 +116,44 @@ out.SimulationInput = Input;
 out.TM = TM_powder*1e6;
 out.TM_of_R = TM_of_R;
 
+out.DeltaTM = sansSpinTM - out.TM;
 
 
 out.V = SignalMean;
 out.V_of_R = V_of_R(ind,:,:);
 out.V_of_R_powder = V_of_R_powder(ind,:);
-
+outfilename = [matfile(1:end-4),'TM.pdb']
+writeSpinPDB(Nuclei,out.DeltaTM,outfilename)
 end
 
+function y0 = linearEval(x,y,x0)
+N = length(x);
 
+n = sum(x<x0);
+
+if n == 0
+
+  dx = x0 - x(1);
+  Dx = x(2) - x(1);
+  dy = y(2) - y(1);
+  y0 = y(1) + dy/Dx*dx;
+
+elseif n ==N
+  
+  dx = x0 - x(n);
+  Dx = x(N) - x(N-1);
+  dy = y(N) - y(N-1);
+  y0 = y(N) + dy/Dx*dx;
+  
+else
+  
+  dx = x0 - x(n);
+  Dx = x(n+1) - x(n);
+
+  p = 1 - dx/Dx;
+  
+  y0 = p*y(n) + (1-p)*y(n+1);
+end
+
+end
 
