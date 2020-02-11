@@ -18,142 +18,90 @@ Input              = indata.Input;
 SignalMean         = indata.SignalMean;    
 Order_n_SignalMean = indata.Order_n_SignalMean;
 
-N = Nuclei.number;
+nSpins = Nuclei.number;
 
-% Get sorted list electron-nucleus separations.
-r = sqrt(sum(Nuclei.Coordinates.^2,2))*1e10;
-[R,ind] = sort(r);
+% Get list electron-nucleus separations.
+r = vecnorm(Nuclei.Coordinates,2,2);
 
 % Initialize other output variables.
-sansSpinV = zeros(N,System.timepoints,nOrientations);
-sansSpinVpowder = zeros(N,System.timepoints);
-sansSpinTM = zeros(1,N);
-sansSpinVofTM = zeros(1,N);
-V_of_R = zeros(N,System.timepoints,nOrientations);
-V_of_R_powder = zeros(N,System.timepoints);
-TM_of_R = zeros(1,N);
+sansSpinV = zeros(nSpins,System.timepoints,nOrientations);
+V_of_R = zeros(nSpins,System.timepoints,nOrientations);
 
-
-time = experiment_time*1e6; % us.
-
-Vtest = cell(1,nOrientations);
-VtestPow = zeros(size(time));
+orderrange = Method.order_lower_bound:Method.order;
 
 % Determine minimum system size needed to hold each cluster.
 cluster_distance = cell(1,Method.order);
-for isize = Method.order_lower_bound:Method.order
-  cluster_distance{isize} = max(r(Clusters{isize})');
+for isize = orderrange
+  cluster_distance{isize} = max(r(Clusters{isize}),[],2);
 end
-cluster_distance{1}=r(Clusters{1})';
 
 % Loop thourgh orientations used in powder averaging.
-parfor ii = 1:nOrientations
-  fprintf('Orientations: %d/%d.\n', ii,nOrientations);
-  
-  Vtest{ii} = ones(size(time));
+parfor iOri = 1:nOrientations
+  fprintf('Orientations: %d/%d.\n', iOri,nOrientations);
   
   % Loop through all bath spins.
-  for ispin = 1:N
+  for ispin = 1:nSpins
     % Initialize to full signal.
-    sansSpinV(ispin,:,ii) = Signals{ii};
-    V_of_R(ispin,:,ii) = ones(size(time));
+    sansSpinV(ispin,:,iOri) = Signals{iOri};
+    V_of_R(ispin,:,iOri) = gridWeight(iOri)*ones(size(experiment_time));
     % Loop though all cluster sizes available.
-    for isize = Method.order_lower_bound:Method.order
+    for isize = orderrange
       
-      rclusters = cluster_distance{isize}<R(ispin);
-      V_of_R(ispin,:,ii) =V_of_R(ispin,:,ii).*prod(AuxiliarySignal{ii}{isize}(rclusters,:));
-      
+      % Calculate signal for system without spins farther away than ispin
+      rclusters = cluster_distance{isize} < r(ispin);
+      v_ = prod(AuxiliarySignal{iOri}{isize}(rclusters,:));
+      V_of_R(ispin,:,iOri) = V_of_R(ispin,:,iOri).*v_;
       
       % Get list of all clusters of size isize that contain spin ispin.
-      clusters = find(sum(Clusters{isize}==ispin,2)>0)';
-      
-      % Loop through clusters.
-      for icluster = clusters
+      clusters = any(Clusters{isize}==ispin,2);      
+      v_ = prod(AuxiliarySignal{iOri}{isize}(clusters,:));
+      sansSpinV(ispin,:,iOri) = sansSpinV(ispin,:,iOri)./v_;
         
-        % Get auxiliary signal for cluster icluster.
-        v_ = AuxiliarySignal{ii}{isize}(icluster,:);
-        Vtest{ii} = Vtest{ii}.*v_.^(1/isize);
-        sansSpinV(ispin,:,ii) = sansSpinV(ispin,:,ii)./v_;
-        
-        
-      end
     end
   end
   
 end
 
-for ii = 1:nOrientations
-  VtestPow = VtestPow + Vtest{ii}*gridWeight(ii);
+% Do powder averaging
+sansSpinVpowder = sum(sansSpinV,3);
+V_of_R_powder = sum(V_of_R,3);
+
+% Determine 1/e decay times
+sansSpinTM = zeros(1,nSpins);
+TM_of_R = zeros(1,nSpins);
+for ispin = 1:nSpins
+  sansSpinTM(ispin) = getTM(experiment_time,sansSpinVpowder(ispin,:));
+  TM_of_R(ispin) = getTM(experiment_time,V_of_R_powder(ispin,:));
 end
 
-for ispin = 1:N
-  for ii = 1:nOrientations
-    sansSpinVpowder(ispin,:) = sansSpinVpowder(ispin,:) + sansSpinV(ispin,:,ii);
-    V_of_R_powder(ispin,:) = V_of_R_powder(ispin,:) + V_of_R(ispin,:,ii);
-  end
-  sansSpinTM(ispin) = getTM(time,sansSpinVpowder(ispin,:));
-  TM_of_R(ispin) = getTM(time,V_of_R_powder(ispin,:));
-  
-  sansSpinVofTM(ispin) = linearEval(experiment_time,abs( sansSpinVpowder(ispin,:) ),TM_powder);
+sansSpinVofTM = zeros(1,nSpins);
+for ispin = 1:nSpins
+  sansSpinVofTM(ispin) = interp1(experiment_time,abs(sansSpinVpowder(ispin,:)),TM_powder);
 end
 
-out.index = ind;
-out.time = time;
-
-out.N_of_R = 1:N;
-out.numberNuclei = N;
-
+out.time = experiment_time;
+out.N_of_R = 1:nSpins;
+out.numberNuclei = nSpins;
 out.Order_n_SignalMean = Order_n_SignalMean;
 
-out.R = R;
-out.sansSpinV = sansSpinV(ind,:,:);
-out.sansSpinVpowder = sansSpinVpowder(ind,:);
-out.sansSpinTM = sansSpinTM(ind);
-out.sansSpinVofTM = sansSpinVofTM(ind);
+out.R = r;
+out.sansSpinV = sansSpinV;
+out.sansSpinVpowder = sansSpinVpowder;
+out.sansSpinTM = sansSpinTM;
+out.sansSpinVofTM = sansSpinVofTM;
 
 out.SimulationInput = Input;
 
-out.TM = TM_powder*1e6;
+out.TM = TM_powder;
 out.TM_of_R = TM_of_R;
 
 out.DeltaTM = sansSpinTM - out.TM;
 
-
 out.V = SignalMean;
-out.V_of_R = V_of_R(ind,:,:);
-out.V_of_R_powder = V_of_R_powder(ind,:);
+out.V_of_R = V_of_R;
+out.V_of_R_powder = V_of_R_powder;
+
 outfilename = [matfile(1:end-4),'TM.pdb']
-writeSpinPDB(Nuclei,out.DeltaTM,outfilename)
-end
-
-function y0 = linearEval(x,y,x0)
-N = length(x);
-
-n = sum(x<x0);
-
-if n == 0
-
-  dx = x0 - x(1);
-  Dx = x(2) - x(1);
-  dy = y(2) - y(1);
-  y0 = y(1) + dy/Dx*dx;
-
-elseif n ==N
-  
-  dx = x0 - x(n);
-  Dx = x(N) - x(N-1);
-  dy = y(N) - y(N-1);
-  y0 = y(N) + dy/Dx*dx;
-  
-else
-  
-  dx = x0 - x(n);
-  Dx = x(n+1) - x(n);
-
-  p = 1 - dx/Dx;
-  
-  y0 = p*y(n) + (1-p)*y(n+1);
-end
+writeSpinPDB(Nuclei,out.DeltaTM,outfilename);
 
 end
-

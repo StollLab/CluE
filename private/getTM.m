@@ -1,5 +1,5 @@
 % ========================================================================
-% Find decay time (where signal drops to 1/e of initial amplitude
+% Find decay time (where signal drops to 1/e of initial amplitude)
 % ========================================================================
 function TM = getTM(t,Signal)
 
@@ -68,14 +68,14 @@ while searching
   end
   
   % checkguess validity
-  if (jTM<1)
+  if jTM<1
     
     % guess outside range of data
-    TM = nan;
+    TM = NaN;
     return;
     
   end
-  if (jTM>N)
+  if jTM>N
     
     % guess outside range of data
     TM = inf;
