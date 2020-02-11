@@ -210,6 +210,9 @@ end
 if ~isfield(Method,'getNuclearContributions')
   Method.getNuclearContributions = false;
 end
+if ~isfield(Method,'getNuclearSpinContributions')
+  Method.getNuclearSpinContributions = false;
+end
 
 % Base Units
 if ~isfield(System,'joule')

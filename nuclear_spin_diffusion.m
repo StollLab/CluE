@@ -365,7 +365,7 @@ else
       TempSignals{isignal} = TempSignals_;
       Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
       
-      if saveAll || Method.getNuclearContributions
+      if saveAll || Method.getNuclearContributions || Method.getNuclearSpinContributions
         AuxiliarySignal{isignal} = AuxiliarySignal_;
       end
       
@@ -522,6 +522,11 @@ end
 % calculate the contributions from each spin
 % placed after the save since getSpinContributions() is still buggy
 %NuclearContribution.findContributions = Method.getNuclearContributions;
+if Method.getNuclearSpinContributions
+  getNuclearSpinContributions([OutputData,'SpinContribution.mat'], ...
+    Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean)
+end
+
 if isfield(Method, 'getNuclearContributions') && Method.getNuclearContributions
   if isnan(TM)
     NuclearContribution.TM=TM_powder;

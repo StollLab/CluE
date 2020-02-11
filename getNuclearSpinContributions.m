@@ -1,23 +1,26 @@
-function out = getNuclearSpinContributions(matfile)
+function out = getNuclearSpinContributions(matfile, ...
+  Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean)
 
 % Load data file.
-disp(matfile);
-indata = load(matfile);
-
-Nuclei             = indata.Nuclei;
-System             = indata.System;
-nOrientations      = indata.nOrientations;
-Clusters           = indata.Clusters;
-Signals            = indata.Signals;
-AuxiliarySignal    = indata.AuxiliarySignal;
-Method             = indata.Method; 
-experiment_time    = indata.experiment_time;
-gridWeight         = indata.gridWeight;
-TM_powder          = indata.TM_powder;
-Input              = indata.Input;
-SignalMean         = indata.SignalMean;    
-Order_n_SignalMean = indata.Order_n_SignalMean;
-
+if nargin == 1
+  
+  disp(matfile);
+  indata = load(matfile);
+  
+  Nuclei             = indata.Nuclei;
+  System             = indata.System;
+  nOrientations      = indata.nOrientations;
+  Clusters           = indata.Clusters;
+  Signals            = indata.Signals;
+  AuxiliarySignal    = indata.AuxiliarySignal;
+  Method             = indata.Method;
+  experiment_time    = indata.experiment_time;
+  gridWeight         = indata.gridWeight;
+  TM_powder          = indata.TM_powder;
+  Input              = indata.Input;
+  SignalMean         = indata.SignalMean;
+  Order_n_SignalMean = indata.Order_n_SignalMean;
+end
 nSpins = Nuclei.number;
 
 % Get list electron-nucleus separations.
@@ -103,6 +106,7 @@ out.SimulationInput = Input;
 
 out.TM = TM_powder;
 out.TM_of_R = TM_of_R;
+out.Type = Nuclei.Type;
 
 out.DeltaTM = sansSpinTM - out.TM;
 
@@ -111,7 +115,10 @@ out.V_of_R = V_of_R;
 out.V_of_R_powder = V_of_R_powder;
 
 outfilename = [matfile(1:end-4),'TM.pdb']
-writeSpinPDB(Nuclei,out.DeltaTM,outfilename);
+save( [matfile(1:end-4),'_out.mat'] ,'out');
+
+DeltaTM_ns = out.DeltaTM*1e9; % s -> ns;
+writeSpinPDB(Nuclei,DeltaTM_ns,outfilename);
 
 delete(pool);
 end
