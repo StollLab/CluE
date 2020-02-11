@@ -35,6 +35,15 @@ for isize = orderrange
   cluster_distance{isize} = max(r(Clusters{isize}),[],2);
 end
 
+% remove current pool if it exists.
+delete(gcp('nocreate'));
+
+% determine number of cores available
+numCores = feature('numcores');
+
+% create parallel pool
+pool = parpool(numCores);
+
 % Loop thourgh orientations used in powder averaging.
 parfor iOri = 1:nOrientations
   fprintf('Orientations: %d/%d.\n', iOri,nOrientations);
@@ -49,12 +58,12 @@ parfor iOri = 1:nOrientations
       
       % Calculate signal for system without spins farther away than ispin
       rclusters = cluster_distance{isize} < r(ispin);
-      v_ = prod(AuxiliarySignal{iOri}{isize}(rclusters,:));
+      v_ = prod(AuxiliarySignal{iOri}{isize}(rclusters,:),1);
       V_of_R(ispin,:,iOri) = V_of_R(ispin,:,iOri).*v_;
       
       % Get list of all clusters of size isize that contain spin ispin.
       clusters = any(Clusters{isize}==ispin,2);      
-      v_ = prod(AuxiliarySignal{iOri}{isize}(clusters,:));
+      v_ = prod(AuxiliarySignal{iOri}{isize}(clusters,:),1);
       sansSpinV(ispin,:,iOri) = sansSpinV(ispin,:,iOri)./v_;
         
     end
@@ -104,4 +113,5 @@ out.V_of_R_powder = V_of_R_powder;
 outfilename = [matfile(1:end-4),'TM.pdb']
 writeSpinPDB(Nuclei,out.DeltaTM,outfilename);
 
+delete(pool);
 end

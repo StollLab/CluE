@@ -155,8 +155,7 @@ end
 if verbose
   fprintf('  Computing cluster Hamiltonians and cluster signals.\n');
 end
-if Method.parallelComputing 
-  %  warning('Parallel Computing is disabled.');
+if Method.parallelComputing  
   % remove current pool if it exists.
   delete(gcp('nocreate'));
   
