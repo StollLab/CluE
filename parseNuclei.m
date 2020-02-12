@@ -117,9 +117,12 @@ Initial_Electron_Coordinates = System.Electron.Coordinates;
 if iscell(Initial_Electron_Coordinates)
   % find nuclei to average over
   replaceNuclei = [Initial_Electron_Coordinates{:}];
-  
+  ReplaceNuclei = zeros(size(replaceNuclei));
+  for irep = 1:length(replaceNuclei)
+    ReplaceNuclei(irep) = find(pdbID==replaceNuclei(irep));
+  end
   % place the electron at the mean coordinates
-  System.Electron.Coordinates = mean( Coordinates(replaceNuclei,:),1);
+  System.Electron.Coordinates = mean( Coordinates(ReplaceNuclei,:),1);
   
   % set initial electron coordinates to a 3-vector
   Initial_Electron_Coordinates = System.Electron.Coordinates;

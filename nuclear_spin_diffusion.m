@@ -337,7 +337,7 @@ if parallelComputing
     TempSignals{isignal} = TempSignals_;
     Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
     
-    if saveAll || Method.getNuclearContributions
+    if saveAll || Method.getNuclearContributions || Method.getNuclearSpinContributions
       AuxiliarySignal{isignal} = AuxiliarySignal_;
     end
   end
