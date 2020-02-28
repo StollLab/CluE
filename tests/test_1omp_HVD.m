@@ -17,14 +17,14 @@ function test_1omp_HVD()
   exp = 'H H';
   InputData = InputData_solvent;  
   Method.method = 'restrictedCE';
-  [SignalMean_HH, Signals_HH] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_HH, Signals_HH] = CluE(System,Method,InputData);
   save('data_1omp.mat');
   % H D  
   exp = 'H D';
   System.D20 = true; 
   InputData = InputData_solvent; 
   Method.method = 'CE';
-  [SignalMean_HD, Signals_HD] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_HD, Signals_HD] = CluE(System,Method,InputData);
   System.D20 = false;
   save('data_1omp.mat');
   % D H  
@@ -32,7 +32,7 @@ function test_1omp_HVD()
   System.deuterateProtein = true;
   InputData = InputData_solvent;  
   Method.method = 'CE';
-  [SignalMean_DH, Signals_DH] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_DH, Signals_DH] = CluE(System,Method,InputData);
   System.deuterateProtein = false;
   save('data_1omp.mat');
   % D D  
@@ -41,7 +41,7 @@ function test_1omp_HVD()
   System.deuterateProtein = true;
   InputData = InputData_solvent; 
   Method.method = 'CE';
-  [SignalMean_DD, Signals_DD] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_DD, Signals_DD] = CluE(System,Method,InputData);
   System.D20 = false;
   System.deuterateProtein = false;
   save('data_1omp.mat');
@@ -49,7 +49,7 @@ function test_1omp_HVD()
   exp = 'H ~';
   InputData = '1omp_res287_to_R1_cryH2O_addH.pdb';
   Method.method = 'restrictedCE';
-  [SignalMean_Hn, Signals_Hn] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_Hn, Signals_Hn] = CluE(System,Method,InputData);
   save('data_1omp.mat');
   
   % D ~
@@ -58,7 +58,7 @@ function test_1omp_HVD()
   System.deuterateProtein = true;
   InputData = '1omp_res287_to_R1_cryH2O_addH.pdb';
   Method.method = 'CE';
-  [SignalMean_Dn, Signals_Dn] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_Dn, Signals_Dn] = CluE(System,Method,InputData);
   System.deuterateProtein = false;
   save('data_1omp.mat');
   % ~ H
@@ -67,7 +67,7 @@ function test_1omp_HVD()
   System.solventOnly = true;
   InputData = InputData_solvent; 
   Method.method = 'restrictedCE';
-  [SignalMean_nH, Signals_nH] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_nH, Signals_nH] = CluE(System,Method,InputData);
   System.solventOnly = false; 
   save('data_1omp.mat');
   
@@ -77,7 +77,7 @@ function test_1omp_HVD()
   System.D20 = true;
   InputData = InputData_solvent; 
   Method.method = 'CE';
-  [SignalMean_nD, Signals_nD] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_nD, Signals_nD] = CluE(System,Method,InputData);
   System.solventOnly = false; 
   System.D2O = false;
   save('data_1omp.mat');

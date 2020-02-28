@@ -24,7 +24,7 @@ if isfile([Data.OutputData,'.mat'])
   end
 end
 if calculate_signal
-[SignalMean_, experiment_time_, TM_powder_] = nuclear_spin_diffusion(System,Method,Data);
+  [SignalMean_, experiment_time_, TM_powder_] = CluE(System,Method,Data);
 end
 if options.verbose
   fprintf('TM2 = %d s.\n',TM_powder_);
@@ -63,7 +63,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -122,7 +122,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -176,7 +176,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -236,7 +236,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -297,7 +297,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -351,7 +351,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -410,7 +410,7 @@ while ~are_R_neighbor_converged
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
       eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -474,9 +474,9 @@ if options.converge.powder
       disp('Powder grid did not converge within set bounds.')
       break;
     end
-    
-    
-    ID = ID + 1; Progress.complete = false;
+        
+    ID = ID + 1;
+    Progress.complete = false;
     
     Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_powder_', num2str(System.gridSize)];
 
@@ -491,7 +491,7 @@ if options.converge.powder
         end
       end
       if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
     
     eta = abs( (TM_powder-TM_powder_)/TM_powder);
@@ -666,8 +666,3 @@ if ~isfield(options,'doPlot')
   options.doPlot = false;
 end
 end
-
-
-
-
-

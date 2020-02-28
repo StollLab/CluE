@@ -18,7 +18,7 @@
   Method.order = 2;
   Method.verbose = true;
   
-  [SignalMean, Signals] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean, Signals] = CluE(System,Method,InputData);
   
   System.hydrogen = false;
   Method.method = 'CE';

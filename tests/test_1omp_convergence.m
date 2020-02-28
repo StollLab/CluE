@@ -20,7 +20,7 @@ function test_1omp_convergence()
   %System.deuterateProtein = true;
   InputData = InputData_solvent; 
   Method.method = 'CE';
-  [SignalMean_HD_r30, Signals_HD_r30] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_HD_r30, Signals_HD_r30] = CluE(System,Method,InputData);
   save('data_1omp_dueterated_distance.mat');
   % D D  
   exp = 'D D';
@@ -29,7 +29,7 @@ function test_1omp_convergence()
   System.deuterateProtein = true;
   InputData = InputData_solvent; 
   Method.method = 'CE';
-  [SignalMean_DD_r20, Signals_DD_r20] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_DD_r20, Signals_DD_r20] = CluE(System,Method,InputData);
   save('data_1omp_dueterated_distance.mat');
   % D D  
   exp = 'D D';
@@ -38,6 +38,6 @@ function test_1omp_convergence()
   System.deuterateProtein = true;
   InputData = InputData_solvent; 
   Method.method = 'CE';
-  [SignalMean_DD_r30, Signals_DD_r30] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean_DD_r30, Signals_DD_r30] = CluE(System,Method,InputData);
   save('data_1omp_dueterated_distance.mat');
 end

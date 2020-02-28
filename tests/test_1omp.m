@@ -20,11 +20,11 @@
  %Method.verbose = true;
   
   %[SignalMean, Signals] = main_20180613(System,Method,InputData);
-  [SignalMean, Signals] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean, Signals] = CluE(System,Method,InputData);
 %   
 %   System.hydrogen = false;
 %   Method.method = 'CE';
-%   [SignalMean2, Signals2] = nuclear_spin_diffusion(System,Method,InputData);
+%   [SignalMean2, Signals2] = CluE(System,Method,InputData);
   hold on;
   for isignal = 1:length(Signals)
     plot(2*System.Time*1e6,Signals{isignal},'color', [0.4, 0.0, 0.0,0.1]);

@@ -22,7 +22,7 @@
   
   
   % Simulation ============================================================
-  [SignalMean, Signals] = nuclear_spin_diffusion(System,Method,InputData);
+  [SignalMean, Signals] = CluE(System,Method,InputData);
   % Plot ==================================================================
   hold on;
   LenzData=csvread('cudbm_Lenz_fit_data.csv',1,0);

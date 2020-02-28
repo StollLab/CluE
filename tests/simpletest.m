@@ -92,7 +92,7 @@ Method.partialSave = false;
 SignalMean = zeros(1,System.timepoints);
 Nave = 1;
 for ii =1:Nave
-[SignalMean_, twotau, TM_powder,order_b_signals,Nuclei] = nuclear_spin_diffusion(System,Method,Data);
+[SignalMean_, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);
 SignalMean = SignalMean + 1/Nave*SignalMean_;
 end
 

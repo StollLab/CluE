@@ -89,7 +89,7 @@ N = Nuclei.number
 %% Run simulations
 %==========================================================================
 tic
-[SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = nuclear_spin_diffusion(System,Method,Data);
+[SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);
 t_CCE = toc
 
 

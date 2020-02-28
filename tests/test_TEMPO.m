@@ -20,7 +20,7 @@ Method.r0 = 5e-10; % m.
 Method.order = 2;
 Method.verbose = true;
 
-[SignalMean, Signals] = nuclear_spin_diffusion(System,Method,InputData);
+[SignalMean, Signals] = CluE(System,Method,InputData);
 
 hold on;
 %%{

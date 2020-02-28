@@ -1,4 +1,4 @@
-% nuclear_spin_diffusion   Calculate signals for nuclear spin diffusion
+% CluE   Calculate spin dynamics using cluster-based expansions in Hilbert space
 %
 % Inputs:
 %   System is a struct with fields: magneticField, Electron, temperature, Time.
@@ -9,7 +9,7 @@
 %    .OutputData name of mat file to store results
 %    .saveLevel  0 (standard), 1 (more), 2 (all)
 
-function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei] = nuclear_spin_diffusion(System,Method,Data)
+function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei] = CluE(System,Method,Data)
 
 tic
 

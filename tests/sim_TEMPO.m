@@ -5,7 +5,7 @@
 % General Setting
 %==========================================================================
 %clear;
-% add path to nuclear_spin_diffusion
+% add path to CluE
 oldpath = path;
 path('../',oldpath);
 
@@ -183,13 +183,13 @@ disp('Calculating coherence.');
 System.deuterateProtein = false;
 % tic
 [SignalMean, twotau, TM_powder,Order_n_SignalMean,Nuclei]
-[SignalMean, twotau, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+[SignalMean, twotau, TM_powder] = CluE(System,Method,Data);
 out = load(Data.OutputData);
 % toc
-% [SignalMean_h18, twotau_h18, TM_powder_h18] = nuclear_spin_diffusion(System,Method,Data);
+% [SignalMean_h18, twotau_h18, TM_powder_h18] = CluE(System,Method,Data);
 % time_h18 = toc;
 % System.deuterateProtein = true;
-% [SignalMean_d18, twotau_d18, TM_powder_d18] = nuclear_spin_diffusion(System,Method,Data);
+% [SignalMean_d18, twotau_d18, TM_powder_d18] = CluE(System,Method,Data);
 % 
 % if false
 %   v = cell(6,1);
@@ -197,7 +197,7 @@ out = load(Data.OutputData);
 %   for ii=0:5
 %     ang = 180+ii;
 %     System.Flip_Angles = pi/180*[90,ang];
-%     [SignalMean, twotau, TM_powder] = nuclear_spin_diffusion(System,Method,Data);
+%     [SignalMean, twotau, TM_powder] = CluE(System,Method,Data);
 %     v{ii+1}=SignalMean;
 %     V = V + v{ii+1}*sin(ang*pi/180);
 %   end
