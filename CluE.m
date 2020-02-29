@@ -112,42 +112,42 @@ end
 % Compile list of connected clusters
 % ========================================================================
 Clusters = [];
-if ~Method.conserveMemory
-  % Loop over cluster sizes, start at the largest (most time consuming) size
-  for clusterSize = Method.order:-1:1
-    
-    if strcmp(Method.method,'full')
-      if clusterSize<Nuclei.number
-        Clusters{clusterSize} = [];
-      else
-        Clusters{Nuclei.number} = Nuclei.Index;
-      end
-      continue
+
+% Loop over cluster sizes, start at the largest (most time consuming) size
+for clusterSize = Method.order:-1:1
+  
+  if strcmp(Method.method,'full')
+    if clusterSize<Nuclei.number
+      Clusters{clusterSize} = [];
+    else
+      Clusters{Nuclei.number} = Nuclei.Index;
     end
-    
-    if verbose, fprintf('Finding clusters of size %d.\n', clusterSize); end
-    
-    Clusters{clusterSize} = findClusters(Nuclei, clusterSize);
-    
-    % save the number of clusters of each size for export to the user
-    Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
-    
-    if verbose
-      fprintf('  Found %d clusters of size %d.\n', size(Clusters{clusterSize},1),clusterSize);
-    end
-    
+    continue
   end
   
-  if strcmp(Method.method,'count clusters')
-    SignalMean = Nuclei.numberClusters;
-    experiment_time = 1:length(SignalMean);
-    TM_powder = [];
-    Order_n_SignalMean = [];
-    toc
-    return
+  if verbose, fprintf('Finding clusters of size %d.\n', clusterSize); end
+  
+  Clusters{clusterSize} = findClusters(Nuclei, clusterSize);
+  
+  % save the number of clusters of each size for export to the user
+  Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
+  
+  if verbose
+    fprintf('  Found %d clusters of size %d.\n', size(Clusters{clusterSize},1),clusterSize);
   end
   
 end
+
+if strcmp(Method.method,'count clusters')
+  SignalMean = Nuclei.numberClusters;
+  experiment_time = 1:length(SignalMean);
+  TM_powder = [];
+  Order_n_SignalMean = [];
+  toc
+  return
+end
+
+
 
 % ========================================================================
 % Starting main loop.
@@ -323,7 +323,7 @@ Temp_Order_n_Signals{numberOfSignals+1} = [];
 Statistics = cell(numberOfSignals,1);
 graphs = cell(numberOfSignals,1);
 
-parallelComputing = Method.parallelComputing && ~Method.conserveMemory;
+parallelComputing = Method.parallelComputing;
 saveAll = Data.saveLevel==2;
 
 if parallelComputing
@@ -746,7 +746,7 @@ System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 % Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
 
-graphs = []; % getBathGraphs(Nuclei);
+graphs = []; 
 
 if System.useMeanField
   [Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal]= getMeanFieldCoefficients(Nuclei,System);
@@ -755,31 +755,22 @@ else
   Nuclei.MeanFieldTotal = [];
 end
 
-if Method.precalculateHamiltonian
-  if strcmp(Method.HamiltonianType,'pairwise')
-    
-    % Generate Cartesian spin-spin coupling Hamiltonian.
-    Hamiltonian_pairwise = pairwiseHamiltonian(System,Nuclei,1:Nuclei.number);
-    
-  else
-    
-    % calculate compressed Hailtonian
-    [Hamiltonian_diagonal,Hamiltonian_offDiagonal,zeroIndex] = constructHamiltonian(System,Nuclei,[1:Nuclei.number]);
-    
-  end
-end
 
 if isfield(Method,'exportHamiltonian') && Method.exportHamiltonian
   
   % Generate Cartesian spin-spin coupling Hamiltonian.
-  [Hamiltonian,zeroIndex] = pairwisetensors(System,Nuclei,[1:Nuclei.number]);
+  
+  geff=System.gMatrix(3,3);
+  
+  [Tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, Nuclei.Coordinates,...
+    [1:Nuclei.number],Nuclei.Atensor, System.magneticField, System.ge, geff, System.muB, System.muN, System.mu0, System.hbar,System.theory,[]);
   
   % set file name
   H_file = [OutputData(1:end-4), '_Hamiltonian.mat'];
   
   % save Hamiltonian
   if ~isempty(Hamiltonian)
-    save(H_file,'Hamiltonian','zeroIndex');
+    save(H_file,'Tensors','zeroIndex');
     clear Hamiltonian;
   end
   
@@ -813,23 +804,7 @@ dt = System.dt;
 linearTimeAxis = true; % Code should be changed to enforce this.
 
 % Calculate signal
-if Method.conserveMemory
-  if Method.vectorized
-    
-    [Signal, Signals,Statistics.ClusterCount, Statistics.NonClusterCount, Statistics.total_clusters, Statistics.total_nonclusters] ...
-      = calculateSignal_conserveMemory_gpu(System, Method, Nuclei, timepoints,dt,OutputData,Progress);
-    
-    %     Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:)};
-    Order_n_Signal = cell(1,Method.order);
-    for ii=1:Method.order
-      Order_n_Signal{ii} = Signals(ii,:);
-    end
-    
-  else
-    [Signal, Order_n_Signal,Statistics] = calculateSignal_conserveMemory(System, Method, Nuclei, timepoints,dt, linearTimeAxis,verbose,OutputData,Progress);
-  end
-  
-elseif Method.mixed_eState
+if Method.mixed_eState
   [Signal, Order_n_Signal,Statistics] = calculateSignal_pulse(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
 else
   % calculate signal and save extra parameters (RAM intensive)
@@ -850,779 +825,3 @@ end
 end
 
 
-% ========================================================================
-% New Function
-% ========================================================================
-function Coherences = propagate(System, Method, DensityMatrix,timepoints,dt,Hamiltonian_beta,Hamiltonian_alpha,isotopeProbability, linearTimeAxis,verbose)
-vecDensityMatrixT = reshape(DensityMatrix.',1,[]);
-
-if strcmp('time-domain',Method.propagationDomain)
-  
-if linearTimeAxis
-  dU_beta = propagator_eig(Hamiltonian_beta,dt);
-  dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
-    
-  nStates = length(Hamiltonian_beta);
-  U_beta = eye(nStates);
-  U_alpha = eye(nStates);
-  
-  if strcmp(System.experiment,'CPMG')
-    U_beta_2 = eye(nStates);
-    U_alpha_2 = eye(nStates);
-  end
-  
-  if strcmp(System.experiment,'CPMG-const')
-    U_beta_2 = propagator_eig(Hamiltonian_beta,System.total_time);
-    U_alpha_2 = propagator_eig(Hamiltonian_alpha,System.total_time);
-  end
-end
-
-Signal_= ones(1,timepoints);
-for iTime = 1:timepoints
-  if ~linearTimeAxis
-    t = System.Time(iTime);
-    U_beta = propagator_eig(Hamiltonian_beta,t);
-    U_alpha = propagator_eig(Hamiltonian_alpha,t);
-  end
-  
-  if strcmp(System.experiment,'FID')
-    U_ = U_beta'*U_alpha;
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-    
-  elseif strcmp(System.experiment,'Hahn')
-    U_ = U_beta'*U_alpha'*U_beta*U_alpha;
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-  elseif strcmp(System.experiment,'CPMG')
-    
-    U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
-    
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-    
-    U_beta_2 = dU_beta*U_beta_2;
-    U_alpha_2 = dU_alpha*U_alpha_2;
-    
-  elseif strcmp(System.experiment,'CPMG-const')
-    
-    U_beta = propagator_eig(Hamiltonian_beta,(iTime-1)*dt);
-    U_alpha = propagator_eig(Hamiltonian_alpha,(iTime-1)*dt);
-
-    U_beta_2 = propagator_eig(Hamiltonian_beta,System.total_time/4-(iTime-1)*dt);
-    U_alpha_2 = propagator_eig(Hamiltonian_alpha,System.total_time/4-(iTime-1)*dt);
-    U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
-      
-    Signal_(iTime) = vecDensityMatrixT*U_(:);
-    
-%     U_beta_2 = dU_beta'*U_beta_2;
-%     U_alpha_2 = dU_alpha'*U_alpha_2;
-    
-  elseif strcmp(System.experiment,'CPMG-2D')
-    
-    U_beta_2 = eye(nStates);
-    U_alpha_2 = eye(nStates);
-    
-    for jTime = 1:timepoints
-    
-      U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;  
-      
-      Signal_(iTime,jTime) = vecDensityMatrixT*U_(:);
-      
-      U_beta_2 = dU_beta*U_beta_2;
-      U_alpha_2 = dU_alpha*U_alpha_2;
-    end
-   
-  else
-    error('The experiment ''%s'' is not supported.',System.experiment);
-  end
-  
-%   Signal_(iTime) = vecDensityMatrixT*U_(:);
-  
-  if linearTimeAxis
-    U_beta = dU_beta*U_beta;
-    U_alpha = dU_alpha*U_alpha;
-  end
-  
-  
-end
- 
-elseif strcmp('frequency-domain',Method.propagationDomain)
- 
-% Diagonalize sub-Hamiltonians for alpha and beta electron manifolds
-[Vec_beta, E_beta] = eig(2*pi*Hamiltonian_beta);
-[Vec_alpha, E_alpha] = eig(2*pi*Hamiltonian_alpha);
-E_beta = diag(E_beta);
-E_alpha = diag(E_alpha);
-M = Vec_alpha'*Vec_beta; % Mims matrix = <a|b> overlap matrix
-Madj = M';
-
-prefactor = 1; % include orienation weights etc here
-
-G = prefactor*M; % prepared density matrix before first varied evolution time
-D = M; % detection matrix after last varied evolution time
-T1left = Madj; % left transfer matrix due to pi pulse
-T1right = Madj; % right transfer matrix due to pi pulse
-
-x=2^20;
-nPoints = x;
-
-IncSchemeID = 2; % for 2p ESEEM
-buffRe = zeros(1,nPoints); % real part of spectral histogram
-buffIm = zeros(1,nPoints); % imag part of spectral histogram
-dt = System.dt/2/pi; % time step, in microseconds
-
-sf_peaks(IncSchemeID,buffRe,buffIm,dt,[1 2],[2 1],E_alpha,E_beta,G,D,T1left,T1right);
-
-Signal_ =ifft(buffRe+1i*buffIm);
-
-Signal_ = Signal_(1:timepoints);
-Signal_=Signal_./Signal_(1);
-
-elseif strcmp('frequency-domain --matlab',Method.propagationDomain)
-  
-  nStates = length(Hamiltonian_beta);
-  
-  [Vec_beta, E_beta] = eig(2*pi*Hamiltonian_beta);
-  [Vec_alpha, E_alpha] = eig(2*pi*Hamiltonian_alpha);
-  E_beta = diag(E_beta);
-  E_alpha = diag(E_alpha);
-  dE_beta = E_beta - E_beta.';
-  dE_alpha = E_alpha - E_alpha.';
-  M = Vec_alpha'*Vec_beta; % Mims matrix
-  Madj = M';
-  
-  % frequency domain variables
-  n_omega = 2^20 - 1;
-
-  domega = 2*pi/dt/(n_omega-1);
-  
-  
-  omega_amp = zeros(1,n_omega);
-  
-  for ii = 1:nStates
-    for jj = 1:nStates
-      for kk = 1:nStates
-        for ll = 1:nStates
-
-          amplitude = Madj(ii,jj) * M(jj,kk) * Madj(kk,ll) * M(ll,ii)/2;
-          omega_ = -( dE_beta(ii,kk) + dE_alpha(jj,ll));
-          idx = mod(round(omega_./domega),n_omega) + 1;
-          
-          omega_amp(idx) = omega_amp(idx) + amplitude;
-          
-        end
-      end
-    end
-  end
-
-  Signal_ = ifft(omega_amp,n_omega);
-  Signal_ = Signal_(1:timepoints);
-  Signal_ =Signal_ /Signal_(1);
-end
-if Method.gpu && gpuDeviceCount > 0
-  Signal_ = gather(Signal_);
-end
-
-if any(abs(Signal_) - 1 > 1e-9)
-  error('Coherence error: coherence cannot be larger than 1.');
-end
-% Coherences = 1 + isotopeProbability*(Signal_ - 1);
-Coherences = Signal_;
-end
-
-% ========================================================================
-% Calculates signal without GPU or parallel capabilities
-% ========================================================================
-
-function [Signal, AuxiliarySignal, Order_n_Signal,Statistics] = calculateSignal_standard(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose)
-verboseCounter = 0;
-verboseThreshold = 0.05*size(Clusters{Method.order_lower_bound},1);
-
-for clusterSize = Method.order:-1:1
-  
-  % Find coherences
-  numClusters = size(Clusters{clusterSize},1);
-  for iCluster = numClusters:-1:1
-    if strcmp(Method.method,'full') && clusterSize~=Method.order
-      Coherences{clusterSize,iCluster} = 1;
-      continue
-    end
-    
-    if Clusters{clusterSize}(iCluster,1)==0
-      Coherences{clusterSize,iCluster} = 1;
-      continue
-    end
-    
-    % The isotope probability is used to determine the likelihood a
-    % particular cluster will the assumed spins.
-    isotopeProbability = prod(Nuclei.Abundance(Clusters{clusterSize}(iCluster,:)));
-    
-    if clusterSize > 1 && ~strcmp(Method.method,'full')
-      SubclusterIndices{clusterSize,iCluster} = findSubclusters(Clusters,clusterSize,iCluster);
-    elseif clusterSize == 1
-      SubclusterIndices{clusterSize,iCluster} = [];
-    end
-        
-    % Get cluster Hamiltonian.
-    if ~Method.precalculateHamiltonian && strcmp(Method.HamiltonianType,'pairwise')
-      
-      % Generate Cartesian spin-spin coupling Hamiltonian.
-      [Hamiltonian_pairwise,zeroIndex] = pairwiseHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
-      % Generate spin Hamiltonian.
-      [ClusterHamiltonian{1},ClusterHamiltonian{2}] = ...
-        assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System,Nuclei,zeroIndex,clusterSize);
-      
-    elseif strcmp(Method.HamiltonianType,'pairwise')
-      
-      % Generate Cartesian spin-spin coupling Hamiltonian.
-      %ClusterHamiltonian{eState} = assemblePairwiseHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System, eState,Nuclei,Method.HamiltonianType);
-      zeroIndex =  Clusters{clusterSize}(iCluster,1) - 1;
-        [ClusterHamiltonian{1},ClusterHamiltonian{2}] = ...
-          assembleHamiltonian(Hamiltonian_pairwise,Clusters{clusterSize}(iCluster,:),System,Nuclei,zeroIndex,clusterSize);
-      
-    elseif ~Method.precalculateHamiltonian
-      
-      % Generate a diassembled spin Hamiltonian.
-      [Hamiltonian_diagonal,Hamiltonian_offDiagonal,zeroIndex] = constructHamiltonian(System,Nuclei,Clusters{clusterSize}(iCluster,:));
-      % Generate spin Hamiltonian.
-      for eState = (2*System.Electron.spin+1):-1:1
-        ClusterHamiltonian{eState} = getClusterHamiltonian(Hamiltonian_diagonal,Hamiltonian_offDiagonal, eState, Clusters{clusterSize}(iCluster,:), Nuclei,zeroIndex);
-      end
-      
-    else
-      
-      % Generate spin Hamiltonian.
-      for eState = (2*System.Electron.spin+1):-1:1
-        ClusterHamiltonian{eState} = getClusterHamiltonian(Hamiltonian_diagonal,Hamiltonian_offDiagonal, eState, Clusters{clusterSize}(iCluster,:), Nuclei,zeroIndex);
-      end
-      
-    end
-    
-    % Get density matrix
-    DensityMatrix = getDensityMatrix(Nuclei,Clusters{clusterSize}(iCluster,:));
-    
-    % Get cluster coherences
-    Coherences{clusterSize,iCluster} = propagate(System, Method, DensityMatrix,timepoints,dt,ClusterHamiltonian{1},ClusterHamiltonian{2},isotopeProbability,linearTimeAxis,verbose);
-    
-    if verbose
-      verboseCounter = verboseCounter + 1;
-      if verboseCounter>=verboseThreshold
-        verboseCounter = 0;
-        fprintf('cluster size %d: %d/%d, (%s).\n', clusterSize,(1+size(Clusters{clusterSize},1)-iCluster),size(Clusters{clusterSize},1),datetime);
-      end
-    end
-    
-  end
-  
-  Statistics.total_clusters = Nuclei.numberStartSpins;
-  Statistics.ClusterCount = zeros(1,Method.order);
-  Statistics.ClusterCount(1) = Nuclei.numberStartSpins;
-  for iorder = 2:Method.order
-    Statistics.ClusterCount(iorder) = size(Clusters{iorder},1 );
-    Statistics.total_clusters = Statistics.total_clusters + Statistics.ClusterCount(iorder);
-    if verbose
-      fprintf('Cluster size %d: %d found.\n', iorder,Statistics.ClusterCount(iorder));
-    end
-  end
-  
-  if verbose
-    disp('-------------------------------------------------');
-    for iorder = 1:Method.order
-      fprintf('Cluster size %d: %d found.\n', iorder,Statistics.ClusterCount(iorder));
-    end
-    fprintf('Total clusters: %d found.\n',Statistics.total_clusters );
-    disp('-------------------------------------------------');
-  end
-  
-end
-
-
-% Calculate signal
-%-------------------------------------------------------------------------------
-if verbose, disp('Calculating signal...'); end
-
-switch Method.method
-  case 'CE'
-    % Use the cluster expansion method.
-    if verbose, fprintf('\nCalculating Cluster Expansion.\n'); end
-    [Signal, AuxiliarySignal, Order_n_Signal] = doClusterExpansion(Coherences,Clusters, SubclusterIndices,Method.order);
-    
-  case 'CCE'
-    % Use the cluster correlation expansion method.
-    if verbose, fprintf('\nCalculating Cluster Correlation Expansion.\n'); end
-    [Signal, AuxiliarySignal, Order_n_Signal] = doClusterCorrelationExpansion(Coherences,Clusters,SubclusterIndices, Method.order,Nuclei);
-    
-    if Method.order_lower_bound  > 1
-      Signal = Order_n_Signal{Method.order}./Order_n_Signal{Method.order_lower_bound-1};
-    end
-    
-  case 'full'
-    % Calculate the full answer.
-    Signal = Coherences{Method.order,1};
-    AuxiliarySignal = [];
-    Order_n_Signal = [];
-    % place holder only since nth order signal is not meaningful
-    Order_n_Signal{1} = ones(size(Signal));
-end
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-function [Signal, Order_n_Signal,Statistics] = calculateSignal_conserveMemory(System, Method, Nuclei, timepoints,dt, linearTimeAxis,verbose,OutputData,Progress)
-
-% initialize output
-Signal = ones(size(System.Time));
-for initialize_clusterSize = Method.order:-1:1
-  Order_n_Signal{initialize_clusterSize} = ones(size(System.Time));
-end
-
-% Determine number of divisions to break calculation into.
-if ~ischar(Method.divisions)
-  numDivisions = Method.divisions;
-elseif strcmp(Method.divisions,'numSpins')
-  
-  % maximum allowed by the current algorithm
-  numDivisions = double(Nuclei.numberStartSpins);
-  
-elseif strcmp(Method.divisions,'numCores')
-  
-  % minimum that will use all nodes
-  numDivisions = feature('numcores');
-  
-else
-  numDivisions = round(sqrt(double(Nuclei.numberStartSpins)));
-end
-
-
-% Initialize internal records.
-Cluster_Statistics = zeros(Method.order,numDivisions);
-NonCluster_Statistics = zeros(Method.order,numDivisions);
-Possible_Clusters = zeros(Method.order,1);
-for ksize=1:Method.order
-      Possible_Clusters(ksize) = nchoosek(uint64(Nuclei.number),ksize); 
-end
-Method_ = Method;
-
-% Get permutation method.
-shuffle = 1:Nuclei.number;
-% Shuffle = zeros(Nuclei.number);
-if Method.shuffle
-  
-  % Set seed and rng method.
-  rng(Method.seed, 'twister');
-  
-  % A constant seed ensures restarting will not give a new permutation.
-  shuffle = randperm(Nuclei.number);
-end
-
-  
-% Loop over order range.
-for iorder = Method.order_lower_bound:Method.order%:-1:2
-  
-  Method_.order = iorder;
-  
-  % Check if order is valid: n-CCE requires at least n nuclear spins.
-  if Nuclei.number - Nuclei.startSpin + 1 < iorder
-    continue;
-  end
-  
-  % Check pigeonhole principle: each division must be unique.
-  if numDivisions + iorder -1 > Nuclei.number -Nuclei.startSpin +1
-    numDivisions = Nuclei.number -Nuclei.startSpin +1 - iorder + 1;
-  end
-  
-  
-  % Separate the clusters into bundles for each division.
-  Bundle = uint32(ones(numDivisions,2));
-  Division_Cluster.Possible_Clusters = Possible_Clusters(iorder); 
-  if Method.MonteCarlo.use
-  Division_Cluster.Limit = ceil(Method.MonteCarlo.Cluster_Limit(iorder)/numDivisions);
-  Division_Cluster.Increment= ceil(Method.MonteCarlo.Increment(iorder)/numDivisions);
-  Division_Cluster.Fraction = Method.MonteCarlo.Fraction(iorder)/numDivisions;
-  else
-    Division_Cluster.Limit = inf;
-    Division_Cluster.Increment = inf;
-    Division_Cluster.Fraction = 1;
-  end
-  if strcmp(Method.divisions,'numSpins')
-    
-    % Assign to the nth division all clusters where the index of the lowest
-    % cluster is n.
-    
-    % Assign bundles based while ensuring that there are at least
-    % n nuclei with number of nuclei > indices >= n, for n-CCE.
-    if Nuclei.endSpin + iorder - 1 > Nuclei.number
-      Bundle(:,1) = Nuclei.startSpin:Nuclei.number -iorder + 1;
-    else
-      Bundle(:,1) = Nuclei.startSpin:Nuclei.endSpin;
-    end
-    Bundle(:,2) = Bundle(:,1);
-    
-  else
-    
-    % For N >> k, to approximately divide N choose k into c even parts,
-    % the nth part should get all clusters whose lowest index in the ranges
-    % N*[  ( (n-1)/c )^1/k, (n/c)^1/k ].
-    
-    % Assign the first bundle.
-    Bundle(1,1) = 1;
-    Bundle(1,2) =  Nuclei.startSpin ...
-      + round( ...
-      (Nuclei.number- Nuclei.startSpin + 1) ...
-      *( 1 - ( 1 - 1/numDivisions)^(1/iorder) ) ...
-      *(Nuclei.numberStartSpins/Nuclei.number) ...
-      );
-    
-    % Assign the remaining bundles.
-    for iCore = 2:numDivisions
-      Bundle(iCore,1) = Bundle(iCore-1,2) + 1;
-      Bundle(iCore,2) =  Nuclei.startSpin ...
-        + round( ...
-        (Nuclei.number- Nuclei.startSpin + 1) ...
-        *(1 - (1 - iCore/numDivisions)^(1/iorder)  ) ...
-        *(Nuclei.numberStartSpins/Nuclei.number) ...
-        );
-      
-      Bundle(iCore,2) = max(Bundle(iCore,2) , Bundle(iCore,1));
-    end
-    
-    Bundle(numDivisions,2) = Nuclei.endSpin;
-  end
-  
-  % Generate unshuffled starting clusters.
-  par_cluster = cell(1,numDivisions);
-  for iCore = 1:numDivisions
-    par_cluster{iCore} = Bundle(iCore,1):(Bundle(iCore,1) + iorder -1);
-  end
-  
-  % initialize division output
-  partial_signal = cell(1,numDivisions);
-   
-  if Method.parallelComputing
-    parfor iCore = 1:numDivisions % parfor
-      [partial_signal{iCore},Cluster_Statistics(iorder,iCore),NonCluster_Statistics(iorder,iCore)] = conserve_memory_for_loop(System,Method,Method_,OutputData,Nuclei,par_cluster{iCore},Bundle,iorder,iCore,Division_Cluster,shuffle, linearTimeAxis,numDivisions);
-    end
-  else
-    for iCore = 1:numDivisions % parfor
-      [partial_signal{iCore},Cluster_Statistics(iorder,iCore),NonCluster_Statistics(iorder,iCore)] = conserve_memory_for_loop(System,Method,Method_,OutputData,Nuclei,par_cluster{iCore},Bundle,iorder,iCore,Division_Cluster,shuffle, linearTimeAxis,numDivisions);
-    end
-  end
-
-  % Combine node outputs to the final output.
-  
-  Combined_AuxiliarySignal = ones(size(System.Time));
-  for iCore = numDivisions:-1:1
-    
-    % main signal
-    Combined_AuxiliarySignal = Combined_AuxiliarySignal.*partial_signal{iCore};
-    
-  end
-  
-  
-  Statistics.ClusterCount(iorder) = sum(Cluster_Statistics(iorder,:) );
-  Statistics.NonClusterCount(iorder) = sum(NonCluster_Statistics(iorder,:) );
-  if Method.MonteCarlo.use
-    clusterFraction = (Statistics.NonClusterCount(iorder) + Statistics.ClusterCount(iorder))/Possible_Clusters(iorder);
-    Combined_AuxiliarySignal = Combined_AuxiliarySignal.^(1/clusterFraction);
-  end
-  
-  Signal = Signal.*Combined_AuxiliarySignal;
-  Order_n_Signal{iorder} = Signal;
-  
-  % Save to file.
-  Progress.order = [num2str(iorder) '/' num2str(Method.order) '-CCE'];
-  Progress.Completed_Orders(iorder) = true;
-  save(OutputData,'Signal','Order_n_Signal','Progress','-append');
-  
-  if Method.clear_partialSave
-    for iCore = 1:numDivisions
-      partial_file = ['partial_', OutputData(1:end-4), '_',num2str(iorder),'cce_', num2str(iCore), '.mat'] ;
-      if isfile(partial_file)
-        delete(partial_file);
-      end
-    end
-  end
-  
-end
-
-
-if strcmp(Method.method,'count clusters')
-  Signal = zeros(1,System.timepoints);
-  Signal(1) = Nuclei.number;
-  for iorder = 2:Method.order
-    Signal(iorder) = sum(Cluster_Statistics(iorder,:) );
-  end
-end
-
-Statistics.total_clusters = Nuclei.numberStartSpins;
-Statistics.total_nonclusters = 0;
-  
-for iorder = 2:Method.order
-  %     Statistics.ClusterCount(iorder) = sum(Cluster_Statistics(iorder,:) );
-  %     Statistics.NonClusterCount(iorder) = sum(NonCluster_Statistics(iorder,:) );
-  
-  Statistics.total_clusters = Statistics.total_clusters + Statistics.ClusterCount(iorder);
-  Statistics.total_nonclusters = Statistics.total_nonclusters + Statistics.NonClusterCount(iorder);
-  
-  fprintf('Cluster size %d: %d found.\n', iorder,Statistics.ClusterCount(iorder));
-  fprintf('Cluster size %d: %d skipped.\n', iorder,Statistics.NonClusterCount(iorder));
-end
-  
-if verbose
-  disp('-------------------------------------------------');
-  for iorder = 1:Method.order
-    fprintf('Cluster size %d: %d found.\n', iorder,Statistics.ClusterCount(iorder));
-  end
-  fprintf('Total clusters: %d found.\n',Statistics.total_clusters );
-  disp('-------------------------------------------------');
-end
-
-end
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-function [partial_signal,Cluster_Statistics,NonCluster_Statistics] = conserve_memory_for_loop(System,Method,Method_,OutputData,Nuclei,par_cluster,Bundle,iorder,iCore,Division_Cluster,shuffle, linearTimeAxis,numDivisions)
-
-% set signal to unperturbed value
-partial_signal = ones(size(System.Time));
-partial_signal0 = partial_signal;
-
-Cluster_Statistics = 0;
-cluster0 = 0;
-NonCluster_Statistics = 0;
-
-% Save to file.
-if Method.partialSave
-  partial_file = ['partial_', OutputData(1:end-4), '_',num2str(iorder),'cce_', num2str(iCore), '.mat'] ;
-  if isfile(partial_file)
-    try
-      parload = load(partial_file,'parsignal','seed');
-      if parload.seed==Method.seed
-        partial_signal = parload.parsignal;
-        return;
-      end
-    catch
-    end
-  end
-end
-
-% loop over all the clusters in the bundle
-iBundle = Bundle(iCore,1);
-bundle_counter = 0;
-
-while iBundle <= Bundle(iCore,2)
-  
-  % Do not calculate more than Division_Cluster.Limit valid clusters.
-  if Cluster_Statistics>Division_Cluster.Limit
-    
-    clusterFraction = (NonCluster_Statistics + Cluster_Statistics)/Division_Cluster.Possible_Clusters;
-    partial_signal1 = partial_signal.^(1/clusterFraction);
-    
-    delta_sig = (partial_signal1-partial_signal0);
-    rmsd = sqrt(  delta_sig*delta_sig'/System.timepoints  );
-    
-    
-    if Method.verbose
-      fprintf('cluster %d to cluster %d rmsd  = %d, (%s).\n', ...
-        Division_Cluster.Limit,  cluster0, rmsd,datetime);
-    end
-    
-    if rmsd < Method.MonteCarlo.Threshold(iorder) || clusterFraction > Division_Cluster.Fraction  
-      break;
-    end
-    
-    partial_signal0 = partial_signal1;
-    Division_Cluster.Limit = Division_Cluster.Limit + Division_Cluster.Increment;
-    cluster0 = Cluster_Statistics;
-
-  end
-  
-  % Update location index.
-  iBundle = par_cluster(1);
-  
-  % Shuffle nuclei.
-  shuffled_cluster = shuffle(par_cluster);
-    
-  isvalid_1 = validateCluster(shuffled_cluster,Nuclei.ValidPair,Nuclei.graphCriterion);
-  
-  if ~isvalid_1
-    
-    % update internal records.
-    NonCluster_Statistics = NonCluster_Statistics + 1;
-    
-    % get next cluster
-    par_cluster = getNextCluster(par_cluster,Nuclei.number);
-    
-    % check if there are no more clusters
-    if isempty(par_cluster)
-      break;
-    end
-    
-    % update location index
-    iBundle = par_cluster(1);
-    
-    % start over
-    continue;
-  end
-  
-  % update internal records.
-  Cluster_Statistics = Cluster_Statistics + 1;
-  
-  % index location check
-  if iBundle > bundle_counter
-    
-    % update bundle counter
-    bundle_counter = iBundle;
-    
-    if Method.verbose
-      fprintf('division %d/%d, cluster %d, (%s).\n',iCore, numDivisions, Cluster_Statistics,datetime);
-      %           disp(par_cluster);
-      disp(shuffled_cluster);
-    end
-    
-  end
-  
-  if strcmp(Method.method,'count clusters')
-    % get next cluster
-    par_cluster = getNextCluster(par_cluster,Nuclei.number);
-    
-    % checkk if next cluster exists
-    if isempty(par_cluster)
-      break;
-    end
-    
-    % update location index
-    iBundle = par_cluster(1);
-    continue;
-  end
-  
-  % re-index
-  new_labels = zeros(1,max( shuffled_cluster  ));
-  old_labels = zeros(1,max( shuffled_cluster  ));
-  for ii=1:iorder
-    new_labels( shuffled_cluster (ii) ) = ii;
-    old_labels(new_labels( shuffled_cluster (ii) )) = shuffled_cluster (ii);
-  end
-  
-  % get reduced system
-  Cluster_ = new_labels(shuffled_cluster );
-  
-  
-  % Reduced_Clusters{iorder} = new system with indices 1:iorder.
-  Reduced_Clusters = getClusterSet(Cluster_);
-  
-  % Loop through subcluster sizes.
-  for jSize = 2:iorder-1
-    
-    jSizeLimit = size(Reduced_Clusters{jSize},1);
-    
-    % Loop through subclusters.
-    for jCluster = 1:jSizeLimit
-      
-%       cluster_ = Reduced_Clusters(jCluster,1:jsize,jsize);
-      
-      if ~validateCluster(shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:)),Nuclei.ValidPair,Nuclei.graphCriterion)
-        Reduced_Clusters{jSize}(jCluster,:) = zeros(size(Reduced_Clusters{jSize}(jCluster,:) ) );
-      end
-    end
-  end
-  
-  % reduce system to only include cluster nuclei
-  Reduced_SubclusterIndices = cell(iorder,1);
-  for jSize = iorder:-1:1
-    for jCluster = 1:size(Reduced_Clusters{jSize},1)
-      % SubclusterIndices{clusterSize,iCluster} = findSubclusters(Clusters,clusterSize,iCluster);
-      % findSubclusters gives Indices{size} = list of all jCluster such that Clusters{size}(jCluster,:) is a subcluster of Clusters{clusterSize}(iCluster,:)
-      %
-      % subC_index = SubclusterIndices{hostClusterSize,hostClusterIndex}{subclusterSize}(index)
-      % --> Clusters{subclusterSize}(subC_index,:) is a subset of
-      % Clusters{hostClusterSize}(hostClusterIndex,:)
-      
-      % find subclusters
-      if Reduced_Clusters{jSize}(jCluster,1)~=0
-        Reduced_SubclusterIndices{jSize,jCluster} = findSubclusters(Reduced_Clusters,jSize,jCluster);
-      else
-        Reduced_SubclusterIndices{jSize,jCluster} = [];
-      end
-      
-    end
-  end
-  
-  
-  
-  
-  Clusters = Reduced_Clusters;
-  for jSize = 1:iorder
-    for jCluster = 1:size(Reduced_Clusters{jSize},1)
-      if Reduced_Clusters{jSize}(jCluster,1) ~= 0
-        Clusters{jSize}(jCluster,:) = shuffled_cluster(Reduced_Clusters{jSize}(jCluster,:));
-      end
-    end
-  end
-  [~, Cluster_AuxiliarySignal, ~] = calculateSignal_standard(System, Method_, Nuclei,Clusters, System.timepoints,System.dt, linearTimeAxis,false);
-  
-  % collect cluster contribution to a the node output
-  isotopeProbability = prod(Nuclei.Abundance(Clusters{iorder}(1,:) ));
-  v_ = 1 + isotopeProbability*(Cluster_AuxiliarySignal{iorder,1}-1);
-
-  % partial_signal  = partial_signal.*Cluster_AuxiliarySignal{iorder,1};
-  partial_signal  = partial_signal.*v_;
-  
-  % get next cluster
-  par_cluster = getNextCluster(par_cluster,Nuclei.number);
-  
-  % checkk if next cluster exists
-  if isempty(par_cluster)
-    break;
-  end
-  
-  % update location index
-  iBundle = par_cluster(1);
-end
-
-
-% Save to file.
-if Method.partialSave
-  partial_file = ['partial_', OutputData(1:end-4), '_',num2str(iorder),'cce_', num2str(iCore), '.mat'] ;
-  parsavefile = matfile(partial_file,'writable',true);
-  parsavefile.parsignal = partial_signal;
-  parsavefile.seed = Method.seed;
-end
-
-
-end
-
-
-
-
-% ========================================================================
-% New Function
-% ========================================================================
-
-% Find all subsets of a sequential set, {1,2,...n}.
-function Clusters = getClusterSet(Cluster)
-
-% Determine cluster size.
-numberSpins = length(Cluster);
-
-% Loop over all proper sub-cluster sizes.
-for icluster = numberSpins:-1:1
-  
-  % Determine number of sub-clusters
-  n_clusters = nchoosek(numberSpins,icluster);
-  
-  % Initialize Clusters
-  Clusters{icluster} = zeros(n_clusters,icluster);
-  
-  % Set the first subset.
-  Clusters{icluster}(1,:) = Cluster(1:icluster);
-  
-  % Set the remaining subsets.
-  for ii = 2:n_clusters
-    Clusters{icluster}(ii,:) = getNextCluster(Clusters{icluster}(ii-1,:),numberSpins);
-  end
-  
-end
-end

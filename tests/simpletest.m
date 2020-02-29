@@ -23,7 +23,7 @@ System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
 System.radius = 5e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
-System.inner_radius = 4.82e-10; % m.
+System.inner_radius = 0e-10; % m.
 
 % time points per delay period
 System.timepoints = 2^7;%11; %1e3 + 1;
@@ -65,7 +65,7 @@ System.nStates = [1,1];
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 1;
+Method.order = 2;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
