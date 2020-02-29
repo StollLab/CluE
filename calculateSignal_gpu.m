@@ -2,7 +2,7 @@
 % Clusters(cluster index , size > order ,order) = 0.
 
 function [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu0(System, Method, Nuclei,Clusters)
+       = calculateSignal_gpu(System, Method, Nuclei,Clusters)
 
 ge=System.ge;
 geff=System.gMatrix(3,3);
