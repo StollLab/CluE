@@ -22,7 +22,7 @@ System.averaging = 'powder';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 5e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.radius = 6e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
 System.inner_radius = 0e-10; % m.
 
 % time points per delay period

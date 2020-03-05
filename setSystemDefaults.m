@@ -333,7 +333,12 @@ end
 if ~isfield(System,'t0')
   System.t0 = 0;
 end
-
+if ~isfield(System,'dt2')
+  System.dt2 = 0;
+end
+if ~isfield(System,'Ndt') || System.Ndt > System.timepoints
+  System.Ndt = System.timepoints;
+end
 % Set up time grid
 if isfield(System,'timepoints') && isfield(System,'dt')
   if System.t0 > 0
@@ -341,7 +346,8 @@ if isfield(System,'timepoints') && isfield(System,'dt')
     System.Time(2:end) = ...
       System.t0 + (0:System.dt:(System.timepoints - 2)*System.dt);
   else
-    System.Time = 0:System.dt:(System.timepoints - 1)*System.dt;
+    System.Time(1:System.Ndt) = 0:System.dt:(System.Ndt - 1)*System.dt;
+    System.Time(System.Ndt+1:System.timepoints) = System.Time(System.Ndt) + (System.dt2:System.dt2:(System.timepoints - System.Ndt)*System.dt2);
   end
 
 elseif isfield(System,'Time')

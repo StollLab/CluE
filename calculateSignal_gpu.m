@@ -14,7 +14,8 @@ hbar = System.hbar;
 timepoints = System.timepoints;
 dt = System.dt;
 t0 = System.t0;
-
+dt2 = System.dt2;
+Ndt = System.Ndt;
 maxSize = 6;     
      
 % ENUM
@@ -505,22 +506,22 @@ for clusterSize = 1:Method_order
         switch clusterSize
           case 1
             Coherences_1(iCluster,:) = Coherences_1(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
           case 2
             Coherences_2(iCluster,:) = Coherences_2(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
           case 3
             Coherences_3(iCluster,:) = Coherences_3(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
           case 4
             Coherences_4(iCluster,:) = Coherences_4(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
           case 5
             Coherences_5(iCluster,:) = Coherences_5(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
           case 6
             Coherences_6(iCluster,:) = Coherences_6(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
             
         end
       end
@@ -542,7 +543,7 @@ for clusterSize = 1:Method_order
             
          
     % Calculate the coherence.
-    Coherences_E = propagate(total_time,timepoints,dt,t0,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
+    Coherences_E = propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
     
     switch clusterSize
       case 1
@@ -597,7 +598,7 @@ for clusterSize = 1:Method_order
      Ha_EA = PA2*Ha_EA*PA2;
      
      % Calculate the coherence.
-     Coherences_EA = propagate(total_time, timepoints,dt,t0,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+     Coherences_EA = propagate(total_time, timepoints,dt,dt2,Ndt,t0,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
 
      % Add the methyl coherences together, weighting the coherences by
      % a statistical factor.
@@ -666,7 +667,7 @@ end
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,timepoints,dt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
+function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
@@ -682,6 +683,10 @@ vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
 
 dU_beta = propagator_eig(Hamiltonian_beta,dt);
 dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
+if dt2 > 0
+  dU_beta2 = propagator_eig(Hamiltonian_beta,dt2);
+  dU_alpha2 = propagator_eig(Hamiltonian_alpha,dt2);
+end
 
 nStates = length(Hamiltonian_beta);
 if t0 > 0
@@ -759,10 +764,13 @@ for iTime = timeStart:timepoints
       
   end
   
-  
-  U_beta = dU_beta*U_beta;
-  U_alpha = dU_alpha*U_alpha;
-  
+  if iTime<= Ndt
+    U_beta = dU_beta*U_beta;
+    U_alpha = dU_alpha*U_alpha;
+  else
+    U_beta = dU_beta2*U_beta;
+    U_alpha = dU_alpha2*U_alpha;
+  end
   
 end
  

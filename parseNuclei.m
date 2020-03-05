@@ -39,7 +39,7 @@ scaleFactor = System.scale;
 Nuclei.dataSource = pdbFileName;
 
 % open data file
-[Coordinates,Type,UnitCell,Connected,Indices_nonWater,pdbID,numberH] = parsePDB(pdbFileName,System);
+[Coordinates,Type,UnitCell,Connected,Indices_nonWater,pdbID,numberH,isSolvent] = parsePDB(pdbFileName,System);
 % Connected = formConnection(Connected_,Indices_nonWater);
 
 % number of PDB entries used
@@ -198,7 +198,7 @@ for uc = 1:nCells
     
     % switch nuclear type
     % H =============================================================
-    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && (rand() > System.deuteriumFraction) )
+    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && isSolvent(iNuc) && (rand() > System.deuteriumFraction) )
       iNuc = iNuc +1;
       Nuclei.Index(iNuc) = iNuc;
       Nuclei.Type{iNuc} = '1H';

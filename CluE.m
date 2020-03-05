@@ -809,16 +809,13 @@ if Method.mixed_eState
 else
   % calculate signal and save extra parameters (RAM intensive)
   
-  if Method.vectorized
-    [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu0(System, Method, Nuclei,Clusters);
-    AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
-    
-    Statistics = [];
-    Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
-  else
-    [Signal,AuxiliarySignal,Order_n_Signal,Statistics] = calculateSignal_standard(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
-  end
+
+  [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
+    = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+  AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
+  
+  Statistics = [];
+  Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
   
 end
 
