@@ -198,7 +198,7 @@ for uc = 1:nCells
     
     % switch nuclear type
     % H =============================================================
-    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && isSolvent(iNuc) && (rand() > System.deuteriumFraction) )
+    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && isSolvent(inucleus) && (rand() > System.deuteriumFraction) )
       iNuc = iNuc +1;
       Nuclei.Index(iNuc) = iNuc;
       Nuclei.Type{iNuc} = '1H';
@@ -354,7 +354,7 @@ for uc = 1:nCells
           switch Type{iconnect}
             case {'O','C'} 
               zQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
-            case 'M'
+            case {'M','D'}
               xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
           end
         end
