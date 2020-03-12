@@ -22,7 +22,7 @@ System.averaging = 'powder';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 6e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.radius = 10e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
 System.inner_radius = 0e-10; % m.
 
 % time points per delay period
@@ -30,7 +30,7 @@ System.timepoints = 2^7;%11; %1e3 + 1;
 System.nitrogen = true;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 20e-6; % s.
+total_time = 320e-6; % s.
 System.dt = total_time/System.timepoints/2; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -48,7 +48,7 @@ System.D2O = false;
 System.electron_Zeeman = true;
 System.nuclear_Zeeman = true;
 System.nuclear_dipole = [true true false false]; % [A, B, CD, EF]
-System.hyperfine = [true true]; % [zz, zx+zy]
+System.hyperfine = [true false]; % [zz, zx+zy]
 System.nuclear_quadrupole = true;
 %System.nuclear_quadrupole_filter =[0,0,0;0,0,0;0,0,1]; 
 System.useMeanField = false;

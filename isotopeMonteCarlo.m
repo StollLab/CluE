@@ -1,4 +1,7 @@
-function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,threshold)
+function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,threshold,saveEveryN)
+
+
+saveCounter = 0;
 
 doReset = true; 
 if isfile(savefile)
@@ -24,20 +27,39 @@ CONVERGENCE_TRIALS = 2;
 
 if ~progress(INITIAL_TRIALS)
   for ii=1:N
-    fprintf('Running inital trail %d/%d.\n', ii,N);
-    [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+    
+    if signals(ii,1)==0
+      fprintf('Running inital trail %d/%d.\n', ii,N);
+      [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+      saveCounter = saveCounter + 1;
+      if saveCounter >= saveEveryN
+        saveCounter = 0;
+        save(savefile);
+      end
+    end
+    
   end
+  
   progress(INITIAL_TRIALS) = true;
   save(savefile);
 end
 
+saveCounter = 0;
 conNum = 1;
 if ~progress(CONVERGENCE_TRIALS)
   isConverged = false;
   while ~isConverged
     for ii=N+1:2*N
-      fprintf('Running convergene trail %d: %d/%d.\n',conNum, ii,2*N);
-      [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+      if signals(ii,1)==0
+        fprintf('Running convergene trail %d: %d/%d.\n',conNum, ii,2*N);
+        [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+        saveCounter = saveCounter + 1;
+        if saveCounter >= saveEveryN
+          saveCounter = 0;
+          save(savefile);
+        end
+      end
+      
     end
     v1 = mean(signals(1:N,:),1);
     v2 = mean(signals(N+1:2*N,:),1);
