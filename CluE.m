@@ -16,6 +16,7 @@ tic
 % set defaults base on specified parameters and for unspecified parameters
 [System, Method, Data] = setSystemDefaults(System,Method,Data);
 
+
 if ~isfield(Method,'r_min')
   Method.r_min = 0.1*System.meter*1e-10; % m.
 end
@@ -42,14 +43,75 @@ if ~isfile(InputData)
   error(['Could not find the specified input file ', InputData, '.']);
 end
 
-% Determine the output file name.
-if isfield(Data,'OutputData') && ~isempty(Data.OutputData)
+
+% Determine the output file.
+if ~isempty(Data.OutputData)
+
   OutputData = Data.OutputData;
+  
   if ~strcmp(OutputData(end-3:end),'.mat')
     OutputData = [OutputData, '.mat'];
   end
-else
-  OutputData = '';
+
+  if isfile(OutputData)
+    disp('Pre-existing save file found.')
+    
+    switch Data.overwriteLevel
+      
+      % no overwrite, return save
+      case 0 
+        
+        disp('Checking completion status.')
+        try
+          
+          sim_ = load(OutputData);
+          
+          if sim_.Progress.complete
+            
+            disp('Complete: returning saved data.') 
+            SignalMean  = sim_.SignalMean;
+            experiment_time = sim_.experiment_time;
+            TM_powder = sim_.TM_powder;
+            
+            if isfield(sim_,'Order_n_SignalMean')
+              Order_n_SignalMean = sim_.Order_n_SignalMean;
+            end
+            if isfield(sim_,'Nuclei')
+              Nuclei = sim_.Nuclei;
+            end
+            
+            return;
+          else
+            clear('sim_')
+          end
+          
+        catch
+        end
+        
+        disp('Incomplete: data will be overwritten.')
+        
+        
+      % no overwrite, backup  
+      case 1 
+        
+        newOutputFile = ['%',OutputData];
+        while isfile(newOutputFile)
+          newOutputFile = ['%',newOutputFile];
+         end
+        disp(['Backing up ',OutputData, ' as ', newOutputFile, '.'])
+        if isunix
+          command = ['mv ', OutputData, ' ', newOutputFile];
+          system(command);
+        else
+          movefile(OutputData, newOutputFile);
+        end
+      % overwrite
+      case 2 
+        disp('Preparing to overwrite save file.');
+    end
+  end
+  
+  
 end
 
 % Initiate progress tracking.

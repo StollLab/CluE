@@ -499,8 +499,14 @@ if ~isfield(Method,'vectorized')
 end
 
 % save options
+
+if ~isfield(Data,'OutputData')
+  Data.OutputData = '';
+end
 if ~isfield(Data,'saveLevel')
   Data.saveLevel = 0;
 end 
-
+if ~isfield(Data,'overwriteLevel')
+  Data.overwriteLevel = 0;
+end
 end

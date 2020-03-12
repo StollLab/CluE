@@ -212,11 +212,7 @@ for uc = 1:nCells
       Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
-      if any(Indices_nonWater==inucleus)
-        Nuclei.Abundance(iNuc) = System.protiumFractionProtein;
-      else
-        Nuclei.Abundance(iNuc) = System.protiumFractionSolvent;
-      end
+      Nuclei.Abundance = 1;
       
       % CH3_A =========================================================
     elseif strcmp(type,'CH3')

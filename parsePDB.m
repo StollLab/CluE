@@ -69,7 +69,7 @@ for iline = 1:nLines
     
     % Determine if atom is not part of the solvent.
     isSolvent(iNucleus) = true;
-    if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL')
+    if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL') && ~strcmp(ResidueName_,'MGLY') && ~strcmp(ResidueName_,'MGL')
       isSolvent(iNucleus) = false;
     end
     
@@ -77,7 +77,7 @@ for iline = 1:nLines
     if strcmp(Element_,'H')
       
       % Replace H with D depending on options.
-      if strcmp(ResidueName_,'WAT') || strcmp(ResidueName_,'SOL')
+      if isSolvent(iNucleus)
         if System.D2O, Element_ = 'D'; end
       else
         if System.deuterateProtein, Element_ = 'D'; end

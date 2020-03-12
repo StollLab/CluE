@@ -6,7 +6,7 @@ saveCounter = 0;
 doReset = true; 
 if isfile(savefile)
   try
-    load(savefile);   
+    load(savefile,'signals','progress','TM','N');   
     disp('Save data loaded.');
     
     doReset = false;
