@@ -45,9 +45,8 @@ end
 
 
 % Determine the output file.
+OutputData = Data.OutputData;
 if ~isempty(Data.OutputData)
-
-  OutputData = Data.OutputData;
   
   if ~strcmp(OutputData(end-3:end),'.mat')
     OutputData = [OutputData, '.mat'];

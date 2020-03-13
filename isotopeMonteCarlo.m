@@ -1,5 +1,18 @@
-function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,threshold,saveEveryN)
+function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,threshold,options)
 
+if ~isfield(options,'saveEveryN')
+  options.saveEveryN = 16;
+end
+if ~isfield(options,'maxN')
+  options.maxN = inf;
+end
+if ~isfield(options,'newProgress')
+  options.newProgress = [];
+end
+
+saveEveryN = options.saveEveryN;
+maxN = options.maxN;
+newProgress = options.newProgress;
 
 saveCounter = 0;
 
@@ -24,8 +37,12 @@ end
 INITIAL_TRIALS = 1;
 CONVERGENCE_TRIALS = 2;
 
+if ~isempty(newProgress)
+  progress = newProgress;
+end
 
 if ~progress(INITIAL_TRIALS)
+  N = min(N,maxN);
   for ii=1:N
     
     if signals(ii,1)==0
@@ -75,6 +92,12 @@ if ~progress(CONVERGENCE_TRIALS)
       isConverged = true;
       progress(CONVERGENCE_TRIALS) = true;
     else
+      
+      if 2*N > maxN
+        save(savefile);
+        return;
+      end
+      
       N = 2*N;
       signals(2*N,:) = zeros(1,System.timepoints);
       TM(2*N) = 0;
