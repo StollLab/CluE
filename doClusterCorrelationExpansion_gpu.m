@@ -52,9 +52,9 @@ for iCluster=1:numberClusters(cluster_order)
     if this_cluster(1)==0
       break;
     end
-    isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
+
     % v(t) = v'(t)*(  (1-p)  + p*v''(t) ) = v'(t)*(  1  + p*(  v''(t) -1 )  ).
-    Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_1(iCluster,:) -1) );
+    Signals(iorder,:) = Signals(iorder,:).*AuxiliarySignal_1(iCluster,:);
   end
   
 end
@@ -86,8 +86,7 @@ for iCluster=1:numberClusters(cluster_order)
     if this_cluster(1)==0
       break;
     end
-    isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
-    Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_2(iCluster,:) -1) );
+    Signals(iorder,:) = Signals(iorder,:).*AuxiliarySignal_2(iCluster,:);
   end
   
 end
