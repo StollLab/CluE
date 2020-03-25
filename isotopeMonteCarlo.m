@@ -9,6 +9,9 @@ end
 if ~isfield(options,'newProgress')
   options.newProgress = [];
 end
+if ~isfield(options,'metric')
+  options.metric = 'rms';
+end
 
 saveEveryN = options.saveEveryN;
 maxN = options.maxN;
@@ -46,7 +49,7 @@ if ~progress(INITIAL_TRIALS)
   for ii=1:N
     
     if signals(ii,1)==0
-      fprintf('Running inital trail %d/%d.\n', ii,N);
+      fprintf('Running inital trial %d/%d.\n', ii,N);
       [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
       saveCounter = saveCounter + 1;
       if saveCounter >= saveEveryN
@@ -68,7 +71,7 @@ if ~progress(CONVERGENCE_TRIALS)
   while ~isConverged
     for ii=N+1:2*N
       if signals(ii,1)==0
-        fprintf('Running convergene trail %d: %d/%d.\n',conNum, ii,2*N);
+        fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,2*N);
         [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
         saveCounter = saveCounter + 1;
         if saveCounter >= saveEveryN
@@ -81,10 +84,8 @@ if ~progress(CONVERGENCE_TRIALS)
     v1 = mean(signals(1:N,:),1);
     v2 = mean(signals(N+1:2*N,:),1);
     v3 = mean(signals,1);
-    TM1 = getTM(twotau,v1);
-    TM2 = getTM(twotau,v2);
     TM3 = getTM(twotau,v3);
-    eta = abs((TM2-TM1)/TM3);
+    eta = getErrorMetric(v1,v2,options.metric,twotau,twotau);
     fprintf('TM  = %d us.\n',TM3*1e6);
     fprintf('eta  = %d.\n',eta);
       

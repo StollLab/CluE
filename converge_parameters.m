@@ -1,6 +1,8 @@
 function [parameters,System,Method,Data]  = converge_parameters(System,Method,Data, options)
 
 options = setDefaults(options,Method);
+metric = options.metric;
+
 System.gridSize = 1;
 ID = 0;
 hline = '-----------------------------------------------------------------';
@@ -66,10 +68,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -125,10 +127,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -179,10 +181,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -239,10 +241,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -300,10 +302,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -354,10 +356,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -413,10 +415,10 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = abs( (TM_powder-TM_powder_)/TM_powder);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+        fprintf('eta = %d.\n',eta);
         disp(hline);
       end
       
@@ -494,11 +496,11 @@ if options.converge.powder
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
     
-    eta = abs( (TM_powder-TM_powder_)/TM_powder);
+    eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
     if options.verbose
       
       fprintf('TM2 = %d s.\n',TM_powder);
-      fprintf('|TM2-TM1|/TM2 = %d.\n',eta);
+      fprintf('eta = %d.\n',eta);
       disp(hline);
       
     end
@@ -543,6 +545,11 @@ end
 end
 
 function options = setDefaults(options,Method)
+
+if ~isfield(options,'metric')
+  options.metric = 'rms';
+end
+
 % system radius
 if ~isfield(options.converge,'radius')
   options.converge.radius = true;
