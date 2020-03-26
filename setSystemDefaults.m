@@ -34,6 +34,10 @@ end
 if ~isfield(Method,'exportHamiltonian')
   Method.exportHamiltonian = false;
 end
+if ~isfield(Method,'exportClusters')
+  Method.exportClusters = false;
+end
+
 if ~isfield(Method,'propagationDomain')
   Method.propagationDomain='time-domain'; % fastest method
 end
@@ -508,5 +512,8 @@ if ~isfield(Data,'saveLevel')
 end 
 if ~isfield(Data,'overwriteLevel')
   Data.overwriteLevel = 0;
+end
+if ~isfield(Data,'ClusterData')
+  Data.ClusterData = '';
 end
 end

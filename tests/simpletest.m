@@ -71,7 +71,7 @@ Method.order_lower_bound = 1;
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = [0, 0, 0, 0, 0];
+Method.cutoff.dipole = 1e3; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -84,12 +84,14 @@ Method.parallelComputing = false;
 Method.partialSave = false;
 
 
-[System, Tensors, Nuclei,Clusters] = setUpSystem(System,Data);
+% [System, Tensors, Nuclei,Clusters] = setUpSystem(System,Data);
 
 %==========================================================================
 %% Run simulation
 %==========================================================================
-
+Method.exportClusters = true;
+% Data.OutputData = 'tempfile';
+Data.ClusterData = 'Clusters.mat';
 [SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);
 
 

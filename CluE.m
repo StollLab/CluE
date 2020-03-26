@@ -173,30 +173,59 @@ end
 % Compile list of connected clusters
 % ========================================================================
 Clusters = [];
-
-% Loop over cluster sizes, start at the largest (most time consuming) size
-for clusterSize = Method.order:-1:1
-  
-  if strcmp(Method.method,'full')
-    if clusterSize<Nuclei.number
-      Clusters{clusterSize} = [];
-    else
-      Clusters{Nuclei.number} = Nuclei.Index;
+doFindClusters = true;
+if ~isempty(Data.ClusterData)
+  try
+    load(Data.ClusterData,'Clusters')
+    
+    for clusterSize = 1:Method.order
+      
+      Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
+      if verbose
+        fprintf('Loaded %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
+      end
     end
-    continue
+    
+    doFindClusters = false;
+  catch
+    disp('Could not load clusters.')
   end
+end
+% Loop over cluster sizes, start at the largest (most time consuming) size
+if doFindClusters
   
-  if verbose, fprintf('Finding clusters of size %d.\n', clusterSize); end
-  
-  Clusters{clusterSize} = findClusters(Nuclei, clusterSize);
-  
-  % save the number of clusters of each size for export to the user
-  Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
-  
-  if verbose
-    fprintf('  Found %d clusters of size %d.\n', size(Clusters{clusterSize},1),clusterSize);
+  for clusterSize = Method.order:-1:1
+    
+    if strcmp(Method.method,'full')
+      if clusterSize<Nuclei.number
+        Clusters{clusterSize} = [];
+      else
+        Clusters{Nuclei.number} = Nuclei.Index;
+      end
+      continue
+    end
+    
+    if verbose, fprintf('Finding clusters of size %d.\n', clusterSize); end
+    
+    Clusters{clusterSize} = findClusters(Nuclei, clusterSize);
+    
+    % save the number of clusters of each size for export to the user
+    Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
+    
+    if verbose
+      fprintf('  Found %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
+    end
+    
   end
-  
+
+  if Method.exportClusters
+    if ~isempty(OutputData)
+      clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];
+    else
+      clusterSaveFile = 'Clusters.mat';
+    end
+    save(clusterSaveFile,'Clusters');
+  end
 end
 
 if strcmp(Method.method,'count clusters')
