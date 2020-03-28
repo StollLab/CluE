@@ -170,23 +170,23 @@ for isize = 1:Method_order
         % the ith ccluster of size clusterSize.
         
         case 1
-          Coherences_1 = zeros(numberClusters(isize),timepoints^dimensionality);  
+          Coherences_1 = ones(numberClusters(isize),timepoints^dimensionality);  
         case 2
           SubclusterIndices_2 = zeros(nchoosek(isize,1), isize , Nuclei.numberClusters(isize)); 
-          Coherences_2 = zeros(numberClusters(isize),timepoints^dimensionality);
+          Coherences_2 = ones(numberClusters(isize),timepoints^dimensionality);
           
         case 3
           SubclusterIndices_3 = zeros(nchoosek(isize,1), isize , Nuclei.numberClusters(isize));
-          Coherences_3 = zeros(numberClusters(isize),timepoints^dimensionality);
+          Coherences_3 = ones(numberClusters(isize),timepoints^dimensionality);
         case 4
           SubclusterIndices_4 = zeros(nchoosek(isize,2), isize , Nuclei.numberClusters(isize));
-          Coherences_4 = zeros(numberClusters(isize),timepoints^dimensionality);
+          Coherences_4 = ones(numberClusters(isize),timepoints^dimensionality);
         case 5
           SubclusterIndices_5 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_5 = zeros(numberClusters(isize),timepoints^dimensionality);
+          Coherences_5 = ones(numberClusters(isize),timepoints^dimensionality);
         case 6
           SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_6 = zeros(numberClusters(isize),timepoints^dimensionality);
+          Coherences_6 = ones(numberClusters(isize),timepoints^dimensionality);
       end
       
 end
@@ -505,23 +505,23 @@ for clusterSize = 1:Method_order
         
         switch clusterSize
           case 1
-            Coherences_1(iCluster,:) = Coherences_1(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            Coherences_1(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_1(iCluster,:) ...
+              + propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 2
-            Coherences_2(iCluster,:) = Coherences_2(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            Coherences_2(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_2(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 3
-            Coherences_3(iCluster,:) = Coherences_3(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            Coherences_3(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_3(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 4
-            Coherences_4(iCluster,:) = Coherences_4(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            Coherences_4(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_4(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 5
-            Coherences_5(iCluster,:) = Coherences_5(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            Coherences_5(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_5(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 6
-            Coherences_6(iCluster,:) = Coherences_6(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            Coherences_6(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_6(iCluster,:) ...
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
             
         end
       end

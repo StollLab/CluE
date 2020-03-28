@@ -1,7 +1,11 @@
-function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,threshold,options)
+function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
+
+if (mod(dN,2) ~= 0) || (dN < 0)
+  error('The parameter dN must be an even natural number.')
+end
 
 if ~isfield(options,'saveEveryN')
-  options.saveEveryN = 16;
+  options.saveEveryN = dN;
 end
 if ~isfield(options,'maxN')
   options.maxN = inf;
@@ -19,10 +23,12 @@ newProgress = options.newProgress;
 
 saveCounter = 0;
 
-doReset = true; 
+doReset = true;
+
+% Try to continue from canceled run.
 if isfile(savefile)
   try
-    load(savefile,'signals','progress','TM','N','twotau');   
+    load(savefile,'signals','progress','TM','N','twotau');
     disp('Save data loaded.');
     
     doReset = false;
@@ -30,6 +36,7 @@ if isfile(savefile)
   end
 end
 
+% Start from scratch.
 if doReset
   disp('Initializing MonteCarlo.');
   progress = false(1,2);
@@ -37,73 +44,126 @@ if doReset
   TM = zeros(1,2*N);
 end
 
-INITIAL_TRIALS = 1;
-CONVERGENCE_TRIALS = 2;
+% ENUM
+INITIAL_TRIALS = 1;  CONVERGENCE_TRIALS = 2;
 
+% Set progress flags.
 if ~isempty(newProgress)
   progress = newProgress;
 end
 
+% Decide if initial trials already been loaded.
 if ~progress(INITIAL_TRIALS)
+  
+  % Determine number of trials to run.
   N = min(N,maxN);
+  
+  % Run initial set of trials.
   for ii=1:N
     
+    % Skip loaded trials.
     if signals(ii,1)==0
+      
       fprintf('Running inital trial %d/%d.\n', ii,N);
       [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+      
       saveCounter = saveCounter + 1;
+      
+      % Save in case run is canceled.
       if saveCounter >= saveEveryN
         saveCounter = 0;
         save(savefile);
       end
+      
     end
+    
+    % Find the overall mean signal, and TM.
+    v3 = mean(signals(1:ii,:),1);
+    TM(ii) = getTM(twotau,v3);
+    
+    fprintf('TM  = %d us.\n',TM(ii)*1e6);
+    
     
   end
   
+  % Update progress flag.
   progress(INITIAL_TRIALS) = true;
+  
+  % Save.
   save(savefile);
 end
 
 saveCounter = 0;
 conNum = 1;
+
+% Check if convergence runs are needed.
 if ~progress(CONVERGENCE_TRIALS)
+  
   isConverged = false;
+  
+  % Run convergence loop.
   while ~isConverged
-    for ii=N+1:2*N
+    
+    % Loop over new trials.
+    for ii=N+1:(N+dN)
+      
+      % Skip loaded trials
       if signals(ii,1)==0
+        
         fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,2*N);
         [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+        
         saveCounter = saveCounter + 1;
+        
+        % Save in case run is canceled.
         if saveCounter >= saveEveryN
           saveCounter = 0;
           save(savefile);
         end
       end
       
-    end
-    v1 = mean(signals(1:N,:),1);
-    v2 = mean(signals(N+1:2*N,:),1);
-    v3 = mean(signals,1);
-    TM3 = getTM(twotau,v3);
-    eta = getErrorMetric(v1,v2,options.metric,twotau,twotau);
-    fprintf('TM  = %d us.\n',TM3*1e6);
-    fprintf('eta  = %d.\n',eta);
+      % Find the overall mean signal, and TM.
+      v3 = mean(signals(1:ii,:),1);
+      TM(ii) = getTM(twotau,v3);
       
+      fprintf('TM  = %d us.\n',TM(ii)*1e6);
+      
+    end
+    
+    % Partition trials into two qual parts.
+    N_ = (N+dN)/2;
+    
+    % Find the mean signal of each partition.
+    v1 = mean(signals(1:N_,:),1);
+    v2 = mean(signals(N_+1:end,:),1);
+    
+    % Get measure of difference.
+    eta = getErrorMetric(v1,v2,options.metric,twotau,twotau);
+    fprintf('eta  = %d.\n',eta);
+    
+    % Compare measure of difference to the set threshold.
     if eta < threshold
       isConverged = true;
       progress(CONVERGENCE_TRIALS) = true;
     else
       
-      if 2*N > maxN
+      % Check that another round will not exceed limit..
+      if N + 2*dN > maxN
         save(savefile);
         return;
       end
       
-      N = 2*N;
-      signals(2*N,:) = zeros(1,System.timepoints);
-      TM(2*N) = 0;
+      % Update N.
+      N = N + dN;
+      
+      % Initialize memory.
+      signals(N+dN,:) = zeros(1,System.timepoints);
+      TM(N+dN) = 0;
+      
       conNum = conNum + 1;
     end
+    
+    % Save.
     save(savefile);
   end
 end

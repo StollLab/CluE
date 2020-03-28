@@ -461,6 +461,7 @@ if isfield(System,'deuterateAll') && islogical(System.deuterateAll) && System.de
 end
 
 
+
 % The methods rCE and rCE do not use precomputed Hamiltonians.
 if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
   System.limitToSpinHalf = true;
@@ -516,4 +517,17 @@ end
 if ~isfield(Data,'ClusterData')
   Data.ClusterData = '';
 end
+
+if ~isfield(System,'deuteriumFraction')
+  System.deuteriumFraction = 1;
+end
+
+if ~isfield(System,'newIsotopologuePerOrientation')
+  if ~isempty(Data.ClusterData) && (System.deuteriumFraction >= 1 || System.deuteriumFraction <= 0)
+    System.newIsotopologuePerOrientation = false;
+  else
+    System.newIsotopologuePerOrientation = true;
+  end
+end
+
 end

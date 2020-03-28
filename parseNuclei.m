@@ -7,7 +7,7 @@
 %   Method       structure with fields for the method
 %   pdbFileName  name of PDB file
 
-function Nuclei = parseNuclei(System,Method,pdbFileName)
+function [Nuclei, System]= parseNuclei(System,Method,pdbFileName)
 
 maxClusterSize = Method.order;
 
@@ -40,6 +40,8 @@ Nuclei.dataSource = pdbFileName;
 
 % open data file
 [Coordinates,Type,UnitCell,Connected,Indices_nonWater,pdbID,numberH,isSolvent] = parsePDB(pdbFileName,System);
+Nuclei.isSolvent = isSolvent;
+
 % Connected = formConnection(Connected_,Indices_nonWater);
 
 % number of PDB entries used
@@ -831,9 +833,7 @@ end
 if ~isfield(System,'deuterium')
   System.deuterium = true;
 end
-if ~isfield(System,'deuteriumFraction')
-  System.deuteriumFraction = 1;
-end
+
 if isfield(System,'hydrogen')
   System.protium = System.hydrogen;
   System.deuterium = System.hydrogen;

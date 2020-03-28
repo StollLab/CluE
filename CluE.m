@@ -139,7 +139,7 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   Progress.LoadSavedData = true;
   
 elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user')
-  Nuclei = parseNuclei(System, Method, InputData);
+  [Nuclei, System] = parseNuclei(System, Method, InputData);
   System.Electron.Coordinates = [0,0,0];
   if Nuclei.number < 1
     Signals{1} = ones(size(System.Time));
@@ -673,6 +673,10 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isigna
     = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,iSignal_max)
      
 % grid point indices
+% if System.newIsotopologuePerOrientation
+%   newHydronIsotopologue(Nuclei,System);
+  disp(isignal);
+% end
 adjusted_isignal = SignalsToCalculate(isignal);
 index_gamma = mod(adjusted_isignal-1,gammaGridSize) + 1;
 igrid = 1 + (adjusted_isignal - index_gamma)/gammaGridSize;

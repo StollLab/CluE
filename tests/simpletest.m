@@ -44,6 +44,7 @@ System.magneticField  = 1.2; % T.
 %System.deuterateAll = true;
 System.deuterateProtein = false;
 System.D2O = false;
+% System.deuteriumFraction = 0.5;
 
 System.electron_Zeeman = true;
 System.nuclear_Zeeman = true;
@@ -71,7 +72,7 @@ Method.order_lower_bound = 1;
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 1e3; % Hz
+Method.cutoff.dipole = 1e2; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -89,9 +90,11 @@ Method.partialSave = false;
 %==========================================================================
 %% Run simulation
 %==========================================================================
-Method.exportClusters = true;
+Method.exportClusters = false;
 % Data.OutputData = 'tempfile';
 Data.ClusterData = 'Clusters.mat';
+
+
 [SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);
 
 
