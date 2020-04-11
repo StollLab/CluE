@@ -1,7 +1,26 @@
-function eta = getErrorMetric(v1,v2,metric,t1,t2)
+function eta = getErrorMetric(v1,v2,metric,t1,t2,options)
 
 if nargin < 3
   metric = 'rms';
+end
+if nargin < 6
+  options = [];
+end
+
+if isfield(options,'tmax')
+  v1 = v1( t1 <= options.tmax);
+  t1 = t1( t1 <= options.tmax);
+  v2 = v2( t2 <= options.tmax);
+  t2 = t2( t2 <= options.tmax);
+end
+
+if isfield(options,'vmin')
+  v_=max(abs(v1),abs(v2));
+  to_remove = v_<options.vmin;
+  v1(to_remove) = [];
+  t1(to_remove) = [];
+  v2(to_remove) = [];
+  t2(to_remove) = [];
 end
 
 switch metric

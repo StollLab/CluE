@@ -16,7 +16,7 @@ Data.saveLevel = 0;
 %==========================================================================
 % System Settings
 %==========================================================================
-System.experiment = 'Hahn';
+System.experiment = 'FID';
 % averaging choices: none, powder, xy
 System.averaging = 'powder';
 System.gridSize = 1;
@@ -30,7 +30,7 @@ System.timepoints = 2^7;%11; %1e3 + 1;
 System.nitrogen = true;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 20e-6; % s.
+total_time = 100e-9; % s.
 System.dt = total_time/System.timepoints/2; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -103,9 +103,14 @@ Data.ClusterData = 'Clusters.mat';
 %% Plot.
 %--------------------------------------------------------------------------
 % plot(twotau*1e6,abs(SignalMean/SignalMean(1)),'-','color',[0,1,1]*0.6,'linewidth',1.5);
-
+clf
 subplot(2,1,1)
-plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5);
+
+plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
+
+hold on
+plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
+plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
 xlabel('2\tau (\mus)');
 ylabel('coherence');
 set(gca,'fontsize',12);

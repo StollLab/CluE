@@ -3,6 +3,10 @@ function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,thre
 if (mod(dN,2) ~= 0) || (dN < 0)
   error('The parameter dN must be an even natural number.')
 end
+if (mod(N,2) ~= 0) || (N < 0)
+  error('The parameter N must be an even natural number.')
+end
+
 
 if ~isfield(options,'saveEveryN')
   options.saveEveryN = dN;
@@ -10,15 +14,22 @@ end
 if ~isfield(options,'maxN')
   options.maxN = inf;
 end
+if ~isfield(options,'N_ave')
+  options.N_ave = 1000;
+end
+
 if ~isfield(options,'newProgress')
   options.newProgress = [];
 end
 if ~isfield(options,'metric')
   options.metric = 'rms';
 end
-
+if ~isfield(options,'vmin')
+  options.vmin = exp(-5);
+end
 saveEveryN = options.saveEveryN;
 maxN = options.maxN;
+N_ave = options.N_ave;
 newProgress = options.newProgress;
 
 saveCounter = 0;
@@ -131,14 +142,20 @@ if ~progress(CONVERGENCE_TRIALS)
     end
     
     % Partition trials into two qual parts.
-    N_ = (N+dN)/2;
+    N_ = (N+dN);
     
-    % Find the mean signal of each partition.
-    v1 = mean(signals(1:N_,:),1);
-    v2 = mean(signals(N_+1:end,:),1);
     
     % Get measure of difference.
-    eta = getErrorMetric(v1,v2,options.metric,twotau,twotau);
+    eta = 0;
+    for ii = 1:N_ave
+      perm = randperm(N_);
+      
+      % Find the mean signal of each partition.
+      v1 = mean(  signals(  perm( 1:N_/2    ) ,: ) , 1);
+      v2 = mean(  signals(  perm( N_/2+1:N_ ) ,: ) , 1);
+      
+      eta = eta + getErrorMetric(v1,v2,options.metric,twotau,twotau,options)/N_ave;
+    end
     fprintf('eta  = %d.\n',eta);
     
     % Compare measure of difference to the set threshold.

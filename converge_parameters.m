@@ -68,7 +68,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -127,7 +127,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -181,7 +181,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -241,7 +241,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -302,7 +302,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -356,7 +356,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -415,7 +415,7 @@ while ~are_R_neighbor_converged
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
       
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
       if options.verbose
         fprintf('TM2 = %d s.\n',TM_powder);
         fprintf('eta = %d.\n',eta);
@@ -496,7 +496,7 @@ if options.converge.powder
         [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
       end
     
-    eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time);
+    eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
     if options.verbose
       
       fprintf('TM2 = %d s.\n',TM_powder);
@@ -549,7 +549,9 @@ function options = setDefaults(options,Method)
 if ~isfield(options,'metric')
   options.metric = 'rms';
 end
-
+if ~isfield(options,'vmin')
+  options.vmin = exp(-5);
+end
 % system radius
 if ~isfield(options.converge,'radius')
   options.converge.radius = true;
