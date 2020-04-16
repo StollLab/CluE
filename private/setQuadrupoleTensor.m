@@ -1,11 +1,11 @@
 function Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei)
 if norm(zQ)==0
-  warning('Failed to set quadrupole tensor orientation.')
+  disp('Failed to set quadrupole tensor orientation.')
   return;
 end
 if norm(xQ)==0
   while xQ*zQ'==0
-    warning('Failed to set quadrupole tensor orientation; using a random direction.')
+    disp('Failed to set quadrupole tensor orientation; using a random direction.')
     xQ = rand(1,3);
     xQ = xQ/norm(xQ);
   end

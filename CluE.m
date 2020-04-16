@@ -673,10 +673,12 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isigna
     = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,iSignal_max)
      
 % grid point indices
-% if System.newIsotopologuePerOrientation
-%   newHydronIsotopologue(Nuclei,System);
-  disp(isignal);
-% end
+if System.newIsotopologuePerOrientation
+  Nuclei = newHydronIsotopologue(Nuclei,System);
+  if verbose
+    fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
+  end    
+end
 adjusted_isignal = SignalsToCalculate(isignal);
 index_gamma = mod(adjusted_isignal-1,gammaGridSize) + 1;
 igrid = 1 + (adjusted_isignal - index_gamma)/gammaGridSize;
@@ -901,18 +903,74 @@ linearTimeAxis = true; % Code should be changed to enforce this.
 if Method.mixed_eState
   [Signal, Order_n_Signal,Statistics] = calculateSignal_pulse(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
 else
-  % calculate signal and save extra parameters (RAM intensive)
+  % Calculate signal and save extra parameters (RAM intensive)
   
-
-  [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
-    = calculateSignal_gpu(System, Method, Nuclei,Clusters);
-  AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
-  
+  % Check if the theroy is the same for every cluster size.
+  if all(all(System.Theory)==any(System.Theory))
+    [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
+      = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+    AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
+    
+    Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
+  else
+    Order_n_Signal = cell(1,Method.order);
+    AuxiliarySignal = cell(1,Method.order);
+    
+    % Remember Method.order.
+    MethodOrder = Method.order;
+    
+    new_order = 1;
+    
+    % Loop over orders.
+    for iorder = 1:MethodOrder
+      if iorder < new_order
+        continue;
+      end
+      
+      % Check for orders with the same theory.
+      for jorder = iorder:MethodOrder
+        if ~all(   all(  System.Theory(iorder:jorder,:),1  )  == any(System.Theory(iorder:jorder,:),1 ) )
+          break;
+        end
+        new_order = jorder;
+      end
+      
+      % Set new order to the highest order with the same theory as iorder.
+      Method.order = new_order;
+      
+      % Calculate signals.
+      [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,~] ...
+        = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+      
+      % Record the appropraite signals.
+      for record_order = iorder:new_order
+        
+        
+        switch record_order
+          case 1
+            AuxiliarySignal{record_order} = AuxiliarySignal_1;
+          case 2
+            AuxiliarySignal{record_order} = AuxiliarySignal_2;
+          case 3
+            AuxiliarySignal{record_order} = AuxiliarySignal_3;
+          case 4
+            AuxiliarySignal{record_order} = AuxiliarySignal_4;
+        end
+      
+      
+        Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
+        if record_order > 1
+          Order_n_Signal{record_order} = Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
+        end
+        
+      end
+      
+    end
+    Signal = Order_n_Signal{MethodOrder};
+    
+    
+  end
   Statistics = [];
-  Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
-  
 end
 
 end
-
-

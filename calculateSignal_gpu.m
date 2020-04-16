@@ -21,10 +21,13 @@ maxSize = 6;
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
-Method_order = Method.order;  
-theory = System.theory;
+Method_order = Method.order;
 
+% Define the theory to use at the given cluster size.
+Theory = System.Theory;
+theory = Theory(Method.order,:);
 useMeanField = theory(10);
+
 
 maxClusterSize = min(maxSize,Method_order);
 % Convert variable to gpu compatible forms
@@ -244,7 +247,7 @@ Methyl_gA = [0,0];
 
 
 for clusterSize = 1:Method_order
-   
+  
   % Find coherences
   numClusters = numberClusters(clusterSize);
   

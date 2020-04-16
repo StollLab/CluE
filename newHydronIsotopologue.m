@@ -1,7 +1,6 @@
 function Isotopologue = newHydronIsotopologue(Nuclei,System)
 
 isSolvent = Nuclei.isSolvent;
-
 for iNuc = 1:Nuclei.number
  
   type = Nuclei.Type{iNuc};
@@ -62,6 +61,7 @@ for iNuc = 1:Nuclei.number
     
   end
 end
+
 
 
 Isotopologue = Nuclei;

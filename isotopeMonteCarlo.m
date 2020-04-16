@@ -121,7 +121,7 @@ if ~progress(CONVERGENCE_TRIALS)
       % Skip loaded trials
       if signals(ii,1)==0
         
-        fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,2*N);
+        fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
         [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
         
         saveCounter = saveCounter + 1;

@@ -16,13 +16,13 @@ Data.saveLevel = 0;
 %==========================================================================
 % System Settings
 %==========================================================================
-System.experiment = 'FID';
+System.experiment = 'Hahn';
 % averaging choices: none, powder, xy
 System.averaging = 'powder';
-System.gridSize = 1;
+System.gridSize = 6;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 10e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.radius = 1.2e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
 System.inner_radius = 0e-10; % m.
 
 % time points per delay period
@@ -30,7 +30,7 @@ System.timepoints = 2^7;%11; %1e3 + 1;
 System.nitrogen = true;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 100e-9; % s.
+total_time = 20e-6; % s.
 System.dt = total_time/System.timepoints/2; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -42,19 +42,22 @@ System.magneticField  = 1.2; % T.
 
 % deuterium options
 %System.deuterateAll = true;
-System.deuterateProtein = false;
+System.deuterateProtein = true;
 System.D2O = false;
 % System.deuteriumFraction = 0.5;
 
+%{
 System.electron_Zeeman = true;
 System.nuclear_Zeeman = true;
-System.nuclear_dipole = [true true false false]; % [A, B, CD, EF]
-System.hyperfine = [true false]; % [zz, zx+zy]
+System.nuclear_dipole = [true true true true]; % [A, B, CD, EF]
+System.hyperfine = [true true]; % [zz, zx+zy]
 System.nuclear_quadrupole = true;
-%System.nuclear_quadrupole_filter =[0,0,0;0,0,0;0,0,1]; 
 System.useMeanField = false;
+%}
 System.Methyl.include = false;
-
+%                  eZ    nZ    HF1   HF2    ddA   ddB  ddCD  ddEF  NQI meanField
+System.Theory = [ true, true, true, true, true, true, true, true, true, false; ... % 1-clusters
+                  true, true, true, false, true, true, true, true, true, false];    % 2-clusters
 System.g = [2.0097, 2.0064,2.0025];
 
 System.nStates = [1,1]; 
@@ -72,7 +75,7 @@ Method.order_lower_bound = 1;
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 1e2; % Hz
+Method.cutoff.dipole = 10^2.4; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -92,7 +95,7 @@ Method.partialSave = false;
 %==========================================================================
 Method.exportClusters = false;
 % Data.OutputData = 'tempfile';
-Data.ClusterData = 'Clusters.mat';
+% Data.ClusterData = 'Clusters.mat';
 
 
 [SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);

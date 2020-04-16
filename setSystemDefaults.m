@@ -277,7 +277,7 @@ if ~isfield(System,'Methyl')
   System.Methyl = struct;
 end
 if ~isfield(System.Methyl,'include')
-  System.Methyl.include = true;
+  System.Methyl.include = false;
 end
 if ~isfield(System.Methyl,'moment_of_inertia')
   System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
@@ -390,39 +390,45 @@ if ~isfield(System,'gridSize') || isempty(System.gridSize)
 end
 
 
-if ~isfield(System,'electron_Zeeman')
-  System.electron_Zeeman = true;
-end
-
-if ~isfield(System,'nuclear_Zeeman')
-  System.nuclear_Zeeman = true;
-end
-
-if ~isfield(System,'hyperfine')
-  System.hyperfine = [true false];
-end
-
-if ~isfield(System,'nuclear_dipole')
-  System.nuclear_dipole = [true true true true];
-end
-
-if ~isfield(System,'nuclear_quadrupole')
-  System.nuclear_quadrupole = true;
-end
-if ~isfield(System,'nuclear_quadrupole_scale_e2qQh')
-  System.nuclear_quadrupole_scale_e2qQh = 1;
-end
-if ~isfield(System,'nuclear_quadrupole_scale_eta')
-  System.nuclear_quadrupole_scale_eta = 1;
-end
-if ~isfield(System,'nuclear_quadrupole_filter')
-  System.nuclear_quadrupole_filter = ones(3);
-end
-if ~isfield(System,'useMeanField')
-  System.useMeanField = false;
+% Define theory.
+if isfield(System,'Theory')
+  System.theory = any(System.Theory);
 end
 
 if ~isfield(System,'theory')
+  
+  if ~isfield(System,'electron_Zeeman')
+    System.electron_Zeeman = true;
+  end
+  
+  if ~isfield(System,'nuclear_Zeeman')
+    System.nuclear_Zeeman = true;
+  end
+  
+  if ~isfield(System,'hyperfine')
+    System.hyperfine = [true false];
+  end
+  
+  if ~isfield(System,'nuclear_dipole')
+    System.nuclear_dipole = [true true true true];
+  end
+  
+  if ~isfield(System,'nuclear_quadrupole')
+    System.nuclear_quadrupole = true;
+  end
+  if ~isfield(System,'nuclear_quadrupole_scale_e2qQh')
+    System.nuclear_quadrupole_scale_e2qQh = 1;
+  end
+  if ~isfield(System,'nuclear_quadrupole_scale_eta')
+    System.nuclear_quadrupole_scale_eta = 1;
+  end
+  if ~isfield(System,'nuclear_quadrupole_filter')
+    System.nuclear_quadrupole_filter = ones(3);
+  end
+  if ~isfield(System,'useMeanField')
+    System.useMeanField = false;
+  end
+
   System.theory = [System.electron_Zeeman,...
     System.nuclear_Zeeman,...
     System.hyperfine(1), System.hyperfine(2), ...
@@ -430,7 +436,36 @@ if ~isfield(System,'theory')
     System.nuclear_dipole(3), System.nuclear_dipole(4), ...
     System.nuclear_quadrupole, ...
     System.useMeanField];
+else
+  
+  System.electron_Zeeman    = System.theory(1);
+  System.nuclear_Zeeman     = System.theory(2);
+  System.hyperfine          = System.theory(3:4);
+  System.nuclear_dipole     = System.theory(5:8);
+  System.nuclear_quadrupole = System.theory(9);
+  System.useMeanField       = System.theory(10);
+  
+  if ~isfield(System,'nuclear_quadrupole_scale_e2qQh')
+    System.nuclear_quadrupole_scale_e2qQh = 1;
+  end
+  if ~isfield(System,'nuclear_quadrupole_scale_eta')
+    System.nuclear_quadrupole_scale_eta = 1;
+  end
+  if ~isfield(System,'nuclear_quadrupole_filter')
+    System.nuclear_quadrupole_filter = ones(3);
+  end
 end
+
+% Define cluster size specific theories.
+if ~isfield(System,'Theory')
+  System.Theory = ones(Method.order,length(System.theory)).*System.theory;  
+elseif size(System.Theory ,1) < Method.order
+  defined_order_ = size(System.Theory ,1);
+  System.Theory(defined_order_+1:Method.order,:) = ...
+    ones(Method.order-defined_order_,length(System.theory))...
+    .*System.Theory(defined_order_,:);
+end
+
 
 if ~isfield(System,'useThermalEnsemble')
   System.useThermalEnsemble = ~System.useMeanField;
