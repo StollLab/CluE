@@ -558,7 +558,7 @@ if ~isfield(System,'deuteriumFraction')
 end
 
 if ~isfield(System,'newIsotopologuePerOrientation')
-  if ~isempty(Data.ClusterData) && (System.deuteriumFraction >= 1 || System.deuteriumFraction <= 0)
+  if isempty(Data.ClusterData) && (System.deuteriumFraction >= 1 || System.deuteriumFraction <= 0)
     System.newIsotopologuePerOrientation = false;
   else
     System.newIsotopologuePerOrientation = true;
