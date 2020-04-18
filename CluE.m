@@ -277,12 +277,13 @@ if strcmp(System.averaging,'powder')
   
   Grid = lebedev_grid(gridSize);
   % Use the inversion symmetry of the spin-Hamiltonian to skip all the
-  % orientations with z < 0.
-  keep = Grid.z>=0;
   
-  % Double the weight of all points whose mirror is to be skipped.
-  doubleWeight = Grid.z>0; 
-  Grid.w(doubleWeight) = 2*Grid.w(doubleWeight); 
+  removeGridPoints = 1:gridSize;
+  removeGridPoints(Grid.z < 0) = -1;
+  removeGridPoints( ((Grid.z==0) & (Grid.x<0)) ) = -1;
+  removeGridPoints( ((Grid.z==0) & (Grid.x==0)) & (Grid.y<0) ) =-1;
+  keep = removeGridPoints>0;
+  
   Grid.w = Grid.w(keep);
   Grid.w = Grid.w/sum(Grid.w);
   

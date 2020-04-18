@@ -19,7 +19,7 @@ Data.saveLevel = 0;
 System.experiment = 'Hahn';
 % averaging choices: none, powder, xy
 System.averaging = 'powder';
-System.gridSize = 6;
+System.gridSize = 14;
 
 % radius from the electron spin to the edge of the system, [m]
 System.radius = 1.2e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
