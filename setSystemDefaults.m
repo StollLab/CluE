@@ -386,7 +386,7 @@ if ~isfield(System,'averaging')
 end
 
 if ~isfield(System,'gridSize') || isempty(System.gridSize)
-  System.gridSize = 14;
+  System.gridSize = 1;
 end
 
 

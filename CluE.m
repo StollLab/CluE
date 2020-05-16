@@ -174,23 +174,32 @@ end
 % ========================================================================
 Clusters = [];
 doFindClusters = true;
-if ~isempty(Data.ClusterData)
-  try
-    load(Data.ClusterData,'Clusters')
-    
-    for clusterSize = 1:Method.order
-      
-      Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
-      if verbose
-        fprintf('Loaded %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
-      end
+if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
+  Clusters = {};
+  if ~isempty(Data.ClusterData)
+    try
+      load(Data.ClusterData,'Clusters');      
+    catch
+      disp('Could not load clusters.')
     end
-    
-    doFindClusters = false;
-  catch
-    disp('Could not load clusters.')
+  else
+    Clusters = Method.Clusters;
   end
+    
+  for clusterSize = 1:Method.order
+    
+    Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
+    if verbose
+      fprintf('Loaded %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
+    end
+   
+  end
+  
+  doFindClusters = isempty(Clusters);
 end
+
+
+
 % Loop over cluster sizes, start at the largest (most time consuming) size
 if doFindClusters
   

@@ -80,8 +80,10 @@ for isc = 1:2^(clusterSize)-1
 end
 
 Cluster = Clusters(iCluster, 1:clusterSize ,clusterSize);
-Indices(1:clusterSize,1) = Cluster;
-
+for ii =1:length(Cluster)
+  inucleus = Cluster(ii);
+  Indices(ii,1) = find(Clusters(:,1,1)'==inucleus);
+end
 % for jCluster = 1:numberSubClusters(1)
 %   
 %   SubCluster = Cluster(possibleSubClusters_1==1);

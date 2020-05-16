@@ -574,6 +574,7 @@ System.Electron.Coordinates = [0,0,0];
 try
   Nuclei.number = uint32(size(Nuclei.Index,2));
 catch
+  warning('No nuclear spins found.')
   return
 end 
 
@@ -589,16 +590,30 @@ Nuclei.Atensor(:,:,Nuclei.number+1:end) = [];
 Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
 Nuclei.Azz(Nuclei.number+1:end,:) = [];
 
+% Initialize separation matrix.
 Nuclei.DistanceMatrix = zeros(Nuclei.number);
+
+% Loop over all nuclear spins.
 for ispin = 1:Nuclei.number
+ 
+  % Loop over all nuclear spins with a higher index than ispin.
   for jspin = ispin+1:Nuclei.number
+    
+    % Set separation matrix entry.
     Nuclei.DistanceMatrix(ispin,jspin) = norm(Nuclei.Coordinates(ispin,:) - Nuclei.Coordinates(jspin,:));
+    
+    % Use the symmetric nature of the separation matrix to set the ispin > jspin entries. 
     Nuclei.DistanceMatrix(jspin,ispin) = Nuclei.DistanceMatrix(ispin,jspin);
   end
 end
+
+% Get coupling statistics.
 Nuclei = getPairwiseStatistics(System, Nuclei);
+
+% Get the highest spin value. 
 Nuclei.maxSpin = max(Nuclei.Spin);
 
+% Initialize a matrix of valid edges.
 Nuclei.ValidPair = ones(Nuclei.number,Nuclei.number,Method.order);
 for isize = 1:Method.order
   Nuclei.ValidPair(:,:,isize) = Nuclei.valid'*Nuclei.valid;
@@ -607,6 +622,7 @@ for isize = 1:Method.order
   % Nuclei.ValidPair(exclude_spins,:) = 0;
   % Nuclei.ValidPair(:,exclude_spins) = 0;
   
+  % Loop over all criteria used to determine an edge.
   num_criteria = numel(Method.Criteria);
   for ii = 1:num_criteria
     switch Method.Criteria{ii}
@@ -636,10 +652,11 @@ for isize = 1:Method.order
 end
 
 
-
+% Set the starting spin index and ending spin index.
 Nuclei.startSpin = max(1, floor(Method.startSpin));
 Nuclei.endSpin = min(Nuclei.number, floor(Method.endSpin));
 
+% Check for consistancy.
 if Nuclei.startSpin > Nuclei.endSpin
   disp('Starting cluster spin cannot be greater than ending spin.  Swapping assignment.');
   Nuclei.startSpin = max(0, floor(Method.endSpin));
@@ -655,14 +672,32 @@ if sum(containsXYZ)>=2
   
   % if nucleus index is given in X/Y/Z, calculate vector from electron to that
   % nucleus
-  if containsXYZ(3) && (length(System.Z)==1)
-    System.Z = Coordinates(System.Z,:)*1e-10 - Initial_Electron_Coordinates;
+  if containsXYZ(3) 
+    if iscell(System.Z) && numel(System.Z)==2
+      z1_ = System.Z{1};
+      z2_ = System.Z{2};
+      System.Z = Coordinates(z2_,:) - Coordinates(z1_,:);
+    elseif length(System.Z)==1
+      System.Z = Coordinates(System.Z,:) - Initial_Electron_Coordinates;
+    end
   end
-  if containsXYZ(2) && (length(System.Y)==1)
-    System.Y = Coordinates(System.Y,:)*1e-10 - Initial_Electron_Coordinates;
+  if containsXYZ(2)
+    if iscell(System.Y) && numel(System.Y)==2
+      y1_ = System.Y{1};
+      y2_ = System.Y{2};
+      System.Y = Coordinates(y2_,:) - Coordinates(y1_,:);
+    elseif length(System.Y)==1
+      System.Y = Coordinates(System.Y,:) - Initial_Electron_Coordinates;
+    end
   end
-  if containsXYZ(1) && (length(System.X)==1)
-    System.X = Coordinates(System.X,:)*1e-10 - Initial_Electron_Coordinates;
+  if containsXYZ(1)
+    if iscell(System.X) && numel(System.X)==2
+      x1_ = System.X{1};
+      x2_ = System.X{2};
+      System.X = Coordinates(x2_,:) - Coordinates(x1_,:);
+    elseif length(System.X)==1
+      System.X = Coordinates(System.X,:) - Initial_Electron_Coordinates;
+    end
   end
   
   % find the x and z unit vectors if one was not specified
@@ -682,7 +717,6 @@ end
 Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
-Nuclei.maxSpin = max(Nuclei.Spin);
 [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
 Nuclei.ZeemanStates = setRandomState(Nuclei);
 end
@@ -721,9 +755,9 @@ end
 Rz3 = rotateZ(-phi);
 
 R = Rz3*Ry2*Rz1;
-Z = R*MolecularZ;
+Z = R*NormZ;
 Z = Z/norm(Z);
-X = R*MolecularX;
+X = R*NormX;
 X = X/norm(X);
 X = X - (X'*Z)*Z;
 X = X/norm(X);

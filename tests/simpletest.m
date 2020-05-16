@@ -19,11 +19,11 @@ Data.saveLevel = 0;
 System.experiment = 'Hahn';
 % averaging choices: none, powder, xy
 System.averaging = 'powder';
-System.gridSize = 14;
+System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 1.2e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
-System.inner_radius = 0e-10; % m.
+System.radius = 6e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.inner_radius = 0.01e-10; % m.
 
 % time points per delay period
 System.timepoints = 2^7;%11; %1e3 + 1;
@@ -37,12 +37,13 @@ System.dt = total_time/System.timepoints/2; % s.
 % [ m, n ] mean coordinates of the mth and nth atoms from the pdb file
 % [ x, y, z ] spatial 3-vector
 System.Electron.Coordinates = {28, 29};
-
+System.X = {28, 29};
+System.Z = {1,19};
 System.magneticField  = 1.2; % T.
 
 % deuterium options
 %System.deuterateAll = true;
-System.deuterateProtein = true;
+System.deuterateProtein = false;
 System.D2O = false;
 % System.deuteriumFraction = 0.5;
 
@@ -56,7 +57,7 @@ System.useMeanField = false;
 %}
 System.Methyl.include = false;
 %                  eZ    nZ    HF1   HF2    ddA   ddB  ddCD  ddEF  NQI meanField
-System.Theory = [ true, true, true, true, true, true, true, true, true, false; ... % 1-clusters
+System.Theory = [ true, true, true, false, true, true, true, true, true, false; ... % 1-clusters
                   true, true, true, false, true, true, true, true, true, false];    % 2-clusters
 System.g = [2.0097, 2.0064,2.0025];
 
@@ -75,7 +76,7 @@ Method.order_lower_bound = 1;
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^2.4; % Hz
+Method.cutoff.dipole = 10^2; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -97,7 +98,7 @@ Method.exportClusters = false;
 % Data.OutputData = 'tempfile';
 % Data.ClusterData = 'Clusters.mat';
 
-
+% System.nuclear_quadrupole_filter = diag([1,1,1]);
 [SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);
 
 

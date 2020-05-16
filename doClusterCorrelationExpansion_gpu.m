@@ -20,7 +20,8 @@ function [Signals, ...
 % end
 
 % Initialize data.
-maxSize = 6;
+code_maxSize = 6;
+maxSize = min(code_maxSize,order);
 AuxiliarySignal_1 = Coherences_1;
 AuxiliarySignal_2 = Coherences_2;
 AuxiliarySignal_3 = Coherences_3;
@@ -28,7 +29,7 @@ AuxiliarySignal_4 = Coherences_4;
 AuxiliarySignal_5 = Coherences_5;
 AuxiliarySignal_6 = Coherences_6;
 
-Signals = ones(maxSize,timepoints^dimensionality);
+Signals = ones(code_maxSize,timepoints^dimensionality);
 
 %--------------------------------------------------------------------------
 % 1-Clusters 
