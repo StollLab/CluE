@@ -16,21 +16,21 @@ Data.saveLevel = 0;
 %==========================================================================
 % System Settings
 %==========================================================================
-System.experiment = 'Hahn';
+System.experiment = 'CPMG';
 % averaging choices: none, powder, xy
 System.averaging = 'powder';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 6e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
-System.inner_radius = 0.01e-10; % m.
+System.radius = 10e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.inner_radius = 9.5e-10; % m.
 
 % time points per delay period
 System.timepoints = 2^7;%11; %1e3 + 1;
 System.nitrogen = true;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 20e-6; % s.
+total_time = 80e-6; % s.
 System.dt = total_time/System.timepoints/2; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -70,13 +70,13 @@ System.nStates = [1,1];
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 2;
+Method.order = 6;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^2; % Hz
+Method.cutoff.dipole = 10^4; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -99,7 +99,7 @@ Method.exportClusters = false;
 % Data.ClusterData = 'Clusters.mat';
 
 % System.nuclear_quadrupole_filter = diag([1,1,1]);
-[SignalMean, twotau, TM_powder,order_b_signals,Nuclei] = CluE(System,Method,Data);
+[SignalMean, twotau, TM_powder,order_n_signals,Nuclei] = CluE(System,Method,Data);
 
 
 
@@ -110,9 +110,20 @@ Method.exportClusters = false;
 clf
 subplot(2,1,1)
 
-plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
-
 hold on
+plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
+if Method.order>2
+  plot(twotau*1e6,real(order_n_signals{2}),'-','linewidth',1.5);
+end
+if Method.order>3
+  plot(twotau*1e6,real(order_n_signals{3}),'-','linewidth',1.5);
+end
+if Method.order>4
+  plot(twotau*1e6,real(order_n_signals{4}),'-','linewidth',1.5);
+end
+if Method.order>5
+   plot(twotau*1e6,real(order_n_signals{5}),'-','linewidth',1.5);
+end
 plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
 plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
 xlabel('2\tau (\mus)');

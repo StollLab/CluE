@@ -129,7 +129,7 @@ for iCluster=1:numberClusters(cluster_order)
     if this_cluster(1)==0
       break;
     end
-    isotopeProbability =prod(Nuclei_Abundance( this_cluster )); 
+    isotopeProbability = 1; % prod(Nuclei_Abundance( this_cluster )); 
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_3(iCluster,:) -1) );
   end
 end
@@ -182,7 +182,7 @@ for iCluster=1:numberClusters(cluster_order)
     if this_cluster(1)==0
       break;
     end
-    isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
+    isotopeProbability = 1; % prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_4(iCluster,:) -1) );
   end
 end
@@ -245,7 +245,7 @@ for iCluster=1:numberClusters(cluster_order)
     if this_cluster(1)==0
       break;
     end
-    isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
+    isotopeProbability = 1; % prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_5(iCluster,:) -1) );
   end
 end
@@ -320,7 +320,7 @@ for iCluster=1:numberClusters(cluster_order)
     if this_cluster(1)==0
       break;
     end
-    isotopeProbability =prod(Nuclei_Abundance( this_cluster ));
+    isotopeProbability = 1; % prod(Nuclei_Abundance( this_cluster ));
     Signals(iorder,:) = Signals(iorder,:).*(1 + isotopeProbability*( AuxiliarySignal_6(iCluster,:) -1) );
   end
 end
