@@ -203,30 +203,45 @@ end
 % Loop over cluster sizes, start at the largest (most time consuming) size
 if doFindClusters
   
-  for clusterSize = Method.order:-1:1
-    
-    if strcmp(Method.method,'full')
-      if clusterSize<Nuclei.number
-        Clusters{clusterSize} = [];
-      else
-        Clusters{Nuclei.number} = Nuclei.Index;
-      end
-      continue
-    end
-    
-    if verbose, fprintf('Finding clusters of size %d.\n', clusterSize); end
-    
-    Clusters{clusterSize} = findClusters(Nuclei, clusterSize);
-    
-    % save the number of clusters of each size for export to the user
-    Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
-    
-    if verbose
-      fprintf('  Found %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
-    end
-    
-  end
+  if strcmp(Method.clusterization,'tree-search')
+    if verbose, fprintf('Finding clusters of up to size %d.\n', Method.order); end
 
+    Clusters = findClusters_treeSearch(Nuclei,Method.order);
+    Nuclei.numberClusters = zeros(1,Method.order);
+    
+    for clusterSize = 1:Method.order
+      Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
+      
+      if verbose
+        fprintf('  Found %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
+      end
+    end
+    
+  else
+    for clusterSize = Method.order:-1:1
+      
+      if strcmp(Method.method,'full')
+        if clusterSize<Nuclei.number
+          Clusters{clusterSize} = [];
+        else
+          Clusters{Nuclei.number} = Nuclei.Index;
+        end
+        continue
+      end
+      
+      if verbose, fprintf('Finding clusters of size %d.\n', clusterSize); end
+      
+      Clusters{clusterSize} = findClusters(Nuclei, clusterSize);
+      
+      % save the number of clusters of each size for export to the user
+      Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
+      
+      if verbose
+        fprintf('  Found %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
+      end
+      
+    end
+  end
   if Method.exportClusters
     if ~isempty(OutputData)
       clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];

@@ -3,7 +3,7 @@
 %==========================================================================
 % General Setting
 %==========================================================================
-clear;
+% clear;
 clc;
 
 oldpath = path;
@@ -23,14 +23,14 @@ System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
 System.radius = 10e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
-System.inner_radius = 9.5e-10; % m.
+System.inner_radius = 0;%e-10; % m.
 
 % time points per delay period
 System.timepoints = 2^7;%11; %1e3 + 1;
-System.nitrogen = true;
+System.nitrogen = false;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 80e-6; % s.
+total_time = 25e-6; % s.
 System.dt = total_time/System.timepoints/2; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -39,7 +39,8 @@ System.dt = total_time/System.timepoints/2; % s.
 System.Electron.Coordinates = {28, 29};
 System.X = {28, 29};
 System.Z = {1,19};
-System.magneticField  = 1.2; % T.
+System.magneticField  = 3.37; % T.
+
 
 % deuterium options
 %System.deuterateAll = true;
@@ -57,8 +58,8 @@ System.useMeanField = false;
 %}
 System.Methyl.include = false;
 %                  eZ    nZ    HF1   HF2    ddA   ddB  ddCD  ddEF  NQI meanField
-System.Theory = [ true, true, true, false, true, true, true, true, true, false; ... % 1-clusters
-                  true, true, true, false, true, true, true, true, true, false];    % 2-clusters
+System.Theory = [ true, true, true, true, true, true, true, true, true, false; ... % 1-clusters
+                  true, true, true, true, true, true, true, true, true, false];    % 2-clusters
 System.g = [2.0097, 2.0064,2.0025];
 
 System.nStates = [1,1]; 
@@ -111,7 +112,7 @@ clf
 subplot(2,1,1)
 
 hold on
-plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
+% plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
 if Method.order>2
   plot(twotau*1e6,real(order_n_signals{2}),'-','linewidth',1.5);
 end
@@ -125,7 +126,7 @@ if Method.order>5
    plot(twotau*1e6,real(order_n_signals{5}),'-','linewidth',1.5);
 end
 plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
-plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
+plot(twotau*1e6,abs(SignalMean),'--','linewidth',3,'color','blue');
 xlabel('2\tau (\mus)');
 ylabel('coherence');
 set(gca,'fontsize',12);

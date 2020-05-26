@@ -84,7 +84,9 @@ end
 if ~isfield(Method,'order')
   Method.order = 2;
 end
-
+if ~isfield(Method,'clusterization')
+  Method.clusterization = 'tree-search';
+end
 % cluster order min
 if ~isfield(Method,'order_lower_bound')
   Method.order_lower_bound = 1;
