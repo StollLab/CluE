@@ -71,7 +71,7 @@ System.nStates = [1,1];
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 6;
+Method.order = 4;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance

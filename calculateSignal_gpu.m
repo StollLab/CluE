@@ -152,6 +152,84 @@ else
   SpinXiXjOp_6 =[];
 end
 
+% Set 7-cluster operators.
+if maxClusterSize > 6
+  Spin2Op7 = Op{2}{7};
+  Spin3Op7 = Op{3}{7};
+  Spin4Op7 = Op{4}{7};
+  SpinXiXjOp_7 = SpinXiXjOps{7};
+else
+  Spin2Op7 = [];
+  Spin3Op7 = [];
+  Spin4Op7 = [];
+  SpinXiXjOp_7 =[];
+end
+
+% Set 8-cluster operators.
+if maxClusterSize > 7
+  Spin2Op8 = Op{2}{8};
+  Spin3Op8 = Op{3}{8};
+  Spin4Op8 = Op{4}{8};
+  SpinXiXjOp_8 = SpinXiXjOps{8};
+else
+  Spin2Op8 = [];
+  Spin3Op8 = [];
+  Spin4Op8 = [];
+  SpinXiXjOp_8 =[];
+end
+
+% Set 9-cluster operators.
+if maxClusterSize > 8
+  Spin2Op9 = Op{2}{9};
+  Spin3Op9 = Op{3}{9};
+  Spin4Op9 = Op{4}{9};
+  SpinXiXjOp_9 = SpinXiXjOps{9};
+else
+  Spin2Op9 = [];
+  Spin3Op9 = [];
+  Spin4Op9 = [];
+  SpinXiXjOp_9 =[];
+end
+
+% Set 9-cluster operators.
+if maxClusterSize > 9
+  Spin2Op10 = Op{2}{10};
+  Spin3Op10 = Op{3}{10};
+  Spin4Op10 = Op{4}{10};
+  SpinXiXjOp_10 = SpinXiXjOps{10};
+else
+  Spin2Op10 = [];
+  Spin3Op10 = [];
+  Spin4Op10 = [];
+  SpinXiXjOp_10 =[];
+end
+
+% Set 11-cluster operators.
+if maxClusterSize > 11
+  Spin2Op11 = Op{2}{11};
+  Spin3Op11 = Op{3}{11};
+  Spin4Op11 = Op{4}{11};
+  SpinXiXjOp_11 = SpinXiXjOps{11};
+else
+  Spin2Op11 = [];
+  Spin3Op11 = [];
+  Spin4Op11 = [];
+  SpinXiXjOp_11 =[];
+end
+
+% Set 12-cluster operators.
+if maxClusterSize > 12
+  Spin2Op12 = Op{2}{12};
+  Spin3Op12 = Op{3}{12};
+  Spin4Op12 = Op{4}{12};
+  SpinXiXjOp_12 = SpinXiXjOps{12};
+else
+  Spin2Op12 = [];
+  Spin3Op12 = [];
+  Spin4Op12 = [];
+  SpinXiXjOp_12 =[];
+end
+
 numberClusters = Nuclei.numberClusters(1:maxClusterSize);
 maxNumberClusters = max(numberClusters(1:maxClusterSize));
 
@@ -190,6 +268,24 @@ for isize = 1:Method_order
         case 6
           SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
           Coherences_6 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 7
+          SubclusterIndices_7 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_7 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 8
+          SubclusterIndices_8 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_8 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 9
+          SubclusterIndices_9 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_9 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 10
+          SubclusterIndices_10 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_10 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 11
+          SubclusterIndices_11 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_11 = ones(numberClusters(isize),timepoints^dimensionality);
+        case 12
+          SubclusterIndices_12 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
+          Coherences_12 = ones(numberClusters(isize),timepoints^dimensionality);
       end
       
 end
@@ -219,6 +315,24 @@ for isize = Method_order+1:maxSize
         case 6
           SubclusterIndices_6 = 1;
           Coherences_6 = 0;
+        case 7
+          SubclusterIndices_7 = 1;
+          Coherences_7 = 0;
+        case 8
+          SubclusterIndices_8 = 1;
+          Coherences_8 = 0;
+        case 9
+          SubclusterIndices_9 = 1;
+          Coherences_9 = 0;
+        case 10
+          SubclusterIndices_10 = 1;
+          Coherences_10 = 0;
+        case 11
+          SubclusterIndices_11 = 1;
+          Coherences_11 = 0;
+        case 12
+          SubclusterIndices_12 = 1;
+          Coherences_12 = 0;
       end
       
 end
@@ -298,6 +412,18 @@ for clusterSize = 1:Method_order
         SubclusterIndices_5(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
       case 6
         SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 7
+        SubclusterIndices_7(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 8
+        SubclusterIndices_8(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 9
+        SubclusterIndices_9(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 10
+        SubclusterIndices_10(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 11
+        SubclusterIndices_11(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+      case 12
+        SubclusterIndices_12(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
       otherwise
         fprintf('Cannot calculate clusters of size %d.\n', clusterSize);
         error('Cluster Error');

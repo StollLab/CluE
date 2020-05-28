@@ -3,286 +3,174 @@
 % ========================================================================
 
 function Indices = findSubclusters_gpu(Clusters,clusterSize,iCluster,reference_clusterSize)
-% from Indices{subCluster_size} = list of all jCluster such that Clusters{subCluster_size}(jCluster,:) is a subcluster of Clusters{clusterSize}(iCluster,:)
-% to
-% Given the ith cluster of size clusterSize, 
-% Indices(jCluster,subCluster_size) = jth cluster of size subCluster_size
-% that is a subcluster of the ith cluster of size clusterSize
-%
+% Indices = Indices{subCluster_size} = SubclusterIndices_clusterSize
 % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
 % the jth cluster of size subCluster_size that is a subcluster of
-% the ith ccluster of size clusterSize.
+% the ith cluster of size clusterSize.
 % In a valid cluster, all indices must be natural numbers.
 
-
-Indices = zeros(nchoosek(reference_clusterSize, ceil(reference_clusterSize/2)),reference_clusterSize);
-jCluster = 0;
+% Initialize Indices assuming that all n choose k subsets are subclusters. 
+Indices = zeros(NchooseK(reference_clusterSize, ceil(reference_clusterSize/2)),reference_clusterSize);
 
 % Each cluster is a subset of itself.
 Indices(1,clusterSize)=iCluster;
-    
+
+% Vector of number of subsets for each subset size.
 numberSubClusters = NchooseK(clusterSize,1:clusterSize);
 
-
-
-switch clusterSize
-  case 1
-    % All non-empty subsets have been found.
+% Check all non-empty subsets have been found.
+if clusterSize == 1
     return;
-    
-  case 3
-    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
-%     possibleSubClusters_2 = [0,1,1; 1, 0,1; 1,1,0];
-    
-  case 4
-    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
-    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize);
-%     
-%     possibleSubClusters_2 = [0,0,1,1; 0,1,0,1; 1,0,0,1; 0,1,1,0; 1,0,1,0; 1,1,0,0];
-%     possibleSubClusters_3 = [0,1,1,1; 1,0,1,1; 1,1,0,1; 1,1,1,0];
-   
-  case 5
-    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
-    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize); 
-    possibleSubClusters_4 = zeros(numberSubClusters(4),clusterSize); 
-    
-  case 6
-    possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
-    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize); 
-    possibleSubClusters_4 = zeros(numberSubClusters(4),clusterSize);  
-    possibleSubClusters_5 = zeros(numberSubClusters(5),clusterSize); 
-end  
+end
 
+% Initialize lists of all possible subclusters.
+if clusterSize > 2
+  possibleSubClusters_2 = zeros(numberSubClusters(2),clusterSize);
+  
+  if clusterSize > 3
+    possibleSubClusters_3 = zeros(numberSubClusters(3),clusterSize);
+    
+    if clusterSize > 4
+      possibleSubClusters_4 = zeros(numberSubClusters(4),clusterSize);
+      
+      if clusterSize > 5
+        possibleSubClusters_5 = zeros(numberSubClusters(5),clusterSize);
+        
+        if clusterSize > 6
+          possibleSubClusters_6 = zeros(numberSubClusters(5),clusterSize);
+          
+          if clusterSize > 7
+            possibleSubClusters_7 = zeros(numberSubClusters(5),clusterSize);
+            
+            if clusterSize > 8
+              possibleSubClusters_8 = zeros(numberSubClusters(5),clusterSize);
+              
+              if clusterSize > 9
+                possibleSubClusters_9 = zeros(numberSubClusters(5),clusterSize);
+                
+                if clusterSize > 10
+                  possibleSubClusters_10 = zeros(numberSubClusters(5),clusterSize);
+                  
+                  if clusterSize > 11
+                    possibleSubClusters_11 = zeros(numberSubClusters(5),clusterSize);
+                    
+                    if clusterSize > 12
+                      error('Cluster size not supported.');
+                    end; end; end; end; end; end; end; end; end; end; end
+
+% Initialize subcluster counters.
 subcluster_count = zeros(1,clusterSize);
+
+% Loop over all proper subsets. 
 for isc = 1:2^(clusterSize)-1
   
+  % Get the binary representation of the subset.
   subcluster_str = dec2bin(isc);
+  
+  % Determine the number of filler zeros required.
   nZeros = clusterSize - length(subcluster_str);
+  
+  % Generate str representing the subcluster.
   subcluster_str = [repmat('0',1,nZeros) subcluster_str];
+  
+  % Determine the size of the subcluster.
   sc_size = sum(subcluster_str=='1');
   
+  % Increment subcluster counter.
+  subcluster_count(sc_size) = subcluster_count(sc_size) + 1;
+  
+  % Convert subcluster_str to logical array.
   switch sc_size
     
     case 2
-      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
       possibleSubClusters_2(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
     case 3
-      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
       possibleSubClusters_3(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
     case 4
-      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
       possibleSubClusters_4(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
     case 5
-      subcluster_count(sc_size) = subcluster_count(sc_size) + 1; 
       possibleSubClusters_5(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 6
+      possibleSubClusters_6(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 7
+      possibleSubClusters_7(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 8
+      possibleSubClusters_8(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 9
+      possibleSubClusters_9(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 10
+      possibleSubClusters_10(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
+    case 11
+      possibleSubClusters_11(subcluster_count(sc_size),1:clusterSize) = subcluster_str=='1';
   end
   
 end
 
+% Get the ith cluster of size clusterSize from the list of clusters.
 Cluster = Clusters(iCluster, 1:clusterSize ,clusterSize);
+
+% Loop through the elements of the cluster.
 for ii =1:length(Cluster)
+  % Get spin ii.
   inucleus = Cluster(ii);
+  
+  % Find the index in Clusters that cooresponds to inucleus 
+  % and store it in Indices. 
   Indices(ii,1) = find(Clusters(:,1,1)'==inucleus);
 end
-% for jCluster = 1:numberSubClusters(1)
-%   
-%   SubCluster = Cluster(possibleSubClusters_1==1);
-%   
-%   % Search for a valid cluster that equals the subcluster.
-%   Search = Clusters(:, 1:clusterSize -1, clusterSize -1)==SubCluster;
-%  
-%   % Locate where the subcluster is.
-%   subclusterIndex = find( all(Search,2));
-%   
-%   Indices(jCluster,1) = subclusterIndex;
-% end
 
+% Check if all subcluster sizes were accounted for.
 if clusterSize == 2
   return;
 end
-  
-for jCluster = 1:numberSubClusters(2)
-  
-  SubCluster = Cluster(possibleSubClusters_2(jCluster,:)==1);
-  
-  % Search for a valid cluster that equals the subcluster.
-  Search = Clusters(:, 1:2, 2)==SubCluster;
- 
-  % Locate where the subcluster is.
-  subclusterIndex = find( all(Search,2));
- 
-  if isempty(subclusterIndex)
-    subclusterIndex = 0;
-  end
-  
-  Indices(jCluster,2) = subclusterIndex;
-end
-
-if clusterSize == 3
-  return;
-end
-  
-for jCluster = 1:numberSubClusters(3)
-  
-  SubCluster = Cluster(possibleSubClusters_3(jCluster,:)==1);
-  
-  % Search for a valid cluster that equals the subcluster.
-  Search = Clusters(:, 1:3, 3)==SubCluster;
- 
-  % Locate where the subcluster is.
-  subclusterIndex = find( all(Search,2));
- 
-  if isempty(subclusterIndex)
-    subclusterIndex = 0;
-  end
-  
-  Indices(jCluster,3) = subclusterIndex;
-end
-
 %--------------------------------------------------------------------------
 
-isize = 4;  
-if clusterSize == isize
-  return;
-end
-
-for jCluster = 1:numberSubClusters(isize)
+for isize = 2:clusterSize-1  
   
-  SubCluster = Cluster(possibleSubClusters_4(jCluster,:)==1);
-  
-  % Search for a valid cluster that equals the subcluster.
-  Search = Clusters(:, 1:isize, isize)==SubCluster;
- 
-  % Locate where the subcluster is.
-  subclusterIndex = find( all(Search,2));
- 
-  if isempty(subclusterIndex)
-    subclusterIndex = 0;
+  % Get list of possible subclusters.
+  switch isize
+    case 2
+      possibleSubClusters_ = possibleSubClusters_2;
+    case 3
+      possibleSubClusters_ = possibleSubClusters_3;
+    case 4  
+      possibleSubClusters_ = possibleSubClusters_4;
+    case 5
+      possibleSubClusters_ = possibleSubClusters_5;
+    case 6  
+      possibleSubClusters_ = possibleSubClusters_6;
+    case 7  
+      possibleSubClusters_ = possibleSubClusters_7;
+    case 8  
+      possibleSubClusters_ = possibleSubClusters_8;
+    case 9  
+      possibleSubClusters_ = possibleSubClusters_9;
+    case 10  
+      possibleSubClusters_ = possibleSubClusters_10;
+    case 11  
+      possibleSubClusters_ = possibleSubClusters_11;
   end
-  
-  Indices(jCluster,isize) = subclusterIndex;
-end
-%--------------------------------------------------------------------------
 
-isize = 5;  
-if clusterSize == isize
-  return;
-end
-
-for jCluster = 1:numberSubClusters(isize)
-  
-  SubCluster = Cluster(possibleSubClusters_5(jCluster,:)==1);
-  
-  % Search for a valid cluster that equals the subcluster.
-  Search = Clusters(:, 1:isize, isize)==SubCluster;
- 
-  % Locate where the subcluster is.
-  subclusterIndex = find( all(Search,2));
- 
-  if isempty(subclusterIndex)
-    subclusterIndex = 0;
+  % Loop through all subclusters.
+  for jCluster = 1:numberSubClusters(isize)
+    
+    % Get the jth subcluster.
+    SubCluster = Cluster(possibleSubClusters_(jCluster,:)==1);
+    
+    % Search for a valid cluster that equals the subcluster.
+    Search = Clusters(:, 1:isize, isize)==SubCluster;
+    
+    % Locate where the subcluster is.
+    subclusterIndex = find( all(Search,2));
+    
+    % Set invalid subcluster indices to zero.
+    if isempty(subclusterIndex)
+      subclusterIndex = 0;
+    end
+    
+    % Record the subcluster's index.
+    Indices(jCluster,isize) = subclusterIndex;
   end
-  
-  Indices(jCluster,isize) = subclusterIndex;
 end
-
-end
-
-function Indices = findSubclusters_gpu_TBD(Clusters,clusterSize,iCluster,reference_clusterSize)
-% from Indices{subCluster_size} = list of all jCluster such that Clusters{subCluster_size}(jCluster,:) is a subcluster of Clusters{clusterSize}(iCluster,:)
-% to
-% Given the ith cluster of size clusterSize, 
-% Indices(jCluster,subCluster_size) = jth cluster of sizesubCluster_size
-% that is a subcluster of the ith cluster of size clusterSize
-%
-% SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
-% the jth cluster of size subCluster_size that is a subcluster of
-% the ith ccluster of size clusterSize.
-% In a valid cluster, all indices must be natural numbers.
-
-
-Indices = zeros(nchoosek(reference_clusterSize, ceil(reference_clusterSize/2)),reference_clusterSize);
-jCluster = 0;
-
-% Each cluster is a subset of itself.
-Indices(1,clusterSize)=iCluster;
-
-switch clusterSize
-  case 1
-    % All non-empty subsets have been found.
-    return;
-    
-  case 3
-    
-    numberSubClusters = [3,3,1];
-   
-    possibleSubClusters_2 = [0,1,1; 1, 0,1; 1,1,0];
-    
-  case 4
-    
-    numberSubClusters = [4,6,4,1];
-    
-    possibleSubClusters_2 = [0,0,1,1; 0,1,0,1; 1,0,0,1; 0,1,1,0; 1,0,1,0; 1,1,0,0];
-    possibleSubClusters_3 = [0,1,1,1; 1,0,1,1; 1,1,0,1; 1,1,1,0];
-end  
-
-Cluster = Clusters(iCluster, 1:clusterSize ,clusterSize);
-Indices(1:clusterSize,1) = Cluster;
-
-% for jCluster = 1:numberSubClusters(1)
-%   
-%   SubCluster = Cluster(possibleSubClusters_1==1);
-%   
-%   % Search for a valid cluster that equals the subcluster.
-%   Search = Clusters(:, 1:clusterSize -1, clusterSize -1)==SubCluster;
-%  
-%   % Locate where the subcluster is.
-%   subclusterIndex = find( all(Search,2));
-%   
-%   Indices(jCluster,1) = subclusterIndex;
-% end
-
-if clusterSize == 2
-  return;
-end
-  
-for jCluster = 1:numberSubClusters(2)
-  
-  SubCluster = Cluster(possibleSubClusters_2(jCluster,:)==1);
-  
-  % Search for a valid cluster that equals the subcluster.
-  Search = Clusters(:, 1:2, 2)==SubCluster;
- 
-  % Locate where the subcluster is.
-  subclusterIndex = find( all(Search,2));
- 
-  if isempty(subclusterIndex)
-    subclusterIndex = 0;
-  end
-  
-  Indices(jCluster,2) = subclusterIndex;
-end
-
-if clusterSize == 3
-  return;
-end
-  
-for jCluster = 1:numberSubClusters(3)
-  
-  SubCluster = Cluster(possibleSubClusters_3(jCluster,:)==1);
-  
-  % Search for a valid cluster that equals the subcluster.
-  Search = Clusters(:, 1:3, 3)==SubCluster;
- 
-  % Locate where the subcluster is.
-  subclusterIndex = find( all(Search,2));
- 
-  if isempty(subclusterIndex)
-    subclusterIndex = 0;
-  end
-  
-  Indices(jCluster,3) = subclusterIndex;
-end
-
 
 end
