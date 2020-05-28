@@ -354,13 +354,35 @@ elseif strcmp(System.averaging,'none')
 elseif strcmp(System.averaging,'xy')
   
   % Average over rotations about the B0 direction.
-  gridSize = 15;
   gammaGridSize = 1;
   Alpha = linspace(0,pi,gridSize+1);
   Alpha(end) = [];
   Beta = ones(1,gridSize)*pi/2;
   Gamma = 0;
   gridWeight = ones(gridSize,1)/gridSize;
+  
+elseif strcmp(System.averaging,'custom') 
+  if isstruct(System.Grid)
+    Alpha = System.Grid.Alpha;
+    Beta = System.Grid.Beta;
+    gridWeight = System.Grid.gridWeight;
+    gammaGridSize = 1;
+    Gamma = 0;
+  end
+elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
+  GridSizes = [6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
+         266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702,...
+         3074, 3470, 3890, 4334, 4802, 5294, 5810];
+  gridIndex = find(GridSizes==gridSize);
+  
+  load([Data.path2CluE, 'grids/Nitroxide_Wband_Weights.mat'],'Grids');
+  Alpha = Grids{gridIndex}.Alpha;
+  Beta = Grids{gridIndex}.Beta;
+  gridWeight = Grids{gridIndex}.Weight;
+  gammaGridSize = 1;
+  Gamma = 0;
+  
+  gridSize = length(Alpha);
   
 end
 gridWeight = repmat(gridWeight(:),1,gammaGridSize);

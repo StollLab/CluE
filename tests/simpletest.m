@@ -18,8 +18,9 @@ Data.saveLevel = 0;
 %==========================================================================
 System.experiment = 'CPMG';
 % averaging choices: none, powder, xy
-System.averaging = 'powder';
-System.gridSize = 1;
+% System.averaging = 'powder';
+System.averaging = 'Nitroxide_Wband_Weights';
+System.gridSize = 14;
 
 % radius from the electron spin to the edge of the system, [m]
 System.radius = 10e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
@@ -38,7 +39,7 @@ System.dt = total_time/System.timepoints/2; % s.
 % [ x, y, z ] spatial 3-vector
 System.Electron.Coordinates = {28, 29};
 System.X = {28, 29};
-System.Z = {1,19};
+System.Y = {1,19};
 System.magneticField  = 3.37; % T.
 
 
@@ -71,7 +72,7 @@ System.nStates = [1,1];
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 4;
+Method.order = 2;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
