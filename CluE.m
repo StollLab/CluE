@@ -368,6 +368,10 @@ elseif strcmp(System.averaging,'custom')
     gridWeight = System.Grid.gridWeight;
     gammaGridSize = 1;
     Gamma = 0;
+    
+  
+    gridSize = length(Alpha);
+    
   end
 elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   GridSizes = [6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...

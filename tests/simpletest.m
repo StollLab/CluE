@@ -20,10 +20,10 @@ System.experiment = 'CPMG';
 % averaging choices: none, powder, xy
 % System.averaging = 'powder';
 System.averaging = 'Nitroxide_Wband_Weights';
-System.gridSize = 14;
+System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 10e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.radius = 12e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
 System.inner_radius = 0;%e-10; % m.
 
 % time points per delay period
@@ -69,16 +69,16 @@ System.nStates = [1,1];
 %==========================================================================
 
 % cluster mehod choices CE, CCE, restrictedCE, restrictedCCE
-Method.method = 'CCE';
+Method.method = 'count clusters';
 
 % maximum cluster size
-Method.order = 2;
+Method.order = 4;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^4; % Hz
+Method.cutoff.dipole = 10^3; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -108,8 +108,17 @@ Method.exportClusters = false;
 %--------------------------------------------------------------------------
 %% Plot.
 %--------------------------------------------------------------------------
-% plot(twotau*1e6,abs(SignalMean/SignalMean(1)),'-','color',[0,1,1]*0.6,'linewidth',1.5);
 clf
+if strcmp(Method.method,'count clusters')
+
+plot(abs(SignalMean),'o--','linewidth',3,'color','blue');
+xlabel('count');
+ylabel('cluster size');
+set(gca,'fontsize',12);
+grid on;  zoom on; 
+fontsize = 24;
+set(gca,'fontsize',fontsize);
+else  
 subplot(2,1,1)
 
 hold on
@@ -145,3 +154,4 @@ xlabel('\nu (MHz)');
 grid on;  zoom on; 
 set(gca,'fontsize',fontsize);
 hold on;
+end
