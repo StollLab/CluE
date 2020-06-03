@@ -23,12 +23,31 @@ if isfield(options,'vmin')
   t2(to_remove) = [];
 end
 
+if any(isnan(v1)) || any(isnan(v1))
+  disp('Warning, removing NaN entries');
+  vnan = isnan(v1) | isnan(v2);
+  v1(vnan) = [];
+  v2(vnan) = [];
+  t1(vnan) = [];
+  t2(vnan) = [];
+  if isempty(v1)
+    disp('Warning, no non-NaN entries to compares.');
+    eta = nan;
+    return;
+  else
+    fprintf('Removed %d NaN entries.\n',sum(vnan));
+    fprintf('Calculating error metric with the %d non-NaN entries.\n',sum(~vnan));
+  end
+  
+end
+
+
 switch metric
   
   case 'rms'
-    eta = sqrt(mean(  (v1-v2).^2   ));
+    eta = sqrt(mean(  abs(v1-v2).^2   ));
   case 'root-max'
-    eta = sqrt(max(  (v1-v2).^2   ));
+    eta = sqrt(max(  abs(v1-v2).^2   ));
   case 'max-abs'
     eta = max(abs(v1-v2));
   case 'mean-abs'
