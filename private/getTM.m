@@ -1,8 +1,16 @@
 % ========================================================================
 % Find decay time (where signal drops to 1/e of initial amplitude)
 % ========================================================================
-function TM = getTM(t,Signal)
+function TM = getTM(t,V)
 
+
+% number of time points
+N = length(t);
+if numel(V)==N^2
+  Signal = diag(reshape(V',N,N));
+else
+  Signal = V;
+end
 % normalize signal maximum to 1
 Signal = abs(Signal/Signal(1));
 
@@ -30,8 +38,6 @@ iTM = negatives(1);
 if length(iTM)>1
   iTM = iTM(1);
 end
-% number of time points
-N = length(t);
 
 % initial TM guess
 TM = t(iTM);
