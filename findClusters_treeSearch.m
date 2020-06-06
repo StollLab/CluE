@@ -1,111 +1,102 @@
 % findClusters   Generate list of cluster of a given order
 %
-%  Clusters = findClusters(Nuclei,order)
+%   Clusters = findClusters(Nuclei,order)
 %
 % Inputs:
-%   Nuclei           ... structure with fields
-%    .number         ... number of nuclei
-%    .ValidPair      ... adjacency matrix
-%    .graphCriterion ... method for establishing cluster connectivity
-%                        'complete', ''
-%   order            ... ckuster order: 1, 2, 3, etc
+%   Nuclei       ... structure with fields
+%    .ValidPair  ... adjacency matrix
+%   order        ... ckuster order: 1, 2, 3, etc
 %
 % Outputs:
-%   Clusters         ... Mxorder array of clusters of size order, one
-%                        custer per row
+%   Clusters     ... Mxorder array of clusters of size order, one
+%                    cluster per row
 
-function Clusters = findClusters_treeSearch2(Nuclei,order)
+function Clusters = findClusters_treeSearch(Nuclei,order)
 
-% Initialize clusters.
+% Get adjacency matrix and convert to logical
+Adjacency = logical(Nuclei.ValidPair(:,:,1));
+% Get number of nuclei
+N = size(Adjacency,1);
+
+% Initialize output array
 Clusters = cell(order,1);
 
-% Get number of nuclei.
-N = Nuclei.number;
+intDataType = 'uint16';
 
-% Get list of nuclear spins.
-C1 = [1:N];
+% Get list of 1-clusters
+C1 = cast(1:N,intDataType).';
 
-% Set 1-clusters.
-Clusters{1} = C1';
+% Set 1-clusters
+Clusters{1} = C1;
 
-%Get adjacency matrix.
-Adjacency = Nuclei.ValidPair(:,:,1);
-
-% Get average number of neighbors.
+% Get average number of neighbors
 q = mean(sum(Adjacency));
 
-% Loop over cluster sizes.
+% Loop over cluster sizes
 for clusterSize = 2:order
   
-  % Estimate the number of clusters.
-  estNum_ = ceil(1/factorial(clusterSize)*double(N)*q^(clusterSize-1));
+  % Estimate the number of clusters
+  estNum_ = ceil(1/factorial(clusterSize)*N*q^(clusterSize-1));
   
-  % Initialize cluster list.
-  Clusters{clusterSize} = uint32(zeros(estNum_,clusterSize));
+  % Initialize cluster list
+  Clusters{clusterSize} = zeros(estNum_,clusterSize,intDataType);
   
-  % Get number of clusters for clusterSize -1.
+  % Get number of clusters for clusterSize-1
   numC_ = size(Clusters{clusterSize-1},1);
   
-  % Initialize template for adding new vertices.
-  newVertex = uint32(zeros(1,clusterSize));
-  newVertex(clusterSize)  =1;
+  % Initialize template for adding new vertices
+  newVertex = zeros(1,clusterSize,intDataType);
+  newVertex(clusterSize) = 1;
   
-  % Initialize cluster counters.
+  % Initialize cluster counters
   cluster_counter0 = 1;
   cluster_counter1 = 1;
   
-  % Loop over all clusters of size clusterSize -1.
+  % Loop over all clusters of size clusterSize-1
   for icluster = 1:numC_
     cluster = Clusters{clusterSize-1}(icluster,:);
     
-    % Find all vertices connected to spins in cluster.
-    neighbors = any(Adjacency(cluster,:),1);
-    
+    % Find all vertices connected to nuclei in cluster
+    neighbors = any(Adjacency(:,cluster),2);
     
     neighbors(cluster) = false;
     neighbors(1:cluster(1)) = false;
-
-    neighborspins = C1(neighbors);
-    if isempty(neighborspins)
-      continue;
+    
+    neighbornuclei = C1(neighbors);
+    if isempty(neighbornuclei)
+      continue
     end
     
-    % Form clusters that contain cluster. 
-    newclusters = [repmat(cluster,numel(neighborspins),1), neighborspins(:)];
+    % Form expanded clusters that contain parent cluster
+    newclusters = [repmat(cluster,numel(neighbornuclei),1), neighbornuclei];
     
-    % update cluster counters.
+    % Update cluster counters
     cluster_counter0 = cluster_counter1;
     cluster_counter1 = cluster_counter0 + size(newclusters,1);
     
-    % Reallot memory if necessary. 
+    % Reallot memory if necessary
     if size(Clusters{clusterSize},1) < cluster_counter1
-      Clusters{clusterSize}(end + estNum_ ,:) = zeros(1,clusterSize);
+      Clusters{clusterSize}(end+estNum_,clusterSize) = 0;
     end  
     
-    % Add clusters to cluster list.
-    Clusters{clusterSize}(cluster_counter0:cluster_counter1-1,1:clusterSize) = newclusters;
+    % Add clusters to cluster list
+    Clusters{clusterSize}(cluster_counter0:cluster_counter1-1,:) = newclusters;
     
   end
   
-  % Remove multicounted clusters.
-
-  C = Clusters{clusterSize};
-  % Remove zero clusters.
-  C(C(:,1)==0,:) = [];
-
+  % Trim array
+  C = Clusters{clusterSize}(1:cluster_counter1-1,:);
   
-  % Sort clusters by spin index.
-  MS = sort(C,2);
+  % Sort nuclei in each cluster by nuclei index
+  C = sort(C,2);
   
-  % Remove duplicates.
-  MC = unique( MS ,'rows');
+  % Sort clusters
+  C = sortrows(C);
   
-  Clusters{clusterSize} = sortrows(MC);
+  % Remove duplicates
+  keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+  Clusters{clusterSize} = C(keep,:);
   
 end
 
-
-
 end
-
-

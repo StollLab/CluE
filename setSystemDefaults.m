@@ -543,7 +543,7 @@ end
 % save options
 Data.path2CluE  = mfilename('fullpath');
 Data.path2CluE = Data.path2CluE(1:end-17);
-if ~strcmp(Data.path2CluE(end-5:end),'/CluE/')
+if ~strcmp(Data.path2CluE(end-5:end),[filesep 'CluE' filesep])
   error('Could not establish path to CluE.')
 end  
 if ~isfield(Data,'OutputData')
