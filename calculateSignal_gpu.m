@@ -801,23 +801,34 @@ function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hamiltonian_beta
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
+% Ensure subHamiltinians are Hermitian.
 Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
 Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
+
+% Get density matrix.
 if useThermalEnsemble
   DensityMatrix = propagator_eig((Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT);
 else
   DensityMatrix = densityMatrix;
 end
+
+% Vectorize density matrix.
 vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
 
+% Generate propagators for time element dt.
 dU_beta = propagator_eig(Hamiltonian_beta,dt);
 dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
+
+% Generate propagators for time element dt2.
 if dt2 > 0
   dU_beta2 = propagator_eig(Hamiltonian_beta,dt2);
   dU_alpha2 = propagator_eig(Hamiltonian_alpha,dt2);
 end
 
+% Find the dimensionality of the Hilbert space.
 nStates = length(Hamiltonian_beta);
+
+% Set starting time.
 if t0 > 0
   timeStart = 2;
   U_beta = propagator_eig(Hamiltonian_beta,t0);
@@ -828,6 +839,7 @@ else
   U_alpha = eye(nStates);
 end
 
+% Get second experimental dimesion propagators.
 if EXPERIMENT==CPMG
   if t0 > 0
     U_beta_2 = propagator_eig(Hamiltonian_beta,t0);
@@ -838,39 +850,57 @@ if EXPERIMENT==CPMG
   end
 end
 
+% Get second experimental dimesion propagators.
 if EXPERIMENT == CPMG_CONST
   U_beta_2 = propagator_eig(Hamiltonian_beta,total_time);
   U_alpha_2 = propagator_eig(Hamiltonian_alpha,total_time);
 end
 
-
+% Initialize signal.
 v= ones(1 ,timepoints);
+
+% Loop over time points.
 for iTime = timeStart:timepoints
   
+  % Find the correct experiment
   switch EXPERIMENT
+    
     case FID
+      % Generate time dependent detection operator.
       U_ = U_beta'*U_alpha;
       v(iTime) = vecDensityMatrixT*U_(:);
       
     case HAHN
+      % Generate time dependent detection operator.
       U_ = U_beta'*U_alpha'*U_beta*U_alpha;
       v(iTime) = vecDensityMatrixT*U_(:);
       
     case CPMG
-      U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
+      % Generate time dependent detection operator.
+%       U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
       
+      U_ = U_alpha'*U_beta'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha*U_beta;
       v(iTime) = vecDensityMatrixT*U_(:);
       
-      U_beta_2 = dU_beta*U_beta_2;
-      U_alpha_2 = dU_alpha*U_alpha_2;
+      % Increment propagator.
+%       if iTime<= Ndt
+%         U_beta_2 = dU_beta*U_beta_2;
+%         U_alpha_2 = dU_alpha*U_alpha_2;
+%       else
+%         U_beta_2 = dU_beta2*U_beta_2;
+%         U_alpha_2 = dU_alpha2*U_alpha_2;
+%       end
       
     case CPMG_CONST
       
+      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > Ndt.
       U_beta = propagator_eig(Hamiltonian_beta,(iTime-1)*dt);
       U_alpha = propagator_eig(Hamiltonian_alpha,(iTime-1)*dt);
       
       U_beta_2 = propagator_eig(Hamiltonian_beta, total_time/4-(iTime-1)*dt);
       U_alpha_2 = propagator_eig(Hamiltonian_alpha, total_time/4-(iTime-1)*dt);
+      
+      % Generate time dependent detection operator.
       U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
       
       v(iTime) = vecDensityMatrixT*U_(:);
@@ -881,18 +911,27 @@ for iTime = timeStart:timepoints
       U_beta_2 = eye(nStates);
       U_alpha_2 = eye(nStates);
       
+      % Loop over second experimental dimension.
       for jTime = 1:timepoints
         
+        % Generate time dependent detection operator.
         U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
         
         v(iTime,jTime) = vecDensityMatrixT*U_(:);
         
-        U_beta_2 = dU_beta*U_beta_2;
-        U_alpha_2 = dU_alpha*U_alpha_2;
+        % Increment propagator.
+        if jTime<= Ndt
+          U_beta_2 = dU_beta*U_beta_2;
+          U_alpha_2 = dU_alpha*U_alpha_2;
+        else
+          U_beta_2 = dU_beta2*U_beta_2;
+          U_alpha_2 = dU_alpha2*U_alpha_2;
+        end
+        
       end
       
   end
-  
+  % Increment propagator.
   if iTime<= Ndt
     U_beta = dU_beta*U_beta;
     U_alpha = dU_alpha*U_alpha;
@@ -902,7 +941,8 @@ for iTime = timeStart:timepoints
   end
   
 end
- 
+
+% Return signal as a vector.
 if EXPERIMENT == CPMG_2D
     Signal = reshape(v.',1,[]);
 else

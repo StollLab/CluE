@@ -23,16 +23,19 @@ System.averaging = 'Nitroxide_Wband_Weights';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 12e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.radius = 8e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
 System.inner_radius = 0;%e-10; % m.
 
 % time points per delay period
-System.timepoints = 2^7;%11; %1e3 + 1;
 System.nitrogen = false;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
-total_time = 25e-6; % s.
-System.dt = total_time/System.timepoints/2; % s.
+
+System.timepoints = 309; % s.
+System.dt = (6.15384615e-08)/4; % s
+System.dt2 = (6.4000e-08)/4; % s.
+System.Ndt = 14;
+System.t0 = 0; % s.
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
 % [ m, n ] mean coordinates of the mth and nth atoms from the pdb file
@@ -69,16 +72,16 @@ System.nStates = [1,1];
 %==========================================================================
 
 % cluster mehod choices CE, CCE, restrictedCE, restrictedCCE
-Method.method = 'count clusters';
+Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 4;
+Method.order = 2;
 Method.order_lower_bound = 1;
 
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^3; % Hz
+Method.cutoff.dipole = 10^4; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -109,6 +112,7 @@ Method.exportClusters = false;
 %% Plot.
 %--------------------------------------------------------------------------
 clf
+fontsize = 24;
 if strcmp(Method.method,'count clusters')
 
 plot(abs(SignalMean),'o--','linewidth',3,'color','blue');
@@ -118,6 +122,32 @@ set(gca,'fontsize',12);
 grid on;  zoom on; 
 fontsize = 24;
 set(gca,'fontsize',fontsize);
+elseif strcmp(System.experiment,'CPMG-2D')
+ time = twotau;
+ V = SignalMean;
+contour(time/4*1e6,fliplr(time/4)*1e6,real(flipud(V)))
+colormap(color_map('-flip','black-body'));
+% colormap(color_map('-no-flip','smooth-cool-warm'));
+% colormap(color_map('no-flip','smooth-cool-warm'));
+cmax = mma(V);
+caxis([-cmax cmax])
+% imagesc(time,time,V)
+
+lw_2d = 1;
+hold on
+cb=colorbar;
+imagesc(time/4*1e6,fliplr(time/4)*1e6,real(flipud(V)));
+contour(time/4*1e6,fliplr(time/4)*1e6,real(flipud(V)),'color',discrete_color_map(8),'linewidth',lw_2d);
+plot(time/4*1e6,time/4*1e6,'--','color',discrete_color_map(5),'linewidth',lw_2d);
+% plot(twotau1*1e6,twotau2*1e6,'--','color','black','linewidth',lw_2d);
+
+xlabel('\tau_{1} (\mus)');
+ylabel('\tau_{2} (\mus)');
+
+%     ylabel(cb,'V(\tau_{1},\tau_{2})/sup_{\tau_{1}}(V(\tau_{1}|\tau_{2}))');
+ylabel(cb,'coherence');
+
+set(gca,'fontsize',fontsize);   
 else  
 subplot(2,1,1)
 
@@ -141,7 +171,7 @@ xlabel('2\tau (\mus)');
 ylabel('coherence');
 set(gca,'fontsize',12);
 grid on;  zoom on; 
-fontsize = 24;
+
 set(gca,'fontsize',fontsize);
 hold on;
 subplot(2,1,2)
