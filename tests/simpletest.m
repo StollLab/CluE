@@ -36,6 +36,16 @@ System.dt = (6.15384615e-08)/4; % s
 System.dt2 = (6.4000e-08)/4; % s.
 System.Ndt = 14;
 System.t0 = 0; % s.
+
+System.timepoints = 73; % s.
+System.dt = (6.15384615e-08)/4; % s
+System.dt2 = (3.2000e-07)/4; % s.
+System.Ndt = 14;
+System.t0 = 0; % s.
+
+
+
+
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
 % [ m, n ] mean coordinates of the mth and nth atoms from the pdb file

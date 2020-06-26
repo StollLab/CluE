@@ -478,7 +478,7 @@ if parallelComputing
     TempSignals{isignal} = TempSignals_;
     Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
     
-    if saveAll || Method.getNuclearContributions || Method.getNuclearSpinContributions
+    if saveAll || Method.getContributions
       AuxiliarySignal{isignal} = AuxiliarySignal_;
     end
   end
@@ -506,7 +506,7 @@ else
       TempSignals{isignal} = TempSignals_;
       Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
       
-      if saveAll || Method.getNuclearContributions || Method.getNuclearSpinContributions
+      if saveAll || Method.getContributions
         AuxiliarySignal{isignal} = AuxiliarySignal_;
       end
       
@@ -666,6 +666,10 @@ end
 if Method.getNuclearSpinContributions
   getNuclearSpinContributions([OutputData,'SpinContribution.mat'], ...
     Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean)
+end
+if Method.getClusterContributions
+  getClusterContributions([OutputData,'ClusterContribution.mat'], ...
+    Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean,Order_n_Signals)
 end
 
 if isfield(Method, 'getNuclearContributions') && Method.getNuclearContributions

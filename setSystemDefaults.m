@@ -17,7 +17,7 @@ if Method.conserveMemory
   
   % Auxiliary signals are not saved so getNuclearContributions will fail.
   Method.getNuclearContributions = false;
-  
+  Method.getClusterContributions = false;
   % The following behaviors are are used regardless of settings,
   % so the settings are modified to reflect what is done.
   
@@ -219,7 +219,10 @@ end
 if ~isfield(Method,'getNuclearSpinContributions')
   Method.getNuclearSpinContributions = false;
 end
-
+if ~isfield(Method,'getClusterContributions')
+  Method.getClusterContributions = false;
+end
+Method.getContributions = Method.getNuclearContributions || Method.getNuclearSpinContributions || Method.getClusterContributions;
 % Base Units
 if ~isfield(System,'joule')
   System.joule = 1; % J;
