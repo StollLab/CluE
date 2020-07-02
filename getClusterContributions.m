@@ -302,11 +302,24 @@ for isize = 2:Method_order
     freq_ = freq_(E_);
     
     
-    ClusterH{isize}.ModulationDepth(icluster,:) = [min(moddepth_),max(moddepth_), ModulationDepth(prox_,dist_), min(moddepth_(adj_))];
+    if any(adj_)
+      crit_moddepth_ = min(moddepth_(adj_));
+      crit_deltahyperfine_ = min(deltahyperfine_(adj_));
+      crit_dd_ = min(dd_(adj_));
+      crit_freq_ = min(freq_(adj_));
+    else
+      crit_moddepth_ = -1;
+      crit_deltahyperfine_ = -1;
+      crit_dd_ = -1;
+      crit_freq_ = -1;
+    end
+    
+    
+    ClusterH{isize}.ModulationDepth(icluster,:) = [min(moddepth_),max(moddepth_), ModulationDepth(prox_,dist_), crit_moddepth_];
     ClusterH{isize}.Hyperfine(icluster,:) = [min(abs(hyperfine_)),max(hyperfine_)];
-    ClusterH{isize}.DeltaHyperfine(icluster,:) = [min(deltahyperfine_),max(deltahyperfine_), DeltaHyperfine(prox_,dist_), min(deltahyperfine_(adj_))];
-    ClusterH{isize}.Nuclear_Dipole(icluster,:) = [min(dd_),max(dd_), Nuclear_Dipole(prox_,dist_), min(dd_(adj_))];
-    ClusterH{isize}.Frequency_Pair(icluster,:) = [min(freq_),max(freq_), Frequency_Pair(prox_,dist_), min(freq_(adj_))];
+    ClusterH{isize}.DeltaHyperfine(icluster,:) = [min(deltahyperfine_),max(deltahyperfine_), DeltaHyperfine(prox_,dist_), crit_deltahyperfine_];
+    ClusterH{isize}.Nuclear_Dipole(icluster,:) = [min(dd_),max(dd_), Nuclear_Dipole(prox_,dist_), crit_dd_];
+    ClusterH{isize}.Frequency_Pair(icluster,:) = [min(freq_),max(freq_), Frequency_Pair(prox_,dist_), crit_freq_];
   end
   
   ClusterH{isize}.DeltaHyperfine_over_Nuclear_Dipole = ClusterH{isize}.DeltaHyperfine./ClusterH{isize}.Nuclear_Dipole;
@@ -354,7 +367,7 @@ ana.ClusterGeo  = ClusterGeo;
 ana.ClusterH = ClusterH;
 
 % Save.
-save( [matfile(1:end-4),'_analysis.mat'] ,'ana');
+save( [matfile(1:end-4),'_analysis.mat'] ,'ana','-v7.3');
 
 % Close parallel pool.
 % delete(pool);
