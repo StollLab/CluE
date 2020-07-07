@@ -1,13 +1,14 @@
-function SuperClusterIndices = findSuperClusters(ClusterArray,clusterSize,iCluster)
+function SuperClusterIndices = findSuperClusters(Clusters,clusterSize,iCluster)
 
 % Extract cluster of interest.
-thisCluster = ClusterArray(iCluster,1:clusterSize,clusterSize);
+thisCluster = Clusters{clusterSize}(iCluster,:);
 
 % Get maximum cluster size in ClusterArray. 
-maxClusterSize = size(ClusterArray,3);
-
-% Determine the highest possible number of super-cluster.
-maxNumberOfClusters = size(ClusterArray,1);
+maxClusterSize = numel(Clusters);
+maxNumberOfClusters = 1;
+for isize = 1:maxClusterSize
+  maxNumberOfClusters = max(maxNumberOfClusters, size(Clusters{isize},1));
+end
 
 % Number line over cluster index range.
 Indices = (1:maxNumberOfClusters)';
@@ -32,7 +33,7 @@ for isize = clusterSize+1:maxClusterSize
     ispin = thisCluster(ii);
     
     % Remove all clusters that do not contain ispin from examination.
-    potenstialCluster = potenstialCluster & any(ClusterArray(:,1:isize,isize)==ispin,2);
+    potenstialCluster = potenstialCluster & any(Clusters{isize}==ispin,2);
   end
   
   % Generate list of indices for the super-clusters of size isize.

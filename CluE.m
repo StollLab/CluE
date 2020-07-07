@@ -173,6 +173,7 @@ end
 % Compile list of connected clusters
 % ========================================================================
 Clusters = [];
+inClusters = {};
 doFindClusters = true;
 if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
   Clusters = {};
@@ -185,8 +186,10 @@ if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
   else
     Clusters = Method.Clusters;
   end
-    
-  for clusterSize = 1:Method.order
+   
+  inOrder = numel(Clusters); 
+   
+  for clusterSize = 1:inOrder
     
     Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
     if verbose
@@ -194,8 +197,11 @@ if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
     end
    
   end
-  
-  doFindClusters = isempty(Clusters);
+  if inOrder < Method.order
+    inClusters = Clusters;
+  else
+    doFindClusters = isempty(Clusters);
+  end
 end
 
 
@@ -206,7 +212,22 @@ if doFindClusters
   if strcmp(Method.clusterization,'tree-search')
     if verbose, fprintf('Finding clusters of up to size %d.\n', Method.order); end
 
-    Clusters = findClusters_treeSearch(Nuclei,Method.order);
+    if Method.combineClusters
+      Clusters = findClusters_treeSearch(Nuclei,Method.order,{});
+      for clusterSize = 1:min(Method.order, numel(inClusters))
+        % Combine arrays.
+        C = [Clusters{clusterSize}; inClusters{clusterSize}];
+        
+        % Sort clusters
+        C = sortrows(C);
+        
+        % Remove duplicates
+        keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+        Clusters{clusterSize} = C(keep,:);
+      end
+    else
+      Clusters = findClusters_treeSearch(Nuclei,Method.order,inClusters);
+    end
     Nuclei.numberClusters = zeros(1,Method.order);
     
     for clusterSize = 1:Method.order
@@ -379,7 +400,7 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
          3074, 3470, 3890, 4334, 4802, 5294, 5810];
   gridIndex = find(GridSizes==gridSize);
   
-  load([Data.path2CluE, 'grids/Nitroxide_Wband_Weights.mat'],'Grids');
+  load([Data.path2CluE, 'grids/Lebedev_weighted_Nitroxide_Wband_Weights.mat'],'Grids');
   Alpha = Grids{gridIndex}.Alpha;
   Beta = Grids{gridIndex}.Beta;
   gridWeight = Grids{gridIndex}.Weight;
@@ -872,6 +893,28 @@ R_pdb2lab = rotateZYZ(Alpha,Beta,Gamma);
 
 % Rotate nuclear coordinates.
 Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
+Statistics = Nuclei.Statistics;
+if Method.Ori_cutoffs
+  
+  Statistics = getPairwiseStatistics(System, Nuclei);
+  Nuclei.Statistics = Statistics;
+  Adjacency = getAdjacencyMatrix(Nuclei,Method);
+  Nuclei.Adjacency = Adjacency;
+  
+  Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,{});
+  
+  for clusterSize = 1:Method.order
+    % Combine arrays.
+    C = [Clusters{clusterSize}; Ori_Clusters{clusterSize}];
+    
+    % Sort clusters
+    C = sortrows(C);
+    
+    % Remove duplicates
+    keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+    Clusters{clusterSize} = C(keep,:);
+  end
+end
 
 % Rotate bath spin tensors.
 for inucleus = 1:Nuclei.number
@@ -956,7 +999,7 @@ linearTimeAxis = true; % Code should be changed to enforce this.
 
 % Calculate signal
 if Method.mixed_eState
-  [Signal, Order_n_Signal,Statistics] = calculateSignal_pulse(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
+  [Signal, Order_n_Signal,~] = calculateSignal_pulse(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
 else
   % Calculate signal and save extra parameters (RAM intensive)
   
@@ -1025,7 +1068,7 @@ else
     
     
   end
-  Statistics = [];
+
 end
 
 end

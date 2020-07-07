@@ -75,14 +75,12 @@ if isfield(System,'UnitCell')
   cz = sqrt(1-cx^2 - cy^2);
   ABC(3,:) = System.UnitCell.ABC(3)*[cx,cy,cz];
   
-  a_limit = ceil(2*System.radius/ABC(1,1)/2/scaleFactor + 1/2)-1;
-  b_limit = ceil(2*System.radius/ABC(2,2)/2/scaleFactor + 1/2)-1;
-  c_limit = ceil(2*System.radius/ABC(3,3)/2/scaleFactor + 1/2)-1;
+  a_limit = ceil(2*System.load_radius/ABC(1,1)/2/scaleFactor + 1/2)-1;
+  b_limit = ceil(2*System.load_radius/ABC(2,2)/2/scaleFactor + 1/2)-1;
+  c_limit = ceil(2*System.load_radius/ABC(3,3)/2/scaleFactor + 1/2)-1;
 
-end
-if ~isfield(System,'radius')
-  System.radius = inf;
-end
+end 
+
 numberUnitCells = (2*a_limit+1)*(2*b_limit+1)*(2*c_limit+1);
 % Get nuclear quadrupole parameters.
 if System.nuclear_quadrupole
@@ -191,7 +189,7 @@ for uc = 1:nCells
     NuclearCoordinates = ElectronCenteredCoordinates(inucleus,:);
     
     % skip if the electron-nuclear separation is over the set cutoff
-    if norm(NuclearCoordinates)>System.radius
+    if norm(NuclearCoordinates)>System.load_radius
       continue
     end
     if norm(NuclearCoordinates)<System.inner_radius
@@ -590,67 +588,17 @@ Nuclei.Atensor(:,:,Nuclei.number+1:end) = [];
 Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
 Nuclei.Azz(Nuclei.number+1:end,:) = [];
 
-% Initialize separation matrix.
-Nuclei.DistanceMatrix = zeros(Nuclei.number);
 
-% Loop over all nuclear spins.
-for ispin = 1:Nuclei.number
- 
-  % Loop over all nuclear spins with a higher index than ispin.
-  for jspin = ispin+1:Nuclei.number
-    
-    % Set separation matrix entry.
-    Nuclei.DistanceMatrix(ispin,jspin) = norm(Nuclei.Coordinates(ispin,:) - Nuclei.Coordinates(jspin,:));
-    
-    % Use the symmetric nature of the separation matrix to set the ispin > jspin entries. 
-    Nuclei.DistanceMatrix(jspin,ispin) = Nuclei.DistanceMatrix(ispin,jspin);
-  end
-end
 
 % Get coupling statistics.
-Nuclei = getPairwiseStatistics(System, Nuclei);
+Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
+Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
+Nuclei.valid = Nuclei.valid & (Nuclei.Statistics.Distance <= System.radius);
 
 % Get the highest spin value. 
 Nuclei.maxSpin = max(Nuclei.Spin);
 
-% Initialize a matrix of valid edges.
-Nuclei.ValidPair = ones(Nuclei.number,Nuclei.number,Method.order);
-for isize = 1:Method.order
-  Nuclei.ValidPair(:,:,isize) = Nuclei.valid'*Nuclei.valid;
-  Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Nuclei.Same_g;
-  % exclude_spins = find( isnan(Nuclei.Spin));
-  % Nuclei.ValidPair(exclude_spins,:) = 0;
-  % Nuclei.ValidPair(:,exclude_spins) = 0;
-  
-  % Loop over all criteria used to determine an edge.
-  num_criteria = numel(Method.Criteria);
-  for ii = 1:num_criteria
-    switch Method.Criteria{ii}
-      case 'neighbor'
-        Max_Neighbor_ = Nuclei.DistanceMatrix <= Method.r0;
-        Min_Neighbor_ = Nuclei.DistanceMatrix > Method.r_min;
-        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Max_Neighbor_.*Min_Neighbor_;
-        
-      case 'modulation'
-        Min_Mod_ = Nuclei.ModulationDepth >= Method.cutoff.modulation(isize);
-        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_Mod_;
-        
-      case 'dipole'
-        Min_dipole_ = abs(Nuclei.Nuclear_Dipole) >= Method.cutoff.dipole(isize);
-        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_dipole_;
-        
-      case 'minimum-frequency'
-        Min_Freq_ = abs(Nuclei.Frequency_Pair) >  Method.cutoff.minimum_frequency(isize);
-        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_Freq_;
-        
-      case 'hyperfine'
-        Min_DeltaA_ = abs(Nuclei.DeltaHyperfine) > Method.cutoff.hyperfine_inf(isize);
-        Max_DeltaA_ = abs(Nuclei.DeltaHyperfine) < Method.cutoff.hyperfine_sup(isize);
-        Nuclei.ValidPair(:,:,isize) = Nuclei.ValidPair(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
-    end
-  end
-end
-
+Nuclei.Adjacency = getAdjacencyMatrix(Nuclei, Method);
 
 % Set the starting spin index and ending spin index.
 Nuclei.startSpin = max(1, floor(Method.startSpin));

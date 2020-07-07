@@ -337,7 +337,7 @@ for isize = Method_order+1:maxSize
       
 end
 
-Nuclei_ValidPair = Nuclei.ValidPair;
+Adjacency = Nuclei.Adjacency;
 % ENUM
 CONNECTED = 0;  COMPLETE = 1;
 
@@ -368,7 +368,7 @@ for clusterSize = 1:Method_order
   for iCluster = numClusters:-1:1
     Cluster = ClusterArray(iCluster,1:clusterSize,clusterSize); 
    
-    if Cluster(1,1) == 0 || ~validateCluster(Cluster,Nuclei_ValidPair,graphCriterion)
+    if Cluster(1,1) == 0 || ~validateCluster(Cluster,Adjacency,graphCriterion)
       continue;
     end
     
@@ -635,22 +635,22 @@ for clusterSize = 1:Method_order
         switch clusterSize
           case 1
             Coherences_1(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_1(iCluster,:) ...
-              + propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
+              + propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 2
             Coherences_2(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_2(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 3
             Coherences_3(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_3(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 4
             Coherences_4(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_4(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 5
             Coherences_5(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_5(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
           case 6
             Coherences_6(iCluster,:) = 1/nStates(clusterSize) * ((iave-1)*Coherences_6(iCluster,:) ...
-              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
+              + 1/nStates(clusterSize) *propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT));
             
         end
       end
@@ -672,7 +672,7 @@ for clusterSize = 1:Method_order
             
          
     % Calculate the coherence.
-    Coherences_E = propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
+    Coherences_E = propagate(total_time,timepoints,dt,dt2,Ndt,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
     
     switch clusterSize
       case 1
@@ -710,7 +710,7 @@ for clusterSize = 1:Method_order
 
      
      % Calculate the coherence.
-     Coherences_AE = propagate(total_time,timepoints,dt,t0,Hb_AE,Ha_AE,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
+     Coherences_AE = propagate(total_time,timepoints,dt,Hb_AE,Ha_AE,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
     
      % Project the Hamiltonian onto an A state for  
      % the other methyl and an E state for one.
@@ -727,7 +727,7 @@ for clusterSize = 1:Method_order
      Ha_EA = PA2*Ha_EA*PA2;
      
      % Calculate the coherence.
-     Coherences_EA = propagate(total_time, timepoints,dt,dt2,Ndt,t0,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+     Coherences_EA = propagate(total_time, timepoints,dt,dt2,Ndt,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
 
      % Add the methyl coherences together, weighting the coherences by
      % a statistical factor.
@@ -796,7 +796,7 @@ end
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,t0,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
+function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
@@ -807,7 +807,7 @@ Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
 
 % Get density matrix.
 if useThermalEnsemble
-  DensityMatrix = propagator_eig((Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT);
+  DensityMatrix = propagator_eig((Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT,0);
 else
   DensityMatrix = densityMatrix;
 end
@@ -816,38 +816,19 @@ end
 vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
 
 % Generate propagators for time element dt.
-dU_beta = propagator_eig(Hamiltonian_beta,dt);
-dU_alpha = propagator_eig(Hamiltonian_alpha,dt);
-
-% Generate propagators for time element dt2.
-if dt2 > 0
-  dU_beta2 = propagator_eig(Hamiltonian_beta,dt2);
-  dU_alpha2 = propagator_eig(Hamiltonian_alpha,dt2);
-end
+[dU_beta, dU_beta2] = propagator_eig(Hamiltonian_beta,dt,dt2);
+[dU_alpha, dU_alpha2] = propagator_eig(Hamiltonian_alpha,dt, dt2);
 
 % Find the dimensionality of the Hilbert space.
 nStates = length(Hamiltonian_beta);
 
-% Set starting time.
-if t0 > 0
-  timeStart = 2;
-  U_beta = propagator_eig(Hamiltonian_beta,t0);
-  U_alpha = propagator_eig(Hamiltonian_alpha,t0);
-else
-  timeStart = 1;
-  U_beta = eye(nStates);
-  U_alpha = eye(nStates);
-end
+U_beta = eye(nStates);
+U_alpha = eye(nStates);
 
 % Get second experimental dimesion propagators.
 if EXPERIMENT==CPMG
-  if t0 > 0
-    U_beta_2 = propagator_eig(Hamiltonian_beta,t0);
-    U_alpha_2 = propagator_eig(Hamiltonian_alpha,t0);
-  else
     U_beta_2 = eye(nStates);
     U_alpha_2 = eye(nStates);
-  end
 end
 
 % Get second experimental dimesion propagators.
@@ -860,7 +841,7 @@ end
 v= ones(1 ,timepoints);
 
 % Loop over time points.
-for iTime = timeStart:timepoints
+for iTime = 1:timepoints
   
   % Find the correct experiment
   switch EXPERIMENT
@@ -894,11 +875,8 @@ for iTime = timeStart:timepoints
     case CPMG_CONST
       
       % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > Ndt.
-      U_beta = propagator_eig(Hamiltonian_beta,(iTime-1)*dt);
-      U_alpha = propagator_eig(Hamiltonian_alpha,(iTime-1)*dt);
-      
-      U_beta_2 = propagator_eig(Hamiltonian_beta, total_time/4-(iTime-1)*dt);
-      U_alpha_2 = propagator_eig(Hamiltonian_alpha, total_time/4-(iTime-1)*dt);
+      [U_beta, U_beta_2] = propagator_eig(Hamiltonian_beta,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
+      [U_alpha, U_alpha_2] = propagator_eig(Hamiltonian_alpha,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
       
       % Generate time dependent detection operator.
       U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
@@ -1027,11 +1005,13 @@ end
 % Calculate propagator using diagonalization
 % ========================================================================
 
-function U = propagator_eig(Ham,t)
+function [U1,U2] = propagator_eig(Ham,t1,t2)
 %Ham = (Ham+Ham')/2; % "hermitianize" Hamiltonian
 [EigenVectors, EigenValues] = eig(Ham);
-Udiag = exp(-2i*pi*diag(EigenValues)*t);
-U = EigenVectors*diag(Udiag)*EigenVectors';
+Udiag1 = exp(-2i*pi*diag(EigenValues)*t1);
+Udiag2 = exp(-2i*pi*diag(EigenValues)*t2);
+U1 = EigenVectors*diag(Udiag1)*EigenVectors';
+U2 = EigenVectors*diag(Udiag2)*EigenVectors';
 end
 
 

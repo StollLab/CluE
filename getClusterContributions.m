@@ -25,21 +25,12 @@ if nargin == 1
 end
 
 % number of bath spin
-nSpins = Nuclei.number;
 numberClusters = Nuclei.numberClusters;
 nt = System.timepoints;
 DistanceMatrix = Nuclei.DistanceMatrix;
 Method_order = Method.order;
-Method_order_lower_bound = Method.order_lower_bound;
-% CluserArray(iCluster,:,clusterSize) = nuclear indices.
-maxClusterSize = min(12,Method_order);
-maxNumberClusters = max(numberClusters(1:maxClusterSize));
-ClusterArray = zeros(maxNumberClusters,maxClusterSize,maxClusterSize);
-for isize = 1:Method_order  
-  for ii = 1:Nuclei.numberClusters(isize)
-    ClusterArray(ii,1:isize,isize) = Clusters{isize}(ii,:);
-  end
-end
+Method_order_lower_bound = Method.order_lower_bound; 
+
 
 % -------------------------------------------------------------------------
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -117,7 +108,7 @@ pool = parpool(numCores);
     
     for icluster = 1:numberClusters(isize)
     
-      SuperClusterIndices = findSuperClusters(ClusterArray,isize,icluster);
+      SuperClusterIndices = findSuperClusters(Clusters,isize,icluster);
       
       % Loop through orientations used in powder averaging.
       for iOri = 1:nOrientations
@@ -245,12 +236,12 @@ ana.Vclu = Vclu;
 
 % -------------------------------------------------------------------------
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-ModulationDepth = Nuclei.ModulationDepth; % = matrix(N);
-Hyperfine = abs(Nuclei.Hyperfine); % = matrix(N,1);
-Nuclear_Dipole = abs(Nuclei.Nuclear_Dipole); % = matrix(N);
-Frequency_Pair = Nuclei.Frequency_Pair; % = matrix(N);
-DeltaHyperfine = abs(Nuclei.DeltaHyperfine); % = matrix(N);
-Adjacency = Nuclei.ValidPair; % = matrix(N);
+ModulationDepth = Nuclei.Statistics{1}.Modulation_Depth; % = matrix(N);
+Hyperfine = abs(Nuclei.Statistics{1}.Hyperfine); % = matrix(N,1);
+Nuclear_Dipole = abs(Nuclei.Statistics{1}.Nuclear_Dipole); % = matrix(N);
+Frequency_Pair = Nuclei.Statistics{1}.Frequency_Pair; % = matrix(N);
+DeltaHyperfine = abs(Nuclei.Statistics{1}.DeltaHyperfine); % = matrix(N);
+Adjacency = Nuclei.Adjacency; % = matrix(N);
 
 % ENUM
 MIN = 1; MAX = 2; EDGE = 3; CRIT = 4;
@@ -275,7 +266,7 @@ for isize = 2:Method_order
   ClusterH{isize}.Frequency_Pair = zeros(nC_,4);
   
   for icluster = 1:nC_
-    cluster_ = ClusterArray(icluster,1:isize,isize);
+    cluster_ = Clusters{isize}(icluster,:);
     adj_ = Adjacency(cluster_,cluster_) > 0;
     adj_ = adj_(:);
     adj_ = adj_(E_);
@@ -323,7 +314,7 @@ for isize = 2:Method_order
   end
   
   ClusterH{isize}.DeltaHyperfine_over_Nuclear_Dipole = ClusterH{isize}.DeltaHyperfine./ClusterH{isize}.Nuclear_Dipole;
-  
+  ClusterH{isize}.GaussianRMSD = getGaussianRMSD(ClusterH{isize}.ModulationDepth,ClusterH{isize}.Frequency_Pair,TM_powder);
 end
 
 
@@ -351,7 +342,6 @@ ana.sim = sim;
 % electron-nucleus coordinates
 ana.Coordinates = Coordinates;
 ana.Clusters = Clusters;
-ana.ClusterArray = ClusterArray;
 ana.Adjacency = Adjacency;
 ana.DistanceMatrix = DistanceMatrix;
 

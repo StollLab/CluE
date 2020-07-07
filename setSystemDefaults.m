@@ -75,10 +75,20 @@ if ~isfield(Method,'cutoff')
   Method.cutoff.hyperfine_inf = zer;
 end
 
+if ~isfield(Method,'Ori_cutoffs')
+  Method.Ori_cutoffs = false;
+end
+
 if numel(Method.cutoff.dipole) < Method.order
   n_ = numel(Method.cutoff.dipole);
   Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
 end
+
+% Radius to load nuclei in to.
+if ~isfield(System,'load_radius')
+  System.load_radius = System.radius;
+end
+System.load_radius = max(System.load_radius, System.radius);
 
 % cluster order max
 if ~isfield(Method,'order')
@@ -86,6 +96,9 @@ if ~isfield(Method,'order')
 end
 if ~isfield(Method,'clusterization')
   Method.clusterization = 'tree-search';
+end
+if ~isfield(Method,'combineClusters')
+  Method.combineClusters = false;
 end
 % cluster order min
 if ~isfield(Method,'order_lower_bound')
@@ -500,6 +513,10 @@ if isfield(System,'deuterateAll') && islogical(System.deuterateAll) && System.de
   System.D2O = true;
 end
 
+if ~isfield(System,'TMguess')
+  % very rough
+  System.TMguess = (5+45*System.D2O)*1e-6;
+end
 
 
 % The methods rCE and rCE do not use precomputed Hamiltonians.

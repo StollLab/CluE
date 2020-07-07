@@ -2,89 +2,99 @@
 % Calculate statistics for each bath spin pair. 
 % ========================================================================
 
-function Nuclei = getPairwiseStatistics(System, Nuclei)
+function pwstat = getPairwiseStatistics(System, Nuclei)
 
 N = Nuclei.number;
 
-Hyperfine = zeros(1,N);
+% Initialize separation matrix.
+pwstat.Coordinates = Nuclei.Coordinates;
+pwstat.DistanceMatrix = zeros(N);
+pwstat.Cylindrical_DistanceMatrix = zeros(N);
+pwstat.ThetaMatrix = zeros(N);
+pwstat.PhiMatrix = zeros(N); 
 
-Nuclei.ModulationDepth = zeros(N);
-Nuclei.Hyperfine = zeros(N,1);
-Nuclei.Nuclear_Dipole = zeros(N);
-Nuclei.Frequency_Pair = zeros(N);
-Nuclei.DeltaHyperfine = zeros(N);
-Nuclei.SameType = eye(N);
-Nuclei.Same_g = eye(N);
-
-Nuclei.SpinSet = unique(Nuclei.Spin);
-
-Nuclei.timescale.HF_A = 0;
-Nuclei.timescale.HF_SzIxy = 0;
-Nuclei.timescale.NucB = 0;
-% loop over all nuclei
-for inucleus = 1:N
-  
-  
-  % Calculating hyperfine coupling
-  
-  gamma_e = -System.Electron.g*System.muB/System.hbar;
-  Rn = norm(System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:) );
-  gamma_n = Nuclei.Nuclear_g(inucleus)*System.muN/System.hbar;
-  
-  R = System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:);
-  cosTheta2 = (R*[0;0;1]/norm(R))^2;
-  
-  Hyperfine(inucleus) = Nuclei.FermiContact(inucleus)*(2*pi)-(System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;
-  Nuclei.Hyperfine(inucleus) = Hyperfine(inucleus)/(2*pi); % Hz;
-  % Calculating bath coupling
-  for jnucleus = 1:inucleus-1
+% Loop over all nuclear spins.
+for ispin = 1:N
+ 
+  % Loop over all nuclear spins with a higher index than ispin.
+  for jspin = ispin+1:N
     
-    if strcmp(Nuclei.Type{inucleus},Nuclei.Type{jnucleus})
-      Nuclei.SameType(inucleus,jnucleus) = true;
-      Nuclei.SameType(jnucleus,inucleus) = true;
-    end
+    deltaR_ = pwstat.Coordinates(ispin,:)-pwstat.Coordinates(jspin,:);
     
-    if abs(Nuclei.Nuclear_g(inucleus)-Nuclei.Nuclear_g(jnucleus)) < 1e-9
-      Nuclei.Same_g(inucleus,jnucleus) = true;
-      Nuclei.Same_g(jnucleus,inucleus) = true;
-    end
+    % Set separation matrix entry.
+    pwstat.DistanceMatrix(ispin,jspin) = norm(deltaR_);
+    pwstat.Cylindrical_DistanceMatrix(ispin,jspin) = norm(deltaR_(1:2));
     
-    % calculate dipolar coupling
-    delta_r = Nuclei.Coordinates(inucleus,:) -Nuclei.Coordinates(jnucleus,:);
-    cosThetaSquared = ( delta_r(3)/norm(delta_r) )^2;
-    b = 0.25*(System.mu0/4/pi)*Nuclei.Nuclear_g(inucleus)*Nuclei.Nuclear_g(jnucleus)*System.muN^2; % J m^3.
-    r = norm(Nuclei.Coordinates(inucleus,:) - Nuclei.Coordinates(jnucleus,:));
-    r3 = r^3;
-    b = -b/r3; % J.
-%     b = b*(3*cosThetaSquared - 1); % J.
-    b = b/(System.hbar); % rad/s.
+    cosTheta_ = deltaR_(3)/pwstat.DistanceMatrix(ispin,jspin);
+    pwstat.ThetaMatrix(ispin,jspin) = acos(cosTheta_);
     
+    cosPhi_ = deltaR_(1)/pwstat.Cylindrical_DistanceMatrix(ispin,jspin);
+    pwstat.PhiMatrix(ispin,jspin) = acos(cosPhi_) + (1 - sign( deltaR_(2) ))*pi/2;
     
-    c = ( Hyperfine(inucleus)-Hyperfine(jnucleus) )/(4*b);
-    
-    mod_amp = 4*c^2/(1+c^2)^2;
-    
-    Nuclei.Frequency_Pair(inucleus,jnucleus) = 2*b*sqrt(1+c^2)/(2*pi);
-    Nuclei.Frequency_Pair(jnucleus,inucleus)=    Nuclei.Frequency_Pair(inucleus,jnucleus);
-    
-    Nuclei.ModulationDepth(inucleus,jnucleus) = mod_amp;
-    Nuclei.ModulationDepth(jnucleus,inucleus) = Nuclei.ModulationDepth(inucleus,jnucleus);
-    
-    Nuclei.Nuclear_Dipole(inucleus,jnucleus) = 4*b/(2*pi); % Hz.
-    Nuclei.Nuclear_Dipole(jnucleus,inucleus) = Nuclei.Nuclear_Dipole(inucleus,jnucleus);
-    
-    Nuclei.DeltaHyperfine(inucleus,jnucleus) = (Nuclei.Hyperfine(inucleus) - Nuclei.Hyperfine(jnucleus)); % Hz
-    Nuclei.DeltaHyperfine(jnucleus,inucleus) = -Nuclei.DeltaHyperfine(inucleus,jnucleus);
-    
-    Nuclei.timescale.HF_A = Nuclei.timescale.HF_A + abs(Nuclei.DeltaHyperfine(jnucleus,inucleus));
-    Nuclei.timescale.NucB = Nuclei.timescale.NucB + abs(Nuclei.Nuclear_Dipole(jnucleus,inucleus));
+    % Use the symmetric nature of the separation matrix to set the ispin > jspin entries. 
+    pwstat.DistanceMatrix(jspin,ispin) = pwstat.DistanceMatrix(ispin,jspin);
+    pwstat.Cylindrical_DistanceMatrix(jspin,ispin) = pwstat.Cylindrical_DistanceMatrix(ispin,jspin);
+    pwstat.ThetaMatrix(jspin,ispin) = pwstat.ThetaMatrix(ispin,jspin);
+    pwstat.PhiMatrix(jspin,ispin) = pwstat.PhiMatrix(ispin,jspin);
   end
-  
 end
 
-Nuclei.timescale.HF_SzIxy = 1/mean(abs(Nuclei.Hyperfine));
-numPair = double(N*(N+1))/2;
-Nuclei.timescale.NucB = numPair/Nuclei.timescale.NucB;
-Nuclei.timescale.HF_A = numPair/Nuclei.timescale.HF_A;
+% Coordinates
+pwstat.Distance = vecnorm(pwstat.Coordinates,2,2);
+pwstat.Cylindrical_Distance = vecnorm(pwstat.Coordinates(:,1:2),2,2);
+pwstat.theta = acos(pwstat.Coordinates(:,3)./pwstat.Distance);
+cosTheta2 = (pwstat.Coordinates(:,3)./pwstat.Distance).^2;
+
+cos_phi= pwstat.Coordinates(:,1)./pwstat.Cylindrical_Distance;
+pwstat.phi = acos(cos_phi) + (1 - sign(pwstat.Coordinates(:,2)))*pi/2;
+
+
+pwstat.gamma_e = -System.Electron.g*System.muB/System.hbar;
+pwstat.gamma_n = Nuclei.Nuclear_g*System.muN/System.hbar;
+
+
+% Hyperfine
+pwstat.Hyperfine_perpendicular = Nuclei.FermiContact ...
+  - System.hbar.*(System.mu0/4/pi).*pwstat.gamma_n.*pwstat.gamma_e.*pwstat.Distance.^-3; % Hz
+pwstat.DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular - pwstat.Hyperfine_perpendicular';
+
+pwstat.Hyperfine = pwstat.Hyperfine_perpendicular.*(1-3*cosTheta2);
+pwstat.DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
+
+% Nuclear Dipole-Dipole
+b = 0.25*(System.mu0/4/pi).*(Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2; % J m^3.
+b = -b./pwstat.DistanceMatrix.^3; % J.
+b = b/(System.h); % Hz.
+bp = b.*(1-3*cos(pwstat.ThetaMatrix).^2);
+pwstat.Nuclear_Dipole_perpendicular = 4*b; % Hz.
+pwstat.Nuclear_Dipole = 4*bp; % Hz.
+
+
+% Hyperfine to nucler dipole-dipole ratio
+cp = pwstat.DeltaHyperfine_perpendicular./pwstat.Nuclear_Dipole_perpendicular;
+c = pwstat.DeltaHyperfine./pwstat.Nuclear_Dipole;
+
+pwstat.DeltaHyperfine_over_Nuclear_Dipole_p = cp;
+pwstat.DeltaHyperfine_over_Nuclear_Dipole = c;
+
+% modulation depth
+modDepth_p = 4*cp.^2./(1+cp.^2).^2;
+modDepth = 4*c.^2./(1+c.^2).^2;
+pwstat.Modulation_Depth_p = modDepth_p;
+pwstat.Modulation_Depth = modDepth;
+
+% modulation frequency
+pwstat.Frequency_Pair_p =  2.*bp.*sqrt(1+cp.^2)./(2*pi);
+pwstat.Frequency_Pair =  2.*b.*sqrt(1+c.^2)./(2*pi);
+
+% delta_gm_gn
+pwstat.Same_g = Nuclei.Nuclear_g == Nuclei.Nuclear_g';
+
+TM = System.TMguess;
+pwstat.GaussianRMSD_p = getGaussianRMSD(modDepth_p,pwstat.Frequency_Pair_p,TM);
+pwstat.GaussianRMSD = getGaussianRMSD(modDepth,pwstat.Frequency_Pair,TM);
 
 end
+
+
+

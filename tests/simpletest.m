@@ -16,14 +16,16 @@ Data.saveLevel = 0;
 %==========================================================================
 % System Settings
 %==========================================================================
-System.experiment = 'CPMG';
+System.experiment = 'Hahn';
+
+System.spinCenter = 'TEMPO';
 % averaging choices: none, powder, xy
 % System.averaging = 'powder';
-System.averaging = 'Nitroxide_Wband_Weights';
+System.averaging = 'powder';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 8e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
+System.radius = 12e-10; % m; % converges at 1.7 nm, but 0.7 nm shows a reasonable decay curve, but with high TM.
 System.inner_radius = 0;%e-10; % m.
 
 % time points per delay period
@@ -31,17 +33,10 @@ System.nitrogen = false;
 %time step size [s]
 % System.dt = 5.0e-9; % s.
 
-System.timepoints = 309; % s.
-System.dt = (6.15384615e-08)/4; % s
-System.dt2 = (6.4000e-08)/4; % s.
-System.Ndt = 14;
-System.t0 = 0; % s.
-
-System.timepoints = 73; % s.
-System.dt = (6.15384615e-08)/4; % s
-System.dt2 = (3.2000e-07)/4; % s.
-System.Ndt = 14;
-System.t0 = 0; % s.
+System.timepoints = 2^6;
+System.dt = 0.1905/2*1e-6; % s
+System.dt2 = 2.25e-6; % s
+System.Ndt = 64;
 
 
 
@@ -53,7 +48,7 @@ System.t0 = 0; % s.
 System.Electron.Coordinates = {28, 29};
 System.X = {28, 29};
 System.Y = {1,19};
-System.magneticField  = 3.37; % T.
+System.magneticField  =1.2; % T.
 
 
 % deuterium options
@@ -72,8 +67,12 @@ System.useMeanField = false;
 %}
 System.Methyl.include = false;
 %                  eZ    nZ    HF1   HF2    ddA   ddB  ddCD  ddEF  NQI meanField
-System.Theory = [ true, true, true, true, true, true, true, true, true, false; ... % 1-clusters
-                  true, true, true, true, true, true, true, true, true, false];    % 2-clusters
+System.Theory = [ true, true, true, true, true, true, true, true, true, false;  ... % 1-clusters
+                  true, true, true, false, true, true, true, true, true, false; ... % 2-clusters
+                  true, true, true, false, true, true, true, true, true, false; ... % 3-clusters
+                  true, true, true, false, true, true, true, true, true, false; ... % 4-clusters
+                  true, true, true, false, true, true, true, true, true, false; ... % 5-clusters
+                  true, true, true, false, true, true, true, true, true, false];    % 6-clusters
 System.g = [2.0097, 2.0064,2.0025];
 
 System.nStates = [1,1]; 
@@ -91,7 +90,8 @@ Method.order_lower_bound = 1;
 % maximum nucleus-nucleus coupling distance
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^4; % Hz
+Method.Ori_cutoffs = false;
+Method.cutoff.dipole = 10^3; % Hz
 
 Method.propagationDomain = 'time-domain';
 
@@ -175,21 +175,28 @@ end
 if Method.order>5
    plot(twotau*1e6,real(order_n_signals{5}),'-','linewidth',1.5);
 end
+plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
 plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
-plot(twotau*1e6,abs(SignalMean),'--','linewidth',3,'color','blue');
+plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
+
+
 xlabel('2\tau (\mus)');
 ylabel('coherence');
 set(gca,'fontsize',12);
 grid on;  zoom on; 
 
 set(gca,'fontsize',fontsize);
-hold on;
+
 subplot(2,1,2)
 dt = twotau(2)-twotau(1);
 nt = size(twotau,2);
 nu  = linspace(0,1/dt,nt);
 F = fft(SignalMean);
-semilogx(nu*1e-6,abs(F),'-o','linewidth',1.5);
+
+semilogx(nu*1e-6,abs(F),'-','linewidth',3,'color',[0,0,0]);
+hold on;
+semilogx(nu*1e-6,real(F),'-','linewidth',1.5,'color',[0,0,1]);
+semilogx(nu*1e-6,imag(F),'-','linewidth',1.5,'color',[1,0,0]);
 xlabel('\nu (MHz)');
 grid on;  zoom on; 
 set(gca,'fontsize',fontsize);

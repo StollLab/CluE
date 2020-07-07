@@ -11,12 +11,20 @@
 %   Clusters     ... Mxorder array of clusters of size order, one
 %                    cluster per row
 
-function Clusters = findClusters_treeSearch(Nuclei,order)
+function Clusters = findClusters_treeSearch(Nuclei,order,inClusters)
+
+
+% Get number of nuclei
+N = Nuclei.number;
+
+inOrder = numel(inClusters);
 
 % Get adjacency matrix and convert to logical
-Adjacency = logical(Nuclei.ValidPair(:,:,1));
-% Get number of nuclei
-N = size(Adjacency,1);
+if (inOrder < order) && (inOrder>=2)
+  Adjacency = clusters2Adjacency(inClusters{2},N);
+else
+  Adjacency = logical(Nuclei.Adjacency(:,:,1));
+end
 
 % Initialize output array
 Clusters = cell(order,1);
@@ -27,14 +35,22 @@ intDataType = 'uint16';
 C1 = cast(1:N,intDataType).';
 
 % Set 1-clusters
-Clusters{1} = C1;
-
+if inOrder >= 1
+  Clusters{1} = inClusters{1};
+else
+  Clusters{1} = C1;
+end
 % Get average number of neighbors
 q = mean(sum(Adjacency));
 
 % Loop over cluster sizes
 for clusterSize = 2:order
-  
+
+  if inOrder >= clusterSize
+    Clusters{clusterSize} = inClusters{clusterSize};
+    continue;
+  end
+    
   % Estimate the number of clusters
   estNum_ = ceil(1/factorial(clusterSize)*N*q^(clusterSize-1));
   
@@ -100,3 +116,21 @@ for clusterSize = 2:order
 end
 
 end
+
+
+
+function Adjacency = clusters2Adjacency(C2,N1)
+
+Adjacency = zeros(N1);
+N2 = size(C2,1);
+
+for ii =1:N2
+  m_ = C2(ii,1);
+  n_ = C2(ii,2);
+  Adjacency(m_,n_) = 1;
+  Adjacency(n_,m_) = 1;
+end
+
+end
+
+
