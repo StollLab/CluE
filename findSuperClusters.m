@@ -25,7 +25,7 @@ Length = 1;
 for isize = clusterSize+1:maxClusterSize
   
   % Assume all cluster could be super-clusters.
-  potenstialCluster = true(maxNumberOfClusters,1);
+  potenstialCluster = true(size(Clusters{isize},1),1);
   
   % Loop over all spins in thisCluster.
   for ii = 1:clusterSize

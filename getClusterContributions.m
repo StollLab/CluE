@@ -173,22 +173,25 @@ for isize = 1:Method_order
   Vclu{isize}.found_2pm = false;
   Vclu{isize}.found_1pm = false;
   
+  v_ori_ = ones(nOrientations,nt);
+  for iOri = 1:nOrientations
+    if isize ==1
+      v0_ = ones(1,nt);
+    else
+      v0_ = Order_n_Signals{iOri}{isize -1};
+      v0_ = v0_./v0_(1);
+    end
+    v_ori_(iOri,:) = gridWeight(iOri)*v0_;
+  end
+  
   for icluster = 1:numberClusters(isize)
-    v_ = zeros(1,nt);
-    theseClusters = sansClusterRMSDsortOrder_powder{isize}(1:icluster);
+    indexClusters = sansClusterRMSDsortOrder_powder{isize}(icluster);
    
     for iOri = 1:nOrientations
-      
-      if isize ==1
-        v0_ = ones(1,nt);
-      else
-        v0_ = Order_n_Signals{iOri}{isize -1};
-        v0_ = v0_./v0_(1);
-      end
-      
-      v_ = v_ + gridWeight(iOri)*prod(AuxiliarySignal{iOri}{isize}(theseClusters,:),1).*v0_;
-      
+      v_ori_(iOri,:) = v_ori_(iOri,:).*prod(AuxiliarySignal{iOri}{isize}(indexClusters,:),1); 
     end
+    v_ = sum(v_ori_,1);
+    
     RMSDclu{isize}(icluster)  = sqrt(mean(abs(v_ - Order_n_SignalMean{isize}).^2,2));
     
     if (~Vclu{isize}.found_10pc) && RMSDclu{isize}(icluster) <= 10e-2
@@ -236,16 +239,17 @@ ana.Vclu = Vclu;
 
 % -------------------------------------------------------------------------
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-ModulationDepth = Nuclei.Statistics{1}.Modulation_Depth; % = matrix(N);
-Hyperfine = abs(Nuclei.Statistics{1}.Hyperfine); % = matrix(N,1);
-Nuclear_Dipole = abs(Nuclei.Statistics{1}.Nuclear_Dipole); % = matrix(N);
-Frequency_Pair = Nuclei.Statistics{1}.Frequency_Pair; % = matrix(N);
-DeltaHyperfine = abs(Nuclei.Statistics{1}.DeltaHyperfine); % = matrix(N);
+ModulationDepth = Nuclei.Statistics{1}.Modulation_Depth_p; % = matrix(N);
+Hyperfine = abs(Nuclei.Statistics{1}.Hyperfine_perpendicular); % = matrix(N,1);
+Nuclear_Dipole = abs(Nuclei.Statistics{1}.Nuclear_Dipole_perpendicular); % = matrix(N);
+Frequency_Pair = Nuclei.Statistics{1}.Frequency_Pair_p; % = matrix(N);
+DeltaHyperfine = abs(Nuclei.Statistics{1}.DeltaHyperfine_perpendicular); % = matrix(N);
 Adjacency = Nuclei.Adjacency; % = matrix(N);
 
 % ENUM
 MIN = 1; MAX = 2; EDGE = 3; CRIT = 4;
 ClusterH = cell(1,Method_order);
+ClusterOriH = cell(nOrientations,Method_order);
 
 isize = 1;
 ClusterH{isize}.ENUM = ['SELF']; 
@@ -253,68 +257,22 @@ ClusterH{isize}.Hyperfine  = Hyperfine;
 
 
 for isize = 2:Method_order
-  ClusterH{isize}.ENUM = {'MIN', 'MAX', 'EDGE' ,'CRIT'};
+  ClusterH{isize} = getClusterH(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
   
-  E_ = 1-eye(isize)>0;
-  E_ = E_(:);
-  
-  nC_ = numberClusters(isize);
-  ClusterH{isize}.ModulationDepth = zeros(nC_,4);
-  ClusterH{isize}.Hyperfine = zeros(nC_,2);
-  ClusterH{isize}.DeltaHyperfine = zeros(nC_,4);
-  ClusterH{isize}.Nuclear_Dipole = zeros(nC_,4);
-  ClusterH{isize}.Frequency_Pair = zeros(nC_,4);
-  
-  for icluster = 1:nC_
-    cluster_ = Clusters{isize}(icluster,:);
-    adj_ = Adjacency(cluster_,cluster_) > 0;
-    adj_ = adj_(:);
-    adj_ = adj_(E_);
-    
-    prox_ = cluster_(find(Coordinates.r(cluster_) == ClusterGeo{isize}.cluster_proximity(icluster)));
-    dist_ = cluster_(find(Coordinates.r(cluster_) == ClusterGeo{isize}.cluster_distance(icluster)));
-    
-    moddepth_ = ModulationDepth(cluster_,cluster_);
-    moddepth_ = moddepth_(:);
-    moddepth_ = moddepth_(E_);
-    
-    hyperfine_ = Hyperfine(cluster_);
-    
-    deltahyperfine_ = DeltaHyperfine(cluster_,cluster_);
-    deltahyperfine_ = deltahyperfine_(:);
-    deltahyperfine_ = deltahyperfine_(E_);
-   
-    dd_ = Nuclear_Dipole(cluster_,cluster_);
-    dd_ = dd_(:);
-    dd_ = dd_(E_);
-    
-    freq_ = Frequency_Pair(cluster_,cluster_);
-    freq_ = freq_(:);
-    freq_ = freq_(E_);
-    
-    
-    if any(adj_)
-      crit_moddepth_ = min(moddepth_(adj_));
-      crit_deltahyperfine_ = min(deltahyperfine_(adj_));
-      crit_dd_ = min(dd_(adj_));
-      crit_freq_ = min(freq_(adj_));
-    else
-      crit_moddepth_ = -1;
-      crit_deltahyperfine_ = -1;
-      crit_dd_ = -1;
-      crit_freq_ = -1;
+  if nOrientations==1
+    for iOri = 1:nOrientations
+      ModulationDepth_ori = Nuclei.Statistics{iOri}.Modulation_Depth; % = matrix(N);
+      Hyperfine_ori = abs(Nuclei.Statistics{iOri}.Hyperfine); % = matrix(N,1);
+      Nuclear_Dipole_ori = abs(Nuclei.Statistics{iOri}.Nuclear_Dipole); % = matrix(N);
+      Frequency_Pair_ori = Nuclei.Statistics{iOri}.Frequency_Pair; % = matrix(N);
+      DeltaHyperfine_ori = abs(Nuclei.Statistics{iOri}.DeltaHyperfine); % = matrix(N);
+      
+      
+      ClusterOriH{iOri,isize} = getClusterH(Hyperfine_ori,DeltaHyperfine_ori,...
+        Nuclear_Dipole_ori, ModulationDepth_ori,Frequency_Pair_ori,...
+        Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
     end
-    
-    
-    ClusterH{isize}.ModulationDepth(icluster,:) = [min(moddepth_),max(moddepth_), ModulationDepth(prox_,dist_), crit_moddepth_];
-    ClusterH{isize}.Hyperfine(icluster,:) = [min(abs(hyperfine_)),max(hyperfine_)];
-    ClusterH{isize}.DeltaHyperfine(icluster,:) = [min(deltahyperfine_),max(deltahyperfine_), DeltaHyperfine(prox_,dist_), crit_deltahyperfine_];
-    ClusterH{isize}.Nuclear_Dipole(icluster,:) = [min(dd_),max(dd_), Nuclear_Dipole(prox_,dist_), crit_dd_];
-    ClusterH{isize}.Frequency_Pair(icluster,:) = [min(freq_),max(freq_), Frequency_Pair(prox_,dist_), crit_freq_];
   end
-  
-  ClusterH{isize}.DeltaHyperfine_over_Nuclear_Dipole = ClusterH{isize}.DeltaHyperfine./ClusterH{isize}.Nuclear_Dipole;
-  ClusterH{isize}.GaussianRMSD = getGaussianRMSD(ClusterH{isize}.ModulationDepth,ClusterH{isize}.Frequency_Pair,TM_powder);
 end
 
 
@@ -355,6 +313,7 @@ ana.sansCluster = sansCluster;
 ana.ClusterGeo  = ClusterGeo;
  
 ana.ClusterH = ClusterH;
+ana.ClusterOriH = ClusterOriH;
 
 % Save.
 save( [matfile(1:end-4),'_analysis.mat'] ,'ana','-v7.3');
@@ -362,3 +321,70 @@ save( [matfile(1:end-4),'_analysis.mat'] ,'ana','-v7.3');
 % Close parallel pool.
 % delete(pool);
 end
+
+
+function ClusterH = getClusterH(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder)
+ 
+  ClusterH.ENUM = {'MIN', 'MAX', 'EDGE' ,'CRIT'};
+  
+  E_ = 1-eye(isize)>0;
+  E_ = E_(:);
+  
+  nC_ = numberClusters(isize);
+  ClusterH.ModulationDepth = zeros(nC_,4);
+  ClusterH.Hyperfine = zeros(nC_,2);
+  ClusterH.DeltaHyperfine = zeros(nC_,4);
+  ClusterH.Nuclear_Dipole = zeros(nC_,4);
+  ClusterH.Frequency_Pair = zeros(nC_,4);
+  
+  for icluster = 1:nC_
+    cluster_ = Clusters{isize}(icluster,:);
+    adj_ = Adjacency(cluster_,cluster_) > 0;
+    adj_ = adj_(:);
+    adj_ = adj_(E_);
+    
+    prox_ = cluster_(find(Coordinates.r(cluster_) == ClusterGeo{isize}.cluster_proximity(icluster)));
+    dist_ = cluster_(find(Coordinates.r(cluster_) == ClusterGeo{isize}.cluster_distance(icluster)));
+    
+    moddepth_ = ModulationDepth(cluster_,cluster_);
+    moddepth_ = moddepth_(:);
+    moddepth_ = moddepth_(E_);
+    
+    hyperfine_ = Hyperfine(cluster_);
+    
+    deltahyperfine_ = DeltaHyperfine(cluster_,cluster_);
+    deltahyperfine_ = deltahyperfine_(:);
+    deltahyperfine_ = deltahyperfine_(E_);
+    
+    dd_ = Nuclear_Dipole(cluster_,cluster_);
+    dd_ = dd_(:);
+    dd_ = dd_(E_);
+    
+    freq_ = Frequency_Pair(cluster_,cluster_);
+    freq_ = freq_(:);
+    freq_ = freq_(E_);
+    
+    
+    if any(adj_)
+      crit_moddepth_ = min(moddepth_(adj_));
+      crit_deltahyperfine_ = min(deltahyperfine_(adj_));
+      crit_dd_ = min(dd_(adj_));
+      crit_freq_ = min(freq_(adj_));
+    else
+      crit_moddepth_ = -1;
+      crit_deltahyperfine_ = -1;
+      crit_dd_ = -1;
+      crit_freq_ = -1;
+    end
+    
+    
+    ClusterH.ModulationDepth(icluster,:) = [min(moddepth_),max(moddepth_), ModulationDepth(prox_,dist_), crit_moddepth_];
+    ClusterH.Hyperfine(icluster,:) = [min(abs(hyperfine_)),max(hyperfine_)];
+    ClusterH.DeltaHyperfine(icluster,:) = [min(deltahyperfine_),max(deltahyperfine_), DeltaHyperfine(prox_,dist_), crit_deltahyperfine_];
+    ClusterH.Nuclear_Dipole(icluster,:) = [min(dd_),max(dd_), Nuclear_Dipole(prox_,dist_), crit_dd_];
+    ClusterH.Frequency_Pair(icluster,:) = [min(freq_),max(freq_), Frequency_Pair(prox_,dist_), crit_freq_];
+  end
+  
+  ClusterH.DeltaHyperfine_over_Nuclear_Dipole = ClusterH.DeltaHyperfine./ClusterH.Nuclear_Dipole;
+  ClusterH.GaussianRMSD = getGaussianRMSD(ClusterH.ModulationDepth,ClusterH.Frequency_Pair,TM_powder);
+end 

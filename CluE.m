@@ -940,7 +940,7 @@ System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 % Get the g-value along the magnetic field direction.
 System.Electron.g = System.gMatrix(3,3);
 
-graphs = []; 
+graphs = Nuclei.Adjacency; 
 
 if System.useMeanField
   [Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal]= getMeanFieldCoefficients(Nuclei,System);
