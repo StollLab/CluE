@@ -41,6 +41,10 @@ for isize = 1:Method.order
             Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
           end
           
+      case 'bAmax'
+        Min_bAmax_ = abs(pwstat.bAmax) >= Method.cutoff.bAmax(isize);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_bAmax_;
+        
       case 'minimum-frequency'
         if Ori_cutoffs
           Min_Freq_ = abs(pwstat.Frequency_Pair) >  Method.cutoff.minimum_frequency(isize);

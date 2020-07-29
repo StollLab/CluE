@@ -61,6 +61,7 @@ pwstat.DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular - pwstat.Hy
 pwstat.Hyperfine = pwstat.Hyperfine_perpendicular.*(1-3*cosTheta2);
 pwstat.DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
 
+
 % Nuclear Dipole-Dipole
 b = 0.25*(System.mu0/4/pi).*(Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2; % J m^3.
 b = -b./pwstat.DistanceMatrix.^3; % J.
@@ -69,6 +70,9 @@ bp = b.*(1-3*cos(pwstat.ThetaMatrix).^2);
 pwstat.Nuclear_Dipole_perpendicular = 4*b; % Hz.
 pwstat.Nuclear_Dipole = 4*bp; % Hz.
 
+% |bA_{mav}|^{1/2}.
+pwstat.bAmax = max( abs(pwstat.Hyperfine_perpendicular), abs(pwstat.Hyperfine_perpendicular'));
+pwstat.bAmax = sqrt(pwstat.bAmax.*abs(pwstat.Nuclear_Dipole));
 
 % Hyperfine to nucler dipole-dipole ratio
 cp = pwstat.DeltaHyperfine_perpendicular./pwstat.Nuclear_Dipole_perpendicular;

@@ -1,561 +1,245 @@
 function [parameters,System,Method,Data]  = converge_parameters(System,Method,Data, options)
+fileID = fopen('convergence_log.txt','w');
 
-options = setDefaults(options,Method);
+% ENUM
+RADIUS  =1;  %DIPOLE = 2; BAMAX = 3; POWDER = 4;
+
+if ~isfield(Method.cutoff,'dipole')
+  Method.cutoff.dipole = -inf;
+end
+if ~isfield(Method.cutoff,'bAmax')
+  Method.cutoff.bAmax = -inf;
+end
+
+options = setDefaults(options);
 metric = options.metric;
 
-System.gridSize = 1;
-ID = 0;
-hline = '-----------------------------------------------------------------';
-if options.verbose
-  disp(hline);
-  fprintf('Starting.\n');
+if options.pruneClusters
+  Method.getClusterContributions = true;
+  Method.getClusterContributions = true;
 end
+
+System.gridSize = 1;
+ID = 1;
+ID_Ref = ID;
+hline = '-----------------------------------------------------------------\n';
+ 
+logPrint(fileID,hline);
+logPrint(fileID,'Starting.\n');
+
 Data0 = Data;
 Data.OutputData = [Data0.OutputData,'_ID_', num2str(ID)];
 calculate_signal = true;
+
 if isfile([Data.OutputData,'.mat'])
   try
     load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
     if Progress.complete
       calculate_signal = false;
-      SignalMean_ = SignalMean;
-      experiment_time_ = experiment_time;
+      SignalMean = SignalMean; 
       TM_powder_ = TM_powder;
     end
   catch
   end
 end
 if calculate_signal
-  [SignalMean_, experiment_time_, TM_powder_] = CluE(System,Method,Data);
+  [SignalMean, ~, TM_powder_] = CluE(System,Method,Data);
 end
-if options.verbose
-  fprintf('TM2 = %d s.\n',TM_powder_);
-  disp(hline);
+Npreload = 16;
+v = zeros(Npreload,size(SignalMean,2)); 
+
+logPrint(fileID,'TM2 = %d s.\n',TM_powder_);
+logPrint(fileID,hline);
+ 
+
+% Initialize error vector.
+Eta = 10*options.Threshold;
+
+% Set error on unused cutoffs to -inf, so they will not be looked at.
+Eta(~options.useCutoffs) = -inf;
+
+% Set powder error to zero, so that it will be ignored until the end.
+usePowder = options.converge.powder;
+if usePowder
+  Eta(end) = -inf;
 end
-% System size, R ----------------------------------------------------------
-are_R_neighbor_converged = false;
-while ~are_R_neighbor_converged
+
+n_ = length(options.useCutoffs);
+isThisCutoffConverged = false(1,n_);
+
+useCutoffs = options.useCutoffs;
+isThisCutoffConverged(~useCutoffs) = true;
+
+is_singleOri_converged = false;
+is_powder_converged = false;
+is_converged = false;
+cutoff.delta = options.Delta; 
+cutoff.Max = options.Max; 
+cutoff.Min = options.Min; 
+nextCutoff = options.firstCutoff;
+
+radiusfirst = true;
+
+[ParameterLog, ~ , ~, NameLog] = updateParameterLog([], [],System,Method, Data0.OutputData ,cutoff,ID);
+
+% Run until all cutoffs are converged.
+while ~is_converged
   
-  are_R_neighbor_converged = true;
+  % Perturb cutoff. 
+  [System,Method, cutoff]= adjustCutoff('relax',System, Method,cutoff,nextCutoff);
   
-  if options.converge.radius
-    is_R_converged = false;
-    while ~is_R_converged
-      System.radius = System.radius + options.delta.radius;
-      if options.verbose
-        fprintf('R = %d nm.\n',System.radius*1e9);
-      end
-      if System.radius > options.limit.radius
-        System.radius = System.radius - options.delta.radius;
-        disp('System radius could did not converge within set bounds.')
-        break;
-      end
-      
-      ID = ID + 1; Progress.complete = false; 
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), 'R_', num2str(System.radius*1e10)];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if options.doPlot
-        plot(experiment_time*1e6,abs(SignalMean));
-        xlabel('time of echo (\mus)');
-        ylabel('coherence');
-        drawnow;
-      end
-      
-      if eta < options.threshold.radius
-        is_R_converged = true;
-        System.radius = System.radius - options.delta.radius;
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
+  % Print info. 
+  logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
+  logPrint(fileID, 'r = %d A. b = %d Hz. bAmax = %d. nOri = %d. \n',System.radius,...
+    Method.cutoff.dipole(1),Method.cutoff.bAmax(1), System.gridSize);
+  
+  % Check for out of bounds parameters.
+  if cutoff.value < cutoff.Min(cutoff.ID) || cutoff.value > cutoff.Max(cutoff.ID)
+    [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff);
+    logPrint(fileID,[cutoff.name, ' did not converge within set bounds.\n']);
+    Eta(cutoff.ID) = -inf;
+    if useCutoffs(cutoff.ID)
+      continue;
     end
+    error('An unused parameter is being tested.');
   end
   
-  % Neighbor cutoff r0 ----------------------------------------------------
+  % Remember parameter sets for data rerieval.
+  [ParameterLog, ID , OutputData, NameLog] = updateParameterLog(ParameterLog, NameLog ,System,Method, Data0.OutputData ,cutoff,ID);
+  Data.OutputData = OutputData;
   
-  if options.converge.r0
-    is_neighbor_converged = false;
-    
-    while ~is_neighbor_converged
-      Method.r0 = Method.r0 + options.delta.r0;
-      if options.verbose
-        fprintf('r0 = %d nm.\n',Method.r0*1e9);
+  % Either load or calculate the appropriate simulation. 
+  calculate_signal = true;
+  if isfile([Data.OutputData,'.mat'])
+    try
+      load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
+      if Progress.complete
+        calculate_signal = false;
       end
-      
-      if Method.r0 > options.limit.r0
-        Method.r0 = Method.r0 - options.delta.r0;
-        disp('Neighbor cutoff r0 did not converge within set bounds.')
-        break;
-      end
-      ID = ID + 1; Progress.complete = false;
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_r0_', num2str(Method.r0*1e10)];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if eta < options.threshold.r0
-        is_neighbor_converged = true;
-        Method.r0 = Method.r0 - options.delta.r0;
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
+    catch
     end
   end
-
-
-% Neighbor cutoff modulation ----------------------------------------------
-  
-  if options.converge.modulation
-    is_neighbor_converged = false;
-    
-    while ~is_neighbor_converged
-      Method.cutoff.modulation = Method.cutoff.modulation*10^(options.delta.modulation);
-      
-      if options.verbose
-        fprintf('modulation depth = %d.\n',Method.cutoff.modulation);
-      end
-      
-      if Method.cutoff.modulation < 10^(options.limit.modulation)
-        Method.cutoff.modulation = Method.cutoff.modulation./10^(options.delta.modulation);
-        disp('Neighbor cutoff modulation did not converge within set bounds.')
-        break;
-      end
-      ID = ID + 1; Progress.complete = false;
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_mod_', num2str(num2str(log(Method.cutoff.modulation)/log(10)))];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if options.doPlot
-        plot(experiment_time*1e6,abs(SignalMean));
-        xlabel('time of echo (\mus)');
-        ylabel('coherence');
-        drawnow;
-      end
-      
-      if eta < options.threshold.modulation
-        is_neighbor_converged = true;
-        Method.cutoff.modulation = Method.cutoff.modulation*10^(-options.delta.modulation);
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
-    end
-  end
-
-  % dipole coupling  ------------------------------------------------------
-  
-  if options.converge.dipole
-    is_neighbor_converged = false;
-    
-    while ~is_neighbor_converged
-      Method.cutoff.dipole = Method.cutoff.dipole*10^(options.delta.dipole);
-      
-      if options.verbose
-       fprintf('dipole coupling = %d Hz.\n',Method.cutoff.dipole);
-      end
-      
-      if Method.cutoff.dipole < 10^(options.limit.dipole)
-        Method.cutoff.dipole = Method.cutoff.dipole./10^(options.delta.dipole);
-        disp('Neighbor cutoff dipole coupling did not converge within set bounds.')
-        break;
-      end
-      ID = ID + 1; Progress.complete = false;
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_dip_', num2str(num2str(log(Method.cutoff.dipole)/log(10)))];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if options.doPlot
-        plot(experiment_time*1e6,abs(SignalMean));
-        xlabel('time of echo (\mus)');
-        ylabel('coherence');
-        drawnow;
-      end
-      
-      if eta < options.threshold.dipole
-        is_neighbor_converged = true;
-        Method.cutoff.dipole = Method.cutoff.dipole*10^(-options.delta.dipole);
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
-    end
+  if calculate_signal
+    [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
   end
   
-  % hyperfine coupling infimum --------------------------------------------
+  % Store data.
+  v(ID,:) = SignalMean;
   
-  if options.converge.hyperfine && options.delta.hyperfine < 0
-    is_neighbor_converged = false;
-    
-    while ~is_neighbor_converged
-      
-      Method.cutoff.hyperfine_inf = Method.cutoff.hyperfine_inf*10^(options.delta.hyperfine);
-      
-      if options.verbose
-        fprintf('hyperfine coupling = %d Hz.\n',Method.cutoff.hyperfine_inf);
-      end
-      
-      if Method.cutoff.hyperfine_inf < 10^(options.limit.hyperfine)  
-        Method.cutoff.hyperfine_inf = Method.cutoff.hyperfine_inf./10^(options.delta.hyperfine);
-        disp('Neighbor cutoff hyperfine coupling did not converge within set bounds.')
-        break;
-      end
-      ID = ID + 1; Progress.complete = false;
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_hf_', num2str(num2str(log(Method.cutoff.hyperfine_inf)/log(10)))];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if eta < options.threshold.hyperfine
-        is_neighbor_converged = true;
-        Method.cutoff.hyperfine_inf = Method.cutoff.hyperfine_inf*10^(-options.delta.hyperfine);
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
-    end
-  end 
+  % Get error metric.
+  eta = getErrorMetric(v(ID_Ref,:),v(ID,:),metric,experiment_time,experiment_time,options);
+  Eta(cutoff.ID) = eta;
   
-   % hyperfine coupling supremum ------------------------------------------
-  
-  if options.converge.hyperfine && options.delta.hyperfine > 0
-    is_neighbor_converged = false;
-    
-    while ~is_neighbor_converged
-      
-      Method.cutoff.hyperfine_sup = Method.cutoff.hyperfine_sup*10^(options.delta.hyperfine);
-      
-      if options.verbose
-        fprintf('hyperfine coupling = %d Hz.\n',Method.cutoff.hyperfine_sup);
-      end
-      
-      if Method.cutoff.hyperfine_sup > 10^(options.limit.hyperfine)
-        Method.cutoff.hyperfine_sup = Method.cutoff.hyperfine_sup./10^(options.delta.hyperfine);
-        disp('Neighbor cutoff hyperfine coupling did not converge within set bounds.')
-        break;
-      end
-      ID = ID + 1; Progress.complete = false;
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_hf_', num2str(num2str(log(Method.cutoff.hyperfine_sup)/log(10)))];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if options.doPlot
-        plot(experiment_time*1e6,abs(SignalMean));
-        xlabel('time of echo (\mus)');
-        ylabel('coherence');
-        drawnow;
-      end
-      
-      if eta < options.threshold.hyperfine
-        is_neighbor_converged = true;
-        Method.cutoff.hyperfine_sup = Method.cutoff.hyperfine_sup*10^(-options.delta.hyperfine);
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
-    end
-  end 
-  
-  % minimum frequency -----------------------------------------------------
-  if options.converge.minimum_frequency
-    is_neighbor_converged = false;
-    
-    while ~is_neighbor_converged
-      Method.cutoff.minimum_frequency = Method.cutoff.minimum_frequency*10^(options.delta.minimum_frequency);
-      
-      if options.verbose
-        fprintf('minimum frequency coupling = %d Hz.\n',Method.cutoff.minimum_frequency);
-      end
-      
-      if Method.cutoff.minimum_frequency < 10^(options.limit.minimum_frequency)
-        Method.cutoff.minimum_frequency = Method.cutoff.minimum_frequency./10^(options.delta.minimum_frequency);
-        disp('Neighbor cutoff minimum frequency coupling did not converge within set bounds.')
-        break;
-      end
-      ID = ID + 1; Progress.complete = false;
-      Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_freq_', num2str(num2str(log(Method.cutoff.minimum_frequency)/log(10)))];
-      
-      calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
-      end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
-      end
-      
-      eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-      if options.verbose
-        fprintf('TM2 = %d s.\n',TM_powder);
-        fprintf('eta = %d.\n',eta);
-        disp(hline);
-      end
-      
-      if options.doPlot
-        plot(experiment_time*1e6,abs(SignalMean));
-        xlabel('time of echo (\mus)');
-        ylabel('coherence');
-        drawnow;
-      end
-      
-      
-      if eta < options.threshold.minimum_frequency
-        is_neighbor_converged = true;
-        Method.cutoff.minimum_frequency = Method.cutoff.minimum_frequency*10^(-options.delta.minimum_frequency);
-      else
-        are_R_neighbor_converged = false;
-        SignalMean_ = SignalMean;
-        experiment_time_ = experiment_time;
-        TM_powder_ = TM_powder;
-      end
-    end
+  % Print info.
+  logPrint(fileID,'TM2 = %d s.\n',TM_powder);
+  logPrint(fileID,'eta = %d.\n',eta);
+  logPrint(fileID,hline);
+   
+  % Check if data should be plotted.
+  if options.doPlot
+    plot(experiment_time*1e6,abs(SignalMean));
+    xlabel('time of echo (\mus)');
+    ylabel('coherence');
+    drawnow;
   end
   
-end
-
-% Powder orientations
-Method.parallelComputing = options.parpow;
-
-grid_options = [1,6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
-  266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702, ...
-  3074, 3470, 3890, 4334, 4802, 5294, 5810];
-
-limit.grid_index = length(grid_options);
-is_grid_converged = false;
-grid_point = 1;
-if options.converge.powder
-  while ~is_grid_converged
-    grid_point = grid_point + 1;
+  if is_singleOri_converged
+    is_powder_converged = strcmp(nextCutoff,'powder') && eta < options.Threshold(cutoff.ID);
+    ID_Ref = ~is_powder_converged*ID + is_powder_converged*ID_Ref;
+  else
+    isThisCutoffConverged(cutoff.ID) = eta < options.Threshold(cutoff.ID);
     
-    if grid_point > limit.grid_index
-      grid_point = grid_point - 1;
-      disp('Powder grid could not converge.')
-      break;
-    end
-    
-    System.gridSize = grid_options(grid_point);
-    
-    if options.verbose
-      fprintf('grid = %d points.\n',System.gridSize);
-    end
-    
-    if System.gridSize > options.limit.grid_points
-      grid_point = grid_point - 1;
-      System.gridSize = grid_options(grid_point);
-      disp('Powder grid did not converge within set bounds.')
-      break;
-    end
-        
-    ID = ID + 1;
-    Progress.complete = false;
-    
-    Data.OutputData = [Data0.OutputData,'_ID_',num2str(ID), '_powder_', num2str(System.gridSize)];
-
-    calculate_signal = true;
-      if isfile([Data.OutputData,'.mat'])
-        try
-          load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
-          if Progress.complete
-            calculate_signal = false;
-          end
-        catch
-        end
+    if isThisCutoffConverged(cutoff.ID)
+      [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff);
+      if cutoff.ID == RADIUS
+        radiusfirst = false;
       end
-      if calculate_signal
-        [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
+      
+      isCutoffUnchanged = strcmp(nextCutoff_,nextCutoff);
+      if isCutoffUnchanged
+        isThisCutoffConverged(useCutoffs) = false;  
+        isThisCutoffConverged(cutoff.ID) = true;
       end
-    
-    eta = getErrorMetric(SignalMean_,SignalMean,metric,experiment_time,experiment_time,options);
-    if options.verbose
       
-      fprintf('TM2 = %d s.\n',TM_powder);
-      fprintf('eta = %d.\n',eta);
-      disp(hline);
-      
+    else     
+      ID_Ref = ID;
+      isThisCutoffConverged(:) = false;
+      if cutoff.ID == RADIUS
+        radiusfirst = true;
+      end        
     end
-      
-    if options.doPlot
-      plot(experiment_time*1e6,abs(SignalMean));
-      xlabel('time of echo (\mus)');
-      ylabel('coherence');
-      drawnow;
-    end
-      
-    
-    if eta < options.threshold.powder
-      is_grid_converged = true;
-      grid_point = grid_point - 1;
-      System.gridSize = grid_options(grid_point);
-    else
-      SignalMean_ = SignalMean;
-      experiment_time_ = experiment_time;
-      TM_powder_ = TM_powder;
-    end
-    
+  
+    is_singleOri_converged =  all(Eta(useCutoffs) < options.Threshold(useCutoffs))...
+      &&  all( isThisCutoffConverged( useCutoffs(1:end-1) ) );
   end
-end
+  
 
-parameters = [];
-if options.converge.radius
-  parameters.radius = System.radius;
+  
+  nextCutoff_ = nextCutoff;
+  if ~strcmp(nextCutoff,'powder')
+    if is_singleOri_converged
+      nextCutoff = 'powder';
+      Method.parallelComputing = options.parpow;
+      is_powder_converged = ~usePowder;
+    elseif ~radiusfirst
+      newMaxEta_ = max(Eta(useCutoffs & ~isThisCutoffConverged));
+      if ~isempty(newMaxEta_)
+        nextCutoff_ID = find(Eta == newMaxEta_);
+        nextCutoff = options.cutoffNames{nextCutoff_ID(1)};
+      end
+    end
+    if isempty(Eta(useCutoffs & ~isThisCutoffConverged)) && ~is_singleOri_converged
+      error('Single orientation is both converged and not converged.');
+    end
+    
+    if strcmp(nextCutoff_,nextCutoff) && eta < options.Threshold(cutoff.ID)
+      error('Cutoff cannot increment.')
+    end
+  end
+  is_converged  = is_singleOri_converged  && is_powder_converged;
+  
+  
 end
-if options.converge.r0
-parameters.r0 = Method.r0;
-end
-if options.converge.modulation
-  parameters.modulation = Method.cutoff.modulation;
-end
+  
+
+
+parameters.radius = System.radius;
 if options.converge.dipole
 parameters.dipole = Method.cutoff.dipole;
+end
+if options.converge.bAmax
+parameters.bAmax = Method.cutoff.bAmax;
 end
 if options.converge.powder
   parameters.gridSize = System.gridSize;
 end
+fclose(fileID);
 end
 
-function options = setDefaults(options,Method)
+function options = setDefaults(options)
 
 if ~isfield(options,'metric')
   options.metric = 'rms';
 end
+if ~isfield(options,'pruneClusters')
+  options.pruneClusters = false;
+end
 if ~isfield(options,'vmin')
   options.vmin = exp(-5);
 end
+
+options.cutoffNames = {'radius','dipole','bAmax','powder'};
+% ENUM
+RADIUS  =1;  DIPOLE = 2; BAMAX = 3; POWDER = 4; 
+
+options.useCutoffs = false(1,POWDER-1);
+
 % system radius
 if ~isfield(options.converge,'radius')
   options.converge.radius = true;
 end
+options.useCutoffs(RADIUS) = options.converge.radius;
+
 if ~isfield(options.threshold,'radius')
   options.threshold.radius = 1e-3;
 end
@@ -568,89 +252,35 @@ end
 
 % neighbor cutoff
 
-if false % isfield(Method,'Criteria')
-num_criteria = numel(Method.Criteria);  
-  for ii = 1:num_criteria
-    if strcmp(Method.Criteria{ii},'neighbor')
-      options.converge.r0 = true;
-    elseif strcmp(Method.Criteria{ii},'modulation')
-      options.converge.modulation = true;
-    elseif strcmp(Method.Criteria{ii},'psuedo-secular')
-      options.converge.dipole = true;
-    elseif strcmp(Method.Criteria{ii},'minimum-frequency')
-      options.converge.minimum_frequency = true;
-    end
-  end
-end
-
-% distance
-if ~isfield(options.converge,'r0')
-  options.converge.r0 = false;
-end
-if ~isfield(options.threshold,'r0')
-  options.threshold.r0 = 1e-3;
-end
-if ~isfield(options.delta,'r0')
-  options.delta.r0 = 1e-10; % m
-end
-if ~isfield(options.limit,'r0')
-  options.limit.r0 = 20e-10; % m
-end
-
-% modulation depth
-if ~isfield(options.converge,'modulation')
-  options.converge.modulation = false;
-end
-if ~isfield(options.threshold,'modulation')
-  options.threshold.modulation = 1e-3;
-end
-if ~isfield(options.delta,'modulation')
-  options.delta.modulation = -1; 
-end
-if ~isfield(options.limit,'modulation')
-  options.limit.modulation = -15; 
-end
-
 % dipole
 if ~isfield(options.converge,'dipole')
   options.converge.dipole = false;
 end
+options.useCutoffs(DIPOLE) = options.converge.dipole;
+
 if ~isfield(options.threshold,'dipole')
   options.threshold.dipole = 1e-3;
 end
 if ~isfield(options.delta,'dipole')
-  options.delta.dipole = -1; 
+  options.delta.dipole = -2; 
 end
 if ~isfield(options.limit,'dipole')
   options.limit.dipole = -15; 
 end
 
-% hyperfine
-if ~isfield(options.converge,'hyperfine')
-  options.converge.hyperfine = false;
+% bAmax
+if ~isfield(options.converge,'bAmax')
+  options.converge.bAmax = false;
 end
-if ~isfield(options.threshold,'hyperfine')
-  options.threshold.hyperfine = 1e-3;
+options.useCutoffs(BAMAX) = options.converge.bAmax;
+if ~isfield(options.threshold,'bAmax')
+  options.threshold.bAmax = 1e-3;
 end
-if ~isfield(options.delta,'hyperfine')
-  options.delta.hyperfine = -1; 
+if ~isfield(options.delta,'bAmax')
+  options.delta.bAmax = -4; 
 end
-if ~isfield(options.limit,'hyperfine')
-  options.limit.hyperfine = -15; 
-end
-
-% minimum_frequency
-if ~isfield(options.converge,'minimum_frequency')
-  options.converge.minimum_frequency = false;
-end
-if ~isfield(options.threshold,'r0')
-  options.threshold.minimum_frequency = 1e-3;
-end
-if ~isfield(options.delta,'r0')
-  options.delta.minimum_frequency = -1;
-end
-if ~isfield(options.limit,'r0')
-  options.limit.minimum_frequency = -15;
+if ~isfield(options.limit,'bAmax')
+  options.limit.bAmax = -15; 
 end
 
 
@@ -658,6 +288,8 @@ end
 if ~isfield(options.converge,'powder')
   options.converge.powder = true;
 end
+options.useCutoffs(POWDER) = options.converge.powder;
+
 if ~isfield(options.threshold,'powder')
   options.threshold.powder = 1e-2;
 end
@@ -667,11 +299,120 @@ end
 if ~isfield(options,'parpow')
   options.parpow = true;
 end
-% verbosity
-if ~isfield(options,'verbose')
-  options.verbose = true;
+options.Threshold = [options.threshold.radius, options.threshold.dipole, options.threshold.bAmax,options.threshold.powder];
+options.Delta = [options.delta.radius, options.delta.dipole, options.delta.bAmax,1];
+options.Min = [0, options.limit.dipole, options.limit.bAmax,1];
+options.Max = [options.limit.radius, inf, inf,options.limit.grid_points];
+if options.converge.radius 
+  options.firstCutoff = 'radius';
+elseif options.converge.dipole
+  options.firstCutoff = 'dipole';
+elseif options.converge.bAmax
+  options.firstCutoff = 'bAmax';
+else
+  options.firstCutoff = 'powder';
 end
+ 
+
 if ~isfield(options,'doPlot')
   options.doPlot = false;
 end
+end
+
+function [ParameterLog_out, ID_out , OutputData, NameLog_out] = updateParameterLog(ParameterLog, NameLog ,System,Method, OutputData0 ,cutoff,ID)
+
+% Initialize log variables.
+ParameterLog_out = ParameterLog;
+NameLog_out = NameLog;
+
+% Update parameter log.
+if isempty(ParameterLog)
+  ParameterLog_out = [System.radius, Method.cutoff.dipole, Method.cutoff.bAmax, System.gridSize];
+  OutputData = OutputData0;
+  NameLog_out{1} = OutputData;
+  ID_out = ID;
+  return;
+end
+
+ParameterLog_out(ID+1, :) = [System.radius, Method.cutoff.dipole, Method.cutoff.bAmax, System.gridSize];
+
+% Look for previous landings on these parameters.
+doParametersExist = all(ParameterLog_out == ParameterLog_out(ID+1, :),2);
+
+
+ID_out = ID + 1;
+
+% Output previous data or update the parameters
+if sum(doParametersExist) > 1
+  ID_ref = find(doParametersExist);
+  ID_ref = ID_ref(1);
+  ParameterLog_out = ParameterLog;
+  OutputData = NameLog{ID_ref};
+else
+  OutputData = [OutputData0,'_ID_',num2str(ID), '_',cutoff.shortname,'_',cutoff.value_str, cutoff.units];
+  NameLog_out{ID_out} = OutputData;
+end
+
+end
+
+function [System, Method, cutoff]= adjustCutoff(direction_str,System0, Method0,cutoff0,nextCutoff)
+System = System0;
+Method = Method0;
+cutoff = cutoff0;
+% ENUM
+RADIUS  =1;  DIPOLE = 2; BAMAX = 3; POWDER = 4; 
+
+switch direction_str  
+  case 'relax'
+    reltig = 1;
+  case 'tighten'
+    reltig = -1;
+end
+
+cutoff.name = nextCutoff;
+
+switch cutoff.name
+  case 'radius'
+    cutoff.ID = RADIUS;
+    System.radius = System.radius + reltig*cutoff.delta(cutoff.ID);
+    cutoff.value = System.radius;
+    cutoff.value_str = num2str(cutoff.value*1e10);
+    cutoff.shortname = 'r';
+    cutoff.units = 'A';
+  case 'dipole'
+    cutoff.ID = DIPOLE;
+    Method.cutoff.dipole = Method.cutoff.dipole*10^(reltig*cutoff.delta(cutoff.ID));
+    cutoff.value = Method.cutoff.dipole(1);
+    cutoff.value_str = num2str(round(cutoff.value,0));
+    cutoff.shortname = 'b';
+    cutoff.units = 'Hz';
+    
+  case 'bAmax'
+    cutoff.ID = BAMAX;
+    Method.cutoff.bAmax = Method.cutoff.bAmax*10^(reltig*cutoff.delta(cutoff.ID) );
+    cutoff.value = Method.cutoff.bAmax(1);
+    cutoff.value_str = num2str(round(cutoff.value,0));
+    cutoff.shortname = 'bAmax';
+    cutoff.units = 'Hz';
+    
+    
+  case 'powder'
+    cutoff.ID = POWDER;
+    grid_options = [1,6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
+      266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702, ...
+      3074, 3470, 3890, 4334, 4802, 5294, 5810];
+    
+    grid_point = find(grid_options == System.gridSize);
+    System.gridSize = grid_options(grid_point + reltig*cutoff.delta(cutoff.ID));
+    cutoff.value = System.gridSize;
+    cutoff.value_str = num2str(cutoff.value);
+    cutoff.unit = '';
+    
+    
+end
+end
+
+function logPrint(fileID,varargin)
+    fprintf(fileID, varargin{:});
+    fprintf(varargin{:});
 end

@@ -50,41 +50,8 @@ orderrange = Method_order_lower_bound:Method_order;
 
 
 % Determine minimum system size needed to hold each cluster.
-ClusterGeo = cell(1,Method_order);
+ClusterGeo = getClusterGeoStats(Clusters,Coordinates, DistanceMatrix, numberClusters,Method_order); 
 sansClusterV = cell(1,Method_order);
-
-for isize = Method_order:-1:1
-  
-  nC_ = numberClusters(isize);
-  C_ = 1:isize;
-  ClusterGeo{isize}.number = nC_;
-  ClusterGeo{isize}.cluster_indices = 1:nC_;
-  ClusterGeo{isize}.cluster_distance = max(Coordinates.r(Clusters{isize}),[],2); 
-  
-
-  ClusterGeo{isize}.cluster_proximity = min(Coordinates.r(Clusters{isize}),[],2);
-  ClusterGeo{isize}.cluster_distance_indices = diag(Clusters{isize}(ClusterGeo{isize}.cluster_indices', sum(  (Coordinates.r(Clusters{isize}) == ClusterGeo{isize}.cluster_distance).*C_,2  )));
-  ClusterGeo{isize}.cluster_proximity_indices = diag(Clusters{isize}(ClusterGeo{isize}.cluster_indices', sum(  (Coordinates.r(Clusters{isize}) == ClusterGeo{isize}.cluster_proximity).*C_ ,2 )));
-
-  r1_ = ClusterGeo{isize}.cluster_distance;
-  ind1_ = ClusterGeo{isize}.cluster_distance_indices;
-  
-  r2_ = ClusterGeo{isize}.cluster_proximity;
-  ind2_ = ClusterGeo{isize}.cluster_proximity_indices;
-  if isize==1
-    continue;
-  end
-  
-  ClusterGeo{isize}.cluster_separation = diag(DistanceMatrix(ind1_, ind2_));
-
-  R_ = ClusterGeo{isize}.cluster_separation;
-  % R^2 = r1^2 + r2^2 -2*r1*r2*cos(theta).
-  % 2*r1*r2*cos(theta) = r1^2 + r2^2 -R^2.
-  % cos(theta) = (r1^2 + r2^2 -R^2)/(2*r1*r2).
-  ClusterGeo{isize}.cluster_cos = (r1_.^2 + r2_.^2 - R_.^2)./(2*r1_.*r2_);
-
-  sansClusterV{isize} = zeros(nC_,nt,nOrientations);
-end
 
 % >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 % -------------------------------------------------------------------------
@@ -105,6 +72,9 @@ pool = parpool(numCores);
 
   % Loop though all cluster sizes available.
   for isize = orderrange
+    
+    nC_ = numberClusters(isize);
+    sansClusterV{isize} = zeros(nC_,nt,nOrientations);
     
     for icluster = 1:numberClusters(isize)
     
@@ -162,16 +132,32 @@ end
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 RMSDclu = cell(1,Method_order);
-Vclu = cell(1,Method_order); 
+Vclu = cell(1,Method_order);
+numberPossibleClusters = NchooseK(numberClusters(1),1:Method_order );
+
+nk = numberPossibleClusters - numberClusters;
 for isize = 1:Method_order
+  minIndexClusters = sansClusterRMSDsortOrder_powder{isize}(end);
+  Vclu{isize}.error = nk(isize)*sqrt(cumsum(abs(sansClusterV_powder{isize}(minIndexClusters,:)-Order_n_SignalMean{isize}).^2)./(1:nt));
+  Vclu{isize}.lowerBound = Order_n_SignalMean{isize} - 2*numberClusters(isize)*sqrt(cumsum(abs(sansClusterV_powder{isize}(minIndexClusters,:)-Order_n_SignalMean{isize}).^2)./(1:nt));
+  
   RMSDclu{isize} = zeros(1,numberClusters(isize)); 
-  Vclu{isize}.found_10pc = false;
-  Vclu{isize}.found_5pc = false;
-  Vclu{isize}.found_2pc = false;
-  Vclu{isize}.found_1pc = false;
-  Vclu{isize}.found_5pm = false;
-  Vclu{isize}.found_2pm = false;
-  Vclu{isize}.found_1pm = false;
+  Vclu{isize}.found_10pc   = false;
+  Vclu{isize}.found_5pc    = false;
+  Vclu{isize}.found_2pc    = false;
+  Vclu{isize}.found_1pc    = false;
+  Vclu{isize}.found_5pm    = false;
+  Vclu{isize}.found_2pm    = false;
+  Vclu{isize}.found_1pm    = false;
+  Vclu{isize}.found_500ppm = false;
+  Vclu{isize}.found_200ppm = false;
+  Vclu{isize}.found_100ppm = false;
+  Vclu{isize}.found_50ppm  = false;
+  Vclu{isize}.found_20ppm  = false;
+  Vclu{isize}.found_10ppm  = false;
+  Vclu{isize}.found_5ppm   = false;
+  Vclu{isize}.found_2ppm   = false;
+  Vclu{isize}.found_1ppm   = false;
   
   v_ori_ = ones(nOrientations,nt);
   for iOri = 1:nOrientations
@@ -183,52 +169,148 @@ for isize = 1:Method_order
     end
     v_ori_(iOri,:) = gridWeight(iOri)*v0_;
   end
-  
+  v_ = ones(1,nt);
+  v__ = ones(1,nt);
   for icluster = 1:numberClusters(isize)
     indexClusters = sansClusterRMSDsortOrder_powder{isize}(icluster);
    
     for iOri = 1:nOrientations
       v_ori_(iOri,:) = v_ori_(iOri,:).*prod(AuxiliarySignal{iOri}{isize}(indexClusters,:),1); 
     end
+    v__ = v_;
     v_ = sum(v_ori_,1);
     
     RMSDclu{isize}(icluster)  = sqrt(mean(abs(v_ - Order_n_SignalMean{isize}).^2,2));
+    
     
     if (~Vclu{isize}.found_10pc) && RMSDclu{isize}(icluster) <= 10e-2
       Vclu{isize}.found_10pc = true;
       Vclu{isize}.thr_10pc = v_;
       Vclu{isize}.icluster_5pc = icluster;
+      
+      Vclu{isize}.error_10pc = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt)); 
+ 
     end
     if (~Vclu{isize}.found_5pc) && RMSDclu{isize}(icluster) <= 5e-2
       Vclu{isize}.found_5pc = true;
       Vclu{isize}.thr_5pc = v_;
       Vclu{isize}.icluster_5pc = icluster;
+      
+      Vclu{isize}.error_5pc = (numberPossibleClusters(isize) - icluster)*sqrt(abs(v__-v_).^2./(1:nt)); 
+      
     end
     if (~Vclu{isize}.found_2pc) && RMSDclu{isize}(icluster) <= 2e-2
       Vclu{isize}.found_2pc = true;
       Vclu{isize}.thr_2pc = v_;
       Vclu{isize}.icluster_2pc = icluster;
+       
+      Vclu{isize}.error_2pc = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt)); 
+      
     end
     if (~Vclu{isize}.found_1pc) && RMSDclu{isize}(icluster) <= 1e-2
       Vclu{isize}.found_1pc = true;
       Vclu{isize}.thr_1pc = v_;
       Vclu{isize}.icluster_1pc = icluster;
+      
+      Vclu{isize}.error_1pc = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt)); 
     end
     if (~Vclu{isize}.found_5pm) && RMSDclu{isize}(icluster) <= 5e-3
       Vclu{isize}.found_5pm = true;
       Vclu{isize}.thr_5pm = v_;
       Vclu{isize}.icluster_5pm = icluster;
+      
+      Vclu{isize}.error_5pm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt)); 
+      
     end
     if (~Vclu{isize}.found_2pm) && RMSDclu{isize}(icluster) <= 2e-3
       Vclu{isize}.found_2pm = true;
       Vclu{isize}.thr_2pm = v_;
       Vclu{isize}.icluster_2pm = icluster;
+      
+      
+      Vclu{isize}.error_2pm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt)); 
     end
     if (~Vclu{isize}.found_1pm) && RMSDclu{isize}(icluster) <= 1e-3
       Vclu{isize}.found_1pm = true;
       Vclu{isize}.thr_1pm = v_;
       Vclu{isize}.icluster_1pm = icluster;
+      
+      
+      Vclu{isize}.error_1pm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt)); 
     end
+    if (~Vclu{isize}.found_500ppm) && RMSDclu{isize}(icluster) <= 5e-4
+      Vclu{isize}.found_500ppm = true;
+      Vclu{isize}.thr_500ppm = v_;
+      Vclu{isize}.icluster_500ppm = icluster;
+      
+      
+      Vclu{isize}.error_500ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_200ppm) && RMSDclu{isize}(icluster) <= 2e-4
+      Vclu{isize}.found_200ppm = true;
+      Vclu{isize}.thr_200ppm = v_;
+      Vclu{isize}.icluster_200ppm = icluster;
+      
+      
+      Vclu{isize}.error_200ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_100ppm) && RMSDclu{isize}(icluster) <= 1e-4
+      Vclu{isize}.found_100ppm = true;
+      Vclu{isize}.thr_100ppm = v_;
+      Vclu{isize}.icluster_100ppm = icluster;
+      
+      
+      Vclu{isize}.error_100ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_50ppm) && RMSDclu{isize}(icluster) <= 5e-5
+      Vclu{isize}.found_50ppm = true;
+      Vclu{isize}.thr_50ppm = v_;
+      Vclu{isize}.icluster_50ppm = icluster;
+      
+      
+      Vclu{isize}.error_50ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_20ppm) && RMSDclu{isize}(icluster) <= 2e-5
+      Vclu{isize}.found_20ppm = true;
+      Vclu{isize}.thr_20ppm = v_;
+      Vclu{isize}.icluster_20ppm = icluster;
+      
+      
+      Vclu{isize}.error_20ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_10ppm) && RMSDclu{isize}(icluster) <= 1e-5
+      Vclu{isize}.found_10ppm = true;
+      Vclu{isize}.thr_10ppm = v_;
+      Vclu{isize}.icluster_10ppm = icluster;
+      
+      
+      Vclu{isize}.error_10ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_5ppm) && RMSDclu{isize}(icluster) <= 5e-6
+      Vclu{isize}.found_5ppm = true;
+      Vclu{isize}.thr_5ppm = v_;
+      Vclu{isize}.icluster_5ppm = icluster;
+      
+      
+      Vclu{isize}.error_5ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_2ppm) && RMSDclu{isize}(icluster) <= 2e-6
+      Vclu{isize}.found_2ppm = true;
+      Vclu{isize}.thr_2ppm = v_;
+      Vclu{isize}.icluster_2ppm = icluster;
+      
+      
+      Vclu{isize}.error_2ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    if (~Vclu{isize}.found_1ppm) && RMSDclu{isize}(icluster) <= 1e-6
+      Vclu{isize}.found_1ppm = true;
+      Vclu{isize}.thr_1ppm = v_;
+      Vclu{isize}.icluster_1ppm = icluster;
+      
+      
+      Vclu{isize}.error_1ppm = (numberPossibleClusters(isize) - icluster)*sqrt(cumsum(abs(v__-v_).^2)./(1:nt));
+    end
+    
   end
 end
 ana.RMSDclu = RMSDclu;
@@ -257,7 +339,7 @@ ClusterH{isize}.Hyperfine  = Hyperfine;
 
 
 for isize = 2:Method_order
-  ClusterH{isize} = getClusterH(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
+  ClusterH{isize} = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
   
   if nOrientations==1
     for iOri = 1:nOrientations
@@ -268,7 +350,7 @@ for isize = 2:Method_order
       DeltaHyperfine_ori = abs(Nuclei.Statistics{iOri}.DeltaHyperfine); % = matrix(N);
       
       
-      ClusterOriH{iOri,isize} = getClusterH(Hyperfine_ori,DeltaHyperfine_ori,...
+      ClusterOriH{iOri,isize} = getClusterHStats(Hyperfine_ori,DeltaHyperfine_ori,...
         Nuclear_Dipole_ori, ModulationDepth_ori,Frequency_Pair_ori,...
         Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
     end
@@ -323,68 +405,3 @@ save( [matfile(1:end-4),'_analysis.mat'] ,'ana','-v7.3');
 end
 
 
-function ClusterH = getClusterH(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder)
- 
-  ClusterH.ENUM = {'MIN', 'MAX', 'EDGE' ,'CRIT'};
-  
-  E_ = 1-eye(isize)>0;
-  E_ = E_(:);
-  
-  nC_ = numberClusters(isize);
-  ClusterH.ModulationDepth = zeros(nC_,4);
-  ClusterH.Hyperfine = zeros(nC_,2);
-  ClusterH.DeltaHyperfine = zeros(nC_,4);
-  ClusterH.Nuclear_Dipole = zeros(nC_,4);
-  ClusterH.Frequency_Pair = zeros(nC_,4);
-  
-  for icluster = 1:nC_
-    cluster_ = Clusters{isize}(icluster,:);
-    adj_ = Adjacency(cluster_,cluster_) > 0;
-    adj_ = adj_(:);
-    adj_ = adj_(E_);
-    
-    prox_ = cluster_(find(Coordinates.r(cluster_) == ClusterGeo{isize}.cluster_proximity(icluster)));
-    dist_ = cluster_(find(Coordinates.r(cluster_) == ClusterGeo{isize}.cluster_distance(icluster)));
-    
-    moddepth_ = ModulationDepth(cluster_,cluster_);
-    moddepth_ = moddepth_(:);
-    moddepth_ = moddepth_(E_);
-    
-    hyperfine_ = Hyperfine(cluster_);
-    
-    deltahyperfine_ = DeltaHyperfine(cluster_,cluster_);
-    deltahyperfine_ = deltahyperfine_(:);
-    deltahyperfine_ = deltahyperfine_(E_);
-    
-    dd_ = Nuclear_Dipole(cluster_,cluster_);
-    dd_ = dd_(:);
-    dd_ = dd_(E_);
-    
-    freq_ = Frequency_Pair(cluster_,cluster_);
-    freq_ = freq_(:);
-    freq_ = freq_(E_);
-    
-    
-    if any(adj_)
-      crit_moddepth_ = min(moddepth_(adj_));
-      crit_deltahyperfine_ = min(deltahyperfine_(adj_));
-      crit_dd_ = min(dd_(adj_));
-      crit_freq_ = min(freq_(adj_));
-    else
-      crit_moddepth_ = -1;
-      crit_deltahyperfine_ = -1;
-      crit_dd_ = -1;
-      crit_freq_ = -1;
-    end
-    
-    
-    ClusterH.ModulationDepth(icluster,:) = [min(moddepth_),max(moddepth_), ModulationDepth(prox_,dist_), crit_moddepth_];
-    ClusterH.Hyperfine(icluster,:) = [min(abs(hyperfine_)),max(hyperfine_)];
-    ClusterH.DeltaHyperfine(icluster,:) = [min(deltahyperfine_),max(deltahyperfine_), DeltaHyperfine(prox_,dist_), crit_deltahyperfine_];
-    ClusterH.Nuclear_Dipole(icluster,:) = [min(dd_),max(dd_), Nuclear_Dipole(prox_,dist_), crit_dd_];
-    ClusterH.Frequency_Pair(icluster,:) = [min(freq_),max(freq_), Frequency_Pair(prox_,dist_), crit_freq_];
-  end
-  
-  ClusterH.DeltaHyperfine_over_Nuclear_Dipole = ClusterH.DeltaHyperfine./ClusterH.Nuclear_Dipole;
-  ClusterH.GaussianRMSD = getGaussianRMSD(ClusterH.ModulationDepth,ClusterH.Frequency_Pair,TM_powder);
-end 

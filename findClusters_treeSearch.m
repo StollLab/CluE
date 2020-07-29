@@ -21,7 +21,7 @@ inOrder = numel(inClusters);
 
 % Get adjacency matrix and convert to logical
 if (inOrder < order) && (inOrder>=2)
-  Adjacency = clusters2Adjacency(inClusters{2},N);
+  Adjacency = clusters2Adjacency(inClusters{2},N) | logical(Nuclei.Adjacency(:,:,1));
 else
   Adjacency = logical(Nuclei.Adjacency(:,:,1));
 end

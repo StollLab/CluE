@@ -65,16 +65,19 @@ end
 if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
   Method.Criteria = {'dipole'};
 end
+zer = zeros(1,Method.order);
 if ~isfield(Method,'cutoff') 
-  zer = zeros(1,Method.order);
   Method.cutoff.modulation = zer;
   Method.cutoff.dipole = zer;
+  Method.cutoff.bAmax = zer;
   Method.cutoff.max_distance = inf + zer;
   Method.cutoff.min_distance = zer;
   Method.cutoff.hyperfine_sup = inf + zer;
   Method.cutoff.hyperfine_inf = zer;
 end
-
+if ~isfield(Method.cutoff,'bAmax') 
+  Method.cutoff.bAmax = zer;
+end
 if ~isfield(Method,'Ori_cutoffs')
   Method.Ori_cutoffs = false;
 end
@@ -82,6 +85,11 @@ end
 if numel(Method.cutoff.dipole) < Method.order
   n_ = numel(Method.cutoff.dipole);
   Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
+end
+
+if numel(Method.cutoff.bAmax) < Method.order
+  n_ = numel(Method.cutoff.bAmax);
+  Method.cutoff.bAmax(n_:Method.order) = Method.cutoff.bAmax(n_);
 end
 
 % Radius to load nuclei in to.
