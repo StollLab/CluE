@@ -910,7 +910,7 @@ for iTime = 1:timepoints
       
   end
   % Increment propagator.
-  if iTime<= Ndt
+  if iTime< Ndt
     U_beta = dU_beta*U_beta;
     U_alpha = dU_alpha*U_alpha;
   else

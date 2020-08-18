@@ -1,4 +1,4 @@
-function ClusterH = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder)
+function ClusterH = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole,bAmax, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder)
  
   ClusterH.ENUM = {'MIN', 'MAX', 'EDGE' ,'CRIT'};
   
@@ -11,6 +11,7 @@ function ClusterH = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, Mo
   ClusterH.DeltaHyperfine = zeros(nC_,4);
   ClusterH.Nuclear_Dipole = zeros(nC_,4);
   ClusterH.Frequency_Pair = zeros(nC_,4);
+  ClusterH.bAmax = zeros(nC_,4);
   
   for icluster = 1:nC_
     cluster_ = Clusters{isize}(icluster,:);
@@ -35,6 +36,10 @@ function ClusterH = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, Mo
     dd_ = dd_(:);
     dd_ = dd_(E_);
     
+    bAmax_ = bAmax(cluster_,cluster_);
+    bAmax_ = bAmax_(:);
+    bAmax_ = bAmax_(E_);
+    
     freq_ = Frequency_Pair(cluster_,cluster_);
     freq_ = freq_(:);
     freq_ = freq_(E_);
@@ -44,11 +49,13 @@ function ClusterH = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, Mo
       crit_moddepth_ = min(moddepth_(adj_));
       crit_deltahyperfine_ = min(deltahyperfine_(adj_));
       crit_dd_ = min(dd_(adj_));
+      crit_bAmax_ = min( bAmax_(adj_) );
       crit_freq_ = min(freq_(adj_));
     else
       crit_moddepth_ = -1;
       crit_deltahyperfine_ = -1;
       crit_dd_ = -1;
+      crit_bAmax_ = -1;
       crit_freq_ = -1;
     end
     
@@ -58,6 +65,8 @@ function ClusterH = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, Mo
     ClusterH.DeltaHyperfine(icluster,:) = [min(deltahyperfine_),max(deltahyperfine_), DeltaHyperfine(prox_,dist_), crit_deltahyperfine_];
     ClusterH.Nuclear_Dipole(icluster,:) = [min(dd_),max(dd_), Nuclear_Dipole(prox_,dist_), crit_dd_];
     ClusterH.Frequency_Pair(icluster,:) = [min(freq_),max(freq_), Frequency_Pair(prox_,dist_), crit_freq_];
+    ClusterH.bAmax(icluster,:) = [min(bAmax_),max(bAmax_), Nuclear_Dipole(prox_,dist_), crit_bAmax_];
+    
   end
   
   ClusterH.DeltaHyperfine_over_Nuclear_Dipole = ClusterH.DeltaHyperfine./ClusterH.Nuclear_Dipole;

@@ -34,8 +34,8 @@ Method_order_lower_bound = Method.order_lower_bound;
 
 % -------------------------------------------------------------------------
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-% Get spherical coordinates.
 
+% Get coordinates.
 Coordinates.xyz = Nuclei.Coordinates;
 Coordinates.r = vecnorm(Nuclei.Coordinates,2,2);
 Coordinates.cos_theta = Nuclei.Coordinates(:,3)./Coordinates.r;
@@ -326,6 +326,7 @@ Hyperfine = abs(Nuclei.Statistics{1}.Hyperfine_perpendicular); % = matrix(N,1);
 Nuclear_Dipole = abs(Nuclei.Statistics{1}.Nuclear_Dipole_perpendicular); % = matrix(N);
 Frequency_Pair = Nuclei.Statistics{1}.Frequency_Pair_p; % = matrix(N);
 DeltaHyperfine = abs(Nuclei.Statistics{1}.DeltaHyperfine_perpendicular); % = matrix(N);
+bAmax = abs(Nuclei.Statistics{1}.bAmax); % = matrix(N);
 Adjacency = Nuclei.Adjacency; % = matrix(N);
 
 % ENUM
@@ -339,7 +340,9 @@ ClusterH{isize}.Hyperfine  = Hyperfine;
 
 
 for isize = 2:Method_order
-  ClusterH{isize} = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
+  ClusterH{isize} = getClusterHStats(Hyperfine,DeltaHyperfine, ...
+    Nuclear_Dipole,bAmax, ModulationDepth,Frequency_Pair,Adjacency, ...
+    Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
   
   if nOrientations==1
     for iOri = 1:nOrientations
@@ -351,7 +354,7 @@ for isize = 2:Method_order
       
       
       ClusterOriH{iOri,isize} = getClusterHStats(Hyperfine_ori,DeltaHyperfine_ori,...
-        Nuclear_Dipole_ori, ModulationDepth_ori,Frequency_Pair_ori,...
+        Nuclear_Dipole_ori,bAmax, ModulationDepth_ori,Frequency_Pair_ori,...
         Adjacency,Coordinates,Clusters,ClusterGeo,numberClusters,isize,TM_powder);
     end
   end

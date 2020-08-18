@@ -1,11 +1,11 @@
-function [Signal,AuxiliarySignal,Order_n_Signal] = doRestrictedCCE(System, Method, Nuclei, r0,verbose)
+function [Signal,AuxiliarySignal,Order_n_Signal] = doRestrictedCCE(System, Method, Nuclei,verbose)
 
 % initialize
 Hyperfine = zeros(Nuclei.number,1);
 Signal = ones(size(System.Time));
 Order_n_Signal{1} = Signal;
 numberNuclei=Nuclei.number;
-
+Adjacency =  Nuclei.Adjacency;
 if Method.conserveMemory
   AuxiliarySignal = 'The auxiliary signals are not saved in memory conservation mode.';
 end
@@ -39,16 +39,14 @@ for inucleus = 1:numberNuclei
   cosTheta2 = cosFieldAngle(System.Electron.Coordinates,Nuclei.Coordinates(inucleus,:));
   cosTheta2 = cosTheta2*cosTheta2;
   
-  Hyperfine(inucleus) = Nuclei.Hyperfine(inucleus)-(System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;
+  Hyperfine(inucleus) = Nuclei.FermiContact(inucleus)-(System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;
   % Calculating bath coupling
   for jnucleus = 1:inucleus-1
     
     % skip over I != 1/2
     if Nuclei.Spin(inucleus)~=1/2, continue; end
     
-    % Calculate inter-nuclear distance and skip if larger than threshold
-    Rij = norm(Nuclei.Coordinates(inucleus,:)-Nuclei.Coordinates(jnucleus,:));
-    if Rij > r0, continue; end
+    if ~Adjacency(inucleus,jnucleus), continue; end
     
     
     % calculate dipolar coupling
@@ -60,12 +58,12 @@ for inucleus = 1:numberNuclei
     b = b/(System.hbar); % 1/s.
     
     c = ( Hyperfine(inucleus)-Hyperfine(jnucleus) )/(4*b);
-    w = 2*b*sqrt(1+c^2);
+    w = b*sqrt(1+c^2);
     
     %if abs(c)>1e9,  error('c is larger than 1e9!');  end
     
     % v(2t) = 1 - xi*xj*c^2/(1+c^2)^2{cos[ 2tb*sqrt(1+c^2) ] -1 }^2
-    AuxiliarySignal_ = 1-Nuclei.Abundance(inucleus)*Nuclei.Abundance(jnucleus)*( (c/(1+c^2)) * (cos(w*System.Time) -1) ).^2;
+    AuxiliarySignal_ = 1-  (2*c/(1+c^2))^2 * sin(w*System.Time).^4;
     Signal = Signal.*AuxiliarySignal_;
     if ~Method.conserveMemory
       AuxiliarySignal{inucleus} =AuxiliarySignal{inucleus}.*AuxiliarySignal_;

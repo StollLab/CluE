@@ -19,6 +19,10 @@ if options.pruneClusters
   Method.getClusterContributions = true;
 end
 
+if options.usePseudoGrad
+  Method.getUncertainty = true;
+end
+
 System.gridSize = 1;
 ID = 1;
 ID_Ref = ID;
@@ -28,22 +32,21 @@ logPrint(fileID,hline);
 logPrint(fileID,'Starting.\n');
 
 Data0 = Data;
-Data.OutputData = [Data0.OutputData,'_ID_', num2str(ID)];
+Data.OutputData = [Data0.OutputData,'_ID_0'];
 calculate_signal = true;
 
 if isfile([Data.OutputData,'.mat'])
   try
-    load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
+    load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress','uncertainty');
     if Progress.complete
       calculate_signal = false;
-      SignalMean = SignalMean; 
       TM_powder_ = TM_powder;
     end
   catch
   end
 end
 if calculate_signal
-  [SignalMean, ~, TM_powder_] = CluE(System,Method,Data);
+  [SignalMean, ~, TM_powder_,~,~,uncertainty] = CluE(System,Method,Data);
 end
 Npreload = 16;
 v = zeros(Npreload,size(SignalMean,2)); 
@@ -53,7 +56,7 @@ logPrint(fileID,hline);
  
 
 % Initialize error vector.
-Eta = 10*options.Threshold;
+Eta = inf(1,4);
 
 % Set error on unused cutoffs to -inf, so they will not be looked at.
 Eta(~options.useCutoffs) = -inf;
@@ -78,7 +81,8 @@ cutoff.Max = options.Max;
 cutoff.Min = options.Min; 
 nextCutoff = options.firstCutoff;
 
-radiusfirst = true;
+use_radiusfirst = true;
+radiusfirst = use_radiusfirst;
 
 [ParameterLog, ~ , ~, NameLog] = updateParameterLog([], [],System,Method, Data0.OutputData ,cutoff,ID);
 
@@ -86,7 +90,7 @@ radiusfirst = true;
 while ~is_converged
   
   % Perturb cutoff. 
-  [System,Method, cutoff]= adjustCutoff('relax',System, Method,cutoff,nextCutoff);
+  [System,Method, cutoff]= adjustCutoff('relax',System, Method,cutoff,nextCutoff,uncertainty);
   
   % Print info. 
   logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
@@ -94,8 +98,8 @@ while ~is_converged
     Method.cutoff.dipole(1),Method.cutoff.bAmax(1), System.gridSize);
   
   % Check for out of bounds parameters.
-  if cutoff.value < cutoff.Min(cutoff.ID) || cutoff.value > cutoff.Max(cutoff.ID)
-    [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff);
+  if false %cutoff.value < cutoff.Min(cutoff.ID) || cutoff.value > cutoff.Max(cutoff.ID)
+    [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty);
     logPrint(fileID,[cutoff.name, ' did not converge within set bounds.\n']);
     Eta(cutoff.ID) = -inf;
     if useCutoffs(cutoff.ID)
@@ -110,9 +114,10 @@ while ~is_converged
   
   % Either load or calculate the appropriate simulation. 
   calculate_signal = true;
+  uncertainty_ = uncertainty;
   if isfile([Data.OutputData,'.mat'])
     try
-      load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress');
+      load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress','uncertainty');
       if Progress.complete
         calculate_signal = false;
       end
@@ -120,14 +125,18 @@ while ~is_converged
     end
   end
   if calculate_signal
-    [SignalMean, experiment_time, TM_powder] = CluE(System,Method,Data);
+    [SignalMean, experiment_time, TM_powder,~,~,uncertainty] = CluE(System,Method,Data);
   end
   
   % Store data.
   v(ID,:) = SignalMean;
   
   % Get error metric.
-  eta = getErrorMetric(v(ID_Ref,:),v(ID,:),metric,experiment_time,experiment_time,options);
+  if strcmp(nextCutoff,'pseudograd')
+    eta = uncertainty.err_norm(Method.order);
+  else
+    eta = getErrorMetric(v(ID_Ref,:),v(ID,:),metric,experiment_time,experiment_time,options);
+  end
   Eta(cutoff.ID) = eta;
   
   % Print info.
@@ -143,18 +152,32 @@ while ~is_converged
     drawnow;
   end
   
+  % Check if the single orientation or powder avergage is being converged.
   if is_singleOri_converged
+    
+    % Check if the powder average converged.
     is_powder_converged = strcmp(nextCutoff,'powder') && eta < options.Threshold(cutoff.ID);
+    
+    % Update ID.
     ID_Ref = ~is_powder_converged*ID + is_powder_converged*ID_Ref;
+    
+    if is_powder_converged
+      [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
+    end
   else
+    
+    % Check if the current cutoff parameter is converged in isolation.
     isThisCutoffConverged(cutoff.ID) = eta < options.Threshold(cutoff.ID);
     
+    
     if isThisCutoffConverged(cutoff.ID)
-      [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff);
+      % Revert to the previous state.
+      [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
       if cutoff.ID == RADIUS
         radiusfirst = false;
       end
       
+      % Decide if the other cutoffs need to be rechecked.
       isCutoffUnchanged = strcmp(nextCutoff_,nextCutoff);
       if isCutoffUnchanged
         isThisCutoffConverged(useCutoffs) = false;  
@@ -162,40 +185,61 @@ while ~is_converged
       end
       
     else     
+      
+      % Update ID.
       ID_Ref = ID;
+      
+      % Update cutoff convegence statuses. 
       isThisCutoffConverged(:) = false;
       if cutoff.ID == RADIUS
-        radiusfirst = true;
+        radiusfirst = use_radiusfirst;
       end        
     end
   
+    % Check if the single orientation system is converged.
     is_singleOri_converged =  all(Eta(useCutoffs) < options.Threshold(useCutoffs))...
       &&  all( isThisCutoffConverged( useCutoffs(1:end-1) ) );
   end
   
 
-  
+  % Record this cutoff.
   nextCutoff_ = nextCutoff;
+  
+  % Only use this black when converging a single orientation.
   if ~strcmp(nextCutoff,'powder')
+    
+    % Check if the orientations should be converged.
     if is_singleOri_converged
       nextCutoff = 'powder';
       Method.parallelComputing = options.parpow;
       is_powder_converged = ~usePowder;
+    
+    % Do not switch parameters until system size is re-converged.  
     elseif ~radiusfirst
+      
+      % Find the least converged cutoff.
       newMaxEta_ = max(Eta(useCutoffs & ~isThisCutoffConverged));
+      
       if ~isempty(newMaxEta_)
+        % Find the cutoff that is likely to produce the largest change.
         nextCutoff_ID = find(Eta == newMaxEta_);
+        
         nextCutoff = options.cutoffNames{nextCutoff_ID(1)};
       end
     end
+    
+    % Error check.
     if isempty(Eta(useCutoffs & ~isThisCutoffConverged)) && ~is_singleOri_converged
       error('Single orientation is both converged and not converged.');
     end
     
+    % Error check.
     if strcmp(nextCutoff_,nextCutoff) && eta < options.Threshold(cutoff.ID)
       error('Cutoff cannot increment.')
     end
   end
+  
+  % Check for convergence.
   is_converged  = is_singleOri_converged  && is_powder_converged;
   
   
@@ -204,15 +248,15 @@ end
 
 
 parameters.radius = System.radius;
-if options.converge.dipole
+if options.converge.dipole || options.usePseudoGrad
 parameters.dipole = Method.cutoff.dipole;
 end
-if options.converge.bAmax
+if options.converge.bAmax || options.usePseudoGrad
 parameters.bAmax = Method.cutoff.bAmax;
 end
-if options.converge.powder
-  parameters.gridSize = System.gridSize;
-end
+
+parameters.gridSize = System.gridSize;
+
 fclose(fileID);
 end
 
@@ -268,6 +312,26 @@ if ~isfield(options.limit,'dipole')
   options.limit.dipole = -15; 
 end
 
+if ~isfield(options,'usePseudoGrad')
+  options.usePseudoGrad = false;
+end
+if ~isfield(options.threshold,'pgrad')
+  options.threshold.pgrad = 1e-3;
+end
+if ~isfield(options.delta,'pgrad')
+  options.delta.pgrad = -1000;
+end
+if ~isfield(options.limit,'pgrad')
+  options.limit.pgrad = -15; 
+end
+
+if options.usePseudoGrad
+  options.cutoffNames = {'radius','pseudograd','NA','powder'};
+  options.converge.bAmax = false;
+  options.threshold.dipole = options.threshold.pgrad;
+  options.delta.dipole = options.delta.pgrad;
+  options.limit.dipole = options.limit.pgrad;
+end
 % bAmax
 if ~isfield(options.converge,'bAmax')
   options.converge.bAmax = false;
@@ -301,7 +365,7 @@ if ~isfield(options,'parpow')
 end
 options.Threshold = [options.threshold.radius, options.threshold.dipole, options.threshold.bAmax,options.threshold.powder];
 options.Delta = [options.delta.radius, options.delta.dipole, options.delta.bAmax,1];
-options.Min = [0, options.limit.dipole, options.limit.bAmax,1];
+options.Min = [0, 10^options.limit.dipole, 10^options.limit.bAmax,1];
 options.Max = [options.limit.radius, inf, inf,options.limit.grid_points];
 if options.converge.radius 
   options.firstCutoff = 'radius';
@@ -355,13 +419,14 @@ end
 
 end
 
-function [System, Method, cutoff]= adjustCutoff(direction_str,System0, Method0,cutoff0,nextCutoff)
+function [System, Method, cutoff]= adjustCutoff(direction_str,System0, Method0,cutoff0,nextCutoff,uncertainty)
 System = System0;
 Method = Method0;
 cutoff = cutoff0;
+order = Method.order;
 % ENUM
 RADIUS  =1;  DIPOLE = 2; BAMAX = 3; POWDER = 4; 
-
+             DIPOLE_BAMAX = 2;
 switch direction_str  
   case 'relax'
     reltig = 1;
@@ -395,7 +460,57 @@ switch cutoff.name
     cutoff.shortname = 'bAmax';
     cutoff.units = 'Hz';
     
+  case 'pseudograd'
+    cutoff.ID = DIPOLE_BAMAX;
+    cutoff.shortname = 'pgrad';
+    cutoff.units = 'Hz';
     
+    switch Method.pseudogradType
+      case 'lin_pgrad'
+      % linear pseudorad steps
+      Method.cutoff.dipole = Method.cutoff.dipole + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1);
+      Method.cutoff.bAmax = Method.cutoff.bAmax + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2);
+      
+      case 'log_off_pgrad'
+        cutoff.ID = DIPOLE_BAMAX;
+        cutoff.shortname = 'pgrad';
+        cutoff.units = 'Hz';
+        
+        % log off-pseudorad steps
+        Method.cutoff.dipole = Method.cutoff.dipole*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1));
+        Method.cutoff.bAmax = Method.cutoff.bAmax*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2));
+        
+      case 'log_pgrad'
+        cutoff.ID = DIPOLE_BAMAX;
+        cutoff.shortname = 'pgrad';
+        cutoff.units = 'Hz';
+        
+        % log pseudorad steps
+        Method.cutoff.dipole = Method.cutoff.dipole*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.cutoff.dipole * uncertainty.err_max{order}(1)));
+        Method.cutoff.bAmax = Method.cutoff.bAmax*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.cutoff.bAmax * uncertainty.err_max{order}(2)));
+        
+      case 'lin_varStep'
+        
+        cutoff.ID = DIPOLE_BAMAX;
+        cutoff.shortname = 'pgrad';
+        cutoff.units = 'Hz';
+        
+        % linear pseudorad with variable steps
+        c = reltig*cutoff.delta(cutoff.ID); % *uncertainty.err_norm(order)/min(uncertainty.err_unitPseudoGrad{order});
+        if abs(c) >= 0.9
+          c = sign(c)*0.9;
+        end
+        if abs(c) <= 0.1
+          c = sign(c)*0.1;
+        end
+        c = c*min(Method.cutoff.dipole/uncertainty.err_unitPseudoGrad{order}(1),Method.cutoff.bAmax/uncertainty.err_unitPseudoGrad{order}(2));
+        
+        Method.cutoff.dipole = Method.cutoff.dipole + c*uncertainty.err_unitPseudoGrad{order}(1);
+        Method.cutoff.bAmax = Method.cutoff.bAmax + c*uncertainty.err_unitPseudoGrad{order}(2);
+        
+        cutoff.value = abs(c);
+        cutoff.value_str = num2str(round(c,0));
+    end
   case 'powder'
     cutoff.ID = POWDER;
     grid_options = [1,6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
@@ -412,7 +527,3 @@ switch cutoff.name
 end
 end
 
-function logPrint(fileID,varargin)
-    fprintf(fileID, varargin{:});
-    fprintf(varargin{:});
-end

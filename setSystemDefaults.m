@@ -78,6 +78,9 @@ end
 if ~isfield(Method.cutoff,'bAmax') 
   Method.cutoff.bAmax = zer;
 end
+if ~isfield(Method,'lock_bAmax')
+  Method.lock_bAmax = false;
+end
 if ~isfield(Method,'Ori_cutoffs')
   Method.Ori_cutoffs = false;
 end
@@ -243,7 +246,12 @@ end
 if ~isfield(Method,'getClusterContributions')
   Method.getClusterContributions = false;
 end
-Method.getContributions = Method.getNuclearContributions || Method.getNuclearSpinContributions || Method.getClusterContributions;
+if ~isfield(Method,'getUncertainty')
+  Method.getUncertainty = false;
+end
+Method.getContributions = Method.getNuclearContributions || ...
+  Method.getNuclearSpinContributions || Method.getClusterContributions ...
+  || Method.getUncertainty;
 % Base Units
 if ~isfield(System,'joule')
   System.joule = 1; % J;
@@ -370,6 +378,9 @@ if ~isfield(System,'Ndt') || System.Ndt > System.timepoints
   System.Ndt = System.timepoints;
 end
 % Set up time grid
+if System.t0  ~=0
+  error('Use of t0 is not recomended.');
+end
 if isfield(System,'timepoints') && isfield(System,'dt')
   if System.t0 > 0
     System.Time = zeros(1,System.timepoints);

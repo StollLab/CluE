@@ -9,7 +9,7 @@
 %    .OutputData name of mat file to store results
 %    .saveLevel  0 (standard), 1 (more), 2 (all)
 
-function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei] = CluE(System,Method,Data)
+function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = CluE(System,Method,Data)
 
 tic
 
@@ -65,12 +65,15 @@ if ~isempty(Data.OutputData)
           
           sim_ = load(OutputData);
           
-          if sim_.Progress.complete
+          if sim_.Progress.complete && ~(isempty(sim_.uncertainty) &&  Method.getUncertainty)
+           
             
             disp('Complete: returning saved data.') 
             SignalMean  = sim_.SignalMean;
             experiment_time = sim_.experiment_time;
             TM_powder = sim_.TM_powder;
+            uncertainty = sim_.uncertainty;
+            
             
             if isfield(sim_,'Order_n_SignalMean')
               Order_n_SignalMean = sim_.Order_n_SignalMean;
@@ -438,13 +441,13 @@ end
 SignalsToCalculate = [];
 
 % Check to see if file already exists.
-for isignal = 1:nOrientations
+for iOri = 1:nOrientations
   
   % temporary file for partial saving
-  temp_file = ['temp_', OutputData, '_sig_', num2str(isignal), '.mat'] ;
+  temp_file = ['temp_', OutputData, '_sig_', num2str(iOri), '.mat'] ;
   
-  Calculate_Signal{isignal} = true;
-  SignalsToCalculate(end+1) = isignal;
+  Calculate_Signal{iOri} = true;
+  SignalsToCalculate(end+1) = iOri;
   
   % check if file alread exists
   if isfile(temp_file)
@@ -456,10 +459,10 @@ for isignal = 1:nOrientations
       if seed == Method.seed && progress_powder
         
         % use loaded data
-        if verbose, fprintf(['Loading signal %d from ', temp_file, '.'],isignal); end
+        if verbose, fprintf(['Loading signal %d from ', temp_file, '.'],iOri); end
         
         % set values to simulation variables
-        Calculate_Signal{isignal} = false;
+        Calculate_Signal{iOri} = false;
         
         if Method.sparseMemory
           SignalMean = SignalMean + signal;
@@ -467,8 +470,8 @@ for isignal = 1:nOrientations
             Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + order_n{iorder};
           end
         else
-          Signals{isignal} = signal;
-          Order_n_Signals{isignal} = order_n;
+          Signals{iOri} = signal;
+          Order_n_Signals{iOri} = order_n;
         end
         
       end
@@ -490,30 +493,30 @@ saveAll = Data.saveLevel==2;
 
 if parallelComputing
   
-  parfor isignal = 1:numberOfSignals
+  parfor iOri = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal},graphs{isignal}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
-      Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
+      Gamma,iOri,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
     
-    TempSignals{isignal} = TempSignals_;
-    Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
+    TempSignals{iOri} = TempSignals_;
+    Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
     
     if saveAll || Method.getContributions
-      AuxiliarySignal{isignal} = AuxiliarySignal_;
+      AuxiliarySignal{iOri} = AuxiliarySignal_;
     end
   end
   
 else
   
-  for isignal = 1:numberOfSignals
+  for iOri = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{isignal},graphs{isignal}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
-      Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
+      Gamma,iOri,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
     
-    TempSignals{isignal} = TempSignals_;
-    Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
+    TempSignals{iOri} = TempSignals_;
+    Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
     
     if Method.sparseMemory
     
@@ -524,11 +527,11 @@ else
       
     else
       
-      TempSignals{isignal} = TempSignals_;
-      Temp_Order_n_Signals{isignal} = Temp_Order_n_Signals_;
+      TempSignals{iOri} = TempSignals_;
+      Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
       
       if saveAll || Method.getContributions
-        AuxiliarySignal{isignal} = AuxiliarySignal_;
+        AuxiliarySignal{iOri} = AuxiliarySignal_;
       end
       
     end
@@ -539,14 +542,14 @@ end
 
 tempSignalIndex = 0;
 if ~Method.sparseMemory 
-  for isignal = 1:nOrientations
-    if Calculate_Signal{isignal} 
+  for iOri = 1:nOrientations
+    if Calculate_Signal{iOri} 
       
       tempSignalIndex = tempSignalIndex  +1;
-      Signals{isignal} = TempSignals{tempSignalIndex};
-      Order_n_Signals{isignal} = Temp_Order_n_Signals{tempSignalIndex};
+      Signals{iOri} = TempSignals{tempSignalIndex};
+      Order_n_Signals{iOri} = Temp_Order_n_Signals{tempSignalIndex};
     end
-    TM(isignal) = getTM(experiment_time,Signals{isignal});
+    TM(iOri) = getTM(experiment_time,Signals{iOri});
     
   end
   
@@ -563,37 +566,37 @@ Nuclei.graphs = graphs;
 % ========================================================================
 
 if ~Method.sparseMemory 
-  for isignal = 1:nOrientations
-    SignalMean = SignalMean + Signals{isignal};
+  for iOri = 1:nOrientations
+    SignalMean = SignalMean + Signals{iOri};
     %Signals{isignal} = abs(Signals{isignal});
     if ~ischar(Order_n_SignalMean{iorder}) && ~isempty(Order_n_Signals{1})
       for iorder = 1:Method.order
         try
-          Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + Order_n_Signals{isignal}{iorder};
+          Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + Order_n_Signals{iOri}{iorder};
         catch
           fprintf('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n');
           
-          fprintf('Error in Order %d mean at signal number %d.\n',iorder,isignal);
+          fprintf('Error in Order %d mean at signal number %d.\n',iorder,iOri);
           disp('Could not evaluate');
           disp('Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + Order_n_Signals{isignal}{iorder};');
           fprintf('Order_n_SignalMean{%d} = Order_n_SignalMean{%d} + Order_n_Signals{%d}{%d};\n', ...
-            iorder,iorder,isignal,iorder);
+            iorder,iorder,iOri,iorder);
           if exist('Order_n_Signals')
-            if iscell(Order_n_Signals) && length(Order_n_Signals)>=isignal
+            if iscell(Order_n_Signals) && length(Order_n_Signals)>=iOri
               
-              if iscell(Order_n_Signals{isignal}) && length(Order_n_Signals{isignal}) >= iorder
+              if iscell(Order_n_Signals{iOri}) && length(Order_n_Signals{iOri}) >= iorder
                 fprintf('Length of Order_n_Signals{%d}{%d} is %d.\n',...
-                  isignal,iorder, length(Order_n_Signals{isignal}{iorder}));
+                  iOri,iorder, length(Order_n_Signals{iOri}{iorder}));
                 
                 fprintf('Length of Order_n_SignalMean{%d} is %d.\n',...
                   iorder, length(Order_n_SignalMean{iorder})  );
                 
               else
-                fprintf('Order_n_Signals{%d}{%d} does not exist.\n',isignal,iorder);
+                fprintf('Order_n_Signals{%d}{%d} does not exist.\n',iOri,iorder);
               end
               
             else
-              fprintf('Order_n_Signals{%d} does not exist.\n',isignal);
+              fprintf('Order_n_Signals{%d} does not exist.\n',iOri);
             end
           else
             fprintf('Order_n_Signals does not exist.\n');
@@ -604,23 +607,23 @@ if ~Method.sparseMemory
           
           
           if iorder == 1
-            index_gamma = mod(isignal-1,gammaGridSize) + 1;
-            iOri = 1 + (isignal - index_gamma)/gammaGridSize;
+            index_gamma = mod(iOri-1,gammaGridSize) + 1;
+            iOri = 1 + (iOri - index_gamma)/gammaGridSize;
             
-            Order_n_Signals{isignal}{iorder} = gridWeight(iOri,index_gamma)*ones(size(experiment_time));
+            Order_n_Signals{iOri}{iorder} = gridWeight(iOri,index_gamma)*ones(size(experiment_time));
             
             disp('Recovered.');
             
           elseif iorder == Method.order
-            Order_n_Signals{isignal}{iorder} = Signals{isignal};
+            Order_n_Signals{iOri}{iorder} = Signals{iOri};
             disp('Recovered.');
           else
             Progress.Order_n_Mean = false;
             disp('Failed.');
-            Order_n_Signals{isignal}{iorder} = nan(size(experiment_time));
+            Order_n_Signals{iOri}{iorder} = nan(size(experiment_time));
           end
           
-          Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + Order_n_Signals{isignal}{iorder};
+          Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + Order_n_Signals{iOri}{iorder};
           fprintf('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n');
         end
       end
@@ -651,22 +654,22 @@ Progress.complete = true;
 if verbose
   fprintf('Processing\n');
 end
-
+uncertainty = [];
 % decide what to save
 if ~isempty(OutputData)
   switch Data.saveLevel
     case 0
       if Method.sparseMemory
-        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','-append');
+        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','uncertainty','-append');
       else
-        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','-append');
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','uncertainty','-append');
       end
     case 1
       if Method.sparseMemory
         save(OutputData,'Nuclei','Order_n_Signals','-append');
       else
         save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
-          'Nuclei','Order_n_SignalMean','Order_n_Signals','-append');
+          'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty','-append');
       end
     case 2
       save(OutputData,'-v7.3');
@@ -684,6 +687,13 @@ end
 % calculate the contributions from each spin
 % placed after the save since getSpinContributions() is still buggy
 %NuclearContribution.findContributions = Method.getNuclearContributions;
+
+if Method.getUncertainty
+uncertainty = getClusterError([], ...
+  Nuclei, System, nOrientations, Clusters, AuxiliarySignal,Method, gridWeight, Order_n_SignalMean, Order_n_Signals); 
+
+save(OutputData,'uncertainty','-append');
+end
 if Method.getNuclearSpinContributions
   getNuclearSpinContributions([OutputData,'SpinContribution.mat'], ...
     Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean)
@@ -986,7 +996,7 @@ elseif strcmp(Method.method,'rCCE')
     fprintf('\nCalculating restricted Cluster Correlation Expansion.\n')
   end
   [Signal,AuxiliarySignal,Order_n_Signal] = ...
-    doRestrictedCCE(System,Method, Nuclei, Method.r0, verbose);
+    doRestrictedCCE(System,Method, Nuclei, verbose);
   if verbose
     fprintf('\nComplete.\n')
   end

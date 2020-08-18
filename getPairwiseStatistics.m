@@ -55,7 +55,7 @@ pwstat.gamma_n = Nuclei.Nuclear_g*System.muN/System.hbar;
 
 % Hyperfine
 pwstat.Hyperfine_perpendicular = Nuclei.FermiContact ...
-  - System.hbar.*(System.mu0/4/pi).*pwstat.gamma_n.*pwstat.gamma_e.*pwstat.Distance.^-3; % Hz
+  - System.hbar.*(System.mu0/4/pi).*pwstat.gamma_n'.*pwstat.gamma_e.*pwstat.Distance.^-3; % Hz
 pwstat.DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular - pwstat.Hyperfine_perpendicular';
 
 pwstat.Hyperfine = pwstat.Hyperfine_perpendicular.*(1-3*cosTheta2);

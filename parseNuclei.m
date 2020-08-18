@@ -576,43 +576,6 @@ catch
   return
 end 
 
-% Clear excess entries.
-Nuclei.quadrupole2lab(:,:,Nuclei.number+1:end) = [];
-Nuclei.Qtensor(:,:,Nuclei.number+1:end) = [];
-Nuclei.quadrupoleXaxis(Nuclei.number+1:end,:) = [];
-Nuclei.quadrupoleYaxis(Nuclei.number+1:end,:) = [];
-Nuclei.quadrupoleZaxis(Nuclei.number+1:end,:) = [];
-
-Nuclei.hyperfine2lab(:,:,Nuclei.number+1:end) = [];
-Nuclei.Atensor(:,:,Nuclei.number+1:end) = [];
-Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
-Nuclei.Azz(Nuclei.number+1:end,:) = [];
-
-
-
-% Get coupling statistics.
-Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
-Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
-Nuclei.valid = Nuclei.valid & (Nuclei.Statistics.Distance <= System.radius);
-
-% Get the highest spin value. 
-Nuclei.maxSpin = max(Nuclei.Spin);
-
-Nuclei.Adjacency = getAdjacencyMatrix(Nuclei, Method);
-
-% Set the starting spin index and ending spin index.
-Nuclei.startSpin = max(1, floor(Method.startSpin));
-Nuclei.endSpin = min(Nuclei.number, floor(Method.endSpin));
-
-% Check for consistancy.
-if Nuclei.startSpin > Nuclei.endSpin
-  disp('Starting cluster spin cannot be greater than ending spin.  Swapping assignment.');
-  Nuclei.startSpin = max(0, floor(Method.endSpin));
-  Nuclei.endSpin = min(Nuclei.number, floor(Method.startSpin));
-end
-
-Nuclei.numberStartSpins = min(Nuclei.number, Nuclei.endSpin - Nuclei.startSpin + 1);
-
 % Rotate coordinates if requested by user via System.X/Y/Z
 %-------------------------------------------------------------------------------
 containsXYZ = [isfield(System,'X') isfield(System,'Y') isfield(System,'Z')];
@@ -660,6 +623,64 @@ if sum(containsXYZ)>=2
   Nuclei.Coordinates = Nuclei.Coordinates*Rotation';
   
 end
+
+
+
+
+
+
+
+% Clear excess entries.
+Nuclei.quadrupole2lab(:,:,Nuclei.number+1:end) = [];
+Nuclei.Qtensor(:,:,Nuclei.number+1:end) = [];
+Nuclei.quadrupoleXaxis(Nuclei.number+1:end,:) = [];
+Nuclei.quadrupoleYaxis(Nuclei.number+1:end,:) = [];
+Nuclei.quadrupoleZaxis(Nuclei.number+1:end,:) = [];
+
+Nuclei.hyperfine2lab(:,:,Nuclei.number+1:end) = [];
+Nuclei.Atensor(:,:,Nuclei.number+1:end) = [];
+Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
+Nuclei.Azz(Nuclei.number+1:end,:) = [];
+
+
+
+% Get coupling statistics.
+Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
+Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
+Nuclei.valid = Nuclei.valid & (Nuclei.Statistics.Distance <= System.radius);
+
+
+if Method.lock_bAmax
+  Nuclei.bAmax_lim = lock_bAmax(Nuclei.Statistics, Method);
+  Method.cutoff.bAmax(:) = Nuclei.bAmax_lim;
+  doAddCriterion = true;
+  for icriterion = Method.Criteria
+    if strcmp(icriterion,'bAmax')
+      doAddCriterion = false;
+    end
+  end
+  if doAddCriterion
+    Method.Criteria{end+1} = 'bAmax';
+  end
+end
+% Get the highest spin value. 
+Nuclei.maxSpin = max(Nuclei.Spin);
+
+Nuclei.Adjacency = getAdjacencyMatrix(Nuclei, Method);
+
+% Set the starting spin index and ending spin index.
+Nuclei.startSpin = max(1, floor(Method.startSpin));
+Nuclei.endSpin = min(Nuclei.number, floor(Method.endSpin));
+
+% Check for consistancy.
+if Nuclei.startSpin > Nuclei.endSpin
+  disp('Starting cluster spin cannot be greater than ending spin.  Swapping assignment.');
+  Nuclei.startSpin = max(0, floor(Method.endSpin));
+  Nuclei.endSpin = min(Nuclei.number, floor(Method.startSpin));
+end
+
+Nuclei.numberStartSpins = min(Nuclei.number, Nuclei.endSpin - Nuclei.startSpin + 1);
+
 
 % set thermal energy
 Nuclei.kT = System.kT;
