@@ -23,7 +23,9 @@ if options.usePseudoGrad
   Method.getUncertainty = true;
 end
 
-System.gridSize = 1;
+if System.gridSize > 1
+  Method.parallelComputing = options.parpow;
+end
 ID = 1;
 ID_Ref = ID;
 hline = '-----------------------------------------------------------------\n';
@@ -521,7 +523,7 @@ switch cutoff.name
     System.gridSize = grid_options(grid_point + reltig*cutoff.delta(cutoff.ID));
     cutoff.value = System.gridSize;
     cutoff.value_str = num2str(cutoff.value);
-    cutoff.unit = '';
+    cutoff.units = '';
     
     
 end
