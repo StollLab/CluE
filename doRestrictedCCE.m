@@ -50,6 +50,7 @@ for inucleus = 1:numberNuclei
     
     
     % calculate dipolar coupling
+    %{
     cosThetaSquared = (cosFieldAngle(Nuclei.Coordinates(inucleus,:),Nuclei.Coordinates(jnucleus,:)))^2;
     b = 0.25*(System.mu0/4/pi)*Nuclei.Nuclear_g(inucleus)*Nuclei.Nuclear_g(jnucleus)*System.muN^2; % J m^3.
     r = norm(Nuclei.Coordinates(inucleus,:) - Nuclei.Coordinates(jnucleus,:));
@@ -59,11 +60,12 @@ for inucleus = 1:numberNuclei
     
     c = ( Hyperfine(inucleus)-Hyperfine(jnucleus) )/(4*b);
     w = b*sqrt(1+c^2);
-    
-    %if abs(c)>1e9,  error('c is larger than 1e9!');  end
-    
-    % v(2t) = 1 - xi*xj*c^2/(1+c^2)^2{cos[ 2tb*sqrt(1+c^2) ] -1 }^2
-    AuxiliarySignal_ = 1-  (2*c/(1+c^2))^2 * sin(w*System.Time).^4;
+    %}
+    b = Nuclei.Statistics.Nuclear_Dipole(inucleus,jnucleus)/4*2*pi;
+    modDepth = Nuclei.Statistics.Modulation_Depth(inucleus,jnucleus);
+    w = Nuclei.Statistics.Frequency_Pair(inucleus,jnucleus)*2*pi;
+   
+    AuxiliarySignal_ = 1 - modDepth * sin(w*System.Time).^4;
     Signal = Signal.*AuxiliarySignal_;
     if ~Method.conserveMemory
       AuxiliarySignal{inucleus} =AuxiliarySignal{inucleus}.*AuxiliarySignal_;

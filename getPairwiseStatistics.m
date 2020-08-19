@@ -55,7 +55,9 @@ pwstat.gamma_n = Nuclei.Nuclear_g*System.muN/System.hbar;
 
 % Hyperfine
 pwstat.Hyperfine_perpendicular = Nuclei.FermiContact ...
-  - System.hbar.*(System.mu0/4/pi).*pwstat.gamma_n'.*pwstat.gamma_e.*pwstat.Distance.^-3; % Hz
+  - System.hbar^2.*(System.mu0/4/pi).*pwstat.gamma_n'.*pwstat.gamma_e.*pwstat.Distance.^-3; % J
+
+pwstat.Hyperfine_perpendicular = pwstat.Hyperfine_perpendicular/(System.h); % Hz.
 pwstat.DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular - pwstat.Hyperfine_perpendicular';
 
 pwstat.Hyperfine = pwstat.Hyperfine_perpendicular.*(1-3*cosTheta2);
@@ -63,12 +65,12 @@ pwstat.DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
 
 
 % Nuclear Dipole-Dipole
-b = 0.25*(System.mu0/4/pi).*(Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2; % J m^3.
-b = -b./pwstat.DistanceMatrix.^3; % J.
-b = b/(System.h); % Hz.
-bp = b.*(1-3*cos(pwstat.ThetaMatrix).^2);
-pwstat.Nuclear_Dipole_perpendicular = 4*b; % Hz.
-pwstat.Nuclear_Dipole = 4*bp; % Hz.
+b_perp = 0.25*(System.mu0/4/pi).*(Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2; % J m^3.
+b_perp = -b_perp./pwstat.DistanceMatrix.^3; % J.
+b_perp = b_perp/(System.h); % Hz.
+b = b_perp.*(1-3*cos(pwstat.ThetaMatrix).^2);
+pwstat.Nuclear_Dipole_perpendicular = 4*b_perp; % Hz.
+pwstat.Nuclear_Dipole = 4*b; % Hz.
 
 % |bA_{mav}|^{1/2}.
 pwstat.bAmax = max( abs(pwstat.Hyperfine_perpendicular), abs(pwstat.Hyperfine_perpendicular'));
@@ -88,8 +90,8 @@ pwstat.Modulation_Depth_p = modDepth_p;
 pwstat.Modulation_Depth = modDepth;
 
 % modulation frequency
-pwstat.Frequency_Pair_p =  2.*bp.*sqrt(1+cp.^2)./(2*pi);
-pwstat.Frequency_Pair =  2.*b.*sqrt(1+c.^2)./(2*pi);
+pwstat.Frequency_Pair_p =  b_perp.*sqrt(1+cp.^2); % Hz
+pwstat.Frequency_Pair   =  b.*sqrt(1+c.^2); % Hz
 
 % delta_gm_gn
 pwstat.Same_g = Nuclei.Nuclear_g == Nuclei.Nuclear_g';
