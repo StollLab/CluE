@@ -898,7 +898,7 @@ for iTime = 1:timepoints
         v(iTime,jTime) = vecDensityMatrixT*U_(:);
         
         % Increment propagator.
-        if jTime<= Ndt
+        if jTime < Ndt
           U_beta_2 = dU_beta*U_beta_2;
           U_alpha_2 = dU_alpha*U_alpha_2;
         else
