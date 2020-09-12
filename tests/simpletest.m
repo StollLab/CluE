@@ -17,7 +17,7 @@ Data.InputData = 'TEMPO_GLY_100K_1001.pdb';
 %==========================================================================
 System.experiment = 'Hahn';
 
-System.gridSize = 6;
+System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
 System.radius = 12e-10; % m;
@@ -76,11 +76,11 @@ System.Theory = [ true, true, true, true, true, true, true, true, true, false;  
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 2;
+Method.order = 4;
 
 % maximum nucleus-nucleus coupling distance;
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^3; % Hz
+Method.cutoff.dipole = 10^4; % Hz
 
 % verbosity option: true, false
 Method.verbose = true;
@@ -110,8 +110,8 @@ subplot(2,1,1)
 hold on
 
 plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
-plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
-plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
+% plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
+% plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
 if ~System.D2O, xlim([0,10]); end
 
 xlabel('2\tau (\mus)');
@@ -131,6 +131,7 @@ semilogx(nu*1e-6,abs(F),'-','linewidth',3,'color',[0,0,0]);
 hold on;
 semilogx(nu*1e-6,real(F),'-','linewidth',1.5,'color',[0,0,1]);
 semilogx(nu*1e-6,imag(F),'-','linewidth',1.5,'color',[1,0,0]);
+legend('Abs','Re','Im')
 xlabel('\nu (MHz)');
 grid on;  zoom on; 
 set(gca,'fontsize',fontsize);

@@ -13,6 +13,7 @@ end
 
 options = setDefaults(options);
 metric = options.metric;
+% verbose = options.verbose;
 
 if options.pruneClusters
   Method.getClusterContributions = true;
@@ -272,6 +273,9 @@ if ~isfield(options,'pruneClusters')
 end
 if ~isfield(options,'vmin')
   options.vmin = exp(-5);
+end
+if ~isfield(options,'verbose')
+  options.verbose = false;
 end
 
 options.cutoffNames = {'radius','dipole','bAmax','powder'};
