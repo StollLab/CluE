@@ -39,7 +39,7 @@ scaleFactor = System.scale;
 Nuclei.dataSource = pdbFileName;
 
 % open data file
-[Coordinates,Type,UnitCell,Connected,Indices_nonWater,pdbID,numberH,isSolvent] = parsePDB(pdbFileName,System);
+[Coordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,numberH,isSolvent,isWater] = parsePDB(pdbFileName,System);
 Nuclei.isSolvent = isSolvent;
 
 % Connected = formConnection(Connected_,Indices_nonWater);
@@ -48,7 +48,7 @@ Nuclei.isSolvent = isSolvent;
 Npdb = length(Type);
 
 if System.Methyl.include
-  [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater);
+  [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonSolvent] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonSolvent);
   Nuclei.Methyl_Data = Methyl_Data;
 else
   Nuclei.Methyl_Data = [];
@@ -354,8 +354,8 @@ for uc = 1:nCells
               xQ = ElectronCenteredCoordinates(iconnect,:) - NuclearCoordinates;
           end
         end
-        isOnWater = ~any(inucleus==Indices_nonWater);
-        if isOnWater
+       
+        if isWater(inucleus)
           
           % Water Quadrupole Values
           % Edmonds, D. T.; Mackay, A. L.

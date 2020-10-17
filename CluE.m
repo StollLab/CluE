@@ -17,12 +17,7 @@ tic
 [System, Method, Data] = setSystemDefaults(System,Method,Data);
 
 
-if ~isfield(Method,'r_min')
-  Method.r_min = 0.1*System.meter*1e-10; % m.
-end
-
 % time axis
-
 if strcmp(System.experiment,'FID')
   experiment_time = System.Time;
 elseif strcmp(System.experiment,'Hahn')
@@ -213,10 +208,10 @@ end
 if doFindClusters
   
   if strcmp(Method.clusterization,'tree-search')
-    if verbose, fprintf('Finding clusters of up to size %d.\n', Method.order); end
+    if verbose, fprintf('Finding clusters of up to size %d.\n', Method.extraOrder); end
 
     if Method.combineClusters
-      Clusters = findClusters_treeSearch(Nuclei,Method.order,{});
+      Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
       for clusterSize = 1:min(Method.order, numel(inClusters))
         % Combine arrays.
         C = [Clusters{clusterSize}; inClusters{clusterSize}];
@@ -229,11 +224,19 @@ if doFindClusters
         Clusters{clusterSize} = C(keep,:);
       end
     else
-      Clusters = findClusters_treeSearch(Nuclei,Method.order,inClusters);
+      if ~Method.cutoff.sizeDependent
+      Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,inClusters);
+      else
+        Clusters = cell(1,Method.extraOrder);
+        for adjacencyOrder = Method.extraOrder:-1:1
+          Clusters_ = findClusters_treeSearch(Nuclei,Method.extraOrder,adjacencyOrder,inClusters);
+          Clusters{adjacencyOrder} = Clusters_{adjacencyOrder};
+        end
+      end
     end
-    Nuclei.numberClusters = zeros(1,Method.order);
+    Nuclei.numberClusters = zeros(1,Method.extraOrder);
     
-    for clusterSize = 1:Method.order
+    for clusterSize = 1:Method.extraOrder
       Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
       
       if verbose
@@ -930,7 +933,7 @@ end
 for inucleus = 1:Nuclei.number
   Nuclei.Atensor(:,:,inucleus) = R_pdb2lab*Nuclei.Atensor(:,:,inucleus)*R_pdb2lab';
   Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
-  % Elementwise Qtensor manipulation used for testing.  The default filer is ones(3); 
+  % Elementwise Qtensor manipulation used for testing.  The default filter is ones(3); 
   Nuclei.Qtensor(:,:,inucleus) = Nuclei.Qtensor(:,:,inucleus).*System.nuclear_quadrupole_filter;
   
 end
@@ -952,7 +955,7 @@ System.Electron.g = System.gMatrix(3,3);
 
 graphs = Nuclei.Adjacency; 
 
-if System.useMeanField
+if Method.useMultipleBathStates
   [Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal]= getMeanFieldCoefficients(Nuclei,System);
 else
   Nuclei.MeanFieldCoefficients = [];

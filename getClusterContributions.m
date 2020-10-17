@@ -101,46 +101,60 @@ pool = parpool(numCores);
 
 % -------------------------------------------------------------------------
 % Do powder averaging.
-sansClusterV_powder = cell(1,Method_order);
 
+% Initialize variables.
+sansClusterV_powder = cell(1,Method_order);
 sansClusterTM_powder = cell(1,Method_order);
 sansClusterDeltaTM_powder = cell(1,Method_order);
 sansClusterRMSD_powder = cell(1,Method_order);
 sansClusterRMSDsorted_powder = cell(1,Method_order);
 sansClusterRMSDsortOrder_powder = cell(1,Method_order);
+
+% Loop though cluster sizes.
 for isize = orderrange
-sansClusterV_powder{isize} = sum(sansClusterV{isize},3);
+  sansClusterV_powder{isize} = sum(sansClusterV{isize},3);
+  
+  % Initialize variables.
+  sansClusterTM_powder{isize} = zeros(1,numberClusters(isize));
+  sansClusterDeltaTM_powder{isize} = zeros(1,numberClusters(isize));
+  sansClusterRMSD_powder{isize} = zeros(1,numberClusters(isize));
+  sansClusterRMSDsorted_powder{isize} = zeros(1,numberClusters(isize));
+  sansClusterRMSDsortOrder_powder{isize} = zeros(1,numberClusters(isize));
+  
+  % Loop through clusters of size isize.
+  for icluster = 1:numberClusters(isize)
+    % get sans-cluster TM.
+    sansClusterTM_powder{isize}(icluster) = getTM(t,sansClusterV_powder{isize}(icluster,:));
+  end
+  
+  % get sans-cluster RMSD.
+  sansClusterRMSD_powder{isize} = sqrt(mean(abs(sansClusterV_powder{isize}-SignalMean).^2,2));
+  
+  % Sort clusters by sans-cluster RMSD.
+  [sansClusterRMSDsorted_powder{isize},sansClusterRMSDsortOrder_powder{isize}] = sort(sansClusterRMSD_powder{isize},'descend');
 
-sansClusterTM_powder{isize} = zeros(1,numberClusters(isize));
-sansClusterDeltaTM_powder{isize} = zeros(1,numberClusters(isize));
-sansClusterRMSD_powder{isize} = zeros(1,numberClusters(isize)); 
-sansClusterRMSDsorted_powder{isize} = zeros(1,numberClusters(isize));
-sansClusterRMSDsortOrder_powder{isize} = zeros(1,numberClusters(isize));
-
-
-for icluster = 1:numberClusters(isize)
-  sansClusterTM_powder{isize}(icluster) = getTM(t,sansClusterV_powder{isize}(icluster,:));
-end
-
-sansClusterRMSD_powder{isize} = sqrt(mean(abs(sansClusterV_powder{isize}-SignalMean).^2,2));
-
-[sansClusterRMSDsorted_powder{isize},sansClusterRMSDsortOrder_powder{isize}] = sort(sansClusterRMSD_powder{isize},'descend');
-sansClusterDeltaTM_powder{isize} = sansClusterTM_powder{isize} - TM_powder;
+  % Get Delta TM.
+  sansClusterDeltaTM_powder{isize} = sansClusterTM_powder{isize} - TM_powder;
 end
 
 % -------------------------------------------------------------------------
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
+% Initialize variables.
 RMSDclu = cell(1,Method_order);
 Vclu = cell(1,Method_order);
 numberPossibleClusters = NchooseK(numberClusters(1),1:Method_order );
 
+% Determine the number of unused clusters.
 nk = numberPossibleClusters - numberClusters;
+
+% Loop through cluster sizes.
 for isize = 1:Method_order
   minIndexClusters = sansClusterRMSDsortOrder_powder{isize}(end);
   Vclu{isize}.error = nk(isize)*sqrt(cumsum(abs(sansClusterV_powder{isize}(minIndexClusters,:)-Order_n_SignalMean{isize}).^2)./(1:nt));
   Vclu{isize}.lowerBound = Order_n_SignalMean{isize} - 2*numberClusters(isize)*sqrt(cumsum(abs(sansClusterV_powder{isize}(minIndexClusters,:)-Order_n_SignalMean{isize}).^2)./(1:nt));
   
+  % Initialize variables.
   RMSDclu{isize} = zeros(1,numberClusters(isize)); 
   Vclu{isize}.found_10pc   = false;
   Vclu{isize}.found_5pc    = false;
@@ -160,7 +174,11 @@ for isize = 1:Method_order
   Vclu{isize}.found_1ppm   = false;
   
   v_ori_ = ones(nOrientations,nt);
+  
+  % Loop through orientations.
   for iOri = 1:nOrientations
+    
+    % Get the isize - 1 CCE signal.
     if isize ==1
       v0_ = ones(1,nt);
     else
@@ -168,21 +186,37 @@ for isize = 1:Method_order
       v0_ = v0_./v0_(1);
     end
     v_ori_(iOri,:) = gridWeight(iOri)*v0_;
+    
   end
+  
+  % Initialize variables.
   v_ = ones(1,nt);
   v__ = ones(1,nt);
+  
+  % Loop through clusters.
   for icluster = 1:numberClusters(isize)
+    
+    % Switch indices to RMSD sorted indices.
     indexClusters = sansClusterRMSDsortOrder_powder{isize}(icluster);
    
+    % Loop though orientations.
     for iOri = 1:nOrientations
+      % Do the CCE product.
       v_ori_(iOri,:) = v_ori_(iOri,:).*prod(AuxiliarySignal{iOri}{isize}(indexClusters,:),1); 
     end
+    
+    % Save last powder signal.
     v__ = v_;
+    
+    % Update powder signal.
     v_ = sum(v_ori_,1);
     
+    % Determine RMSD.
     RMSDclu{isize}(icluster)  = sqrt(mean(abs(v_ - Order_n_SignalMean{isize}).^2,2));
     
-    
+    % Switch Yard
+    % Check if RMSD is the first under various thresholds 
+    % and save data at those points.
     if (~Vclu{isize}.found_10pc) && RMSDclu{isize}(icluster) <= 10e-2
       Vclu{isize}.found_10pc = true;
       Vclu{isize}.thr_10pc = v_;
@@ -313,6 +347,8 @@ for isize = 1:Method_order
     
   end
 end
+
+% Collect variable into ana(lysis) structure.
 ana.RMSDclu = RMSDclu;
 ana.Vclu = Vclu;
 % >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

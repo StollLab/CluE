@@ -1,6 +1,7 @@
 function [H_alpha,H_beta] = assembleMeanFieldHamiltonian_gpu(state_multiplicity,tensors,SpinOp,Qtensors,SpinXiXjOp,...
   theory,zeroIndex,methyl_number, MeanFieldCoefficients, MeanFieldTotal)
 
+% Extract boolean flags.
 useEZ       = theory(1);
 useNZ       = theory(2);
 useHF_SzIz  = theory(3);
@@ -14,6 +15,7 @@ useMeanField= theory(10);
 
 clusterSize = numel(state_multiplicity);
 
+% Adjust for methyl groups.
 %Cluster = sort(unique(Cluster));
 
 %if methyl_number==0 && abs(double(zeroIndex) + 1 - double(Cluster(1)) )>=1
@@ -23,11 +25,14 @@ clusterSize = numel(state_multiplicity);
 %if clusterSize ~= length(Cluster)
 %  error('Cluster reference failure.');
 %end
+
 I0 = SpinOp(:,:,1);
 Hnuc = 0;
 Hhf = 0;
 
+% ENUM
 E = 1; Z = 2; RAISE = 3; SZ = 4;
+
 Hmf = 0;
 Hmf0 = 0; %MeanFieldTotal*I0;
 Hmf0_ = 0;

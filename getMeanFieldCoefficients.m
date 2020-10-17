@@ -5,14 +5,14 @@ function [h,hTr] = getMeanFieldCoefficients(Nuclei,System)
 % Only operators proportional Iz are needed.
 theory = System.theory;
 % useEZ       = theory(1);
-useNZ       = theory(2);
-useHF_SzIz  = theory(3);
+useNZ       = false; %  theory(2);
+useHF_SzIz  = false; %  theory(3);
 % useHF_SzIxy = theory(4);
 useNucA     = theory(5);
 % useNucB     = theory(6);
-useNucCD    = theory(7);
+useNucCD    = false; % theory(7);
 % useNucEF    = theory(8);
-useNQ       = theory(9);
+useNQ       = false; %  theory(9);
 
 nStates = max(Nuclei.nStates);
 h_ = zeros(Nuclei.number,Nuclei.number,4);
@@ -113,10 +113,10 @@ for istate = 1:nStates
         if useNucA
           
           h_(iSpin,jSpin,E) = h_(iSpin,jSpin,E) + MI*dd(3,3)*MJ;
-          h_(jSpin,iSpin,E) = h_(jSpin,iSpin,E) + MJ*dd(3,3)*MI;
+          h_(jSpin,iSpin,E) = h_(iSpin,jSpin,E); % + MJ*dd(3,3)*MI;
           
           h_(iSpin,jSpin,Z) = h_(iSpin,jSpin,Z) + MI*dd(3,3);
-          h_(jSpin,iSpin,Z) = h_(jSpin,iSpin,Z) + MJ*dd(3,3);
+          h_(jSpin,iSpin,Z) = h_(iSpin,jSpin,Z);% + MJ*dd(3,3);
         end
         
         % nucleus-nucleus dipolar C and D terms
@@ -140,5 +140,5 @@ for istate = 1:nStates
   
 h(:,:,:,istate) = h_;
 end
-
+ 
 end

@@ -12,7 +12,7 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonWater, pdbID,numberH, isSolvent] = parsePDB(filename,System)
+function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,numberH, isSolvent,isWater] = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -33,6 +33,7 @@ nLines = numel(allLines);
 Connected = {};
 
 isSolvent = false(1,nLines);
+isWater = false(1,nLines);
 Coordinates = zeros(nLines,3);
 pdbID = zeros(1,nLines);
 Type = cell(1,nLines);
@@ -68,9 +69,17 @@ for iline = 1:nLines
     Element_ = strtrim(line_(77:78));
     
     % Determine if atom is not part of the solvent.
-    isSolvent(iNucleus) = true;
     if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL') && ~strcmp(ResidueName_,'MGLY') && ~strcmp(ResidueName_,'MGL')
       isSolvent(iNucleus) = false;
+    else
+      isSolvent(iNucleus) = true;
+    end
+    
+    % Determine if atom is not part of water.
+    if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL')
+      isWater(iNucleus) = false;
+    else
+      isWater(iNucleus) = true;
     end
     
     % Determine if the atom is hydrogen.
@@ -148,5 +157,7 @@ isSolvent(iNucleus+1:end) = [];
 Coordinates(iNucleus+1:end,:) = [];
 pdbID(iNucleus+1:end) = [];
 Type(iNucleus+1:end) = [];
-Indices_nonWater = find(~isSolvent);
+Indices_nonSolvent = find(~isSolvent);
+isWater(iNucleus+1:end) = [];
+
 end

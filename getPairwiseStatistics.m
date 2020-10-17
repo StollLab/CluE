@@ -73,8 +73,8 @@ pwstat.Nuclear_Dipole_perpendicular = 4*b_perp; % Hz.
 pwstat.Nuclear_Dipole = 4*b; % Hz.
 
 % |bA_{mav}|^{1/2}.
-pwstat.bAmax = max( abs(pwstat.Hyperfine_perpendicular), abs(pwstat.Hyperfine_perpendicular'));
-pwstat.bAmax = sqrt(pwstat.bAmax.*abs(pwstat.Nuclear_Dipole));
+pwstat.Amax = max( abs(pwstat.Hyperfine_perpendicular), abs(pwstat.Hyperfine_perpendicular'));
+pwstat.bAmax = sqrt(pwstat.Amax.*abs(pwstat.Nuclear_Dipole));
 
 % Hyperfine to nucler dipole-dipole ratio
 cp = pwstat.DeltaHyperfine_perpendicular./pwstat.Nuclear_Dipole_perpendicular;

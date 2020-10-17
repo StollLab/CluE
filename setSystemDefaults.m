@@ -70,6 +70,8 @@ if ~isfield(Method,'cutoff')
   Method.cutoff.modulation = zer;
   Method.cutoff.dipole = zer;
   Method.cutoff.bAmax = zer;
+  Method.cutoff.maxAmax = inf;
+  Method.cutoff.minAmax = zer;
   Method.cutoff.max_distance = inf + zer;
   Method.cutoff.min_distance = zer;
   Method.cutoff.hyperfine_sup = inf + zer;
@@ -89,10 +91,24 @@ if numel(Method.cutoff.dipole) < Method.order
   n_ = numel(Method.cutoff.dipole);
   Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
 end
+if isfield(Method.cutoff, 'maxAmax') && numel(Method.cutoff.maxAmax) < Method.order
+  n_ = numel(Method.cutoff.maxAmax);
+  Method.cutoff.maxAmax(n_:Method.order) = Method.cutoff.maxAmax(n_);
+end
+if isfield(Method.cutoff, 'minAmax') && numel(Method.cutoff.minAmax) < Method.order
+  n_ = numel(Method.cutoff.minAmax);
+  Method.cutoff.minAmax(n_:Method.order) = Method.cutoff.minAmax(n_);
+end
 
 if numel(Method.cutoff.bAmax) < Method.order
   n_ = numel(Method.cutoff.bAmax);
   Method.cutoff.bAmax(n_:Method.order) = Method.cutoff.bAmax(n_);
+end
+
+if norm(Method.cutoff.dipole-Method.cutoff.dipole(1)) > 0
+  Method.cutoff.sizeDependent = true;
+else
+  Method.cutoff.sizeDependent = false;
 end
 
 % Radius to load nuclei in to.
@@ -205,7 +221,30 @@ end
 if ~isfield(Method,'record_clusters')
   Method.record_clusters = false;
 end
+if ~isfield(Method,'useMultipleBathStates')
+  Method.useMultipleBathStates = false;
+end
+if ~isfield(Method,'useInterlacedClusters')
+  Method.useInterlacedClusters = false;
+end
+if any(Method.useInterlacedClusters(:)) && Method.useMultipleBathStates
+  error('Method.useInterlacedClusters and Method.useMultipleBathStates are not compatiple.')
+end
+if (size(Method.useInterlacedClusters,1) ~= size(Method.useInterlacedClusters,2)) || (size(Method.useInterlacedClusters,1) < Method.order)
 
+  if any(Method.useInterlacedClusters(:))
+  M_ = eye(Method.order)>0;
+  nrow_ = min(Method.order, size(Method.useInterlacedClusters,1));
+  ncol_ = min(Method.order, size(Method.useInterlacedClusters,1));
+  M_(1:nrow_,1:ncol_) = Method.useInterlacedClusters;
+  Method.useInterlacedClusters = M_;
+  else
+    Method.useInterlacedClusters = false(Method.order);
+  end
+end
+if ~isfield(Method,'extraOrder')
+  Method.extraOrder = Method.order;
+end
 % number of product states to average over
 if ~isfield(System,'nStates')
   System.nStates = ones(1,Method.order);
@@ -426,6 +465,10 @@ if ~isfield(System,'gridSize') || isempty(System.gridSize)
   System.gridSize = 1;
 end
 
+if ~isfield(Method,'r_min')
+  Method.r_min = 0.1*System.meter*1e-10; % m.
+end
+
 
 % Define theory.
 if isfield(System,'Theory')
@@ -493,6 +536,7 @@ else
   end
 end
 
+
 % Define cluster size specific theories.
 if ~isfield(System,'Theory')
   System.Theory = ones(Method.order,length(System.theory)).*System.theory;  
@@ -503,12 +547,13 @@ elseif size(System.Theory ,1) < Method.order
     .*System.Theory(defined_order_,:);
 end
 
+System.nStates(~System.Theory(1:length(System.nStates),10)') = 1;
 
 if ~isfield(System,'useThermalEnsemble')
-  System.useThermalEnsemble = ~System.useMeanField;
+  System.useThermalEnsemble = ~Method.useMultipleBathStates;
 end
-if System.useMeanField && System.useThermalEnsemble
-  error('The setting of useMeanField = useThermalEnsemble = true is not supported.');
+if Method.useMultipleBathStates && System.useThermalEnsemble
+  error('The setting of Method.useMultipleBathStates= useThermalEnsemble = true is not supported.');
 end
 % System limiting options
 if ~isfield(System,'limitToSpinHalf')

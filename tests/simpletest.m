@@ -5,25 +5,28 @@
 %==========================================================================
 % clear;
 clc;
-
+clear;
+Data.ClusterData = "Clusters.mat";
 oldpath = path;
 path('../',oldpath);
  
 Data.InputData = 'TEMPO_GLY_100K_1001.pdb';
-
+% Data.InputData = 'TEMPO_100K_dt100ps_01.pdb'
+Data.overwriteLevel = 2;
 
 %==========================================================================
 % System Settings
 %==========================================================================
 System.experiment = 'Hahn';
-
+System.spinCenter = 'TEMPO';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 12e-10; % m;
+System.radius = 16e-10; % m;
 
 % Do not include nitrogen in the Hamiltonian.
 System.nitrogen = false;
+System.carbon = false;
 
 % total number of time points 
 System.timepoints = 2^7;
@@ -51,14 +54,19 @@ System.g = [2.0097, 2.0064,2.0025];
 
 % applied magnetic field
 System.magneticField  =1.2; % T.
+% System.temperature = 20; % K
 
 
 % deuterate non-solvents?
-System.deuterateProtein = false;
+System.deuterateProtein = true;
 
 % deuterate solvents?
-System.D2O = false;
+System.D2O = true;
+System.deuteriumFraction = 1;
 
+Method.useInterlacedClusters = true;
+% Method.useMultipleBathStates = true;
+System.nStates = [1,1];
 % theory selection 
 %                  eZ    nZ    HF1   HF2    ddA   ddB  ddCD  ddEF  NQI meanField
 System.Theory = [ true, true, true, true, true, true, true, true, true, false;  ... % 1-clusters
@@ -76,11 +84,15 @@ System.Theory = [ true, true, true, true, true, true, true, true, true, false;  
 Method.method = 'CCE';
 
 % maximum cluster size
-Method.order = 4;
-
+Method.order = 2;
+% Method.extraOrder = 3;
+% Method.useInterlacedClusters = [0,0;0,1]>0;
+% System.nStates = ones(1,Method.order)*2^10;
+% System.nStates(1) = 1;
+% System.useThermalEnsemble = true;
 % maximum nucleus-nucleus coupling distance;
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 10^4; % Hz
+Method.cutoff.dipole = 0*[10^3,10^2.6,10^3.6]; % Hz
 
 % verbosity option: true, false
 Method.verbose = true;
@@ -97,7 +109,7 @@ Method.partialSave = false;
 
 % [SignalMean, twotau, TM_powder,order_n_signals,Nuclei, uncertainty] = CluE(System,Method,Data);
 
-[SignalMean, twotau] = CluE(System,Method,Data);
+[SignalMean, twotau,~,Order_n_SignalMean] = CluE(System,Method,Data);
 
 
 %--------------------------------------------------------------------------
@@ -110,6 +122,10 @@ subplot(2,1,1)
 hold on
 
 plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
+% plot(twotau*1e6,abs(Order_n_SignalMean{Method.order-1}),'-','linewidth',3,'color','red');
+% if max(abs(SignalMean(:) ) )>1
+%   set(gca,'yscale','log');
+% end
 % plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
 % plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
 if ~System.D2O, xlim([0,10]); end

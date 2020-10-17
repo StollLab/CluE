@@ -9,8 +9,8 @@ Ori_cutoffs = Method.Ori_cutoffs;
 Nuclei.maxSpin = max(Nuclei.Spin);
 
 % Initialize a matrix of valid edges.
-Adjacency = ones(Nuclei.number,Nuclei.number,Method.order);
-for isize = 1:Method.order
+Adjacency = ones(Nuclei.number,Nuclei.number,Method.extraOrder);
+for isize = 1:Method.extraOrder
   Adjacency(:,:,isize) = Nuclei.valid'*Nuclei.valid > 0;
   Adjacency(:,:,isize) = Adjacency(:,:,isize).*pwstat.Same_g;
  
@@ -44,6 +44,14 @@ for isize = 1:Method.order
       case 'bAmax'
         Min_bAmax_ = abs(pwstat.bAmax) >= Method.cutoff.bAmax(isize);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_bAmax_;
+
+      case 'minAmax'
+        Min_Amax_ = abs(pwstat.Amax) >= Method.cutoff.minAmax(isize);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Amax_;  
+
+      case 'maxAmax'
+        Max_Amax_ = abs(pwstat.Amax) <= Method.cutoff.maxAmax(isize);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Max_Amax_;  
         
       case 'minimum-frequency'
         if Ori_cutoffs

@@ -25,7 +25,7 @@ Length = 1;
 for isize = clusterSize+1:maxClusterSize
   
   % Assume all cluster could be super-clusters.
-  potenstialCluster = true(size(Clusters{isize},1),1);
+  potentialCluster = true(size(Clusters{isize},1),1);
   
   % Loop over all spins in thisCluster.
   for ii = 1:clusterSize
@@ -33,11 +33,11 @@ for isize = clusterSize+1:maxClusterSize
     ispin = thisCluster(ii);
     
     % Remove all clusters that do not contain ispin from examination.
-    potenstialCluster = potenstialCluster & any(Clusters{isize}==ispin,2);
+    potentialCluster = potentialCluster & any(Clusters{isize}==ispin,2);
   end
   
   % Generate list of indices for the super-clusters of size isize.
-  idx_ = Indices(potenstialCluster);
+  idx_ = Indices(potentialCluster);
   size_idx_ = size(idx_,1);
   Length = max(size_idx_,Length);
   % Record indices.

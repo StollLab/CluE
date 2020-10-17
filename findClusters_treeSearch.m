@@ -11,7 +11,7 @@
 %   Clusters     ... Mxorder array of clusters of size order, one
 %                    cluster per row
 
-function Clusters = findClusters_treeSearch(Nuclei,order,inClusters)
+function Clusters = findClusters_treeSearch(Nuclei,order,adjacencyOrder,inClusters)
 
 
 % Get number of nuclei
@@ -23,7 +23,7 @@ inOrder = numel(inClusters);
 if (inOrder < order) && (inOrder>=2)
   Adjacency = clusters2Adjacency(inClusters{2},N) | logical(Nuclei.Adjacency(:,:,1));
 else
-  Adjacency = logical(Nuclei.Adjacency(:,:,1));
+  Adjacency = logical(Nuclei.Adjacency(:,:,adjacencyOrder));
 end
 
 % Initialize output array
