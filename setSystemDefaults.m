@@ -464,7 +464,9 @@ end
 if ~isfield(System,'gridSize') || isempty(System.gridSize)
   System.gridSize = 1;
 end
-
+if ~isfield(System,'randomOrientation')
+  System.randomOrientation = false;
+end
 if ~isfield(Method,'r_min')
   Method.r_min = 0.1*System.meter*1e-10; % m.
 end

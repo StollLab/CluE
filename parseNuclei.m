@@ -84,7 +84,7 @@ end
 numberUnitCells = (2*a_limit+1)*(2*b_limit+1)*(2*c_limit+1);
 % Get nuclear quadrupole parameters.
 if System.nuclear_quadrupole
-    
+  Nuclei.warnings.setQuadrupoleTensor = false;  
   % Water Quadrupole Values
   % Edmonds, D. T.; Mackay, A. L. 
   % The Pure Quadrupole Resonance of the Deuteron in Ice. 
@@ -622,9 +622,25 @@ if sum(containsXYZ)>=2
   Rotation = alignCoordinates(System.X,System.Z);
   Nuclei.Coordinates = Nuclei.Coordinates*Rotation';
   
+
 end
 
-
+if System.randomOrientation
+  
+  % Generate random Euler angles.
+  alpha_ = rand()*2*pi;
+  beta_ = rand()*2*pi;
+  gamma_ = rand()*2*pi;
+  
+  % Get rotation matrix.
+  Rotation = rotateZYZ(alpha_,beta_,gamma_);
+  
+  % Rotate coordinates.
+  Nuclei.Coordinates = Nuclei.Coordinates*Rotation';
+  
+  % Save rotation matrix.
+  Nuclei.RandomRotationMatrix = Rotation;
+end
 
 
 

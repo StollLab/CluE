@@ -5,9 +5,12 @@ if norm(zQ)==0
 end
 if norm(xQ)==0
   while xQ*zQ'==0
-    disp('Failed to set quadrupole tensor orientation; using a random direction.')
+    if ~Nuclei.warnings.setQuadrupoleTensor
+      disp('Failed to set quadrupole tensor orientation; using a random direction.');
+    end
     xQ = rand(1,3);
     xQ = xQ/norm(xQ);
+    Nuclei.warnings.setQuadrupoleTensor = true;
   end
 end
 

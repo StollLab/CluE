@@ -6,7 +6,7 @@
 % clear;
 clc;
 clear;
-Data.ClusterData = "Clusters.mat";
+% Data.ClusterData = "Clusters.mat";
 oldpath = path;
 path('../',oldpath);
  
@@ -22,7 +22,7 @@ System.spinCenter = 'TEMPO';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 16e-10; % m;
+System.radius = 14e-10; % m;
 
 % Do not include nitrogen in the Hamiltonian.
 System.nitrogen = false;
@@ -64,13 +64,13 @@ System.deuterateProtein = true;
 System.D2O = true;
 System.deuteriumFraction = 1;
 
-Method.useInterlacedClusters = true;
+% Method.useInterlacedClusters = true;
 % Method.useMultipleBathStates = true;
-System.nStates = [1,1];
+% System.nStates = [1,1];
 % theory selection 
 %                  eZ    nZ    HF1   HF2    ddA   ddB  ddCD  ddEF  NQI meanField
 System.Theory = [ true, true, true, true, true, true, true, true, true, false;  ... % 1-clusters
-                  true, true, true, false, true, true, true, true, true, false; ... % 2-clusters
+                  true, true, true, true, true, true, true, true, true, false; ... % 2-clusters
                   true, true, true, false, true, true, true, true, true, false; ... % 3-clusters
                   true, true, true, false, true, true, true, true, true, false; ... % 4-clusters
                   true, true, true, false, true, true, true, true, true, false; ... % 5-clusters
@@ -92,7 +92,7 @@ Method.order = 2;
 % System.useThermalEnsemble = true;
 % maximum nucleus-nucleus coupling distance;
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = 0*[10^3,10^2.6,10^3.6]; % Hz
+Method.cutoff.dipole = [10^2,10^2,10^2]; % Hz
 
 % verbosity option: true, false
 Method.verbose = true;
