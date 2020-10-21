@@ -15,7 +15,12 @@ tic
 
 % set defaults base on specified parameters and for unspecified parameters
 [System, Method, Data] = setSystemDefaults(System,Method,Data);
-
+if isempty(Method.seed)
+  
+else 
+  fprintf('Using rng seed to Method.seed = %d.\n',Method.seed)
+  rng(Method.seed);
+end
 
 % time axis
 if strcmp(System.experiment,'FID')

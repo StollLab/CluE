@@ -27,6 +27,21 @@ end
 if ~isfield(options,'vmin')
   options.vmin = exp(-5);
 end
+if ~isfield(options,'seed')
+  options.seed = 42;
+end
+if ~isempty(options.seed)
+  fprintf('Using rng seed to options.seed = %d.\n',options.seed)
+  rng(options.seed);
+end
+primeRange = [2^10,2^20];
+
+
+
+if ~isfield(System,'randomOrientation')
+  System.randomOrientation = true;
+end
+
 saveEveryN = options.saveEveryN;
 maxN = options.maxN;
 N_ave = options.N_ave;
@@ -74,6 +89,10 @@ if ~progress(INITIAL_TRIALS)
     
     % Skip loaded trials.
     if signals(ii,1)==0
+      if ~isempty(options.seed)
+        Method.seed = nthprime(randi(primeRange));
+        fprintf('Setting Method.seed to %d.\n',Method.seed)
+      end
       
       fprintf('Running inital trial %d/%d.\n', ii,N);
       [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
@@ -120,6 +139,11 @@ if ~progress(CONVERGENCE_TRIALS)
       
       % Skip loaded trials
       if signals(ii,1)==0
+        
+        if ~isempty(options.seed)
+          Method.seed = nthprime(randi(primeRange));
+          fprintf('Setting Method.seed to %d.\n',Method.seed)
+        end
         
         fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
         [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
