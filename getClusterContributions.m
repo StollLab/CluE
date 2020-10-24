@@ -1,5 +1,5 @@
 function ana = getClusterContributions(matfile, ...
-  Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, t, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean, Order_n_Signals)
+  Nuclei, System, OriRange, Clusters, Signals, AuxiliarySignal,Method, t, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean, Order_n_Signals)
 
 
 % Load data file.
@@ -10,7 +10,7 @@ if nargin == 1
   
   Nuclei             = indata.Nuclei;
   System             = indata.System;
-  nOrientations      = indata.nOrientations;
+  OriRange           = indata.OriRange;
   Clusters           = indata.Clusters;
   Signals            = indata.Signals;
   AuxiliarySignal    = indata.AuxiliarySignal;
@@ -30,8 +30,11 @@ nt = System.timepoints;
 DistanceMatrix = Nuclei.DistanceMatrix;
 Method_order = Method.order;
 Method_order_lower_bound = Method.order_lower_bound; 
+nOrientations = length(OriRange);
 
-
+for isize = 1:Method_order
+  numberClusters(isize) = size(Clusters{isize},1);
+end
 % -------------------------------------------------------------------------
 % <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -81,7 +84,8 @@ pool = parpool(numCores);
       SuperClusterIndices = findSuperClusters(Clusters,isize,icluster);
       
       % Loop through orientations used in powder averaging.
-      for iOri = 1:nOrientations
+      for index_Ori = 1:nOrientations
+        iOri = OriRange(index_Ori);
       
         sansClusterV{isize}(icluster,:,iOri) = Signals{iOri};       
         
@@ -176,7 +180,8 @@ for isize = 1:Method_order
   v_ori_ = ones(nOrientations,nt);
   
   % Loop through orientations.
-  for iOri = 1:nOrientations
+  for index_Ori = 1:nOrientations
+    iOri = OriRange(index_Ori);
     
     % Get the isize - 1 CCE signal.
     if isize ==1
@@ -185,7 +190,7 @@ for isize = 1:Method_order
       v0_ = Order_n_Signals{iOri}{isize -1};
       v0_ = v0_./v0_(1);
     end
-    v_ori_(iOri,:) = gridWeight(iOri)*v0_;
+    v_ori_(index_Ori,:) = gridWeight(iOri)*v0_;
     
   end
   
@@ -200,9 +205,10 @@ for isize = 1:Method_order
     indexClusters = sansClusterRMSDsortOrder_powder{isize}(icluster);
    
     % Loop though orientations.
-    for iOri = 1:nOrientations
+    for index_Ori = 1:nOrientations
+      iOri = OriRange(index_Ori);
       % Do the CCE product.
-      v_ori_(iOri,:) = v_ori_(iOri,:).*prod(AuxiliarySignal{iOri}{isize}(indexClusters,:),1); 
+      v_ori_(index_Ori,:) = v_ori_(index_Ori,:).*prod(AuxiliarySignal{iOri}{isize}(indexClusters,:),1); 
     end
     
     % Save last powder signal.

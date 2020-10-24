@@ -175,9 +175,13 @@ end
 % ========================================================================
 % Compile list of connected clusters
 % ========================================================================
-Clusters = [];
+Clusters = cell(Method.extraOrder,1);
+for clusterSize = 1:Method.extraOrder
+  Clusters{clusterSize} = [];
+end
+
 inClusters = {};
-doFindClusters = true;
+doFindClusters = ~Method.Ori_cutoffs;
 if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
   Clusters = {};
   if ~isempty(Data.ClusterData)
@@ -253,11 +257,6 @@ if doFindClusters
     for clusterSize = Method.order:-1:1
       
       if strcmp(Method.method,'full')
-        if clusterSize<Nuclei.number
-          Clusters{clusterSize} = [];
-        else
-          Clusters{Nuclei.number} = Nuclei.Index;
-        end
         continue
       end
       
@@ -274,6 +273,15 @@ if doFindClusters
       
     end
   end
+end
+
+if strcmp(Method.method,'count clusters')
+  SignalMean = Nuclei.numberClusters;
+  experiment_time = 1:length(SignalMean);
+  TM_powder = [];
+  Order_n_SignalMean = [];
+  
+  
   if Method.exportClusters
     if ~isempty(OutputData)
       clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];
@@ -282,13 +290,8 @@ if doFindClusters
     end
     save(clusterSaveFile,'Clusters');
   end
-end
-
-if strcmp(Method.method,'count clusters')
-  SignalMean = Nuclei.numberClusters;
-  experiment_time = 1:length(SignalMean);
-  TM_powder = [];
-  Order_n_SignalMean = [];
+  
+  
   toc
   return
 end
@@ -495,6 +498,7 @@ Temp_Order_n_Signals{numberOfSignals+1} = [];
 
 Statistics = cell(numberOfSignals,1);
 graphs = cell(numberOfSignals,1);
+Ori_Clusters = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing;
 saveAll = Data.saveLevel==2;
@@ -519,7 +523,7 @@ else
   
   for iOri = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri},Ori_Clusters{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
       Gamma,iOri,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
     
@@ -575,6 +579,10 @@ Nuclei.graphs = graphs;
 
 if ~Method.sparseMemory 
   for iOri = 1:nOrientations
+    
+    if Method.Ori_cutoffs
+      Clusters =  combineClusters(Clusters,Ori_Clusters{iOri});
+    end
     SignalMean = SignalMean + Signals{iOri};
     %Signals{isignal} = abs(Signals{isignal});
     if ~ischar(Order_n_SignalMean{iorder}) && ~isempty(Order_n_Signals{1})
@@ -638,6 +646,9 @@ if ~Method.sparseMemory
     end
     % Signals{isignal} = Signals{isignal}/max(Signals{isignal});
   end
+  for iSize=1:Method.order
+    Nuclei.numberClusters(iSize) = size(Clusters{iSize},1);
+  end
 end
 
 % update progress
@@ -650,6 +661,17 @@ if System.dimensionality ==2 && min(size(SignalMean))==1
     Order_n_SignalMean{iorder} = reshape(Order_n_SignalMean{iorder}',System.timepoints,System.timepoints)';
   end
 end
+
+
+if Method.exportClusters
+  if ~isempty(OutputData)
+    clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];
+  else
+    clusterSaveFile = 'Clusters.mat';
+  end
+  save(clusterSaveFile,'Clusters','Ori_Clusters');
+end
+
 
 if strcmp(Method.method,'count clusters')
   SignalMean = SignalMean(1:Method.order);
@@ -704,11 +726,25 @@ save(OutputData,'uncertainty','-append');
 end
 if Method.getNuclearSpinContributions
   getNuclearSpinContributions([OutputData,'SpinContribution.mat'], ...
-    Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean)
+    Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal, ...
+    Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, ...
+    Order_n_SignalMean);
 end
 if Method.getClusterContributions
+  if ~Method.Ori_cutoffs
   getClusterContributions([OutputData,'ClusterContribution.mat'], ...
-    Nuclei, System, nOrientations, Clusters, Signals, AuxiliarySignal,Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, Order_n_SignalMean,Order_n_Signals)
+    Nuclei, System, 1:nOrientations, Clusters, Signals, AuxiliarySignal, ...
+    Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, ...
+    Order_n_SignalMean,Order_n_Signals);
+  else
+    for iOri = 1:nOrientations
+
+      getClusterContributions([OutputData,'ClusterContribution_Ori_',num2str(iOri), '.mat'], ...
+        Nuclei, System, iOri, Ori_Clusters{iOri}, Signals, AuxiliarySignal, ...
+        Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, ...
+        Order_n_SignalMean,Order_n_Signals);
+    end
+  end
 end
 
 if isfield(Method, 'getNuclearContributions') && Method.getNuclearContributions
@@ -763,7 +799,7 @@ end
 % ========================================================================
 % Calculates signal for a set of orientations
 % ========================================================================
-function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal] ...
+function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] ...
     = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,iSignal_max)
      
 % grid point indices
@@ -778,7 +814,7 @@ index_gamma = mod(adjusted_isignal-1,gammaGridSize) + 1;
 igrid = 1 + (adjusted_isignal - index_gamma)/gammaGridSize;
 
 % calculate coherence signal
-[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal] = ...
+[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
   calculateSignal(System,Method,Nuclei,Clusters,...
   Alpha(igrid),Beta(igrid),Gamma(index_gamma),verbose,OutputData,Progress);
 
@@ -900,7 +936,7 @@ end
 % ========================================================================
 % Calculate signal for one orientation
 % ========================================================================
-function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs] = ...
+function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,Ori_Clusters] = ...
   calculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,Gamma,verbose,OutputData,Progress)
 
 % Assign temporary value to AuxiliarySignal
@@ -912,6 +948,7 @@ R_pdb2lab = rotateZYZ(Alpha,Beta,Gamma);
 % Rotate nuclear coordinates.
 Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 Statistics = Nuclei.Statistics;
+Ori_Clusters = [];
 if Method.Ori_cutoffs
   
   Statistics = getPairwiseStatistics(System, Nuclei);
@@ -919,7 +956,7 @@ if Method.Ori_cutoffs
   Adjacency = getAdjacencyMatrix(Nuclei,Method);
   Nuclei.Adjacency = Adjacency;
   
-  Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,{});
+  Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,Method.extraOrder,{});
   
   for clusterSize = 1:Method.order
     % Combine arrays.
@@ -931,6 +968,12 @@ if Method.Ori_cutoffs
     % Remove duplicates
     keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
     Clusters{clusterSize} = C(keep,:);
+    
+    Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1); 
+  end
+  
+  if Method.verbose
+    fprintf('Found %d orientation clusters of size %d.\n', size(Clusters{Method.order},1),Method.order);
   end
 end
 
