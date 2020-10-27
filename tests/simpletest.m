@@ -101,7 +101,7 @@ Method.verbose = true;
 Method.parallelComputing = false;
 
 % save each orientation in temporary files until the simm completes?
-Method.partialSave = false;
+Method.partialSave = true;
 
 %==========================================================================
 %% Run simulation

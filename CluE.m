@@ -450,6 +450,7 @@ for iorder = Method.order:-1:1
 end
 
 SignalsToCalculate = [];
+saveAll = Data.saveLevel==2;
 
 % Check to see if file already exists.
 for iOri = 1:nOrientations
@@ -458,19 +459,18 @@ for iOri = 1:nOrientations
   temp_file = ['temp_', OutputData, '_sig_', num2str(iOri), '.mat'] ;
   
   Calculate_Signal{iOri} = true;
-  SignalsToCalculate(end+1) = iOri;
   
   % check if file alread exists
-  if isfile(temp_file)
+  if isfile(temp_file) && ~(saveAll || Method.getContributions)
     try
       % load partial save
       load(temp_file,'signal','order_n','seed');
       
       % check progress
-      if seed == Method.seed && progress_powder
+      if seed == Method.seed %&& progress_powder
         
         % use loaded data
-        if verbose, fprintf(['Loading signal %d from ', temp_file, '.'],iOri); end
+        if verbose, fprintf(['Loading signal %d from ', temp_file, '.\n'],iOri); end
         
         % set values to simulation variables
         Calculate_Signal{iOri} = false;
@@ -486,7 +486,11 @@ for iOri = 1:nOrientations
         end
         
       end
+    catch     
+      SignalsToCalculate(end+1) = iOri;
     end
+  else
+    SignalsToCalculate(end+1) = iOri;
   end
   
 end
@@ -501,7 +505,7 @@ graphs = cell(numberOfSignals,1);
 Ori_Clusters = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing;
-saveAll = Data.saveLevel==2;
+
 
 if parallelComputing
   
@@ -832,7 +836,7 @@ if ~ischar(Temp_Order_n_Signals_)
   end
 end
 
-if verbose, fprintf('\nCompleted orientation %d/%d.\n',isignal,iSignal_max); end
+if verbose, fprintf('\nCompleted orientation %d/%d.\n',adjusted_isignal,iSignal_max); end
 
 % Save to file.
 if Method.partialSave
