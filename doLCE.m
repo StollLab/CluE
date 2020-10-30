@@ -28,7 +28,7 @@ for isize = 2
     switch System.experiment
       case 'Hahn'
       case 'CPMG-2D'
-        V2 = - 2*(b/omega*(cos(omega.*tau1) - cos(omega.*tau2)  )).^2;
+        V2 = - 4*(b/omega*(cos(omega.*tau1) - cos(omega.*tau2)  )).^2;
         AuxiliarySignal_  = V2;
         Signal = Signal + AuxiliarySignal_;
     end
