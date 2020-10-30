@@ -1056,6 +1056,17 @@ elseif strcmp(Method.method,'rCCE')
     fprintf('\nComplete.\n')
   end
   return
+  
+elseif strcmp(Method.method,'LCE')
+  if verbose
+    fprintf('\nCalculating Linked Cluster Expansion.\n')
+  end
+  [Signal,AuxiliarySignal,Order_n_Signal] = ...
+    doLCE(System,Method, Nuclei,Clusters, verbose);
+  if verbose
+    fprintf('\nComplete.\n')
+  end
+  return;
 end
 
 timepoints = size(System.Time,2);
