@@ -1027,12 +1027,13 @@ for iTime = 1:timepoints
       U_alpha_2 = eye(nStates);
       
       % Loop over second experimental dimension.
-      for jTime = 1:timepoints
+      for jTime = 1:iTime %timepoints
         
         % Generate time dependent detection operator.
         U_ = U_alpha_2'*U_beta_2'  *  (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
         
         v(iTime,jTime) = vecDensityMatrixT*U_(:);
+        v(jTime,iTime) = v(iTime,jTime)';
         
         % Increment propagator.
         if jTime < Ndt
