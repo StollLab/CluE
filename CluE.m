@@ -309,7 +309,7 @@ if Method.parallelComputing
   delete(gcp('nocreate'));
   
   % determine number of cores available
-  numCores = feature('numcores');
+  numCores = min(feature('numcores'), Method.numberCores);
   
   % create parallel pool
   pool = parpool(numCores);

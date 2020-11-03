@@ -52,7 +52,9 @@ end
 if ~isfield(Method,'parallelComputing')
   Method.parallelComputing = false;
 end
-
+if ~isfield(Method,'numberCores')
+  Method.numberCores = inf;
+end
 % Set verbosity.
 if ~isfield(Method,'verbose')
   Method.verbose = false;
