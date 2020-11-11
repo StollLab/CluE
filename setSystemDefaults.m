@@ -18,12 +18,16 @@ if Method.conserveMemory
   % Auxiliary signals are not saved so getNuclearContributions will fail.
   Method.getNuclearContributions = false;
   Method.getClusterContributions = false;
+  Method.getNuclearStatistics = false;
   % The following behaviors are are used regardless of settings,
   % so the settings are modified to reflect what is done.
   
   Method.precalculateHamiltonian = false;
   Method.HamiltonianType = 'pairwise';
   
+end
+if ~isfield(Method,'getNuclearStatistics');
+  Method.getNuclearStatistics = false;
 end
 if ~isfield(Method,'gpu')
   Method.gpu = false;

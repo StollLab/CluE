@@ -704,6 +704,10 @@ Nuclei.kT = System.kT;
 % set thermal equilibrium state
 [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
 Nuclei.ZeemanStates = setRandomState(Nuclei);
+
+if ~Method.getNuclearStatistics
+  Nuclei.Statistics = [];
+end
 end
 
 % ========================================================================

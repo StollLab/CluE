@@ -322,6 +322,7 @@ end
 %===============================================================================
 % Powder average settings
 gridSize = System.gridSize;
+GridInfo = [];
 if gridSize==1
   System.averaging = 'none';
 end
@@ -375,7 +376,12 @@ if strcmp(System.averaging,'powder')
   end
   gridSize = length(Alpha);
   gridWeight = Grid.w;
-    
+  
+  GridInfo.gridSize   = gridSize;
+  GridInfo.gridWeight = gridWeight;
+  GridInfo.Alpha      = Alpha;
+  GridInfo.Beta       = Beta;
+  
 elseif strcmp(System.averaging,'none')
   
   % Use only the PDB file orientation.
@@ -422,6 +428,12 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   Gamma = 0;
   
   gridSize = length(Alpha);
+  
+  
+  GridInfo.gridSize   = gridSize;
+  GridInfo.gridWeight = gridWeight;
+  GridInfo.Alpha      = Alpha;
+  GridInfo.Beta       = Beta;
   
 end
 gridWeight = repmat(gridWeight(:),1,gammaGridSize);
@@ -694,16 +706,16 @@ if ~isempty(OutputData)
   switch Data.saveLevel
     case 0
       if Method.sparseMemory
-        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','uncertainty','-append');
+        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','uncertainty','GridInfo','-append');
       else
-        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','uncertainty','-append');
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','uncertainty','GridInfo','-append');
       end
     case 1
       if Method.sparseMemory
-        save(OutputData,'Nuclei','Order_n_Signals','-append');
+        save(OutputData,'Nuclei','Order_n_Signals','GridInfo','-append');
       else
         save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
-          'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty','-append');
+          'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty','GridInfo','-append');
       end
     case 2
       save(OutputData,'-v7.3');
