@@ -9,7 +9,7 @@ Ori_cutoffs = Method.Ori_cutoffs;
 Nuclei.maxSpin = max(Nuclei.Spin);
 
 % Initialize a matrix of valid edges.
-Adjacency = ones(Nuclei.number,Nuclei.number,Method.extraOrder);
+Adjacency = true(Nuclei.number,Nuclei.number,Method.extraOrder);
 for isize = 1:Method.extraOrder
   Adjacency(:,:,isize) = Nuclei.valid'*Nuclei.valid > 0;
   Adjacency(:,:,isize) = Adjacency(:,:,isize).*pwstat.Same_g;

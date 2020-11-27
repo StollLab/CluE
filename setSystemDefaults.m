@@ -26,7 +26,7 @@ if Method.conserveMemory
   Method.HamiltonianType = 'pairwise';
   
 end
-if ~isfield(Method,'getNuclearStatistics');
+if ~isfield(Method,'getNuclearStatistics')
   Method.getNuclearStatistics = false;
 end
 if ~isfield(Method,'gpu')

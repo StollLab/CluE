@@ -275,6 +275,10 @@ if doFindClusters
   end
 end
 
+% Save Memory.
+Nuclei.Adjacency = [];
+
+
 if strcmp(Method.method,'count clusters')
   SignalMean = Nuclei.numberClusters;
   experiment_time = 1:length(SignalMean);
@@ -1126,7 +1130,7 @@ else
       
       % Calculate signals.
       [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,~] ...
-        = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+        = methyl_calculateSignal(System, Method, Nuclei,Clusters);
       
       % Record the appropraite signals.
       for record_order = iorder:new_order

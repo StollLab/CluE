@@ -9,7 +9,9 @@
 
 function [Nuclei, System]= parseNuclei(System,Method,pdbFileName)
 
-maxClusterSize = Method.order;
+maxSize = 6;
+methylFactor = 2*System.Methyl.include + 1;
+maxClusterSize = min(maxSize,methylFactor*Method.order);
 
 % set values to unspecified fields
 System = setIsotopeDefaults(System);
@@ -25,8 +27,18 @@ Nuclei.SpinOperators{multiplicity} = 1;
 for multiplicity = 2:4
   S = (multiplicity-1)/2;
   Nuclei.SpinOperators{multiplicity} = generateSpinOperators(S,maxClusterSize);
+%   rot = generateRotationMatrices(spinDim,numberMethyl)
 end
- 
+
+nuT = System.Methyl.tunnel_splitting;
+if System.Methyl.include
+  Nuclei.rotationalMatrix{2,1} = -nuT/3*generateRotationMatrices(2,1);
+  Nuclei.rotationalMatrix{4,1} = -nuT/3*generateRotationMatrices(4,1);
+  Nuclei.rotationalMatrix{4,2} = -nuT/3*generateRotationMatrices(4,2);
+%   Nuclei.rotationalMatrix{3,1} = -nuT/3*generateRotationMatrices(3,1);
+%   Nuclei.rotationalMatrix{9,1} = -nuT/3*generateRotationMatrices(9,1);
+%   Nuclei.rotationalMatrix{9,1} = -nuT/3*generateRotationMatrices(9,2);
+end
 Nuclei.SpinXiXjOperators = generateXiXjSpinOperators(1,maxClusterSize);
  
 
@@ -209,7 +221,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 5.58569;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+%       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.Abundance = 1;
@@ -226,7 +238,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 5.58569;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+%       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(8);
       Nuclei.valid(iNuc)= true;
       
@@ -332,7 +344,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 0.857438;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(3);
       Nuclei.valid(iNuc)= true;
       
@@ -415,7 +427,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 1.4048;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       
@@ -435,7 +447,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 0.403761;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(3);
       Nuclei.valid(iNuc)= true;
       Nuclei.Abundance(iNuc) = 0.99632;
@@ -519,7 +531,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = -1.11058;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       
@@ -540,7 +552,7 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 2.0023;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
-      Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.Abundance(iNuc) = 1; 
@@ -705,9 +717,25 @@ Nuclei.kT = System.kT;
 [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
 Nuclei.ZeemanStates = setRandomState(Nuclei);
 
+% Clean
+
+Nuclei.Connected = [];
+Nuclei.State = [];
+
 if ~Method.getNuclearStatistics
   Nuclei.Statistics = [];
+  Nuclei.DistanceMatrix = [];
 end
+
+if ~Method.getNuclearContributions
+  Nuclei.PDBCoordinates = [];
+  Nuclei.Element = [];
+end
+
+if ~Method.Ori_cutoffs
+  Nuclei.valid = [];
+end
+
 end
 
 % ========================================================================
@@ -886,8 +914,9 @@ end
 % New Function
 % ========================================================================
 
-function  [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater)
+function  [Methyl_Data,Coordinates,Type_out,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater)
 
+Type_out  = Type;
 Number_Nuclei = length(Type);
 Methyl_Data.number_methyls = 0;
 Methyl_Data.Hydron_Coordinates = cell(1);
@@ -919,19 +948,19 @@ for ispin = 1:Number_Nuclei
       % Record indices.
       indexH = Connected{ispin}([ 2,3,4 ]);
       % Adjust for the forth carbon bond.
-      indexH = indexH + (indexH >=ii);
+      indexH = indexH + (indexH <=ii);
       break;
     elseif strcmp(methyl,'HCHH')
       indexH = Connected{ispin}([ 1,3,4 ]);
-      indexH = indexH + (indexH >=ii);
+      indexH = indexH + (indexH <=ii);
       break;
     elseif strcmp(methyl,'HHCH')
       indexH = Connected{ispin}([ 1,2,4]);
-      indexH = indexH + (indexH >=ii);
+      indexH = indexH + (indexH <=ii);
       break;
     elseif strcmp(methyl,'HHHC')
       indexH = Connected{ispin}([ 1,2,3 ]);
-      indexH = indexH + (indexH >=ii);
+      indexH = indexH + (indexH <=ii);
       break;
     end
     
@@ -962,10 +991,10 @@ for ispin = 1:Number_Nuclei
     Methyl_Data.Hydron_Coordinates{new_index}(iH,:) = Coordinates(indexH(iH),:);
   end
   % Change hydrogens into methy pseudo-particles.
-  Type{new_index} = 'CH3';
-  Type{indexH(1)} = 'CH3_H_source';
-  Type{indexH(2)} = 'CH3_H_source';
-  Type{indexH(3)} = 'CH3_H_source';
+  Type_out{new_index} = 'CH3';
+  Type_out{indexH(1)} = 'CH3_H_source';
+  Type_out{indexH(2)} = 'CH3_H_source';
+  Type_out{indexH(3)} = 'CH3_H_source';
   
   
 end
