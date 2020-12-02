@@ -51,7 +51,7 @@ scaleFactor = System.scale;
 Nuclei.dataSource = pdbFileName;
 
 % open data file
-[Coordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,numberH,isSolvent,isWater] = parsePDB(pdbFileName,System);
+[Coordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,MoleculeID,numberH,isSolvent,isWater] = parsePDB(pdbFileName,System);
 Nuclei.isSolvent = isSolvent;
 
 % Connected = formConnection(Connected_,Indices_nonWater);
@@ -209,8 +209,17 @@ for uc = 1:nCells
     end
     
     % switch nuclear type
+    
     % H =============================================================
-    if (strcmp(type,'H') && System.protium)  || ( strcmp(type,'D') && isSolvent(inucleus) && (rand() > System.deuteriumFraction) )
+    if System.newIsotopologuePerOrientation
+      doParseAsH_ = false;
+    else
+      isProtium_ = (strcmp(type,'H') && System.protium);
+      isDeuteriumTurnedProtium_ = ( strcmp(type,'D') && isSolvent(inucleus) && (rand() > System.deuteriumFraction) );
+      doParseAsH_ = (isProtium_ || isDeuteriumTurnedProtium_);
+    end
+    
+    if  doParseAsH_
       iNuc = iNuc +1;
       Nuclei.Index(iNuc) = iNuc;
       Nuclei.Type{iNuc} = '1H';
@@ -222,6 +231,7 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
 %       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.Abundance = 1;
@@ -239,6 +249,7 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
 %       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(8);
       Nuclei.valid(iNuc)= true;
       
@@ -292,6 +303,7 @@ for uc = 1:nCells
       Nuclei.PDBCoordinates((iNuc),:)= Methyl_Data.Hydron_Coordinates{inucleus}(3,:);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= false;
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       Nuclei.Abundance(iNuc) = 1;
       
       %
@@ -345,9 +357,10 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(3);
       Nuclei.valid(iNuc)= true;
-      
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       Nuclei.Abundance(iNuc) = 1;
       
       
@@ -383,7 +396,7 @@ for uc = 1:nCells
           xQ = [0,0,0];
         end
         Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei);
-        
+       
         %{
         if norm(zQ)==0
           warning('Failed to set quadrupole tensor orientation.')
@@ -428,8 +441,10 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       
       Nuclei.Abundance(iNuc) = 0.0107;
       
@@ -448,8 +463,10 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(3);
       Nuclei.valid(iNuc)= true;
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       Nuclei.Abundance(iNuc) = 0.99632;
       
       
@@ -532,8 +549,10 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       
       Nuclei.Abundance(iNuc) = 0.046832;
       
@@ -553,8 +572,10 @@ for uc = 1:nCells
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       Nuclei.Abundance(iNuc) = 1; 
       
     elseif System.allAtoms
@@ -568,8 +589,10 @@ for uc = 1:nCells
       Nuclei.Nuclear_g(iNuc) = 0;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
+      Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
+      Nuclei.isWater(iNuc) = isWater(inucleus);
       Nuclei.Abundance(iNuc) = 1; 
     end
     
@@ -718,8 +741,6 @@ Nuclei.kT = System.kT;
 Nuclei.ZeemanStates = setRandomState(Nuclei);
 
 % Clean
-
-Nuclei.Connected = [];
 Nuclei.State = [];
 
 if ~Method.getNuclearStatistics
@@ -735,6 +756,14 @@ end
 if ~Method.Ori_cutoffs
   Nuclei.valid = [];
 end
+
+if System.newIsotopologuePerOrientation
+  Nuclei.MoleculeIDunique = unique(Nuclei.MoleculeID);
+else
+  Nuclei.MoleculeID = [];
+  Nuclei.Connected = [];
+  Nuclei.isWater = [];
+end    
 
 end
 

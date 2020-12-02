@@ -12,7 +12,7 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,numberH, isSolvent,isWater] = parsePDB(filename,System)
+function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater] = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -36,6 +36,7 @@ isSolvent = false(1,nLines);
 isWater = false(1,nLines);
 Coordinates = zeros(nLines,3);
 pdbID = zeros(1,nLines);
+MoleculeID = zeros(1,nLines);
 Type = cell(1,nLines);
 
 UnitCell.isUnitCell = false;
@@ -58,6 +59,9 @@ for iline = 1:nLines
     
     % Get pdb ID #.
     pdbID(iNucleus) = sscanf(line_(7:12),'%f');
+    
+    % Get molucule number.
+    MoleculeID(iNucleus) = sscanf(line_(23:27),'%f');
     
     % Get coordinates in meters.
     Coordinates(iNucleus,:) = sscanf(line_(31:54),'%f %f %f')*System.angstrom; % angstrom -> m

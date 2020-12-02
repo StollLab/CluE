@@ -662,5 +662,7 @@ if ~isfield(System,'newIsotopologuePerOrientation')
     System.newIsotopologuePerOrientation = true;
   end
 end
-
+if ~isfield(System,'HydrogenExchange')
+  System.HydrogenExchange = 'full';
+end  
 end

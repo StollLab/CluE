@@ -34,7 +34,17 @@ if ~isempty(options.seed)
   fprintf('Using rng seed to options.seed = %d.\n',options.seed)
   rng(options.seed);
 end
+
+% Set RNG to ensure that repeats on the same initial conditions
+% give identical results. 
 primeRange = [2^10,2^20];
+try 
+  rng(options.seed)
+catch 
+  options.seed = 42;
+  rng(options.seed)
+end
+nextSeed = nthprime(randi(primeRange));
 
 
 
@@ -89,10 +99,12 @@ if ~progress(INITIAL_TRIALS)
     
     % Skip loaded trials.
     if signals(ii,1)==0
-      if ~isempty(options.seed)
-        Method.seed = nthprime(randi(primeRange));
-        fprintf('Setting Method.seed to %d.\n',Method.seed)
-      end
+  
+      rng(nextSeed);
+      Method.seed = nextSeed;
+      nextSeed = nthprime(randi(primeRange));
+      
+      fprintf('Setting Method.seed to %d.\n',Method.seed)
       
       fprintf('Running inital trial %d/%d.\n', ii,N);
       [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
@@ -140,10 +152,11 @@ if ~progress(CONVERGENCE_TRIALS)
       % Skip loaded trials
       if signals(ii,1)==0
         
-        if ~isempty(options.seed)
-          Method.seed = nthprime(randi(primeRange));
-          fprintf('Setting Method.seed to %d.\n',Method.seed)
-        end
+        rng(nextSeed);
+        Method.seed = nextSeed;
+        nextSeed = nthprime(randi(primeRange));
+        fprintf('Setting Method.seed to %d.\n',Method.seed)
+        
         
         fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
         [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
