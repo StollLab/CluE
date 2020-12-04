@@ -649,6 +649,21 @@ if ~isfield(Data,'overwriteLevel')
 end
 if ~isfield(Data,'ClusterData')
   Data.ClusterData = '';
+  Data.exitOnFailedLoad = false;
+else
+  Data.exitOnFailedLoad = true;
+end
+
+if strcmp(Method.method,'HD-CCE')
+  if isempty(Data.ClusterData)
+    error('Please supply a set of clusters.')
+  end
+  Data.exitOnFailedLoad = true;
+  
+  if Method.order > 2
+    error('HD-CCE is only implemented to 2-clusters.')
+  end
+  
 end
 
 if ~isfield(System,'deuteriumFraction')

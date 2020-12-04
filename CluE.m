@@ -189,6 +189,10 @@ if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
       load(Data.ClusterData,'Clusters');      
     catch
       disp('Could not load clusters.')
+      
+      if Data.exitOnFailedLoad
+        error('Could not load clusters.')
+      end
     end
   else
     Clusters = Method.Clusters;
@@ -453,9 +457,11 @@ Calculate_Signal{nOrientations} = true;
 % update progress
 Progress.Order_n_Mean = 'pending';
 Order_n_Signals{nOrientations} = [];
-
+if strcmp(Method.method,'HD-CCE')
+  SignalMean = zeros(1,System.timepoints^System.dimensionality,length(System.deuteriumFraction));
+else
 SignalMean = zeros(1,System.timepoints^System.dimensionality);
-
+end
 % initialize
 for iorder = Method.order:-1:1
   if strcmp(System.experiment,'CPMG-2D')
@@ -581,8 +587,9 @@ if ~Method.sparseMemory
       Signals{iOri} = TempSignals{tempSignalIndex};
       Order_n_Signals{iOri} = Temp_Order_n_Signals{tempSignalIndex};
     end
-    TM(iOri) = getTM(experiment_time,Signals{iOri});
-    
+    if ~strcmp(Method.method,'HD-CCE')
+      TM(iOri) = getTM(experiment_time,Signals{iOri});
+    end
   end
   
   clear('TempSignals');
@@ -1096,9 +1103,12 @@ else
   % Calculate signal and save extra parameters (RAM intensive)
   
   % Check if the theroy is the same for every cluster size.
-  if all(all(System.Theory)==any(System.Theory))
+  if all(all(System.Theory)==any(System.Theory)) && ~strcmp(Method.method,'HD-CCE')
+%     [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
+%       = calculateSignal_gpu(System, Method, Nuclei,Clusters);
     [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
-      = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+      = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+    
     AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
     
     Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
@@ -1129,9 +1139,42 @@ else
       Method.order = new_order;
       
       % Calculate signals.
-      [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,~] ...
-        = methyl_calculateSignal(System, Method, Nuclei,Clusters);
-      
+      if strcmp(Method.method,'HD-CCE')
+        
+        fractions = System.deuteriumFraction;
+        
+        % Change all hydrons to protons.
+        System.deuteriumFraction = 0;
+        Nuclei = newHydronIsotopologue(Nuclei,System);
+        
+        % Get proton auxiliary signals.
+        [ClusterArray, Coherences_1H,Coherences_2H,SubclusterIndices_2H,dimensionality,~] ...
+          = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+        
+        % Change all hydrons to deuteron.
+        System.deuteriumFraction = 1;
+        Nuclei = newHydronIsotopologue(Nuclei,System);
+
+        % Get deuteron auxiliary signals.
+
+        [~, Coherences_1D,Coherences_2D,SubclusterIndices_2D,~,~] ...
+          = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+        
+        
+        [Signals, ...
+          AuxiliarySignal_1,AuxiliarySignal_2] = ...
+          doHydrogenIsotopologueCCE(...
+          Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, fractions, ClusterArray, ...
+          SubclusterIndices_2H,SubclusterIndices_2D,...
+          System.timepoints,dimensionality, Method.order,Nuclei.numberClusters);
+        
+        System.deuteriumFraction = fractions;
+
+      else
+        
+        [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,~] ...
+          = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+      end
       % Record the appropraite signals.
       for record_order = iorder:new_order
         
@@ -1147,12 +1190,13 @@ else
             AuxiliarySignal{record_order} = AuxiliarySignal_4;
         end
       
-      
-        Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
-        if record_order > 1
-          Order_n_Signal{record_order} = Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
-        end
+       
+          Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
+          if record_order > 1
+            Order_n_Signal{record_order} = Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
+          end
         
+      
       end
       
     end

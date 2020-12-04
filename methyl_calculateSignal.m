@@ -44,6 +44,11 @@ else
   Method_extraOrder = Method_order;
   maxSuperclusterSize = maxClusterSize/methylFactor;
 end
+if strcmp(Method.method,'HD-CCE')
+  doHDCCE = true;
+else
+  doHDCCE = false;
+end
 % Convert variable to gpu compatible forms
 dimensionality = 1;
 if strcmp(System.experiment,'FID')
@@ -469,7 +474,7 @@ for clusterSize = 1:Method_order
     switch clusterSize 
       % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
       % the jth cluster of size subCluster_size that is a subcluster of
-      % the ith ccluster of size clusterSize.
+      % the ith cluster of size clusterSize.
       case 1
         % This is just to catch this case.  There is nothing to set. 
       case 2
@@ -791,6 +796,15 @@ end
 
 % Calculate signal
 %-------------------------------------------------------------------------------
+if doHDCCE
+  Signal = ClusterArray;
+  AuxiliarySignal_1 = Coherences_1;
+  AuxiliarySignal_2 = Coherences_2;
+  AuxiliarySignal_3 = SubclusterIndices_2;
+  AuxiliarySignal_4 = dimensionality;
+  Signals = [];
+return
+end
 [Signals, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4] ...
   = doClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
   SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,SubclusterIndices_5,SubclusterIndices_6,...
