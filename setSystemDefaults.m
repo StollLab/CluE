@@ -585,6 +585,9 @@ if isfield(System,'deuterateAll') && islogical(System.deuterateAll) && System.de
   System.D2O = true;
 end
 
+if ~isfield(System,'defaultExchangability')
+  System.defaultExchangability = true;
+end
 if ~isfield(System,'TMguess')
   % very rough
   System.TMguess = (5+45*System.D2O)*1e-6;
@@ -678,6 +681,6 @@ if ~isfield(System,'newIsotopologuePerOrientation')
   end
 end
 if ~isfield(System,'HydrogenExchange')
-  System.HydrogenExchange = 'full';
+  System.HydrogenExchange = 'OH';
 end  
 end

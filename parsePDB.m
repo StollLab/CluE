@@ -12,7 +12,7 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater] = parsePDB(filename,System)
+function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangable] = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -38,7 +38,7 @@ Coordinates = zeros(nLines,3);
 pdbID = zeros(1,nLines);
 MoleculeID = zeros(1,nLines);
 Type = cell(1,nLines);
-
+Exchangable = false(1,nLines);
 UnitCell.isUnitCell = false;
 numberH = [0,0,0];
 iNucleus = 0;
@@ -144,6 +144,28 @@ for iline = 1:nLines
       Connected{index_} = unique(Connected{index_});
     end
     
+    if strcmp(Type{referenceNucleus},'H') || strcmp(Type{referenceNucleus},'D')
+      
+      exchangable_ = [];
+      for jjNuc = Connected{referenceNucleus}
+        switch Type{jjNuc}
+          case {'O','M'}
+            Exchangable(referenceNucleus) = true;
+          case 'C'
+            Exchangable(referenceNucleus) = false;
+          otherwise
+            Exchangable(referenceNucleus) = System.defaultExchangability;
+        end
+        if ~isempty(exchangable_) && exchangable_~= Exchangable(referenceNucleus)
+          fprintf('Inconsistant exchangability for nucleus %d.\n',referenceNucleus);
+          disp('    Using System.defaultExchangability.')
+          break;
+        end
+        exchangable_ = Exchangable(referenceNucleus);
+      end
+      
+    end
+    
   elseif strncmp(line_,'CRYST1',6)
     % Parse information about unit cell
     
@@ -161,6 +183,7 @@ isSolvent(iNucleus+1:end) = [];
 Coordinates(iNucleus+1:end,:) = [];
 pdbID(iNucleus+1:end) = [];
 Type(iNucleus+1:end) = [];
+Exchangable(iNucleus+1:end) = [];
 Indices_nonSolvent = find(~isSolvent);
 isWater(iNucleus+1:end) = [];
 
