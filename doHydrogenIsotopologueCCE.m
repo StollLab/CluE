@@ -3,7 +3,7 @@ function [Signals, ...
   doHydrogenIsotopologueCCE(...
   Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, fractions, Clusters, ...
   SubclusterIndices_2H,SubclusterIndices_2D,...
-  timepoints,dimensionality, order,numberClusters)
+  timepoints,dimensionality, order,numberClusters,Exchangable,MoleculeID)
 %   Coherences_n(iCluster,timepoints)
 
 % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
@@ -86,9 +86,17 @@ for iCluster=1:numberClusters(cluster_order)
   auxD1a_ = Coherences_1D(a1_,:);
   auxD1b_ = Coherences_1D(b1_,:);
   
-  for ifrac = 1:nP
-    AuxiliarySignal_2(iCluster,:,ifrac) = PH(ifrac)^2.*auxH_ + PD(ifrac)^2.*auxD_ + ...
-      PH(ifrac)*PD(ifrac).*(auxH1a_.*auxD1b_ + auxD1a_.*auxH1b_);
+  this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
+  isSameMolecule = MoleculeID(this_cluster(1)) == MoleculeID(this_cluster(2));
+  if isSameMolecule && all(~Exchangable( this_cluster  ))
+    for ifrac = 1:nP
+      AuxiliarySignal_2(iCluster,:,ifrac) = PH(ifrac).*auxH_ + PD(ifrac).*auxD_ ;
+    end
+  else
+    for ifrac = 1:nP 
+      AuxiliarySignal_2(iCluster,:,ifrac) = PH(ifrac)^2.*auxH_ + PD(ifrac)^2.*auxD_ + ...
+        PH(ifrac)*PD(ifrac).*(auxH1a_.*auxD1b_ + auxD1a_.*auxH1b_);
+    end
   end
   
   % Remove 1-cluster correlations
