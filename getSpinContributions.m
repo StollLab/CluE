@@ -1,5 +1,6 @@
 %function getSpinContributions(System,Nuclei,Signal, AuxiliarySignal,Clusters,order,TM)
-function NuclearContribution = getSpinContributions(System, Nuclei, Signals, AuxiliarySignal, Clusters,Method,OutputData,gridWeight,gammaGridSize, TM)
+function NuclearContribution = getSpinContributions(System, Nuclei, Signals, ...
+  AuxiliarySignal, Clusters,Method,OutputData,gridWeight, TM)
   
   
   order = Method.order;

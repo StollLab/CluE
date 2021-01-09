@@ -13,11 +13,14 @@ function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei,uncer
 
 tic
 
+% Determine the output file.
+[OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data);
+if doReturn, toc; return; end
+
 % set defaults base on specified parameters and for unspecified parameters
 [System, Method, Data] = setSystemDefaults(System,Method,Data);
-if isempty(Method.seed)
-  
-else 
+
+if ~isempty(Method.seed)
   fprintf('Using rng seed to Method.seed = %d.\n',Method.seed)
   rng(Method.seed);
 end
@@ -44,77 +47,6 @@ if ~isfile(InputData)
 end
 
 
-% Determine the output file.
-OutputData = Data.OutputData;
-if ~isempty(Data.OutputData)
-  
-  if ~strcmp(OutputData(end-3:end),'.mat')
-    OutputData = [OutputData, '.mat'];
-  end
-
-  if isfile(OutputData)
-    disp('Pre-existing save file found.')
-    
-    switch Data.overwriteLevel
-      
-      % no overwrite, return save
-      case 0 
-        
-        disp('Checking completion status.')
-        try
-          
-          sim_ = load(OutputData);
-          
-          if sim_.Progress.complete && ~(isempty(sim_.uncertainty) &&  Method.getUncertainty)
-           
-            
-            disp('Complete: returning saved data.') 
-            SignalMean  = sim_.SignalMean;
-            experiment_time = sim_.experiment_time;
-            TM_powder = sim_.TM_powder;
-            uncertainty = sim_.uncertainty;
-            
-            
-            if isfield(sim_,'Order_n_SignalMean')
-              Order_n_SignalMean = sim_.Order_n_SignalMean;
-            end
-            if isfield(sim_,'Nuclei')
-              Nuclei = sim_.Nuclei;
-            end
-            
-            return;
-          else
-            clear('sim_')
-          end
-          
-        catch
-        end
-        
-        disp('Incomplete: data will be overwritten.')
-        
-        
-      % no overwrite, backup  
-      case 1 
-        
-        newOutputFile = ['%',OutputData];
-        while isfile(newOutputFile)
-          newOutputFile = ['%',newOutputFile];
-         end
-        disp(['Backing up ',OutputData, ' as ', newOutputFile, '.'])
-        if isunix
-          command = ['mv ', OutputData, ' ', newOutputFile];
-          system(command);
-        else
-          movefile(OutputData, newOutputFile);
-        end
-      % overwrite
-      case 2 
-        disp('Preparing to overwrite save file.');
-    end
-  end
-  
-  
-end
 
 % Initiate progress tracking.
 Progress.started = true;
@@ -147,7 +79,8 @@ elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user')
   if Nuclei.number < 1
     Signals{1} = ones(size(System.Time));
     SignalMean = Signals{1};
-    fprintf(2,'\n There are too few magnetic nuclei in the system for nuclear spin diffusion.\n')
+    fprintf(2,'\n There are too few spins in the system for spin decoherence.\n')
+    fprintf(2,' Try relaxing one or more cutoffs.\n')
     toc
     return;
   end
@@ -334,12 +267,6 @@ GridInfo = [];
 if gridSize==1
   System.averaging = 'none';
 end
-% useless feature (to be removed)
-if isfield(System,'gammaGridSize')
-  gammaGridSize = System.gammaGridSize; % number of point for the gamma Euler angle.
-else
-  gammaGridSize = 1; % number of point for the gamma Euler angle.
-end
 
 if strcmp(System.averaging,'powder')
   
@@ -358,9 +285,6 @@ if strcmp(System.averaging,'powder')
   Grid.x = Grid.x(keep);
   Grid.y = Grid.y(keep);
   Grid.z = Grid.z(keep);
-  
-
-  Gamma = linspace(0,2*pi,gammaGridSize+1); % grid of gamma values.
   
   % Convert xyz coordinates to alpha/beta angles
   for iOri = 1:numel(Grid.z)
@@ -394,20 +318,16 @@ elseif strcmp(System.averaging,'none')
   
   % Use only the PDB file orientation.
   gridSize = 1;
-  gammaGridSize = 1;
   Alpha = 0;
   Beta = 0;
-  Gamma = 0;
   gridWeight = 1;
   
 elseif strcmp(System.averaging,'xy')
   
   % Average over rotations about the B0 direction.
-  gammaGridSize = 1;
   Alpha = linspace(0,pi,gridSize+1);
   Alpha(end) = [];
   Beta = ones(1,gridSize)*pi/2;
-  Gamma = 0;
   gridWeight = ones(gridSize,1)/gridSize;
   
 elseif strcmp(System.averaging,'custom') 
@@ -415,8 +335,6 @@ elseif strcmp(System.averaging,'custom')
     Alpha = System.Grid.Alpha;
     Beta = System.Grid.Beta;
     gridWeight = System.Grid.gridWeight;
-    gammaGridSize = 1;
-    Gamma = 0;
     
   
     gridSize = length(Alpha);
@@ -432,8 +350,7 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   Alpha = Grids{gridIndex}.Alpha;
   Beta = Grids{gridIndex}.Beta;
   gridWeight = Grids{gridIndex}.Weight;
-  gammaGridSize = 1;
-  Gamma = 0;
+
   
   gridSize = length(Alpha);
   
@@ -444,9 +361,8 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   GridInfo.Beta       = Beta;
   
 end
-gridWeight = repmat(gridWeight(:),1,gammaGridSize);
 
-nOrientations = gridSize*gammaGridSize;
+nOrientations = gridSize;
 
 % initialize result variables
 Signals{nOrientations} = [];
@@ -535,7 +451,7 @@ if parallelComputing
     
     [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
-      Gamma,iOri,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
+      iOri,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,nOrientations);
     
     TempSignals{iOri} = TempSignals_;
     Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
@@ -551,7 +467,7 @@ else
     
     [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri},Ori_Clusters{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
-      Gamma,iOri,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,nOrientations);
+      iOri,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,nOrientations);
     
     TempSignals{iOri} = TempSignals_;
     Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
@@ -650,10 +566,8 @@ if ~Method.sparseMemory
           
           
           if iorder == 1
-            index_gamma = mod(iOri-1,gammaGridSize) + 1;
-            iOri = 1 + (iOri - index_gamma)/gammaGridSize;
             
-            Order_n_Signals{iOri}{iorder} = gridWeight(iOri,index_gamma)*ones(size(experiment_time));
+            Order_n_Signals{iOri}{iorder} = gridWeight(iOri)*ones(size(experiment_time));
             
             disp('Recovered.');
             
@@ -779,7 +693,7 @@ if isfield(Method, 'getNuclearContributions') && Method.getNuclearContributions
     NuclearContribution.TM=TM_powder;
     fprintf('Cannot find nuclear contributions whe TM is Nan.');
   else
-    NuclearContribution = getSpinContributions(System, Nuclei, Signals, AuxiliarySignal, Clusters,Method,OutputData,gridWeight,gammaGridSize, TM_powder);
+    NuclearContribution = getSpinContributions(System, Nuclei, Signals, AuxiliarySignal, Clusters,Method,OutputData,gridWeight, TM_powder);
     save(OutputData,'NuclearContribution','-append');
   end
 else
@@ -827,7 +741,7 @@ end
 % Calculates signal for a set of orientations
 % ========================================================================
 function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] ...
-    = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,Gamma,isignal,verbose,OutputData,Progress,SignalsToCalculate,gammaGridSize,gridWeight,iSignal_max)
+    = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,isignal,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,iSignal_max)
      
 % grid point indices
 if System.newIsotopologuePerOrientation
@@ -836,17 +750,15 @@ if System.newIsotopologuePerOrientation
     fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
   end    
 end
-adjusted_isignal = SignalsToCalculate(isignal);
-index_gamma = mod(adjusted_isignal-1,gammaGridSize) + 1;
-igrid = 1 + (adjusted_isignal - index_gamma)/gammaGridSize;
+igrid = SignalsToCalculate(isignal);
 
 % calculate coherence signal
 [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
-  calculateSignal(System,Method,Nuclei,Clusters,...
-  Alpha(igrid),Beta(igrid),Gamma(index_gamma),verbose,OutputData,Progress);
+  beginCalculateSignal(System,Method,Nuclei,Clusters,...
+  Alpha(igrid),Beta(igrid),verbose,OutputData,Progress);
 
 normalizing_factor = TempSignals_(1);
-TempSignals_ = gridWeight(igrid,index_gamma)*TempSignals_/normalizing_factor;
+TempSignals_ = gridWeight(igrid)*TempSignals_/normalizing_factor;
 if strcmp(Method.method,'full')
   return
 end
@@ -855,15 +767,15 @@ end
 if ~ischar(Temp_Order_n_Signals_)
   for iorder = 1:Method.order
     % set the max amplitude to the weight
-    Temp_Order_n_Signals_{iorder} = gridWeight(igrid,index_gamma)*Temp_Order_n_Signals_{iorder}/normalizing_factor;
+    Temp_Order_n_Signals_{iorder} = gridWeight(igrid)*Temp_Order_n_Signals_{iorder}/normalizing_factor;
   end
 end
 
-if verbose, fprintf('\nCompleted orientation %d/%d.\n',adjusted_isignal,iSignal_max); end
+if verbose, fprintf('\nCompleted orientation %d/%d.\n',igrid,iSignal_max); end
 
 % Save to file.
 if Method.partialSave
-  temp_file = ['temp_', OutputData, '_sig_', num2str(adjusted_isignal), '.mat'] ;
+  temp_file = ['temp_', OutputData, '_sig_', num2str(igrid), '.mat'] ;
   parsavefile = matfile(temp_file,'writable',true);
   parsavefile.signal = TempSignals_;
   parsavefile.order_n = Temp_Order_n_Signals_;
@@ -964,13 +876,13 @@ end
 % Calculate signal for one orientation
 % ========================================================================
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,Ori_Clusters] = ...
-  calculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,Gamma,verbose,OutputData,Progress)
+  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,OutputData,Progress)
 
 % Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
 
 % Get rotation matrix from PDB frame to lab frame, via Euler angles
-R_pdb2lab = rotateZYZ(Alpha,Beta,Gamma);
+R_pdb2lab = rotateZYZ(Alpha,Beta,0);
 
 % Rotate nuclear coordinates.
 Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
@@ -1207,4 +1119,86 @@ else
 
 end
 
+end
+
+%==========================================================================
+% Set Output Data
+%==========================================================================
+function [OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data)
+doReturn = false;
+SignalMean  = [];
+experiment_time = [];
+TM_powder = [];
+Order_n_SignalMean =[];
+Nuclei = [];
+uncertainty = [];
+
+OutputData = Data.OutputData;
+if ~isempty(OutputData)
+  
+  if ~strcmp(OutputData(end-3:end),'.mat')
+    OutputData = [OutputData, '.mat'];
+  end
+  
+  if isfile(OutputData)
+    disp('Pre-existing save file found.')
+    
+    switch Data.overwriteLevel
+      
+      % no overwrite, return save
+      case 0
+        
+        disp('Checking completion status.')
+        try
+          
+          sim_ = load(OutputData);
+          
+          if sim_.Progress.complete && ~(isempty(sim_.uncertainty) &&  Method.getUncertainty)
+            
+            
+            disp('Complete: returning saved data.')
+            SignalMean  = sim_.SignalMean;
+            experiment_time = sim_.experiment_time;
+            TM_powder = sim_.TM_powder;
+            uncertainty = sim_.uncertainty;
+            
+            
+            if isfield(sim_,'Order_n_SignalMean')
+              Order_n_SignalMean = sim_.Order_n_SignalMean;
+            end
+            if isfield(sim_,'Nuclei')
+              Nuclei = sim_.Nuclei;
+            end
+            doReturn = true;
+            return;
+          else
+            clear('sim_')
+          end
+          
+        catch
+        end
+        
+        disp('Incomplete: data will be overwritten.')
+        
+        
+        % no overwrite, backup
+      case 1
+        
+        newOutputFile = ['%',OutputData];
+        while isfile(newOutputFile)
+          newOutputFile = ['%',newOutputFile];
+        end
+        disp(['Backing up ',OutputData, ' as ', newOutputFile, '.'])
+        if isunix
+          command = ['mv ', OutputData, ' ', newOutputFile];
+          system(command);
+        else
+          movefile(OutputData, newOutputFile);
+        end
+        % overwrite
+      case 2
+        disp('Preparing to overwrite save file.');
+    end
+  end
+end
 end

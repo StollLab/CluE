@@ -4,13 +4,10 @@
 function [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ... 
        = methyl_calculateSignal(System, Method, Nuclei,Clusters)
 
-ge=System.ge;
-geff=System.gMatrix(3,3);
+ge=System.ge; geff=System.gMatrix(3,3); 
+muB = System.muB;  muN = System.muN;  mu0 = System.mu0; hbar = System.hbar;
+
 magneticField = System.magneticField;
-muB = System.muB;
-muN = System.muN;
-mu0 = System.mu0;
-hbar = System.hbar;
 timepoints = System.timepoints;
 dt = System.dt;
 t0 = System.t0;
@@ -22,14 +19,13 @@ maxSize = 6;
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
 Method_order = Method.order;
-
-
-% Define the theory to use at the given cluster size.
-Theory = System.Theory;
 Method_useMultipleBathStates = Method.useMultipleBathStates;
 Method_useInterlacedClusters = Method.useInterlacedClusters;
 
+% Define the theory to use at the given cluster size.
+Theory = System.Theory;
 theory = Theory(Method_order,:);
+
 useMeanField = theory(10);
 useMultipleBathStates = Method_useMultipleBathStates & useMeanField;
 useInterlacedClusters = Method_useInterlacedClusters & useMeanField;
@@ -79,6 +75,7 @@ state_multiplicity = Nuclei.StateMultiplicity;
 ZeemanStates = Nuclei.ZeemanStates;
 MeanFieldCoefficients = Nuclei.MeanFieldCoefficients;
 MeanFieldTotal = Nuclei.MeanFieldTotal;
+
 max_basis = max(NumberStates);
 useThermalEnsemble = System.useThermalEnsemble;
 States = zeros(max_basis,Nuclei.number);
@@ -90,165 +87,21 @@ Atensors = Nuclei.Atensor;
 FermiContact = Nuclei.FermiContact;
 nStates0 =System.nStates;
 nStates =System.nStates;
-% Unpackspin operators.
+
+
+% Unpack spin operators.
 Op = Nuclei.SpinOperators;
 SpinXiXjOps = Nuclei.SpinXiXjOperators;
 
-% Set 1-cluster operators.
-if maxClusterSize > 0
-  Spin2Op1 = Op{2}{1};
-  Spin3Op1 = Op{3}{1};
-  Spin4Op1 = Op{4}{1};
-  SpinXiXjOp_1 = SpinXiXjOps{1};
-else
-  Spin2Op1 = [];
-  Spin3Op1 = [];
-  Spin4Op1 = [];
-  SpinXiXjOp_1 = [];
-end
+% Unpack spin operators to individual variables.
+[Spin2Op1,Spin3Op1,Spin4Op1,Spin2Op2,Spin3Op2,Spin4Op2, ...
+  Spin2Op3,Spin3Op3,Spin4Op3, Spin2Op4,Spin3Op4,Spin4Op4, ...
+  Spin2Op5,Spin3Op5,Spin4Op5, Spin2Op6,Spin3Op6,Spin4Op6, ...
+  SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
+  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6]...
+  = initializeSpinOps(maxClusterSize, Op, SpinXiXjOps);
 
-% Set 2-cluster operators.
-if maxClusterSize > 1
-  Spin2Op2 = Op{2}{2};
-  Spin3Op2 = Op{3}{2};
-  Spin4Op2 = Op{4}{2};
-  SpinXiXjOp_2 = SpinXiXjOps{2};
-else
-  Spin2Op2 = [];
-  Spin3Op2 = [];
-  Spin4Op2 = [];
-  SpinXiXjOp_2 =[];
-end
 
-% Set 3-cluster operators.
-if maxClusterSize > 2
-  Spin2Op3 = Op{2}{3};
-  Spin3Op3 = Op{3}{3};
-  Spin4Op3 = Op{4}{3};
-  SpinXiXjOp_3 = SpinXiXjOps{3};
-else
-  Spin2Op3 = [];
-  Spin3Op3 = [];
-  Spin4Op3 = [];
-  SpinXiXjOp_3 =[];
-end
-
-% Set 4-cluster operators.
-if maxClusterSize > 3
-  Spin3Op4 = Op{3}{4};
-  Spin2Op4 = Op{2}{4};
-  Spin4Op4 = Op{4}{4};
-  SpinXiXjOp_4 = SpinXiXjOps{4};
-else
-  Spin3Op4 = [];
-  Spin2Op4 = [];
-  Spin4Op4 = [];
-  SpinXiXjOp_4 =[];
-end
-
-% Set 5-cluster operators.
-if maxClusterSize > 4
-  Spin2Op5 = Op{2}{5};
-  Spin3Op5 = Op{3}{5};
-  Spin4Op5 = Op{4}{5};
-  SpinXiXjOp_5 = SpinXiXjOps{5};
-else
-  Spin2Op5 = [];
-  Spin3Op5 = [];
-  Spin4Op5 = [];
-  SpinXiXjOp_5 =[];
-end
-
-% Set 6-cluster operators.
-if maxClusterSize > 5
-  Spin2Op6 = Op{2}{6};
-  Spin3Op6 = Op{3}{6};
-  Spin4Op6 = Op{4}{6};
-  SpinXiXjOp_6 = SpinXiXjOps{6};
-else
-  Spin2Op6 = [];
-  Spin3Op6 = [];
-  Spin4Op6 = [];
-  SpinXiXjOp_6 =[];
-end
-
-% Set 7-cluster operators.
-if maxClusterSize > 6
-  Spin2Op7 = Op{2}{7};
-  Spin3Op7 = Op{3}{7};
-  Spin4Op7 = Op{4}{7};
-  SpinXiXjOp_7 = SpinXiXjOps{7};
-else
-  Spin2Op7 = [];
-  Spin3Op7 = [];
-  Spin4Op7 = [];
-  SpinXiXjOp_7 =[];
-end
-
-% Set 8-cluster operators.
-if maxClusterSize > 7
-  Spin2Op8 = Op{2}{8};
-  Spin3Op8 = Op{3}{8};
-  Spin4Op8 = Op{4}{8};
-  SpinXiXjOp_8 = SpinXiXjOps{8};
-else
-  Spin2Op8 = [];
-  Spin3Op8 = [];
-  Spin4Op8 = [];
-  SpinXiXjOp_8 =[];
-end
-
-% Set 9-cluster operators.
-if maxClusterSize > 8
-  Spin2Op9 = Op{2}{9};
-  Spin3Op9 = Op{3}{9};
-  Spin4Op9 = Op{4}{9};
-  SpinXiXjOp_9 = SpinXiXjOps{9};
-else
-  Spin2Op9 = [];
-  Spin3Op9 = [];
-  Spin4Op9 = [];
-  SpinXiXjOp_9 =[];
-end
-
-% Set 9-cluster operators.
-if maxClusterSize > 9
-  Spin2Op10 = Op{2}{10};
-  Spin3Op10 = Op{3}{10};
-  Spin4Op10 = Op{4}{10};
-  SpinXiXjOp_10 = SpinXiXjOps{10};
-else
-  Spin2Op10 = [];
-  Spin3Op10 = [];
-  Spin4Op10 = [];
-  SpinXiXjOp_10 =[];
-end
-
-% Set 11-cluster operators.
-if maxClusterSize > 11
-  Spin2Op11 = Op{2}{11};
-  Spin3Op11 = Op{3}{11};
-  Spin4Op11 = Op{4}{11};
-  SpinXiXjOp_11 = SpinXiXjOps{11};
-else
-  Spin2Op11 = [];
-  Spin3Op11 = [];
-  Spin4Op11 = [];
-  SpinXiXjOp_11 =[];
-end
-
-% Set 12-cluster operators.
-if maxClusterSize > 12
-  Spin2Op12 = Op{2}{12};
-  Spin3Op12 = Op{3}{12};
-  Spin4Op12 = Op{4}{12};
-  SpinXiXjOp_12 = SpinXiXjOps{12};
-else
-  Spin2Op12 = [];
-  Spin3Op12 = [];
-  Spin4Op12 = [];
-  SpinXiXjOp_12 =[];
-end
 maxClusterSize = maxClusterSize/methylFactor;
 
 numberClusters = Nuclei.numberClusters(1:maxSuperclusterSize);
@@ -258,154 +111,41 @@ maxNumberClusters = max(numberClusters(1:maxSuperclusterSize));
 % CluserArray(iCluster,:,clusterSize) = nuclear indices.
 ClusterArray = zeros(maxNumberClusters,maxClusterSize,maxClusterSize);
  
-
-for isize = 1:Method_extraOrder
-  
+% Change data type of Clusters to a 3D array.
+for isize = 1:Method_extraOrder 
   for ii = 1:Nuclei.numberClusters(isize)
     ClusterArray(ii,1:isize,isize) = Clusters{isize}(ii,:);
   end
 end
 
-for isize = 1:Method_order
-      switch isize 
-        
-        % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
-        % the jth cluster of size subCluster_size that is a subcluster of
-        % the ith ccluster of size clusterSize.
-        
-        case 1
-          Coherences_1 = zeros(numberClusters(isize),timepoints^dimensionality);  
-          if System.Methyl.include 
-            rotationalMatrix_h2_m1 = Nuclei.rotationalMatrix{2,1};
-%             rotationalMatrix_h3_m1 = Nuclei.rotationalMatrix{3,1};
-          else
-            rotationalMatrix_h2_m1 = [];
-            rotationalMatrix_h3_m1 = [];
-          end
-        case 2
-          SubclusterIndices_2 = zeros(nchoosek(isize,1), isize , Nuclei.numberClusters(isize)); 
-          Coherences_2 = zeros(numberClusters(isize),timepoints^dimensionality);  
-          if System.Methyl.include 
-            rotationalMatrix_h4_m1 = Nuclei.rotationalMatrix{4,1};
-            rotationalMatrix_h4_m2 = Nuclei.rotationalMatrix{4,1};
-%             rotationalMatrix_h9_m1 = Nuclei.rotationalMatrix{9,1};
-%             rotationalMatrix_h9_m2 = Nuclei.rotationalMatrix{9,1};
-          else
-            rotationalMatrix_h4_m1 = [];
-            rotationalMatrix_h4_m2 = [];
-            rotationalMatrix_h9_m1 = [];
-            rotationalMatrix_h9_m2 = [];
-          end
-          
-        case 3
-          SubclusterIndices_3 = zeros(nchoosek(isize,1), isize , Nuclei.numberClusters(isize));
-          Coherences_3 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 4
-          SubclusterIndices_4 = zeros(nchoosek(isize,2), isize , Nuclei.numberClusters(isize));
-          Coherences_4 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 5
-          SubclusterIndices_5 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_5 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 6
-          SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_6 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 7
-          SubclusterIndices_7 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_7 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 8
-          SubclusterIndices_8 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_8 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 9
-          SubclusterIndices_9 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_9 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 10
-          SubclusterIndices_10 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_10 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 11
-          SubclusterIndices_11 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_11 = zeros(numberClusters(isize),timepoints^dimensionality);
-        case 12
-          SubclusterIndices_12 = zeros(nchoosek(isize,3), isize , Nuclei.numberClusters(isize));
-          Coherences_12 = zeros(numberClusters(isize),timepoints^dimensionality);
-      end
-      
-end
+% Initialize coherences and subcluster indices.
+[Coherences_1, SubclusterIndices_2, Coherences_2, ...
+  SubclusterIndices_3, Coherences_3, SubclusterIndices_4, Coherences_4, ...
+  SubclusterIndices_5, Coherences_5, SubclusterIndices_6, Coherences_6, ...
+  SubclusterIndices_7, Coherences_7, SubclusterIndices_8, Coherences_8, ...
+  SubclusterIndices_9, Coherences_9, SubclusterIndices_10, Coherences_10, ...
+  SubclusterIndices_11, Coherences_11, SubclusterIndices_12, Coherences_12,...
+  rotationalMatrix_h2_m1, rotationalMatrix_h3_m1, ...
+  rotationalMatrix_h4_m1, rotationalMatrix_h4_m2, ...
+  rotationalMatrix_h9_m1, rotationalMatrix_h9_m2] ...
+  = initializeCoherences(Method_order, numberClusters, ...
+  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,maxSize);
 
-% Define placeholder variables for variables that need to be defined but do
-% not contribute to the calculation for the selected order.
-for isize = Method_order+1:maxSize
-  
-      switch isize 
-        
-        case 1
-          Coherences_1 = 0;  
-          
-          rotationalMatrix_h2_m1 = [];
-          rotationalMatrix_h3_m1 = [];
-        
-        case 2
-          SubclusterIndices_2 = []; 
-          Coherences_2 = 0;
-          
-          rotationalMatrix_h4_m1 = [];
-          rotationalMatrix_h4_m2 = [];
-          rotationalMatrix_h9_m1 = [];
-          rotationalMatrix_h9_m2 = [];
-        
-        case 3
-          SubclusterIndices_3 = [];
-          Coherences_3 = 0;
-        case 4
-          SubclusterIndices_4 = 1;
-          Coherences_4 = 0;
-          
-        case 5
-          SubclusterIndices_5 = [];
-          Coherences_5 = 0;
-        case 6
-          SubclusterIndices_6 = 1;
-          Coherences_6 = 0;
-        case 7
-          SubclusterIndices_7 = 1;
-          Coherences_7 = 0;
-        case 8
-          SubclusterIndices_8 = 1;
-          Coherences_8 = 0;
-        case 9
-          SubclusterIndices_9 = 1;
-          Coherences_9 = 0;
-        case 10
-          SubclusterIndices_10 = 1;
-          Coherences_10 = 0;
-        case 11
-          SubclusterIndices_11 = 1;
-          Coherences_11 = 0;
-        case 12
-          SubclusterIndices_12 = 1;
-          Coherences_12 = 0;
-      end
-      
-end
-
-% ENUM
-CONNECTED = 0;  COMPLETE = 1;
-
-graphCriterion = CONNECTED;
-if strcmp(Nuclei.graphCriterion,'complete')
-  graphCriterion = COMPLETE;
-end
 
 % Methyl Groups
 IsMethyl = strcmp(Nuclei.Type,'CH3');
-if ~isempty(Nuclei.Methyl_Data)
-  Methyl_P3 = Nuclei.Methyl_Data.Projection_3;
-  Methyl_P4 = Nuclei.Methyl_Data.Projection_4;
-  Methyl_P5 = Nuclei.Methyl_Data.Projection_5;
-  Methyl_P6 = Nuclei.Methyl_Data.Projection_6;
-end
 Methyl_gA = [0,0];
 
 %--------------------------------------------------------------------------
+% gpu code
+%
+% At this point all varables should be in a gpu compatible form,
+% and can be trasnfered over to the gpu. 
+%
+% if useGPU
+%   trasferDataToGPU();
+% end
+%
 % gpu code
 %--------------------------------------------------------------------------
 
@@ -418,15 +158,21 @@ for clusterSize = 1:Method_order
   for iCluster = numClusters:-1:1
     Cluster = ClusterArray(iCluster,1:clusterSize,clusterSize); 
    
-    if Cluster(1,1) == 0 %|| ~validateCluster(Cluster,Adjacency,graphCriterion)
-      continue;
-    end
+    % Check if iCluster is valid.
+    if Cluster(1,1) == 0, continue; end
     
+    % Determin the number of spins in the cluster.
     thisClusterSize = clusterSize + 2*sum(IsMethyl(Cluster));
+    
+    % Initialize cluster.
     thisCluster = zeros(1,thisClusterSize);
-    thisIndex = 0;
+    
+    % Initialize methyl ID, and counters.
     MethylID = zeros(1,thisClusterSize);
+    thisIndex = 0;
     methyl_number = 0;
+    
+    % Loop over the cluster to assign methyl rotors.
     for ii = 1:clusterSize
 
       thisIndex = thisIndex + 1;
@@ -435,13 +181,8 @@ for clusterSize = 1:Method_order
         methyl_number = methyl_number + 1;
         Methyl_gA(methyl_number) = Nuclei_Abundance(Cluster(ii));
         MethylID(thisIndex:thisIndex+2) = methyl_number;      
-        thisCluster(thisIndex) = Cluster(ii) + 1;
-        thisIndex = thisIndex + 1;
-        thisCluster(thisIndex) = Cluster(ii) + 2;
-        thisIndex = thisIndex + 1;
-        thisCluster(thisIndex) = Cluster(ii) + 3;
-
-        
+        thisCluster(thisIndex) = Cluster(ii) + [1,2,3];
+        thisIndex = thisIndex + 2;
       else
         thisCluster(thisIndex) = Cluster(ii);
       end
@@ -453,6 +194,7 @@ for clusterSize = 1:Method_order
     nPerm = size(cyclicPermutation,1);
     cyclicPermutation = thisCluster(cyclicPermutation);
     
+    % Check if all spin have the same S.
     if ~all(state_multiplicity(thisCluster)==state_multiplicity(thisCluster(1)))
       switch clusterSize
         case 1
@@ -468,137 +210,32 @@ for clusterSize = 1:Method_order
         case 6
           Coherences_6(iCluster,:) = ones(size(Coherences_6(iCluster,:) ));          
       end
-    
       continue;
     end
-    switch clusterSize 
-      % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
-      % the jth cluster of size subCluster_size that is a subcluster of
-      % the ith cluster of size clusterSize.
-      case 1
-        % This is just to catch this case.  There is nothing to set. 
-      case 2
-        SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);   
-      case 3
-        SubclusterIndices_3(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 4
-        SubclusterIndices_4(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 5
-        SubclusterIndices_5(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 6
-        SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 7
-        SubclusterIndices_7(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 8
-        SubclusterIndices_8(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 9
-        SubclusterIndices_9(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 10
-        SubclusterIndices_10(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 11
-        SubclusterIndices_11(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      case 12
-        SubclusterIndices_12(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
-      otherwise
-        fprintf('Cannot calculate clusters of size %d.\n', clusterSize);
-        error('Cluster Error');
-        continue;
-        
-    end
+    
+    % Set subcluster indices.
+    [SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
+      SubclusterIndices_5,SubclusterIndices_6, SubclusterIndices_7, SubclusterIndices_8,...
+      SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11,SubclusterIndices_12] ...
+      = setSubclusterIndices( ClusterArray,clusterSize,iCluster,...
+      SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
+      SubclusterIndices_5,SubclusterIndices_6, SubclusterIndices_7, SubclusterIndices_8,...
+      SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11, SubclusterIndices_12);
     
     % Select the appropriate spin operator.
-     switch thisClusterSize
-      case 1
-        switch Nuclei_Spin(Cluster(1))
-          case 1/2
-            SpinOp = Spin2Op1;
-            SpinXiXjOp = [];
-          case 1
-            SpinOp = Spin3Op1;
-            SpinXiXjOp = SpinXiXjOp_1;
-          case 3/2
-            SpinOp = Spin4Op1;
-            SpinXiXjOp = [];
-        end
-        
-       case 2
-         switch Nuclei_Spin(Cluster(1))
-           case 1/2
-             SpinOp = Spin2Op2;
-             SpinXiXjOp = [];
-           case 1
-             SpinOp = Spin3Op2;
-             SpinXiXjOp = SpinXiXjOp_2;
-           case 3/2
-             SpinOp = Spin4Op2;
-             SpinXiXjOp = [];
-         end
-         
-       case 3
-         switch Nuclei_Spin(Cluster(1))
-           case 1/2
-             SpinOp = Spin2Op3;
-             SpinXiXjOp = [];
-           case 1
-             SpinOp = Spin3Op3;
-             SpinXiXjOp = SpinXiXjOp_3;
-           case 3/2
-             SpinOp = Spin4Op3;
-             SpinXiXjOp = [];
-         end
-         
-       case 4
-         switch Nuclei_Spin(Cluster(1))
-           case 1/2
-             SpinOp = Spin2Op4;
-             SpinXiXjOp = [];
-           case 1
-             SpinOp = Spin3Op4;
-             SpinXiXjOp = SpinXiXjOp_4;
-           case 3/2
-             SpinOp = Spin4Op4;
-             SpinXiXjOp = [];
-         end
-         
-       case 5
-         switch Nuclei_Spin(Cluster(1))
-           case 1/2
-             SpinOp = Spin2Op5;
-             SpinXiXjOp = [];
-           case 1
-             SpinOp = Spin3Op5;
-             SpinXiXjOp = SpinXiXjOp_5;
-           case 3/2
-             SpinOp = Spin4Op5;
-             SpinXiXjOp = [];
-         end
-         
-       case 6
-         switch Nuclei_Spin(Cluster(1))
-           case 1/2
-             SpinOp = Spin2Op6;
-             SpinXiXjOp = [];
-           case 1
-             SpinOp = Spin3Op6;
-             SpinXiXjOp = SpinXiXjOp_6;
-           case 3/2
-             SpinOp = Spin4Op6;
-             SpinXiXjOp = [];
-         end
-         
-       otherwise
-        continue;
-         
-     end
+    [SpinOp,SpinXiXjOp] = getSpinOps( thisClusterSize,Nuclei_Spin(Cluster(1)),...
+      Spin2Op1,Spin3Op1,Spin4Op1, Spin2Op2,Spin3Op2,Spin4Op2, Spin2Op3,Spin3Op3,Spin4Op3, ...
+      Spin2Op4,Spin3Op4,Spin4Op4, Spin2Op5,Spin3Op5,Spin4Op5, Spin2Op6,Spin3Op6,Spin4Op6, ...
+      SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6);
     
  
-    
     
     if useInterlacedClusters(Method_order,clusterSize)
       
       % Get union of all clusters that contain the primary cluster.
       SuperclusterUnion = findSuperClusterUnion(ClusterArray,clusterSize,iCluster);
       
+      randStateIndex = randperm(3^numel(SuperclusterUnion));
       % Get the set of nuclei not in the primary cluster that unions with the primary
       % cluster to give SuperclusterUnion.
       ClusterComplement = SuperclusterUnion(  ~any(SuperclusterUnion==thisCluster',1)  );
@@ -613,10 +250,7 @@ for clusterSize = 1:Method_order
       else
         nStates(clusterSize) = max( 1, min(nStates0(clusterSize),prod(state_multiplicity(SuperclusterUnion))));
       end
-%     else
-%       [H_alpha,H_beta] = ...
-%         assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
-%         theory,zeroIndex,methyl_number);
+      
     end
     
     H_alphaMF = 0;
@@ -628,7 +262,7 @@ for clusterSize = 1:Method_order
     HilbertSpaceDim = SpinSpaceDim*nPerm;
     
     switch nPerm
-      case 3
+      case 3 % 1 rotor
         switch SpinSpaceDim
           case 2
             Hb = rotationalMatrix_h2_m1;
@@ -639,7 +273,7 @@ for clusterSize = 1:Method_order
           case 9
             Hb = rotationalMatrix_h9_m1;
         end
-      case 9  
+      case 9 % 2 rotors  
         switch SpinSpaceDim
           case 4
             Hb = rotationalMatrix_h4_m2;
@@ -664,9 +298,7 @@ for clusterSize = 1:Method_order
           assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
           theory,zeroIndex,methyl_number);
         
-        if useInterlacedClusters(Method_order,clusterSize)
-          
-          
+        if useInterlacedClusters(Method_order,clusterSize)          
           if ~useThermalEnsemble
             
             % density matrix size
@@ -682,26 +314,31 @@ for clusterSize = 1:Method_order
           else
             densityMatrix = [];
             
-            iState = iave;
+            % density matrix size
+            dm_size = prod(state_multiplicity(thisCluster));
+            
+            iState = randStateIndex(iave);
           end
           
           % Adjust tensors for external fields.
           if length(ClusterComplement) > length(thisCluster)
-            %           tensors = getInterlacedTensors(tensors0,zeroIndex, thisCluster,ClusterComplement,iState,...
-            %                     Nuclei_g,state_multiplicity,Nuclei_Coordinates, muN, mu0, hbar);
-            tensors = tensors0; % TEMPORARY
+            tensors = getInterlacedTensors(tensors0,zeroIndex, thisCluster,ClusterComplement,iState,...
+              Nuclei_g,state_multiplicity,Nuclei_Coordinates, muN, mu0, hbar);
+            %tensors = tensors0; % TEMPORARY
           else
             tensors = tensors0;
             if iave >1
               continue;
             end
           end
+          
           [H_alpha,H_beta] = ...
             assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
             theory,zeroIndex,methyl_number);
           
         else
           
+          % Add mean field contribution from spins outside of the cluster.
           if useMultipleBathStates
             [H_alphaMF,H_betaMF] = assembleMeanFieldHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
               theory,zeroIndex,methyl_number, MeanFieldCoefficients(:,:,:,iave), MeanFieldTotal(iave));
@@ -722,8 +359,7 @@ for clusterSize = 1:Method_order
         Ha(hRange,hRange) = Halpha;
       end
       
-      % get cluster coherence
-      
+      % Calculate cluster coherence.      
       switch clusterSize
         case 1
           Coherences_1(iCluster,:) = Coherences_1(iCluster,:)  +  ...
@@ -742,32 +378,10 @@ for clusterSize = 1:Method_order
             propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 6
           Coherences_6(iCluster,:) = Coherences_6(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
-          
+            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);          
       end
-    end
-    
-    switch clusterSize
-        case 1
-          Coherences_1(iCluster,:) = Coherences_1(iCluster,:)/Coherences_1(iCluster,1);
-        case 2
-          Coherences_2(iCluster,:) = Coherences_2(iCluster,:)/Coherences_2(iCluster,1);
-        case 3
-          Coherences_3(iCluster,:) = Coherences_3(iCluster,:)/Coherences_3(iCluster,1);
-        case 4
-          Coherences_4(iCluster,:) = Coherences_4(iCluster,:)/Coherences_4(iCluster,1);
-        case 5
-          Coherences_5(iCluster,:) = Coherences_5(iCluster,:)/Coherences_5(iCluster,1);
-        case 6
-          Coherences_6(iCluster,:) = Coherences_6(iCluster,:)/Coherences_6(iCluster,1);
-          
-      end
-    
-    
-    
-  end
-  
-  
+    end 
+  end 
 end
 
 
@@ -809,16 +423,24 @@ end
   = doClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
   SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,SubclusterIndices_5,SubclusterIndices_6,...
   timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
-% 
+ 
 
-% if EXPERIMENT == CPMG_2D
-%     Signal = reshape(Signals(Method_order,:).',timepoints,timepoints)';
-% else
-%     Signal = Signals(Method_order,:);
+Signal = Signals(Method_order,:);
+%--------------------------------------------------------------------------
+% gpu code end
+%
+% At this point the data should be transfered back to the cpu.
+%
+% if useGPU
+%   transferDataToCPU();
 % end
-
-    Signal = Signals(Method_order,:);
+%
+% gpu code end
+%--------------------------------------------------------------------------
+% return; % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 end
+
+
 % ========================================================================
 % Generate Density Matrix
 % ========================================================================
@@ -1115,6 +737,9 @@ for isize = 1:clusterSize
 end
 end
 
+% ========================================================================
+% Generate cyclic permutation
+% ========================================================================
 function cycPerm = getCyclicPermutations(boolCluster)
 
 N = length(boolCluster);
@@ -1144,4 +769,497 @@ else
   error('Cannot calculate cyclic permutations.');
 end
 
+end
+
+
+% ========================================================================
+% Select the Spin Operator
+% ========================================================================
+function [SpinOp,SpinXiXjOp] = getSpinOps(thisClusterSize,Nuclei_Spin,...
+  Spin2Op1,Spin3Op1,Spin4Op1, ...
+  Spin2Op2,Spin3Op2,Spin4Op2, ...
+  Spin2Op3,Spin3Op3,Spin4Op3, ...
+  Spin2Op4,Spin3Op4,Spin4Op4, ...
+  Spin2Op5,Spin3Op5,Spin4Op5, ...
+  Spin2Op6,Spin3Op6,Spin4Op6, ...
+  SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
+  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6)
+
+switch thisClusterSize
+  case 1
+    switch Nuclei_Spin
+      case 1/2
+        SpinOp = Spin2Op1;
+        SpinXiXjOp = [];
+      case 1
+        SpinOp = Spin3Op1;
+        SpinXiXjOp = SpinXiXjOp_1;
+      case 3/2
+        SpinOp = Spin4Op1;
+        SpinXiXjOp = [];
+    end
+    
+  case 2
+    switch Nuclei_Spin
+      case 1/2
+        SpinOp = Spin2Op2;
+        SpinXiXjOp = [];
+      case 1
+        SpinOp = Spin3Op2;
+        SpinXiXjOp = SpinXiXjOp_2;
+      case 3/2
+        SpinOp = Spin4Op2;
+        SpinXiXjOp = [];
+    end
+    
+  case 3
+    switch Nuclei_Spin
+      case 1/2
+        SpinOp = Spin2Op3;
+        SpinXiXjOp = [];
+      case 1
+        SpinOp = Spin3Op3;
+        SpinXiXjOp = SpinXiXjOp_3;
+      case 3/2
+        SpinOp = Spin4Op3;
+        SpinXiXjOp = [];
+    end
+    
+  case 4
+    switch Nuclei_Spin
+      case 1/2
+        SpinOp = Spin2Op4;
+        SpinXiXjOp = [];
+      case 1
+        SpinOp = Spin3Op4;
+        SpinXiXjOp = SpinXiXjOp_4;
+      case 3/2
+        SpinOp = Spin4Op4;
+        SpinXiXjOp = [];
+    end
+    
+  case 5
+    switch Nuclei_Spin
+      case 1/2
+        SpinOp = Spin2Op5;
+        SpinXiXjOp = [];
+      case 1
+        SpinOp = Spin3Op5;
+        SpinXiXjOp = SpinXiXjOp_5;
+      case 3/2
+        SpinOp = Spin4Op5;
+        SpinXiXjOp = [];
+    end
+    
+  case 6
+    switch Nuclei_Spin
+      case 1/2
+        SpinOp = Spin2Op6;
+        SpinXiXjOp = [];
+      case 1
+        SpinOp = Spin3Op6;
+        SpinXiXjOp = SpinXiXjOp_6;
+      case 3/2
+        SpinOp = Spin4Op6;
+        SpinXiXjOp = [];
+    end
+    
+  otherwise
+    error('Cluster size is too large: spin operators cannot be assigned.');
+    
+end
+end
+
+% ========================================================================
+% Unpack Spin Operators
+% ========================================================================
+
+function [Spin2Op1,Spin3Op1,Spin4Op1, ...
+  Spin2Op2,Spin3Op2,Spin4Op2, ...
+  Spin2Op3,Spin3Op3,Spin4Op3, ...
+  Spin2Op4,Spin3Op4,Spin4Op4, ...
+  Spin2Op5,Spin3Op5,Spin4Op5, ...
+  Spin2Op6,Spin3Op6,Spin4Op6, ...
+  SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
+  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6]...
+  = initializeSpinOps(maxClusterSize, Op, SpinXiXjOps)
+
+% Set 1-cluster operators.
+if maxClusterSize > 0
+  Spin2Op1 = Op{2}{1};
+  Spin3Op1 = Op{3}{1};
+  Spin4Op1 = Op{4}{1};
+  SpinXiXjOp_1 = SpinXiXjOps{1};
+else
+  Spin2Op1 = [];
+  Spin3Op1 = [];
+  Spin4Op1 = [];
+  SpinXiXjOp_1 = [];
+end
+
+% Set 2-cluster operators.
+if maxClusterSize > 1
+  Spin2Op2 = Op{2}{2};
+  Spin3Op2 = Op{3}{2};
+  Spin4Op2 = Op{4}{2};
+  SpinXiXjOp_2 = SpinXiXjOps{2};
+else
+  Spin2Op2 = [];
+  Spin3Op2 = [];
+  Spin4Op2 = [];
+  SpinXiXjOp_2 =[];
+end
+
+% Set 3-cluster operators.
+if maxClusterSize > 2
+  Spin2Op3 = Op{2}{3};
+  Spin3Op3 = Op{3}{3};
+  Spin4Op3 = Op{4}{3};
+  SpinXiXjOp_3 = SpinXiXjOps{3};
+else
+  Spin2Op3 = [];
+  Spin3Op3 = [];
+  Spin4Op3 = [];
+  SpinXiXjOp_3 =[];
+end
+
+% Set 4-cluster operators.
+if maxClusterSize > 3
+  Spin3Op4 = Op{3}{4};
+  Spin2Op4 = Op{2}{4};
+  Spin4Op4 = Op{4}{4};
+  SpinXiXjOp_4 = SpinXiXjOps{4};
+else
+  Spin3Op4 = [];
+  Spin2Op4 = [];
+  Spin4Op4 = [];
+  SpinXiXjOp_4 =[];
+end
+
+% Set 5-cluster operators.
+if maxClusterSize > 4
+  Spin2Op5 = Op{2}{5};
+  Spin3Op5 = Op{3}{5};
+  Spin4Op5 = Op{4}{5};
+  SpinXiXjOp_5 = SpinXiXjOps{5};
+else
+  Spin2Op5 = [];
+  Spin3Op5 = [];
+  Spin4Op5 = [];
+  SpinXiXjOp_5 =[];
+end
+
+% Set 6-cluster operators.
+if maxClusterSize > 5
+  Spin2Op6 = Op{2}{6};
+  Spin3Op6 = Op{3}{6};
+  Spin4Op6 = Op{4}{6};
+  SpinXiXjOp_6 = SpinXiXjOps{6};
+else
+  Spin2Op6 = [];
+  Spin3Op6 = [];
+  Spin4Op6 = [];
+  SpinXiXjOp_6 =[];
+end
+
+% Set 7-cluster operators.
+if maxClusterSize > 6
+  Spin2Op7 = Op{2}{7};
+  Spin3Op7 = Op{3}{7};
+  Spin4Op7 = Op{4}{7};
+  SpinXiXjOp_7 = SpinXiXjOps{7};
+else
+  Spin2Op7 = [];
+  Spin3Op7 = [];
+  Spin4Op7 = [];
+  SpinXiXjOp_7 =[];
+end
+
+% Set 8-cluster operators.
+if maxClusterSize > 7
+  Spin2Op8 = Op{2}{8};
+  Spin3Op8 = Op{3}{8};
+  Spin4Op8 = Op{4}{8};
+  SpinXiXjOp_8 = SpinXiXjOps{8};
+else
+  Spin2Op8 = [];
+  Spin3Op8 = [];
+  Spin4Op8 = [];
+  SpinXiXjOp_8 =[];
+end
+
+% Set 9-cluster operators.
+if maxClusterSize > 8
+  Spin2Op9 = Op{2}{9};
+  Spin3Op9 = Op{3}{9};
+  Spin4Op9 = Op{4}{9};
+  SpinXiXjOp_9 = SpinXiXjOps{9};
+else
+  Spin2Op9 = [];
+  Spin3Op9 = [];
+  Spin4Op9 = [];
+  SpinXiXjOp_9 =[];
+end
+
+% Set 9-cluster operators.
+if maxClusterSize > 9
+  Spin2Op10 = Op{2}{10};
+  Spin3Op10 = Op{3}{10};
+  Spin4Op10 = Op{4}{10};
+  SpinXiXjOp_10 = SpinXiXjOps{10};
+else
+  Spin2Op10 = [];
+  Spin3Op10 = [];
+  Spin4Op10 = [];
+  SpinXiXjOp_10 =[];
+end
+
+% Set 11-cluster operators.
+if maxClusterSize > 11
+  Spin2Op11 = Op{2}{11};
+  Spin3Op11 = Op{3}{11};
+  Spin4Op11 = Op{4}{11};
+  SpinXiXjOp_11 = SpinXiXjOps{11};
+else
+  Spin2Op11 = [];
+  Spin3Op11 = [];
+  Spin4Op11 = [];
+  SpinXiXjOp_11 =[];
+end
+
+% Set 12-cluster operators.
+if maxClusterSize > 12
+  Spin2Op12 = Op{2}{12};
+  Spin3Op12 = Op{3}{12};
+  Spin4Op12 = Op{4}{12};
+  SpinXiXjOp_12 = SpinXiXjOps{12};
+else
+  Spin2Op12 = [];
+  Spin3Op12 = [];
+  Spin4Op12 = [];
+  SpinXiXjOp_12 =[];
+end
+end
+
+
+% ========================================================================
+% Initialize Coherences
+% ========================================================================
+
+function [Coherences_1, SubclusterIndices_2, Coherences_2, ...
+  SubclusterIndices_3, Coherences_3, SubclusterIndices_4, Coherences_4, ...
+  SubclusterIndices_5, Coherences_5, SubclusterIndices_6, Coherences_6, ...
+  SubclusterIndices_7, Coherences_7, SubclusterIndices_8, Coherences_8, ...
+  SubclusterIndices_9, Coherences_9, SubclusterIndices_10, Coherences_10, ...
+  SubclusterIndices_11, Coherences_11, SubclusterIndices_12, Coherences_12,...
+  rotationalMatrix_h2_m1, rotationalMatrix_h3_m1, ...
+  rotationalMatrix_h4_m1, rotationalMatrix_h4_m2, ...
+  rotationalMatrix_h9_m1, rotationalMatrix_h9_m2] ...
+  = initializeCoherences(Method_order, numberClusters, ...
+  Nuclei_rotationalMatrix,nt,includeMethyls,maxSize)
+
+% nt = timepoints^dimensionality;
+% includeMethyls = System.Methyl.include
+
+Coherences_1 = [];
+SubclusterIndices_2 = [];
+Coherences_2 = [];
+SubclusterIndices_3 = [];
+Coherences_3 = [];
+SubclusterIndices_4 = [];
+Coherences_4 = [];
+SubclusterIndices_5 = [];
+Coherences_5 = [];
+SubclusterIndices_6 = [];
+Coherences_6 = [];
+SubclusterIndices_7 = [];
+Coherences_7 = [];
+SubclusterIndices_8 = [];
+Coherences_8 = [];
+SubclusterIndices_9 = [];
+Coherences_9 = [];
+SubclusterIndices_10 = [];
+Coherences_10 = [];
+SubclusterIndices_11 = [];
+Coherences_11 = [];
+SubclusterIndices_12 = [];
+Coherences_12 = [];
+rotationalMatrix_h2_m1 = [];
+rotationalMatrix_h3_m1 = [];
+rotationalMatrix_h4_m1 = [];
+rotationalMatrix_h4_m2 = [];
+rotationalMatrix_h9_m1 = [];
+rotationalMatrix_h9_m2 = [];
+for isize = 1:Method_order
+  switch isize
+    
+    % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
+    % the jth cluster of size subCluster_size that is a subcluster of
+    % the ith ccluster of size clusterSize.
+    
+    case 1
+      Coherences_1 = zeros(numberClusters(isize),nt);
+      if includeMethyls
+        rotationalMatrix_h2_m1 = Nuclei_rotationalMatrix{2,1}; 
+        
+      else
+        rotationalMatrix_h2_m1 = [];
+        rotationalMatrix_h3_m1 = [];
+      end
+    case 2
+      SubclusterIndices_2 = zeros(nchoosek(isize,1), isize , numberClusters(isize));
+      Coherences_2 = zeros(numberClusters(isize),nt);
+      
+      if includeMethyls
+        rotationalMatrix_h4_m1 = Nuclei_rotationalMatrix{4,1};
+        rotationalMatrix_h4_m2 = Nuclei_rotationalMatrix{4,1};
+        
+      else
+        rotationalMatrix_h4_m1 = [];
+        rotationalMatrix_h4_m2 = [];
+        rotationalMatrix_h9_m1 = [];
+        rotationalMatrix_h9_m2 = [];
+      end
+      
+    case 3
+      SubclusterIndices_3 = zeros(nchoosek(isize,1), isize , numberClusters(isize));
+      Coherences_3 = zeros(numberClusters(isize),nt);
+    case 4
+      SubclusterIndices_4 = zeros(nchoosek(isize,2), isize , numberClusters(isize));
+      Coherences_4 = zeros(numberClusters(isize),nt);
+    case 5
+      SubclusterIndices_5 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_5 = zeros(numberClusters(isize),nt);
+    case 6
+      SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_6 = zeros(numberClusters(isize),nt);
+    case 7
+      SubclusterIndices_7 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_7 = zeros(numberClusters(isize),nt);
+    case 8
+      SubclusterIndices_8 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_8 = zeros(numberClusters(isize),nt);
+    case 9
+      SubclusterIndices_9 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_9 = zeros(numberClusters(isize),nt);
+    case 10
+      SubclusterIndices_10 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_10 = zeros(numberClusters(isize),nt);
+    case 11
+      SubclusterIndices_11 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_11 = zeros(numberClusters(isize),nt);
+    case 12
+      SubclusterIndices_12 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
+      Coherences_12 = zeros(numberClusters(isize),nt);
+  end
+  
+end
+
+
+
+% Define placeholder variables for variables that need to be defined but do
+% not contribute to the calculation for the selected order.
+for isize = Method_order+1:maxSize
+  
+      switch isize 
+        
+        case 1
+          Coherences_1 = 0;  
+          
+          rotationalMatrix_h2_m1 = [];
+          rotationalMatrix_h3_m1 = [];
+        
+        case 2
+          SubclusterIndices_2 = []; 
+          Coherences_2 = 0;
+          
+          rotationalMatrix_h4_m1 = [];
+          rotationalMatrix_h4_m2 = [];
+          rotationalMatrix_h9_m1 = [];
+          rotationalMatrix_h9_m2 = [];
+        
+        case 3
+          SubclusterIndices_3 = [];
+          Coherences_3 = 0;
+        case 4
+          SubclusterIndices_4 = 1;
+          Coherences_4 = 0;
+          
+        case 5
+          SubclusterIndices_5 = [];
+          Coherences_5 = 0;
+        case 6
+          SubclusterIndices_6 = 1;
+          Coherences_6 = 0;
+        case 7
+          SubclusterIndices_7 = 1;
+          Coherences_7 = 0;
+        case 8
+          SubclusterIndices_8 = 1;
+          Coherences_8 = 0;
+        case 9
+          SubclusterIndices_9 = 1;
+          Coherences_9 = 0;
+        case 10
+          SubclusterIndices_10 = 1;
+          Coherences_10 = 0;
+        case 11
+          SubclusterIndices_11 = 1;
+          Coherences_11 = 0;
+        case 12
+          SubclusterIndices_12 = 1;
+          Coherences_12 = 0;
+      end
+      
+end
+end
+
+% ========================================================================
+% Set Subcluster Indices
+% ========================================================================
+function [SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
+  SubclusterIndices_5,SubclusterIndices_6, SubclusterIndices_7,SubclusterIndices_8,...
+  SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11, ...
+  SubclusterIndices_12]...
+  = setSubclusterIndices(ClusterArray,clusterSize,iCluster,...
+  SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
+  SubclusterIndices_5,SubclusterIndices_6, SubclusterIndices_7,SubclusterIndices_8,...
+  SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11, ...
+  SubclusterIndices_12)
+
+
+switch clusterSize
+  % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
+  % the jth cluster of size subCluster_size that is a subcluster of
+  % the ith cluster of size clusterSize.
+  case 1
+    % This is just to catch this case.  There is nothing to set.
+  case 2
+    SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 3
+    SubclusterIndices_3(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 4
+    SubclusterIndices_4(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 5
+    SubclusterIndices_5(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 6
+    SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 7
+    SubclusterIndices_7(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 8
+    SubclusterIndices_8(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 9
+    SubclusterIndices_9(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 10
+    SubclusterIndices_10(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 11
+    SubclusterIndices_11(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  case 12
+    SubclusterIndices_12(:,:,iCluster) = findSubclusters_gpu(ClusterArray,clusterSize,iCluster,clusterSize);
+  otherwise
+    fprintf('Cannot calculate clusters of size %d.\n', clusterSize);
+    error('Cluster Error');
+    
+    
+end
 end

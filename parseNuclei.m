@@ -17,7 +17,8 @@ maxClusterSize = min(maxSize,methylFactor*Method.order);
 System = setIsotopeDefaults(System);
 spinCenter = System.spinCenter;
 
-Nuclei.nStates = System.nStates;  
+Nuclei.nStates = System.nStates; 
+Nuclei.number = 0;
 % Define spin operators.
 Nuclei.SpinOperators = cell(1,4);
 
@@ -38,6 +39,8 @@ if System.Methyl.include
 %   Nuclei.rotationalMatrix{3,1} = -nuT/3*generateRotationMatrices(3,1);
 %   Nuclei.rotationalMatrix{9,1} = -nuT/3*generateRotationMatrices(9,1);
 %   Nuclei.rotationalMatrix{9,1} = -nuT/3*generateRotationMatrices(9,2);
+else
+  Nuclei.rotationalMatrix = [];
 end
 Nuclei.SpinXiXjOperators = generateXiXjSpinOperators(1,maxClusterSize);
  
