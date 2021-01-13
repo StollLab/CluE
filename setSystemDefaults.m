@@ -647,9 +647,6 @@ end
 if ~isfield(Data,'saveLevel')
   Data.saveLevel = 0;
 end 
-if ~isfield(Data,'overwriteLevel')
-  Data.overwriteLevel = 0;
-end
 if ~isfield(Data,'ClusterData')
   Data.ClusterData = '';
   Data.exitOnFailedLoad = false;

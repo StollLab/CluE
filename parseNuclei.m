@@ -214,10 +214,12 @@ for uc = 1:nCells
     % switch nuclear type
     
     % H =============================================================
+    isProtium_ = (strcmp(type,'H') && System.protium);
+    
     if System.newIsotopologuePerOrientation
-      doParseAsH_ = false;
+      doParseAsH_ = isProtium_ && ~isSolvent(inucleus);
     else
-      isProtium_ = (strcmp(type,'H') && System.protium);
+
       isDeuteriumTurnedProtium_ = ( strcmp(type,'D') && isSolvent(inucleus) && (rand() > System.deuteriumFraction) );
       doParseAsH_ = (isProtium_ || isDeuteriumTurnedProtium_);
     end

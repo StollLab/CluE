@@ -1133,6 +1133,10 @@ Order_n_SignalMean =[];
 Nuclei = [];
 uncertainty = [];
 
+if ~isfield(Data,'overwriteLevel')
+  Data.overwriteLevel = 0;
+end
+
 OutputData = Data.OutputData;
 if ~isempty(OutputData)
   
