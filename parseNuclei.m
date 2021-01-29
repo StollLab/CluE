@@ -33,9 +33,15 @@ end
 
 nuT = System.Methyl.tunnel_splitting;
 if System.Methyl.include
-  Nuclei.rotationalMatrix{2,1} = -nuT/3*generateRotationMatrices(2,1);
-  Nuclei.rotationalMatrix{4,1} = -nuT/3*generateRotationMatrices(4,1);
-  Nuclei.rotationalMatrix{4,2} = -nuT/3*generateRotationMatrices(4,2);
+  % Nuclei.rotationalMatrix{clusterSize,numberOfMethyls}
+  % generateRotationMatrices(spinMultiplicity,numberOfMethyls)
+  Nuclei.rotationalMatrix{1,1} = -nuT/3*generateRotationMatrices(2^3,1);
+  Nuclei.rotationalMatrix{2,1} = -nuT/3*generateRotationMatrices(2*2^3,1);
+  Nuclei.rotationalMatrix{2,2} = -nuT/3*generateRotationMatrices(2^3*2^3,2);
+%   
+%   Nuclei.rotationalMatrix{2,1} = -nuT/3*generateRotationMatrices(2,1);
+%   Nuclei.rotationalMatrix{4,1} = -nuT/3*generateRotationMatrices(4,1);
+%   Nuclei.rotationalMatrix{4,2} = -nuT/3*generateRotationMatrices(4,2);
 %   Nuclei.rotationalMatrix{3,1} = -nuT/3*generateRotationMatrices(3,1);
 %   Nuclei.rotationalMatrix{9,1} = -nuT/3*generateRotationMatrices(9,1);
 %   Nuclei.rotationalMatrix{9,1} = -nuT/3*generateRotationMatrices(9,2);
@@ -54,7 +60,15 @@ scaleFactor = System.scale;
 Nuclei.dataSource = pdbFileName;
 
 % open data file
-[Coordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,MoleculeID,numberH,isSolvent,isWater,Exchangable] = parsePDB(pdbFileName,System);
+if ~strcmp(pdbFileName,'System.RandomEnsemble.include')
+[Coordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,MoleculeID,numberH,isSolvent,isWater,Exchangable,VanDerWaalsRadii] = parsePDB(pdbFileName,System);
+else
+  Coordinates = [];
+  isSolvent = [];
+  Type = {};
+  UnitCell.isUnitCell = false;
+  numberH = [0,0,0];
+end
 Nuclei.isSolvent = isSolvent;
 
 % Connected = formConnection(Connected_,Indices_nonWater);
@@ -63,7 +77,7 @@ Nuclei.isSolvent = isSolvent;
 Npdb = length(Type);
 
 if System.Methyl.include
-  [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonSolvent] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonSolvent);
+  [Methyl_Data,Coordinates,Type,UnitCell,Connected,Indices_nonSolvent] = findMethyls(System, Coordinates,Type,UnitCell,Connected,Indices_nonSolvent);
   Nuclei.Methyl_Data = Methyl_Data;
 else
   Nuclei.Methyl_Data = [];
@@ -116,17 +130,6 @@ if System.nuclear_quadrupole
   end
 end
 
-Nuclei.quadrupole2lab = zeros(3,3,numberH(2)*numberUnitCells);
-Nuclei.Qtensor = zeros(3,3,Npdb*numberUnitCells);
-Nuclei.quadrupoleXaxis = zeros(numberH(2)*numberUnitCells,3);
-Nuclei.quadrupoleYaxis = zeros(numberH(2)*numberUnitCells,3);
-Nuclei.quadrupoleZaxis = zeros(numberH(2)*numberUnitCells,3);
-
-Nuclei.hyperfine2lab = zeros(3,3,numberH(2)*numberUnitCells);
-Nuclei.Atensor = zeros(3,3,Npdb*numberUnitCells);
-Nuclei.FermiContact = zeros(Npdb*numberUnitCells,1);
-Nuclei.Azz = zeros(Npdb*numberUnitCells,1);
-
 Initial_Electron_Coordinates = System.Electron.Coordinates;
 
 if iscell(Initial_Electron_Coordinates)
@@ -158,6 +161,75 @@ elseif length(System.Electron.Coordinates) == 2
   Initial_Electron_Coordinates = System.Electron.Coordinates;
   
 end
+
+% Decide whether or not to add randomly distributed hard spheres. 
+if System.RandomEnsemble.include
+  
+  % radius to add spheres within
+  R_ = System.RandomEnsemble.radius;
+  
+  % radius within which to avoid adding spheres
+  R0_ = System.RandomEnsemble.innerRadius;
+  
+  % hard sphere radius
+  r0_ = System.RandomEnsemble.sphereRadius;
+  
+  % Get random packing of hard spheres, centered on the origin.
+  [inCoor, N_]  = generateRandomConcentrationEnsemble(System.RandomEnsemble.concentration,R_,R0_,2*r0_);
+  
+  % Translate random ensemble to be centered on the elecron spin.
+  inCoor = inCoor + Initial_Electron_Coordinates;
+  
+  % Remove spheres that overlap with pdb input.
+  if ~isempty(Coordinates)
+    [outCoor,  N_] = removeOverlap(inCoor,Coordinates,VanDerWaalsRadii);
+  else
+    outCoor = inCoor;
+  end
+  % number of pdb coordinates
+  M_ = size(Coordinates,2);
+  
+  % Add random spins to pdb spin. 
+  Coordinates = [Coordinates; outCoor];
+
+  % Loop through the new spins.
+  for ii = M_+N_:-1: M_+1
+    
+    % Update spin info. 
+    Type{ii} = System.RandomEnsemble.Type;
+    if strcmp(Type{ii},'H')
+      numberH(1) = numberH(1) + 1;
+    elseif strcmp(Type{ii},'D')
+      numberH(2) = numberH(2) + 1;
+    end
+    Exchangable(ii) = System.RandomEnsemble.Exchangable;
+    isSolvent(ii) = System.RandomEnsemble.isSolvent;
+    isWater(ii) = System.RandomEnsemble.isWater;
+    MoleculeID(ii) = ii;
+    pdbID(ii) = - ii + M_;
+    Indices_nonSolvent(ii) = ~isSolvent(ii);
+    Connected{ii} = [];
+    
+  end
+  numberH(3) = numberH(1) + numberH(3);
+  % number of PDB entries used
+  Npdb = length(Type);
+end
+
+
+
+Nuclei.quadrupole2lab = zeros(3,3,numberH(2)*numberUnitCells);
+Nuclei.Qtensor = zeros(3,3,Npdb*numberUnitCells);
+Nuclei.quadrupoleXaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.quadrupoleYaxis = zeros(numberH(2)*numberUnitCells,3);
+Nuclei.quadrupoleZaxis = zeros(numberH(2)*numberUnitCells,3);
+
+Nuclei.hyperfine2lab = zeros(3,3,numberH(2)*numberUnitCells);
+Nuclei.Atensor = zeros(3,3,Npdb*numberUnitCells);
+Nuclei.FermiContact = zeros(Npdb*numberUnitCells,1);
+Nuclei.Azz = zeros(Npdb*numberUnitCells,1);
+
+
 iNuc = uint32(0);
 
 % replicate unit cell
@@ -256,7 +328,7 @@ for uc = 1:nCells
       Nuclei.PDBCoordinates((iNuc),:)= Coordinates(inucleus,:);
 %       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
-      Nuclei.Exchangable(iNuc) = Exchangable(inucleus);
+      Nuclei.Exchangable(iNuc) = false; %Exchangable(inucleus);
       Nuclei.NumberStates(iNuc) = int8(8);
       Nuclei.valid(iNuc)= true;
       
@@ -310,7 +382,7 @@ for uc = 1:nCells
       Nuclei.PDBCoordinates((iNuc),:)= Methyl_Data.Hydron_Coordinates{inucleus}(3,:);
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= false;
-      Nuclei.isWater(iNuc) = isWater(inucleus);
+      Nuclei.isWater(iNuc) = false; %isWater(inucleus);
       Nuclei.Abundance(iNuc) = 1;
       
       %
@@ -956,13 +1028,15 @@ end
 % New Function
 % ========================================================================
 
-function  [Methyl_Data,Coordinates,Type_out,UnitCell,Connected,Indices_nonWater] = findMethyls(Coordinates,Type,UnitCell,Connected,Indices_nonWater)
+function  [Methyl_Data,Coordinates,Type_out,UnitCell,Connected,Indices_nonWater] = findMethyls(System, Coordinates,Type,UnitCell,Connected,Indices_nonWater)
 
 Type_out  = Type;
 Number_Nuclei = length(Type);
 Methyl_Data.number_methyls = 0;
 Methyl_Data.Hydron_Coordinates = cell(1);
 Methyl_Data.ID = [];
+Methyl_Data.Hydron_radius  = cell(1);
+Methyl_Data.Moment_of_Inertia = [];
 
 for ispin = 1:Number_Nuclei
   
@@ -1027,11 +1101,16 @@ for ispin = 1:Number_Nuclei
   Methyl_Data.Hydron_ID{new_index} = indexH;
   
   Center_of_Mass_Coor = sum(Coordinates(indexH,:),1)/3;
+  Methyl_Data.Center_of_Mass_Coor{new_index} = Center_of_Mass_Coor;
   Coordinates(new_index,:) = Center_of_Mass_Coor;
+  
+  Methyl_Data.Hydron_radius{Methyl_Data.number_methyls} = [0,0,0];
   for iH = 1:3
     % Save hydron coordinates for Hamiltonian construction.
     Methyl_Data.Hydron_Coordinates{new_index}(iH,:) = Coordinates(indexH(iH),:);
+    Methyl_Data.Hydron_radius{Methyl_Data.number_methyls}(iH) = norm(Coordinates(indexH(iH),:) - Center_of_Mass_Coor);
   end
+  Methyl_Data.Moment_of_Inertia(Methyl_Data.number_methyls) = System.m1H*sum(Methyl_Data.Hydron_radius{Methyl_Data.number_methyls}.^2); 
   % Change hydrogens into methy pseudo-particles.
   Type_out{new_index} = 'CH3';
   Type_out{indexH(1)} = 'CH3_H_source';

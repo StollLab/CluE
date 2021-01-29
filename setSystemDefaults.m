@@ -316,6 +316,7 @@ end
 
 System.coulomb = System.joule*System.second/System.tesla/System.meter^2;
 System.volt = System.joule/System.coulomb;
+System.kg = System.joule*(System.second /System.meter)^2; 
 
 % Physical Constants (https://physics.nist.gov/cuu/Constants/index.html)
 % constant = SI value * SI units % SI units
@@ -334,6 +335,7 @@ System.angstrom = System.meter*1e-10; % m.
 System.wavenumber = System.h*(100*System.c); % J*cm;
 System.avogadro= 6.022140857e23;
 System.ge = 2.00231930436256;% https://physics.nist.gov/cgi-bin/cuu/Value?gem 2020-02-08
+System.m1H = 1.007825/System.avogadro*System.kg/1000; % J. Emsley, The Elements, Oxford Chemistry Guides (Oxford Univ. Press, New York, NY, 1995).
 % System Constants
 
 % Set magnetic field.
@@ -361,17 +363,25 @@ end
 if ~isfield(System.Methyl,'moment_of_inertia')
   System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
 end
-if ~isfield(System,'methyl_V3')
+if ~isfield(System.Methyl,'V3')
   System.Methyl.V3 = 86*1e-3*System.eV;
 end
-if ~isfield(System,'tunnel_spliting')
-  System.Methyl.omega_harmonic_oscillator = sqrt(9*System.Methyl.V3/System.Methyl.moment_of_inertia);
+if ~isfield(System.Methyl,'lockRotors')
+  System.Methyl.lockRotors = false;
+end
+if ~isfield(System.Methyl,'tunnel_spliting')
+  System.Methyl.omega_harmonic_oscillator = sqrt(9*System.Methyl.V3/System.Methyl.moment_of_inertia); % rad/s
   
-  System.Methyl.instanton_action = 8*System.Methyl.moment_of_inertia*System.Methyl.omega_harmonic_oscillator/9;
+%   System.Methyl.instanton_action = 8*System.Methyl.moment_of_inertia*System.Methyl.omega_harmonic_oscillator/9; % J*s
+  System.Methyl.instanton_action = 8*sqrt(System.Methyl.moment_of_inertia*System.Methyl.V3)/3; % J*s
   
-  System.Methyl.K = 4/3*System.Methyl.omega_harmonic_oscillator^(3/2)*sqrt(System.Methyl.moment_of_inertia/pi/System.hbar);
+%   System.Methyl.K = 4/3*System.Methyl.omega_harmonic_oscillator^(3/2)...
+%     *sqrt(System.Methyl.moment_of_inertia/pi/System.hbar); % rad/s
+  System.Methyl.K = sqrt(48/pi/System.hbar*sqrt(System.Methyl.V3^3/System.Methyl.moment_of_inertia));
   
-  System.Methyl.tunnel_splitting = 3*System.Methyl.K*exp(-System.Methyl.instanton_action/System.hbar);
+  System.Methyl.K = System.Methyl.K/2/pi; % rad/s -> Hz.
+  System.Methyl.tunnel_splitting = 3*System.Methyl.K...
+    *exp(-System.Methyl.instanton_action/System.hbar); % Hz
   
 end
 if ~isfield(System.Methyl,'temperature')
@@ -593,6 +603,33 @@ if ~isfield(System,'TMguess')
   System.TMguess = (5+45*System.D2O)*1e-6;
 end
 
+if ~isfield(System,'RandomEnsemble') || ~isfield(System.RandomEnsemble,'include')
+System.RandomEnsemble.include = false;
+end 
+if System.RandomEnsemble.include && ~isfield(System.RandomEnsemble,'concentration')
+  error('Please specify System.RandomEnsemble.concentration [=] mol/L.');
+end
+if ~isfield(System.RandomEnsemble,'radius')
+  System.RandomEnsemble.radius = System.radius;
+end
+if ~isfield(System.RandomEnsemble,'innerRadius')
+  System.RandomEnsemble.innerRadius = getVanDerWaalsRadius('O');
+end
+if ~isfield(System.RandomEnsemble,'Type')
+  System.RandomEnsemble.Type = 'H';
+end
+if ~isfield(System.RandomEnsemble,'sphereRadius')
+  System.RandomEnsemble.sphereRadius = getVanDerWaalsRadius(System.RandomEnsemble.Type)*System.meter;
+end
+if ~isfield(System.RandomEnsemble,'Exchangable')
+  System.RandomEnsemble.Exchangable = true;
+end
+if ~isfield(System.RandomEnsemble,'isSolvent')
+  System.RandomEnsemble.isSolvent = true;
+end
+if ~isfield(System.RandomEnsemble,'isWater')
+  System.RandomEnsemble.isWater = false;
+end
 
 % The methods rCE and rCE do not use precomputed Hamiltonians.
 if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
@@ -669,7 +706,9 @@ end
 if ~isfield(System,'deuteriumFraction')
   System.deuteriumFraction = 1;
 end
-
+if ~isfield(System,'deuteriumFraction_nonExchangeable')
+  System.deuteriumFraction_nonExchangeable = System.deuteriumFraction;
+end
 if ~isfield(System,'newIsotopologuePerOrientation')
   if isempty(Data.ClusterData) && (System.deuteriumFraction >= 1 || System.deuteriumFraction <= 0)
     System.newIsotopologuePerOrientation = false;

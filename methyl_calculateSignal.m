@@ -118,6 +118,8 @@ for isize = 1:Method_extraOrder
   end
 end
 
+lockRotors = System.Methyl.lockRotors;
+
 % Initialize coherences and subcluster indices.
 [Coherences_1, SubclusterIndices_2, Coherences_2, ...
   SubclusterIndices_3, Coherences_3, SubclusterIndices_4, Coherences_4, ...
@@ -125,16 +127,15 @@ end
   SubclusterIndices_7, Coherences_7, SubclusterIndices_8, Coherences_8, ...
   SubclusterIndices_9, Coherences_9, SubclusterIndices_10, Coherences_10, ...
   SubclusterIndices_11, Coherences_11, SubclusterIndices_12, Coherences_12,...
-  rotationalMatrix_h2_m1, rotationalMatrix_h3_m1, ...
-  rotationalMatrix_h4_m1, rotationalMatrix_h4_m2, ...
-  rotationalMatrix_h9_m1, rotationalMatrix_h9_m2] ...
+  rotationalMatrix_c1_m1, rotationalMatrix_d1_m1, ...
+  rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
+  rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,maxSize);
+  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,maxSize,lockRotors);
 
 
 % Methyl Groups
 IsMethyl = strcmp(Nuclei.Type,'CH3');
-Methyl_gA = [0,0];
 
 %--------------------------------------------------------------------------
 % gpu code
@@ -167,8 +168,7 @@ for clusterSize = 1:Method_order
     % Initialize cluster.
     thisCluster = zeros(1,thisClusterSize);
     
-    % Initialize methyl ID, and counters.
-    MethylID = zeros(1,thisClusterSize);
+    % Initialize counters.
     thisIndex = 0;
     methyl_number = 0;
     
@@ -178,10 +178,11 @@ for clusterSize = 1:Method_order
       thisIndex = thisIndex + 1;
       
       if IsMethyl(Cluster(ii))
-        methyl_number = methyl_number + 1;
-        Methyl_gA(methyl_number) = Nuclei_Abundance(Cluster(ii));
-        MethylID(thisIndex:thisIndex+2) = methyl_number;      
-        thisCluster(thisIndex) = Cluster(ii) + [1,2,3];
+        % Count the number of metyls.
+        methyl_number = methyl_number + 1;      
+        
+        % Unpack spins from methyl pseudo-particle.
+        thisCluster(thisIndex:thisIndex+2) = Cluster(ii) + [1,2,3];
         thisIndex = thisIndex + 2;
       else
         thisCluster(thisIndex) = Cluster(ii);
@@ -191,7 +192,11 @@ for clusterSize = 1:Method_order
     
     % Generate methyl permutations.
     cyclicPermutation = getCyclicPermutations(IsMethyl(Cluster));
-    nPerm = size(cyclicPermutation,1);
+    if lockRotors
+      nPerm = 1;
+    else
+      nPerm = size(cyclicPermutation,1);
+    end
     cyclicPermutation = thisCluster(cyclicPermutation);
     
     % Check if all spin have the same S.
@@ -238,11 +243,9 @@ for clusterSize = 1:Method_order
       randStateIndex = randperm(3^numel(SuperclusterUnion));
       % Get the set of nuclei not in the primary cluster that unions with the primary
       % cluster to give SuperclusterUnion.
-      ClusterComplement = SuperclusterUnion(  ~any(SuperclusterUnion==thisCluster',1)  );
+      ClusterComplement = SuperclusterUnion(  ~any(SuperclusterUnion==thisCluster',1)  );      
       
-      % Determine the number of spin states required to describe SuperclusterUnion.
-      
-      [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory,MethylID);
+      [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory);
       qtensors = Qtensors(:,:,thisCluster);
       tensors0 = tensors;
       if useThermalEnsemble
@@ -262,24 +265,26 @@ for clusterSize = 1:Method_order
     HilbertSpaceDim = SpinSpaceDim*nPerm;
     
     switch nPerm
+      case 1 % 0 rotors
+        Hb = zeros(HilbertSpaceDim);
+    
       case 3 % 1 rotor
         switch SpinSpaceDim
-          case 2
-            Hb = rotationalMatrix_h2_m1;
-          case 3
-            Hb = rotationalMatrix_h3_m1;
-          case 4
-            Hb = rotationalMatrix_h4_m1;
-          case 9
-            Hb = rotationalMatrix_h9_m1;
+          case 8 % CH3
+            Hb = rotationalMatrix_c1_m1;
+          case 27 % CD3
+            Hb = rotationalMatrix_d1_m1;
+          case 16 % H, CH3
+            Hb = rotationalMatrix_c2_m1;
+          case 81 % D, CD3
+            Hb = rotationalMatrix_d2_m1;
         end
       case 9 % 2 rotors  
         switch SpinSpaceDim
-          case 4
-            Hb = rotationalMatrix_h4_m2;
-            
-          case 9
-            Hb = rotationalMatrix_h9_m2;
+          case 64 % CH3, CH3 
+            Hb = rotationalMatrix_c2_m2;
+          case 729 % CH3, CH3
+            Hb = rotationalMatrix_d2_m2;
         end
       otherwise
         Hb = zeros(HilbertSpaceDim);
@@ -290,10 +295,15 @@ for clusterSize = 1:Method_order
       
     % Loop over cyclic permutations.
       for iPerm = 1:nPerm
+        
+        % Permute rotor spins.
         thisCluster = cyclicPermutation(iPerm,:);
-        [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory,MethylID);
+        
+        % Get interaction tensors.
+        [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory);
         qtensors = Qtensors(:,:,thisCluster);
         
+        % Build Hamiltonians.
         [H_alpha,H_beta] = ...
           assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
           theory,zeroIndex,methyl_number);
@@ -352,9 +362,15 @@ for clusterSize = 1:Method_order
           
         end
         
+        % Add mean field term to the Hamiltonian.
         Halpha = H_alpha + H_alphaMF;
         Hbeta = H_beta + H_betaMF;
+       
+        % Determine which block in the rotational Hamiltonian
+        % this configuration is assigned to.
         hRange = (iPerm-1)*SpinSpaceDim+(1:SpinSpaceDim);
+        
+        % Add configuration Hamiltonian to the full Hamiltonian.
         Hb(hRange,hRange) = Hbeta;
         Ha(hRange,hRange) = Halpha;
       end
@@ -1052,11 +1068,11 @@ function [Coherences_1, SubclusterIndices_2, Coherences_2, ...
   SubclusterIndices_7, Coherences_7, SubclusterIndices_8, Coherences_8, ...
   SubclusterIndices_9, Coherences_9, SubclusterIndices_10, Coherences_10, ...
   SubclusterIndices_11, Coherences_11, SubclusterIndices_12, Coherences_12,...
-  rotationalMatrix_h2_m1, rotationalMatrix_h3_m1, ...
-  rotationalMatrix_h4_m1, rotationalMatrix_h4_m2, ...
-  rotationalMatrix_h9_m1, rotationalMatrix_h9_m2] ...
+  rotationalMatrix_c1_m1, rotationalMatrix_d1_m1, ...
+  rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
+  rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei_rotationalMatrix,nt,includeMethyls,maxSize)
+  Nuclei_rotationalMatrix,nt,includeMethyls,lockRotor,maxSize)
 
 % nt = timepoints^dimensionality;
 % includeMethyls = System.Methyl.include
@@ -1084,73 +1100,73 @@ SubclusterIndices_11 = [];
 Coherences_11 = [];
 SubclusterIndices_12 = [];
 Coherences_12 = [];
-rotationalMatrix_h2_m1 = [];
-rotationalMatrix_h3_m1 = [];
-rotationalMatrix_h4_m1 = [];
-rotationalMatrix_h4_m2 = [];
-rotationalMatrix_h9_m1 = [];
-rotationalMatrix_h9_m2 = [];
-for isize = 1:Method_order
-  switch isize
+rotationalMatrix_c1_m1 = [];
+rotationalMatrix_d1_m1 = [];
+rotationalMatrix_c2_m1 = [];
+rotationalMatrix_c2_m2 = [];
+rotationalMatrix_d2_m1 = [];
+rotationalMatrix_d2_m2 = [];
+for iclusterSize = 1:Method_order
+  switch iclusterSize
     
     % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
     % the jth cluster of size subCluster_size that is a subcluster of
     % the ith ccluster of size clusterSize.
     
     case 1
-      Coherences_1 = zeros(numberClusters(isize),nt);
-      if includeMethyls
-        rotationalMatrix_h2_m1 = Nuclei_rotationalMatrix{2,1}; 
+      Coherences_1 = zeros(numberClusters(iclusterSize),nt);
+      if includeMethyls && ~lockRotor
+        rotationalMatrix_c1_m1 = Nuclei_rotationalMatrix{1,1}; 
         
       else
-        rotationalMatrix_h2_m1 = [];
-        rotationalMatrix_h3_m1 = [];
+        rotationalMatrix_c1_m1 = [];
+        rotationalMatrix_d1_m1 = [];
       end
     case 2
-      SubclusterIndices_2 = zeros(nchoosek(isize,1), isize , numberClusters(isize));
-      Coherences_2 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_2 = zeros(nchoosek(iclusterSize,1), iclusterSize , numberClusters(iclusterSize));
+      Coherences_2 = zeros(numberClusters(iclusterSize),nt);
       
-      if includeMethyls
-        rotationalMatrix_h4_m1 = Nuclei_rotationalMatrix{4,1};
-        rotationalMatrix_h4_m2 = Nuclei_rotationalMatrix{4,1};
+      if includeMethyls && ~lockRotor
+        rotationalMatrix_c2_m1 = Nuclei_rotationalMatrix{2,1};
+        rotationalMatrix_c2_m2 = Nuclei_rotationalMatrix{2,2};
         
       else
-        rotationalMatrix_h4_m1 = [];
-        rotationalMatrix_h4_m2 = [];
-        rotationalMatrix_h9_m1 = [];
-        rotationalMatrix_h9_m2 = [];
+        rotationalMatrix_c2_m1 = [];
+        rotationalMatrix_c2_m2 = [];
+        rotationalMatrix_d2_m1 = [];
+        rotationalMatrix_d2_m2 = [];
       end
       
     case 3
-      SubclusterIndices_3 = zeros(nchoosek(isize,1), isize , numberClusters(isize));
-      Coherences_3 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_3 = zeros(nchoosek(iclusterSize,1), iclusterSize , numberClusters(iclusterSize));
+      Coherences_3 = zeros(numberClusters(iclusterSize),nt);
     case 4
-      SubclusterIndices_4 = zeros(nchoosek(isize,2), isize , numberClusters(isize));
-      Coherences_4 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_4 = zeros(nchoosek(iclusterSize,2), iclusterSize , numberClusters(iclusterSize));
+      Coherences_4 = zeros(numberClusters(iclusterSize),nt);
     case 5
-      SubclusterIndices_5 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_5 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_5 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_5 = zeros(numberClusters(iclusterSize),nt);
     case 6
-      SubclusterIndices_6 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_6 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_6 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_6 = zeros(numberClusters(iclusterSize),nt);
     case 7
-      SubclusterIndices_7 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_7 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_7 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_7 = zeros(numberClusters(iclusterSize),nt);
     case 8
-      SubclusterIndices_8 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_8 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_8 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_8 = zeros(numberClusters(iclusterSize),nt);
     case 9
-      SubclusterIndices_9 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_9 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_9 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_9 = zeros(numberClusters(iclusterSize),nt);
     case 10
-      SubclusterIndices_10 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_10 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_10 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_10 = zeros(numberClusters(iclusterSize),nt);
     case 11
-      SubclusterIndices_11 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_11 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_11 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_11 = zeros(numberClusters(iclusterSize),nt);
     case 12
-      SubclusterIndices_12 = zeros(nchoosek(isize,3), isize , numberClusters(isize));
-      Coherences_12 = zeros(numberClusters(isize),nt);
+      SubclusterIndices_12 = zeros(nchoosek(iclusterSize,3), iclusterSize , numberClusters(iclusterSize));
+      Coherences_12 = zeros(numberClusters(iclusterSize),nt);
   end
   
 end
@@ -1159,24 +1175,24 @@ end
 
 % Define placeholder variables for variables that need to be defined but do
 % not contribute to the calculation for the selected order.
-for isize = Method_order+1:maxSize
+for iclusterSize = Method_order+1:maxSize
   
-      switch isize 
+      switch iclusterSize 
         
         case 1
           Coherences_1 = 0;  
           
-          rotationalMatrix_h2_m1 = [];
-          rotationalMatrix_h3_m1 = [];
+          rotationalMatrix_c1_m1 = [];
+          rotationalMatrix_d1_m1 = [];
         
         case 2
           SubclusterIndices_2 = []; 
           Coherences_2 = 0;
           
-          rotationalMatrix_h4_m1 = [];
-          rotationalMatrix_h4_m2 = [];
-          rotationalMatrix_h9_m1 = [];
-          rotationalMatrix_h9_m2 = [];
+          rotationalMatrix_c2_m1 = [];
+          rotationalMatrix_c2_m2 = [];
+          rotationalMatrix_d2_m1 = [];
+          rotationalMatrix_d2_m2 = [];
         
         case 3
           SubclusterIndices_3 = [];

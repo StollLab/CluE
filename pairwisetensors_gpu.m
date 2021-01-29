@@ -19,7 +19,7 @@
   hbar = System.hbar;
 %}
 function [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,...
-  Cluster,HF_tensor, magneticField, ge, geff, muB, muN, mu0, hbar,theory,MethylID)
+  Cluster,HF_tensor, magneticField, ge, geff, muB, muN, mu0, hbar,theory)
 
 zeroIndex = min(Cluster) - 1;
 Indices = fliplr(Cluster);

@@ -6,10 +6,15 @@ switch System.HydrogenExchange
     NuclearList = 1:Nuclei.number;
     for iNuc = NuclearList
       
+      if Nuclei.Exchangable(iNuc)
+        deuteriumFraction = System.deuteriumFraction;
+      else
+        System.deuteriumFraction_nonExchangeable;
+      end
       type = Nuclei.Type{iNuc};
       if isSolvent(iNuc) && (strcmp(type,'1H') || strcmp(type,'2H'))
         
-        if rand() > System.deuteriumFraction
+        if rand() > deuteriumFraction
           Nuclei.Type{iNuc} = '1H';
           Nuclei.Spin(iNuc) = 0.5; % hbar
           Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;

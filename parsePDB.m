@@ -12,7 +12,7 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangable] = parsePDB(filename,System)
+function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangable,VanDerWaalsRadii] = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -39,6 +39,7 @@ pdbID = zeros(1,nLines);
 MoleculeID = zeros(1,nLines);
 Type = cell(1,nLines);
 Exchangable = false(1,nLines);
+VanDerWaalsRadii = zeros(1,nLines);
 UnitCell.isUnitCell = false;
 numberH = [0,0,0];
 iNucleus = 0;
@@ -72,6 +73,7 @@ for iline = 1:nLines
     % Get element.
     Element_ = strtrim(line_(77:78));
     
+    VanDerWaalsRadii(iNucleus) = getVanDerWaalsRadius(Element_);
     % Determine if atom is not part of the solvent.
     if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL') && ~strcmp(ResidueName_,'MGLY') && ~strcmp(ResidueName_,'MGL')
       isSolvent(iNucleus) = false;
@@ -188,3 +190,8 @@ Indices_nonSolvent = find(~isSolvent);
 isWater(iNucleus+1:end) = [];
 
 end
+
+
+
+
+

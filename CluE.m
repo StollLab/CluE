@@ -14,11 +14,13 @@ function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei,uncer
 tic
 
 % Determine the output file.
-[OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data);
-if doReturn, toc; return; end
 
 % set defaults base on specified parameters and for unspecified parameters
 [System, Method, Data] = setSystemDefaults(System,Method,Data);
+
+[OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method);
+if doReturn, toc; return; end
+
 
 if ~isempty(Method.seed)
   fprintf('Using rng seed to Method.seed = %d.\n',Method.seed)
@@ -42,8 +44,12 @@ if ~isfield(Data,'InputData') || ~ischar(Data.InputData)
   error(['Data.InputData is not a valid file identifier.']);
 end
 InputData = Data.InputData;
-if ~isfile(InputData)
-  error(['Could not find the specified input file ', InputData, '.']);
+if ~isfile(InputData) 
+  if System.RandomEnsemble.include
+    InputData = 'System.RandomEnsemble.include';
+  else
+    error(['Could not find the specified input file ', InputData, '.']);
+  end
 end
 
 
@@ -73,7 +79,7 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   clear newMethod
   Progress.LoadSavedData = true;
   
-elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user')
+elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') || strcmp(InputData,'System.RandomEnsemble.include')
   [Nuclei, System] = parseNuclei(System, Method, InputData);
   System.Electron.Coordinates = [0,0,0];
   if Nuclei.number < 1
@@ -1124,7 +1130,7 @@ end
 %==========================================================================
 % Set Output Data
 %==========================================================================
-function [OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data)
+function [OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method)
 doReturn = false;
 SignalMean  = [];
 experiment_time = [];
