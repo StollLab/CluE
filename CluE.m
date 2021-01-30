@@ -411,25 +411,26 @@ for iOri = 1:nOrientations
       load(temp_file,'signal','order_n','seed');
       
       % check progress
-      if seed == Method.seed %&& progress_powder
-        
-        % use loaded data
-        if verbose, fprintf(['Loading signal %d from ', temp_file, '.\n'],iOri); end
-        
-        % set values to simulation variables
-        Calculate_Signal{iOri} = false;
-        
-        if Method.sparseMemory
-          SignalMean = SignalMean + signal;
-          for iorder = Method.order:-1:1
-            Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + order_n{iorder};
-          end
-        else
-          Signals{iOri} = signal;
-          Order_n_Signals{iOri} = order_n;
+      if seed ~= Method.seed %&& progress_powder
+        error('RNG seeds do not match.  Loaded data may be inconsistant.')
+      end  
+      % use loaded data
+      if verbose, fprintf(['Loading signal %d from ', temp_file, '.\n'],iOri); end
+      
+      % set values to simulation variables
+      Calculate_Signal{iOri} = false;
+      
+      if Method.sparseMemory
+        SignalMean = SignalMean + signal;
+        for iorder = Method.order:-1:1
+          Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + order_n{iorder};
         end
-        
+      else
+        Signals{iOri} = signal;
+        Order_n_Signals{iOri} = order_n;
       end
+      
+        
     catch     
       SignalsToCalculate(end+1) = iOri;
     end
