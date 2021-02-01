@@ -29,11 +29,19 @@ muN = System.muN;
 hbar = System.hbar;
 ge = System.Electron.g;
 
+% Loop through bath states.
 for istate = 1:nStates
+  
+  % Loop through spin states.
   for iSpin = 1:Nuclei.number
     
-    psi_i = Nuclei.ZeemanStates(iSpin);
+    % Get the ith soin state.
+    psi_i = Nuclei.ZeemanStates(istate, iSpin);
+    
+    % Get the ith spin.
     I = Nuclei.Spin(iSpin);
+    
+    % Determine the z-projection.
     MI = psi_i - I - 1;
     
     % Nuclear Zeeman
@@ -58,11 +66,13 @@ for istate = 1:nStates
       if size(r,2)==3
         r=r';
       end
+      
       n = r/norm(r);
       nnt = n*n';
       r3 = norm(r)^3;
       dd = km*ge*muB*gni*muN/r3*(eye(3)-3*nnt);
       Hyperfine = -dd/(2*pi*hbar); % Hz.
+      
       h_(iSpin,iSpin,SZ) = h_(iSpin,iSpin,SZ) + Hyperfine(3,3)*MI;
       
     end
@@ -79,30 +89,51 @@ for istate = 1:nStates
       
     end
     
+    % Loop through other bath spins.
     for jSpin = 1:iSpin-1
       
+      % Get jth spin state.
       psi_j = Nuclei.ZeemanStates(jSpin);
+      
+      % Get the jth spin.
       J = Nuclei.Spin(jSpin);
+      
+      % Determine the z-projection.
       MJ = psi_j - J -1;
       
       if useNucA || useNucCD
         
-        
+        % Get classical dipole moment.
         muNi = System.muN;
+        
+        % Check if the spin is an electron/
         if strcmp(Nuclei.Type{iSpin},'e')
+          % Adjust to Bohr magneton.
           muNi = -muB;
         end
+        
+        % Get classical dipole moment.
         muNj = System.muN;
+        
+        % Check if the spin is an electron/
         if strcmp(Nuclei.Type{jSpin},'e')
+          % Adjust to Bohr magneton.
           muNj = -muB;
         end
         
+        % Get spin g-factors.
         gni = Nuclei.Nuclear_g(iSpin);
         gnj = Nuclei.Nuclear_g(jSpin);
+        
+        % Get inter-spin veparation vector.
         r = Nuclei.Coordinates(iSpin,:)-Nuclei.Coordinates(jSpin,:);
+        
+        % Set r to be a column vector.
         if size(r,2)==3
           r=r';
         end
+        
+        % Get direction of r.
         n = r/norm(r);
         nnt = n*n';
         r3 = norm(r)^3;

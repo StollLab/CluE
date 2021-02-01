@@ -9,7 +9,7 @@ switch System.HydrogenExchange
       if Nuclei.Exchangable(iNuc)
         deuteriumFraction = System.deuteriumFraction;
       else
-        System.deuteriumFraction_nonExchangeable;
+        deuteriumFraction = System.deuteriumFraction_nonExchangeable;
       end
       type = Nuclei.Type{iNuc};
       if isSolvent(iNuc) && (strcmp(type,'1H') || strcmp(type,'2H'))

@@ -336,6 +336,7 @@ System.wavenumber = System.h*(100*System.c); % J*cm;
 System.avogadro= 6.022140857e23;
 System.ge = 2.00231930436256;% https://physics.nist.gov/cgi-bin/cuu/Value?gem 2020-02-08
 System.m1H = 1.007825/System.avogadro*System.kg/1000; % J. Emsley, The Elements, Oxford Chemistry Guides (Oxford Univ. Press, New York, NY, 1995).
+System.epsilon0 = (8.8541878128e-12)*System.coulomb^2/System.volt/System.meter;
 % System Constants
 
 % Set magnetic field.
