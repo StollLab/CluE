@@ -43,7 +43,7 @@ switch System.HydrogenExchange
             Nuclei.Spin(jNuc) = Nuclei.Spin(iNuc); % hbar
             Nuclei.StateMultiplicity(jNuc) = Nuclei.StateMultiplicity(iNuc);
             Nuclei.Nuclear_g(jNuc) = Nuclei.Nuclear_g(iNuc);
-            Nuclei.Nuclear_g(jNuc) = Nuclei.Nuclear_g(iNuc);
+            Nuclei.NumberStates(jNuc) = Nuclei.NumberStates(iNuc);
           end
           
         end
@@ -117,6 +117,18 @@ switch System.HydrogenExchange
   otherwise
     error('Could not generate isotopologue.');
 end
+
+is1H = cellfun(@(x)isequal(x,'1H'),Nuclei.Type) & isSolvent;
+is2H = cellfun(@(x)isequal(x,'2H'),Nuclei.Type) & isSolvent;
+isExch = Nuclei.Exchangeable;n1H = sum(is1H);
+n2H = sum(is2H);
+n1Hx = sum(is1H & isExch);
+n2Hx = sum(is2H & isExch);
+n1Hn = sum(is1H & ~isExch);
+n2Hn = sum(is2H & ~isExch);P = n2H/(n1H+n2H);
+
+Px =  n2Hx/(n1Hx+n2Hx)
+Pn =  n2Hn/(n1Hn+n2Hn)
 
 Isotopologue = Nuclei;
 end
