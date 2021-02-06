@@ -131,7 +131,7 @@ lockRotors = System.Methyl.lockRotors;
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,maxSize,lockRotors);
+  Nuclei.rotationalMatrix,timepoints^dimensionality,lockRotors,System.Methyl.include,maxSize);
 
 
 % Methyl Groups
@@ -320,7 +320,8 @@ for clusterSize = 1:Method_order
             % Set cluster spin-state.
             dm_index = mod(iave,dm_size) + 1;
             densityMatrix(dm_index,dm_index) = 1;
-            iState = floor(iave/dm_size)+1;
+            iState = randStateIndex(iave); % iState = floor(iave/dm_size)+1;
+            
           else
             densityMatrix = [];
             
@@ -331,7 +332,7 @@ for clusterSize = 1:Method_order
           end
           
           % Adjust tensors for external fields.
-          if length(ClusterComplement) > length(thisCluster)
+          if ~isempty(ClusterComplement)%length(ClusterComplement) > length(thisCluster)
             tensors = getInterlacedTensors(tensors0,zeroIndex, thisCluster,ClusterComplement,iState,...
               Nuclei_g,state_multiplicity,Nuclei_Coordinates, muN, mu0, hbar);
             %tensors = tensors0; % TEMPORARY

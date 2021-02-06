@@ -3,7 +3,7 @@ function [Signals, ...
   doHydrogenIsotopologueCCE(...
   Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, fractions, Clusters, ...
   SubclusterIndices_2H,SubclusterIndices_2D,...
-  timepoints,dimensionality, order,numberClusters,Exchangable,MoleculeID)
+  timepoints,dimensionality, order,numberClusters,Exchangeable,MoleculeID)
 %   Coherences_n(iCluster,timepoints)
 
 % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
@@ -88,7 +88,7 @@ for iCluster=1:numberClusters(cluster_order)
   
   this_cluster = Clusters(iCluster,1:cluster_order,cluster_order);
   isSameMolecule = MoleculeID(this_cluster(1)) == MoleculeID(this_cluster(2));
-  if isSameMolecule && all(~Exchangable( this_cluster  ))
+  if isSameMolecule && all(~Exchangeable( this_cluster  ))
     for ifrac = 1:nP
       AuxiliarySignal_2(iCluster,:,ifrac) = PH(ifrac).*auxH_ + PD(ifrac).*auxD_ ;
     end

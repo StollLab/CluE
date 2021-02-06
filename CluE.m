@@ -528,8 +528,24 @@ Nuclei.graphs = graphs;
 % ========================================================================
 
 if ~Method.sparseMemory 
+  if System.newIsotopologuePerOrientation
+    Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber = [0,0,0];
+    Nuclei.PowderStatistics.Isotopologue.Mean_Instance_2H_Number = [0,0,0];
+    Nuclei.PowderStatistics.Isotopologue.Mean_Instance_2H_Fraction = [0,0,0];
+  end
+  
   for iOri = 1:nOrientations
     
+    if System.newIsotopologuePerOrientation
+      Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber = Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber ...
+        + Nuclei.Statistics{iOri}.Isotopologue.TypeNumber/nOrientations;
+      
+      Nuclei.PowderStatistics.Isotopologue.Mean_Instance_2H_Number = Nuclei.PowderStatistics.Isotopologue.Mean_Instance_2H_Number ...
+        + Statistics{iOri}.Isotopologue.Instance_2H_Number/nOrientations;
+      
+      Nuclei.PowderStatistics.Isotopologue.Mean_Instance_2H_Fraction = Nuclei.PowderStatistics.Isotopologue.Mean_Instance_2H_Fraction ...
+        + Statistics{iOri}.Isotopologue.InstanceFraction/nOrientations;
+    end
     if Method.Ori_cutoffs
       Clusters =  combineClusters(Clusters,Ori_Clusters{iOri});
     end
@@ -763,6 +779,10 @@ igrid = SignalsToCalculate(isignal);
 [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
   Alpha(igrid),Beta(igrid),verbose,OutputData,Progress);
+
+if System.newIsotopologuePerOrientation
+  Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
+end
 
 normalizing_factor = TempSignals_(1);
 TempSignals_ = gridWeight(igrid)*TempSignals_/normalizing_factor;
@@ -1085,7 +1105,7 @@ else
           doHydrogenIsotopologueCCE(...
           Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, fractions, ClusterArray, ...
           SubclusterIndices_2H,SubclusterIndices_2D,...
-          System.timepoints,dimensionality, Method.order,Nuclei.numberClusters,Nuclei.Exchangable,Nuclei.MoleculeID);
+          System.timepoints,dimensionality, Method.order,Nuclei.numberClusters,Nuclei.Exchangeable,Nuclei.MoleculeID);
         
         System.deuteriumFraction = fractions;
 

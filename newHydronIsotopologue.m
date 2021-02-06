@@ -1,12 +1,12 @@
 function Isotopologue = newHydronIsotopologue(Nuclei,System)
-isSolvent = Nuclei.isSolvent;
+NuclearList = 1:Nuclei.number;
+isSolvent = Nuclei.isSolvent(NuclearList);
 
 switch System.HydrogenExchange
   case 'OH'
-    NuclearList = 1:Nuclei.number;
     for iNuc = NuclearList
       
-      if Nuclei.Exchangable(iNuc)
+      if Nuclei.Exchangeable(iNuc)
         deuteriumFraction = System.deuteriumFraction;
       else
         deuteriumFraction = System.deuteriumFraction_nonExchangeable;
@@ -32,11 +32,11 @@ switch System.HydrogenExchange
           
         end
         
-        if ~Nuclei.Exchangable(iNuc)
+        if ~Nuclei.Exchangeable(iNuc)
           sameMolecule = NuclearList(Nuclei.MoleculeID==Nuclei.MoleculeID(iNuc));
           
           for jNuc = sameMolecule 
-            if Nuclei.Exchangable(jNuc) || iNuc==jNuc
+            if Nuclei.Exchangeable(jNuc) || iNuc==jNuc
               continue;
             end
             Nuclei.Type{jNuc} = Nuclei.Type{iNuc};
@@ -120,15 +120,32 @@ end
 
 is1H = cellfun(@(x)isequal(x,'1H'),Nuclei.Type) & isSolvent;
 is2H = cellfun(@(x)isequal(x,'2H'),Nuclei.Type) & isSolvent;
-isExch = Nuclei.Exchangeable;n1H = sum(is1H);
+isExch = Nuclei.Exchangeable;
+n1H = sum(is1H);
 n2H = sum(is2H);
 n1Hx = sum(is1H & isExch);
 n2Hx = sum(is2H & isExch);
 n1Hn = sum(is1H & ~isExch);
-n2Hn = sum(is2H & ~isExch);P = n2H/(n1H+n2H);
+n2Hn = sum(is2H & ~isExch);
+nH = (n1H+n2H);
+nHx = n1Hx + n2Hx;
+nHn = n1Hn + n2Hn;
 
-Px =  n2Hx/(n1Hx+n2Hx)
-Pn =  n2Hn/(n1Hn+n2Hn)
+Ptarget = nHx/nH*System.deuteriumFraction + nHn/nH*System.deuteriumFraction_nonExchangeable;
+P = n2H/(n1H+n2H);
+Px =  n2Hx/nHx;
+Pn =  n2Hn/nHn;
+
+
+fprintf('Target: \n  P(D) = %d. \n  P(D|OH) = %d.\n  P(D|CH) = %d.\n',...
+  Ptarget,System.deuteriumFraction,System.deuteriumFraction_nonExchangeable);
+fprintf('Initialized %d hydrons: \n  P(D) = %d. \n  P(D|OH) = %d.\n  P(D|CH) = %d.\n',nH, P,Px,Pn);
+
 
 Isotopologue = Nuclei;
+Isotopologue.Isotopologue.Name = {'All','OH','CH'};
+Isotopologue.Isotopologue.TypeNumber = [nH,nHx,nHn];
+Isotopologue.Isotopologue.TargetFraction = [Ptarget,System.deuteriumFraction,System.deuteriumFraction_nonExchangeable];
+Isotopologue.Isotopologue.Instance_2H_Number = [n2H,n2Hx,n2Hn];
+Isotopologue.Isotopologue.InstanceFraction = [P,Px,Pn];
 end

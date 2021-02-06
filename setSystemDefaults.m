@@ -233,9 +233,9 @@ end
 if ~isfield(Method,'useInterlacedClusters')
   Method.useInterlacedClusters = false;
 end
-if any(Method.useInterlacedClusters(:)) && Method.useMultipleBathStates
-  error('Method.useInterlacedClusters and Method.useMultipleBathStates are not compatiple.')
-end
+% if any(Method.useInterlacedClusters(:)) && Method.useMultipleBathStates
+%   error('Method.useInterlacedClusters and Method.useMultipleBathStates are not compatiple.')
+% end
 if (size(Method.useInterlacedClusters,1) ~= size(Method.useInterlacedClusters,2)) || (size(Method.useInterlacedClusters,1) < Method.order)
 
   if any(Method.useInterlacedClusters(:))
@@ -622,8 +622,8 @@ end
 if ~isfield(System.RandomEnsemble,'sphereRadius')
   System.RandomEnsemble.sphereRadius = getVanDerWaalsRadius(System.RandomEnsemble.Type)*System.meter;
 end
-if ~isfield(System.RandomEnsemble,'Exchangable')
-  System.RandomEnsemble.Exchangable = true;
+if ~isfield(System.RandomEnsemble,'Exchangeable')
+  System.RandomEnsemble.Exchangeable = true;
 end
 if ~isfield(System.RandomEnsemble,'isSolvent')
   System.RandomEnsemble.isSolvent = true;

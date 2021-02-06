@@ -1,10 +1,10 @@
 function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
 
-if (mod(dN,2) ~= 0) || (dN < 0)
-  error('The parameter dN must be an even natural number.')
+if (dN < 1)
+  error('The parameter dN >= 1.')
 end
-if (mod(N,2) ~= 0) || (N < 0)
-  error('The parameter N must be an even natural number.')
+if (N < 1)
+  error('The parameter N >= 1.')
 end
 
 
@@ -37,14 +37,14 @@ end
 
 % Set RNG to ensure that repeats on the same initial conditions
 % give identical results. 
-primeRange = [2^10,2^20];
+iMax = 2^20;
 try 
   rng(options.seed)
 catch 
   options.seed = 42;
   rng(options.seed)
 end
-nextSeed = nthprime(randi(primeRange));
+nextSeed = randi(iMax);
 
 
 
@@ -95,18 +95,23 @@ if ~progress(INITIAL_TRIALS)
   N = min(N,maxN);
   
   % Run initial set of trials.
-  for ii=1:N
+  iiStart = find( signals(:,1)==0,1);
+  if isempty(iiStart)
+    iiStart = N + 1;
+  end
+  
+  for ii= iiStart:N
     
     % Skip loaded trials.
     if signals(ii,1)==0
   
       rng(nextSeed);
       Method.seed = nextSeed;
-      nextSeed = nthprime(randi(primeRange));
+      nextSeed = randi(iMax);
       
       fprintf('Setting Method.seed to %d.\n',Method.seed)
       
-      fprintf('Running inital trial %d/%d.\n', ii,N);
+      fprintf('Running initial trial %d/%d.\n', ii,N);
       [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
       
       saveCounter = saveCounter + 1;
@@ -154,7 +159,7 @@ if ~progress(CONVERGENCE_TRIALS)
         
         rng(nextSeed);
         Method.seed = nextSeed;
-        nextSeed = nthprime(randi(primeRange));
+        nextSeed = randi(iMax);
         fprintf('Setting Method.seed to %d.\n',Method.seed)
         
         
@@ -188,8 +193,8 @@ if ~progress(CONVERGENCE_TRIALS)
       perm = randperm(N_);
       
       % Find the mean signal of each partition.
-      v1 = mean(  signals(  perm( 1:N_/2    ) ,: ) , 1);
-      v2 = mean(  signals(  perm( N_/2+1:N_ ) ,: ) , 1);
+      v1 = mean(  signals(  perm( 1:ceil(N_/2)    ) ,: ) , 1);
+      v2 = mean(  signals(  perm( ( ceil(N_/2) + 1 ) :N_ ) ,: ) , 1);
       
       eta = eta + getErrorMetric(v1,v2,options.metric,twotau,twotau,options)/N_ave;
     end
@@ -211,7 +216,7 @@ if ~progress(CONVERGENCE_TRIALS)
       N = N + dN;
       
       % Initialize memory.
-      signals(N+dN,:) = zeros(1,System.timepoints);
+      signals(N+dN,:) = 0;
       TM(N+dN) = 0;
       
       conNum = conNum + 1;

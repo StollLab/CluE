@@ -73,11 +73,6 @@ while doCalc
   % Update counter.
   counter = counter + 1;
   
-%   if mod(counter,listSize)==0 && n_ > 0 
-%     newPerm_ = randperm(N);
-%     recalc(newPerm_ (1:n_)) = true;
-%     n_ = sum(recalc);
-%   end
   % Get new coordinates for the selected particles.
   coor(recalc,:) = R*(2*rand(n_,3) -1);
   
@@ -86,8 +81,7 @@ while doCalc
     doCalc = false;
   end
 end
-counter
-  disp(counter)
+
 end
 
 

@@ -12,13 +12,24 @@ pwstat.DistanceMatrix = zeros(N);
 pwstat.Cylindrical_DistanceMatrix = zeros(N);
 pwstat.ThetaMatrix = zeros(N);
 pwstat.PhiMatrix = zeros(N); 
-
+if System.Methyl.include
+  pwstat.Methyl_Data.ID = zeros(Nuclei.Methyl_Data.number_methyls,1);
+  pwstat.Methyl_Data.number_methyls = 0;
+end
 % Loop over all nuclear spins.
 for ispin = 1:N
  
+  if strcmp(Nuclei.Type{ispin},'CH3') && System.Methyl.include
+    pwstat.Methyl_Data.number_methyls = pwstat.Methyl_Data.number_methyls + 1;
+    pwstat.Methyl_Data.ID(pwstat.Methyl_Data.number_methyls) = ispin;
+    continue;
+  end
+  
   % Loop over all nuclear spins with a higher index than ispin.
   for jspin = ispin+1:N
-    
+    if strcmp(Nuclei.Type{ispin},'CH3')
+      continue;
+    end
     deltaR_ = pwstat.Coordinates(ispin,:)-pwstat.Coordinates(jspin,:);
     
     % Set separation matrix entry.
@@ -37,8 +48,7 @@ for ispin = 1:N
     pwstat.ThetaMatrix(jspin,ispin) = pwstat.ThetaMatrix(ispin,jspin);
     pwstat.PhiMatrix(jspin,ispin) = pwstat.PhiMatrix(ispin,jspin);
   end
-end
-
+end  
 % Coordinates
 pwstat.Distance = vecnorm(pwstat.Coordinates,2,2);
 pwstat.Cylindrical_Distance = vecnorm(pwstat.Coordinates(:,1:2),2,2);
@@ -99,6 +109,16 @@ pwstat.Same_g = Nuclei.Nuclear_g == Nuclei.Nuclear_g';
 TM = System.TMguess;
 pwstat.GaussianRMSD_p = getGaussianRMSD(modDepth_p,pwstat.Frequency_Pair_p,TM);
 pwstat.GaussianRMSD = getGaussianRMSD(modDepth,pwstat.Frequency_Pair,TM);
+
+if System.Methyl.include
+% pwstat.Nuclear_Dipole(abs(pwstat.Nuclear_Dipole)==inf)=nan;
+% for ispin  = pwstat.Methyl_Data.ID'
+%   hydrons_ = ispin + [1 ,2, 3]; 
+%   pwstat.Nuclear_Dipole(:,ispin);
+%   pwstat.Nuclear_Dipole(:,hydrons_)
+%   
+% end
+end
 
 end
 

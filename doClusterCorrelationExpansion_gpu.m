@@ -22,12 +22,12 @@ function [Signals, ...
 % Initialize data.
 code_maxSize = 6;
 maxSize = min(code_maxSize,order);
-AuxiliarySignal_1 = Coherences_1;
-AuxiliarySignal_2 = Coherences_2;
-AuxiliarySignal_3 = Coherences_3;
-AuxiliarySignal_4 = Coherences_4;
-AuxiliarySignal_5 = Coherences_5;
-AuxiliarySignal_6 = Coherences_6;
+AuxiliarySignal_1 = Coherences_1./Coherences_1(:,1);
+AuxiliarySignal_2 = Coherences_2./Coherences_2(:,1);
+AuxiliarySignal_3 = Coherences_3./Coherences_3(:,1);
+AuxiliarySignal_4 = Coherences_4./Coherences_4(:,1);
+AuxiliarySignal_5 = Coherences_5./Coherences_5(:,1);
+AuxiliarySignal_6 = Coherences_6./Coherences_6(:,1);
 
 Signals = ones(code_maxSize,timepoints^dimensionality);
 

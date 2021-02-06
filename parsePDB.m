@@ -12,7 +12,7 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangable,VanDerWaalsRadii] = parsePDB(filename,System)
+function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii] = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -38,7 +38,7 @@ Coordinates = zeros(nLines,3);
 pdbID = zeros(1,nLines);
 MoleculeID = zeros(1,nLines);
 Type = cell(1,nLines);
-Exchangable = false(1,nLines);
+Exchangeable = false(1,nLines);
 VanDerWaalsRadii = zeros(1,nLines);
 UnitCell.isUnitCell = false;
 numberH = [0,0,0];
@@ -152,18 +152,18 @@ for iline = 1:nLines
       for jjNuc = Connected{referenceNucleus}
         switch Type{jjNuc}
           case {'O','M'}
-            Exchangable(referenceNucleus) = true;
+            Exchangeable(referenceNucleus) = true;
           case 'C'
-            Exchangable(referenceNucleus) = false;
+            Exchangeable(referenceNucleus) = false;
           otherwise
-            Exchangable(referenceNucleus) = System.defaultExchangability;
+            Exchangeable(referenceNucleus) = System.defaultExchangability;
         end
-        if ~isempty(exchangable_) && exchangable_~= Exchangable(referenceNucleus)
+        if ~isempty(exchangable_) && exchangable_~= Exchangeable(referenceNucleus)
           fprintf('Inconsistant exchangability for nucleus %d.\n',referenceNucleus);
           disp('    Using System.defaultExchangability.')
           break;
         end
-        exchangable_ = Exchangable(referenceNucleus);
+        exchangable_ = Exchangeable(referenceNucleus);
       end
       
     end
@@ -185,7 +185,7 @@ isSolvent(iNucleus+1:end) = [];
 Coordinates(iNucleus+1:end,:) = [];
 pdbID(iNucleus+1:end) = [];
 Type(iNucleus+1:end) = [];
-Exchangable(iNucleus+1:end) = [];
+Exchangeable(iNucleus+1:end) = [];
 Indices_nonSolvent = find(~isSolvent);
 isWater(iNucleus+1:end) = [];
 
