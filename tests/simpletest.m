@@ -29,7 +29,7 @@ System.nitrogen = false;
 System.carbon = false;
 
 % total number of time points 
-System.timepoints = 2^7;
+System.timepoints = 2^6;
 
 % number of timepoints for th first dt
 System.Ndt = 2^6;
@@ -58,10 +58,10 @@ System.magneticField  =1.2; % T.
 
 
 % deuterate non-solvents?
-System.deuterateProtein = true;
+System.deuterateProtein = false;
 
 % deuterate solvents?
-System.D2O = true;
+System.D2O = false;
 System.deuteriumFraction = 1;
 
 % Method.useInterlacedClusters = true;
@@ -92,7 +92,7 @@ Method.order = 2;
 % System.useThermalEnsemble = true;
 % maximum nucleus-nucleus coupling distance;
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = [10^2,10^2,10^2]; % Hz
+Method.cutoff.dipole = [10^3,10^3,10^3]; % Hz
 
 % verbosity option: true, false
 Method.verbose = true;
@@ -110,6 +110,8 @@ Method.partialSave = true;
 % [SignalMean, twotau, TM_powder,order_n_signals,Nuclei, uncertainty] = CluE(System,Method,Data);
 
 [SignalMean, twotau,~,Order_n_SignalMean] = CluE(System,Method,Data);
+Data.InputData = 'TEMPO_TIP4P_connect.pdb';
+SignalMean0 = CluE(System,Method,Data);
 
 
 %--------------------------------------------------------------------------
@@ -120,15 +122,18 @@ fontsize = 24;
 subplot(2,1,1)
 
 hold on
-
-plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','black');
+TM = getTM(twotau*1e6,abs(SignalMean))
+TM0  = getTM(twotau*1e6,abs(SignalMean0))
+2*(TM-TM0)/(TM+TM0)
+plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','red');
+plot(twotau*1e6,abs(SignalMean0),'-','linewidth',3,'color','blue');
 % plot(twotau*1e6,abs(Order_n_SignalMean{Method.order-1}),'-','linewidth',3,'color','red');
 % if max(abs(SignalMean(:) ) )>1
 %   set(gca,'yscale','log');
 % end
 % plot(twotau*1e6,imag(SignalMean),'-','linewidth',1.5,'color','red');
 % plot(twotau*1e6,real(SignalMean),'-','linewidth',1.5,'color','blue');
-if ~System.D2O, xlim([0,10]); end
+% if ~System.D2O, xlim([0,10]); end
 
 xlabel('2\tau (\mus)');
 ylabel('coherence');

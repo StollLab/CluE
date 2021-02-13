@@ -10,7 +10,7 @@ useHF_SzIz  = false; %  theory(3);
 % useHF_SzIxy = theory(4);
 useNucA     = theory(5);
 % useNucB     = theory(6);
-useNucCD    = false; % theory(7);
+useNucCD    = true; % theory(7);
 % useNucEF    = theory(8);
 useNQ       = false; %  theory(9);
 

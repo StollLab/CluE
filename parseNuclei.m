@@ -823,7 +823,8 @@ Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
 [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
-Nuclei.ZeemanStates = setRandomState(Nuclei);
+Nuclei.ZeemanStates = setRandomZeemanState(Nuclei);
+[Nuclei.RandomDenityMatrices,Nuclei.RandomSpinVector] = setRandomDensityMatrix(Nuclei);
 
 % Clean
 Nuclei.State = [];
@@ -967,7 +968,7 @@ end
 % Sets the initial bath state with a Boltzmann distribution.
 % Both output variables contain the same information, but are formated
 % differently.
-function ZeemanState = setRandomState(Nuclei)
+function ZeemanState = setRandomZeemanState(Nuclei)
 
 nStates = Nuclei.nStates; 
 maxnStates = max(nStates);
@@ -981,6 +982,40 @@ for iSpin = 1:Nuclei.number
 end
 end
 
+
+function [randDen,randSpin] = setRandomDensityMatrix(Nuclei)
+
+N = Nuclei.number;
+nStates = Nuclei.nStates; 
+maxnStates = max(nStates);
+maxMult = max(Nuclei.StateMultiplicity);
+randDen = zeros(maxMult,maxMult, maxnStates,N);
+randSpin = zeros(3, maxnStates,N);
+S = cell(4,maxMult);
+for ii=2:maxMult
+  spin_ = (maxMult-1)/2;
+  S{1,ii} = spinX(spin_);
+  S{2,ii} = spinY(spin_);
+  S{3,ii} = spinZ(spin_);
+end
+% Loop through all nuclei.
+for iSpin = 1:N
+  mult_ = Nuclei.StateMultiplicity(iSpin);
+  psi_ = rand(mult_,1,maxnStates)+rand(mult_,1,maxnStates)*1i;
+  
+  for iave =1:maxnStates
+      rho_ = psi_(:,:,iave)*psi_(:,:,iave)';
+      rho_ = rho_/trace(rho_);
+      randDen(1:mult_,1:mult_,iave,iSpin) = rho_;
+      
+      for ix = 1:3
+        randSpin(ix,iave,iSpin) = trace(rho_*S{ix,mult_});
+      end
+
+  end
+  
+end
+end
 % ========================================================================
 % New Function
 % ========================================================================

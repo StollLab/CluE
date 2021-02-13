@@ -59,9 +59,13 @@ for iSpin = 1:clusterSize
   Iy = (SpinOp(:,:,p) - SpinOp(:,:,m) )/2i;
   
   if useNZ
-    H_nuclear_Zeeman_Iz = tensors(3,3,iSpin+1,iSpin+1)*Iz;
+    H_nuclear_Zeeman = tensors(3,3,iSpin+1,iSpin+1)*Iz ...
+    + tensors(1,1,iSpin+1,iSpin+1)*Ix + tensors(2,2,iSpin+1,iSpin+1)*Iy;% ...
+    %+ tensors(2,1,iSpin+1,iSpin+1)*Ix + tensors(3,1,iSpin+1,iSpin+1)*Ix ...
+    %+ tensors(1,2,iSpin+1,iSpin+1)*Iy + tensors(3,2,iSpin+1,iSpin+1)*Iy ...
+    %+ tensors(1,3,iSpin+1,iSpin+1)*Iz + tensors(2,3,iSpin+1,iSpin+1)*Iz;
   else
-    H_nuclear_Zeeman_Iz = 0;
+    H_nuclear_Zeeman = 0;
   end
   
   % Calculate hyperfine Hamiltonian
@@ -107,7 +111,7 @@ for iSpin = 1:clusterSize
   
   
   % Assemble single-nucleus terms in nuclear Hamiltonian
-  Hnuc = Hnuc + H_nuclear_Zeeman_Iz + H_nuclear_quadrupole;
+  Hnuc = Hnuc + H_nuclear_Zeeman + H_nuclear_quadrupole;
   Hhf = Hhf + H_hyperfine_SzIz + H_hyperfine_SzIx + H_hyperfine_SzIy;
 
   

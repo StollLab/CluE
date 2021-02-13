@@ -35,7 +35,7 @@ useNucDD    = any(theory(5:8));
 
 % Electron Zeeman
 if useEZ
-  tensors(:,:,1,1) = constructElectronZeeman(magneticField,geff, muB, hbar);
+  tensors(3,3,1,1) = constructElectronZeeman(magneticField,geff, muB, hbar);
 end
 
 inucleus = 0;
@@ -44,7 +44,7 @@ for i_index_nucleus = Indices
   inucleus  = inucleus + 1;
   % Nuclear Zeeman
   if useNZ
-    tensors(:,:,1+inucleus,1+inucleus) = constructNuclearZeeman(Nuclei_g,i_index_nucleus,magneticField, muN, hbar);
+    tensors(3,3,1+inucleus,1+inucleus) = constructNuclearZeeman(Nuclei_g,i_index_nucleus,magneticField, muN, hbar);
   end
   
   % Hyperfine
@@ -77,13 +77,13 @@ end
 end
 
 function electronZeeman = constructElectronZeeman(magneticField,ge, muB, hbar)
-electronZeeman = ge*muB*magneticField*eye(3); % J.
+electronZeeman = ge*muB*magneticField; % J.
 electronZeeman = electronZeeman/(2*pi*hbar); % J -> Hz.
 end
 
 function NuclearZeeman = constructNuclearZeeman(Nuclei_g, i_index_nucleus, magneticField, muN, hbar)
 gn = Nuclei_g(i_index_nucleus);
-NuclearZeeman = -gn*muN*magneticField*eye(3); % J.
+NuclearZeeman = -gn*muN*magneticField; % J.
 NuclearZeeman = NuclearZeeman/(2*pi*hbar); % J -> Hz
 end
 

@@ -67,8 +67,8 @@ for iSpin = 1:clusterSize
   if useMeanField
     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,E)*I0;
     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,Z)*Iz;
-%     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)*SpinOp(:,:,p);
-%     Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)'*SpinOp(:,:,m);
+    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)*SpinOp(:,:,p);
+    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)'*SpinOp(:,:,m);
     Hmf = Hmf - MeanFieldCoefficients(iSpin,iSpin,SZ)*I0;
   end
   
@@ -90,14 +90,14 @@ for iSpin = 1:clusterSize
     if useMeanField
       
       Hmf0_ = MeanFieldCoefficients(jSpin,iSpin,Z)*Iz;
-%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)*SpinOp(:,:,p);
-%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)'*SpinOp(:,:,m);
+      Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)*SpinOp(:,:,p);
+      Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)'*SpinOp(:,:,m);
       
       [z_,p_,m_] = spinopidx(clusterSize,jSpin);
       
       Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,Z)*SpinOp(:,:,z_);
-%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)*SpinOp(:,:,p_);
-%       Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)'*SpinOp(:,:,m_);
+      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)*SpinOp(:,:,p_);
+      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)'*SpinOp(:,:,m_);
       
     end
     

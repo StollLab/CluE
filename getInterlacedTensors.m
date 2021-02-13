@@ -18,10 +18,10 @@ for jj = 1:length(thisCluster)
   for ii = 1:length(ClusterComplement)
     inucleus = ClusterComplement(ii);
     %  Get the magnetic coupling between the external and internal nuclei.
-    b = constructNuclearDipoleCoupling(Nuclei_g,Nuclei_Coordinates,jnucleus,inucleus, muN, mu0, hbar);
+    Hdd = constructNuclearDipoleCoupling(Nuclei_g,Nuclei_Coordinates,jnucleus,inucleus, muN, mu0, hbar);
     
     % Adjust the Zeeman term.
-    intTensors(3,3,1+jj,1+jj) = intTensors(3,3,1+jj,1+jj) + mI(ii)*b;
+    intTensors(:,:,1+jj,1+jj) = intTensors(:,:,1+jj,1+jj) + mI(ii)*Hdd;
 
   end
 end
@@ -59,7 +59,7 @@ end
 
 
 
-function b = constructNuclearDipoleCoupling(Nuclei_g,Nuclei_Coordinates,i_index_nucleus,j_index_nucleus, muN, mu0, hbar)
+function Hdd = constructNuclearDipoleCoupling(Nuclei_g,Nuclei_Coordinates,i_index_nucleus,j_index_nucleus, muN, mu0, hbar)
 
 gni = Nuclei_g(i_index_nucleus);
 gnj = Nuclei_g(j_index_nucleus);
@@ -69,7 +69,7 @@ nnt = n*n';
 r3 = norm(r)^3;
 Hdd = -mu0/(4*pi)*gni*gnj*muN^2/r3*(3*nnt - eye(3));
 Hdd = Hdd/(2*pi*hbar); % Hz.
-b = Hdd(3,3);
+
 end
 
 

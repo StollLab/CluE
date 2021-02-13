@@ -50,7 +50,7 @@ switch type
     R = 185*pm;
   case 'Kr'
     R = 202*pm;
-  case 'M'
+  case {'M','MW','LP'}
     R = 0;
   otherwise
     err= ['Could not find Van der Waals radius for ', type,'.'];

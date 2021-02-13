@@ -29,6 +29,7 @@ theory = Theory(Method_order,:);
 useMeanField = theory(10);
 useMultipleBathStates = Method_useMultipleBathStates & useMeanField;
 useInterlacedClusters = Method_useInterlacedClusters & useMeanField;
+RandomSpinVector = Nuclei.RandomSpinVector;
 
 methylFactor = 2*System.Methyl.include + 1;
 maxClusterSize = min(maxSize,methylFactor*Method_order);
@@ -105,6 +106,7 @@ SpinXiXjOps = Nuclei.SpinXiXjOperators;
 maxClusterSize = maxClusterSize/methylFactor;
 
 numberClusters = Nuclei.numberClusters(1:maxSuperclusterSize);
+nucleiList = 1:numberClusters(1);
 maxNumberClusters = max(numberClusters(1:maxSuperclusterSize));
 
 
@@ -131,7 +133,7 @@ lockRotors = System.Methyl.lockRotors;
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei.rotationalMatrix,timepoints^dimensionality,lockRotors,System.Methyl.include,maxSize);
+  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,lockRotors,maxSize);
 
 
 % Methyl Groups
@@ -246,7 +248,7 @@ for clusterSize = 1:Method_order
       ClusterComplement = SuperclusterUnion(  ~any(SuperclusterUnion==thisCluster',1)  );      
       
       [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory);
-      qtensors = Qtensors(:,:,thisCluster);
+      
       tensors0 = tensors;
       if useThermalEnsemble
         nStates(clusterSize) = max( 1, min(nStates0(clusterSize),prod(state_multiplicity(ClusterComplement))));
@@ -254,6 +256,11 @@ for clusterSize = 1:Method_order
         nStates(clusterSize) = max( 1, min(nStates0(clusterSize),prod(state_multiplicity(SuperclusterUnion))));
       end
       
+    elseif useMultipleBathStates
+      ClusterComplement = nucleiList(  ~any(nucleiList==thisCluster',1)  );
+      
+      [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,theory);
+      tensors0 = tensors;
     end
     
     H_alphaMF = 0;
@@ -322,6 +329,7 @@ for clusterSize = 1:Method_order
             densityMatrix(dm_index,dm_index) = 1;
             iState = randStateIndex(iave); % iState = floor(iave/dm_size)+1;
             
+           
           else
             densityMatrix = [];
             
@@ -333,8 +341,13 @@ for clusterSize = 1:Method_order
           
           % Adjust tensors for external fields.
           if ~isempty(ClusterComplement)%length(ClusterComplement) > length(thisCluster)
-            tensors = getInterlacedTensors(tensors0,zeroIndex, thisCluster,ClusterComplement,iState,...
-              Nuclei_g,state_multiplicity,Nuclei_Coordinates, muN, mu0, hbar);
+            if useInterlacedClusters(Method_order,clusterSize)
+              tensors = getInterlacedTensors(tensors0,zeroIndex, thisCluster,ClusterComplement,iState,...
+                Nuclei_g,state_multiplicity,Nuclei_Coordinates, muN, mu0, hbar);
+            else
+              tensors = getMeanMagneticFieldTensors(tensors,RandomSpinVector, thisCluster,ClusterComplement,iState,...
+                Nuclei_g,Nuclei_Coordinates, muN, mu0, hbar);
+            end
             %tensors = tensors0; % TEMPORARY
           else
             tensors = tensors0;
@@ -347,13 +360,27 @@ for clusterSize = 1:Method_order
             assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
             theory,zeroIndex,methyl_number);
           
+        elseif useMultipleBathStates
+          iState = iave;
+          tensors = getMeanMagneticFieldTensors(tensors,RandomSpinVector, thisCluster,ClusterComplement,iState,...
+                Nuclei_g,Nuclei_Coordinates, muN, mu0, hbar);
+          
+          [H_alpha,H_beta] = ...
+            assembleHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
+            theory,zeroIndex,methyl_number);
+          
+          if useThermalEnsemble
+            densityMatrix = [];
+          else
+            densityMatrix = getDensityMatrix(ZeemanStates(iave,thisCluster),state_multiplicity(thisCluster),thisCluster);
+          end
         else
           
           % Add mean field contribution from spins outside of the cluster.
-          if useMultipleBathStates
-            [H_alphaMF,H_betaMF] = assembleMeanFieldHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
-              theory,zeroIndex,methyl_number, MeanFieldCoefficients(:,:,:,iave), MeanFieldTotal(iave));
-          end
+%           if useMultipleBathStates
+%             [H_alphaMF,H_betaMF] = assembleMeanFieldHamiltonian_gpu(state_multiplicity(thisCluster),tensors,SpinOp,qtensors,SpinXiXjOp,...
+%               theory,zeroIndex,methyl_number, MeanFieldCoefficients(:,:,:,iave), MeanFieldTotal(iave));
+%           end
           
           if useThermalEnsemble
             densityMatrix = [];
