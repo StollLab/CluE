@@ -992,11 +992,11 @@ maxMult = max(Nuclei.StateMultiplicity);
 randDen = zeros(maxMult,maxMult, maxnStates,N);
 randSpin = zeros(3, maxnStates,N);
 S = cell(4,maxMult);
-for ii=2:maxMult
-  spin_ = (maxMult-1)/2;
-  S{1,ii} = spinX(spin_);
-  S{2,ii} = spinY(spin_);
-  S{3,ii} = spinZ(spin_);
+for iMult=2:maxMult
+  spin_ = (iMult-1)/2;
+  S{1,iMult} = spinX(spin_);
+  S{2,iMult} = spinY(spin_);
+  S{3,iMult} = spinZ(spin_);
 end
 % Loop through all nuclei.
 for iSpin = 1:N

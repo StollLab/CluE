@@ -22,10 +22,10 @@ System.spinCenter = 'TEMPO';
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system, [m]
-System.radius = 14e-10; % m;
+System.radius = 12e-10; % m;
 
 % Do not include nitrogen in the Hamiltonian.
-System.nitrogen = false;
+System.nitrogen = true;
 System.carbon = false;
 
 % total number of time points 
