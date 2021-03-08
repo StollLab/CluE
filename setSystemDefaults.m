@@ -361,6 +361,9 @@ end
 if ~isfield(System.Methyl,'include')
   System.Methyl.include = false;
 end
+if ~isfield(System.Methyl,'methylMethylCoupling')
+  System.Methyl.methylMethylCoupling = false;
+end
 if ~isfield(System.Methyl,'moment_of_inertia')
   System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
 end

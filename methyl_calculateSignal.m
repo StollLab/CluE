@@ -31,15 +31,16 @@ useMultipleBathStates = Method_useMultipleBathStates & useMeanField;
 useInterlacedClusters = Method_useInterlacedClusters & useMeanField;
 RandomSpinVector = Nuclei.RandomSpinVector;
 
-methylFactor = 2*System.Methyl.include + 1;
-maxClusterSize = min(maxSize,methylFactor*Method_order);
+% methylFactor = 2*System.Methyl.include + 1;
+maxSpinClusterSize = Nuclei.maxClusterSize;
+% maxClusterSize = Nuclei.maxClusterSize; %min(maxSize,methylFactor*Method_order);
 
 if Theory(Method_order,10)
   Method_extraOrder = Method.extraOrder;
   maxSuperclusterSize = Method_extraOrder;
 else
   Method_extraOrder = Method_order;
-  maxSuperclusterSize = maxClusterSize/methylFactor;
+  maxSuperclusterSize = Method_order;
 end
 if strcmp(Method.method,'HD-CCE')
   doHDCCE = true;
@@ -100,10 +101,8 @@ SpinXiXjOps = Nuclei.SpinXiXjOperators;
   Spin2Op5,Spin3Op5,Spin4Op5, Spin2Op6,Spin3Op6,Spin4Op6, ...
   SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
   SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6]...
-  = initializeSpinOps(maxClusterSize, Op, SpinXiXjOps);
+  = initializeSpinOps(maxSpinClusterSize, Op, SpinXiXjOps);
 
-
-maxClusterSize = maxClusterSize/methylFactor;
 
 numberClusters = Nuclei.numberClusters(1:maxSuperclusterSize);
 nucleiList = 1:numberClusters(1);
@@ -111,7 +110,7 @@ maxNumberClusters = max(numberClusters(1:maxSuperclusterSize));
 
 
 % CluserArray(iCluster,:,clusterSize) = nuclear indices.
-ClusterArray = zeros(maxNumberClusters,maxClusterSize,maxClusterSize);
+ClusterArray = zeros(maxNumberClusters,Method_order,Method_order);
  
 % Change data type of Clusters to a 3D array.
 for isize = 1:Method_extraOrder 
@@ -133,7 +132,7 @@ lockRotors = System.Methyl.lockRotors;
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,lockRotors,maxSize);
+  Nuclei.rotationalMatrix,timepoints^dimensionality,System.Methyl.include,lockRotors,System.Methyl.methylMethylCoupling,maxSize);
 
 
 % Methyl Groups
@@ -1100,7 +1099,7 @@ function [Coherences_1, SubclusterIndices_2, Coherences_2, ...
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei_rotationalMatrix,nt,includeMethyls,lockRotor,maxSize)
+  Nuclei_rotationalMatrix,nt,includeMethyls,lockRotor,Methyl_methylMethylCoupling,maxSize)
 
 % nt = timepoints^dimensionality;
 % includeMethyls = System.Methyl.include
@@ -1156,8 +1155,11 @@ for iclusterSize = 1:Method_order
       
       if includeMethyls && ~lockRotor
         rotationalMatrix_c2_m1 = Nuclei_rotationalMatrix{2,1};
-        rotationalMatrix_c2_m2 = Nuclei_rotationalMatrix{2,2};
-        
+        if Methyl_methylMethylCoupling
+          rotationalMatrix_c2_m2 = Nuclei_rotationalMatrix{2,2};
+        else
+          rotationalMatrix_c2_m2 = [];
+        end
       else
         rotationalMatrix_c2_m1 = [];
         rotationalMatrix_c2_m2 = [];

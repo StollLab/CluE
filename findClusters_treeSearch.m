@@ -24,6 +24,7 @@ if (inOrder < order) && (inOrder>=2)
   Adjacency = clusters2Adjacency(inClusters{2},N) | logical(Nuclei.Adjacency(:,:,1));
 else
   Adjacency = logical(Nuclei.Adjacency(:,:,adjacencyOrder));
+  AntiAdjacency = Nuclei.AntiAdjacency(:,:,adjacencyOrder);
 end
 
 % Initialize output array
@@ -81,6 +82,11 @@ for clusterSize = 2:order
     neighbornuclei = C1(neighbors);
     if isempty(neighbornuclei)
       continue
+    end
+    
+    % Remove forbidden clusters  
+    for ispin = cluster
+      neighbornuclei(AntiAdjacency(ispin, neighbornuclei))=[];
     end
     
     % Form expanded clusters that contain parent cluster

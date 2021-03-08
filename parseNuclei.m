@@ -10,8 +10,13 @@
 function [Nuclei, System]= parseNuclei(System,Method,pdbFileName)
 
 maxSize = 6;
-methylFactor = 2*System.Methyl.include + 1;
-maxClusterSize = min(maxSize,methylFactor*Method.order);
+if System.Methyl.methylMethylCoupling
+  methylFactor = 2*System.Methyl.include + 1;
+  maxClusterSize = min(maxSize,methylFactor*Method.order);
+else
+  maxClusterSize = min(maxSize,Method.order + 3);
+end
+Nuclei.maxClusterSize = maxClusterSize;
 
 % set values to unspecified fields
 System = setIsotopeDefaults(System);
@@ -37,7 +42,9 @@ if System.Methyl.include
   % generateRotationMatrices(spinMultiplicity,numberOfMethyls)
   Nuclei.rotationalMatrix{1,1} = -nuT/3*generateRotationMatrices(2^3,1);
   Nuclei.rotationalMatrix{2,1} = -nuT/3*generateRotationMatrices(2*2^3,1);
-  Nuclei.rotationalMatrix{2,2} = -nuT/3*generateRotationMatrices(2^3*2^3,2);
+  if System.Methyl.methylMethylCoupling
+    Nuclei.rotationalMatrix{2,2} = -nuT/3*generateRotationMatrices(2^3*2^3,2);
+  end
 %   
 %   Nuclei.rotationalMatrix{2,1} = -nuT/3*generateRotationMatrices(2,1);
 %   Nuclei.rotationalMatrix{4,1} = -nuT/3*generateRotationMatrices(4,1);
@@ -803,7 +810,7 @@ end
 Nuclei.maxSpin = max(Nuclei.Spin);
 
 Nuclei.Adjacency = getAdjacencyMatrix(Nuclei, Method);
-
+Nuclei.AntiAdjacency = getAntiAdjacencyMatrix(System, Nuclei, Method); % System.Methyl.methylMethylCoupling
 % Set the starting spin index and ending spin index.
 Nuclei.startSpin = max(1, floor(Method.startSpin));
 Nuclei.endSpin = min(Nuclei.number, floor(Method.endSpin));
