@@ -1,4 +1,4 @@
-function Adjacency = getAdjacencyMatrix(Nuclei,Method)
+function Adjacency = getAdjacencyMatrix(System, Nuclei,Method)
 
 pwstat = Nuclei.Statistics;
 
@@ -82,7 +82,10 @@ for isize = 1:Method.extraOrder
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_gRMSD;
         end
         
-        
+      case 'methyl only'
+        isMethyl = strcmp(Nuclei.Type,'CH3');
+        isCH3 = isMethyl + isMethyl' == 2;
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*isCH3;
     end
   end
 end

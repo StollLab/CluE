@@ -19,7 +19,7 @@ end
 Nuclei.maxClusterSize = maxClusterSize;
 
 % set values to unspecified fields
-System = setIsotopeDefaults(System);
+System = setIsotopeDefaults(System,Method);
 spinCenter = System.spinCenter;
 
 Nuclei.nStates = System.nStates; 
@@ -809,7 +809,7 @@ end
 % Get the highest spin value. 
 Nuclei.maxSpin = max(Nuclei.Spin);
 
-Nuclei.Adjacency = getAdjacencyMatrix(Nuclei, Method);
+Nuclei.Adjacency = getAdjacencyMatrix(System,Nuclei, Method);
 Nuclei.AntiAdjacency = getAntiAdjacencyMatrix(System, Nuclei, Method); % System.Methyl.methylMethylCoupling
 % Set the starting spin index and ending spin index.
 Nuclei.startSpin = max(1, floor(Method.startSpin));
@@ -1027,9 +1027,11 @@ end
 % New Function
 % ========================================================================
 
-function System = setIsotopeDefaults(System)
+function System = setIsotopeDefaults(System, Method)
+
+defaultValue = ~any(strcmp(Method.Criteria,'methyl only'));
 if ~isfield(System,'protium')
-  System.protium = true;
+  System.protium = defaultValue;
 end
 if ~isfield(System,'protiumFractionSolvent')
   System.protiumFractionSolvent = 1;
@@ -1038,7 +1040,7 @@ if ~isfield(System,'protiumFractionProtein')
   System.protiumFractionProtein = 1;
 end
 if ~isfield(System,'deuterium')
-  System.deuterium = true;
+  System.deuterium = defaultValue;
 end
 
 if isfield(System,'hydrogen')
@@ -1046,16 +1048,16 @@ if isfield(System,'hydrogen')
   System.deuterium = System.hydrogen;
 end
 if ~isfield(System,'carbon')
-  System.carbon = true;
+  System.carbon = defaultValue;
 end
 if ~isfield(System,'nitrogen')
-  System.nitrogen = true;
+  System.nitrogen = defaultValue;
 end
 if ~isfield(System,'oxygen')
   System.oxygen = false;
 end
 if ~isfield(System,'silicon')
-  System.silicon = true;
+  System.silicon = defaultValue;
 end
 if ~isfield(System,'allAtoms')
   System.allAtoms = false;
