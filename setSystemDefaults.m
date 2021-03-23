@@ -590,6 +590,10 @@ if ~isfield(System,'D2O')
   System.D2O = false;
 end
 
+if ~isfield(System,'spinHalfOnly')
+  System.spinHalfOnly = false;
+end
+
 if ~isfield(System,'deuterateProtein')
   System.deuterateProtein = false;
 end

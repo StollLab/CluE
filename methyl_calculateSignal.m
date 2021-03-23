@@ -47,6 +47,13 @@ if strcmp(Method.method,'HD-CCE')
 else
   doHDCCE = false;
 end
+
+if strcmp(Method.method,'OffsetCCE')
+  doOffsetCCE = true;
+else
+  doOffsetCCE = false;
+end
+
 % Convert variable to gpu compatible forms
 dimensionality = 1;
 if strcmp(System.experiment,'FID')
@@ -89,7 +96,7 @@ Atensors = Nuclei.Atensor;
 FermiContact = Nuclei.FermiContact;
 nStates0 =System.nStates;
 nStates =System.nStates;
-
+spinHalfOnly = System.spinHalfOnly;
 
 % Unpack spin operators.
 Op = Nuclei.SpinOperators;
@@ -200,8 +207,13 @@ for clusterSize = 1:Method_order
     end
     cyclicPermutation = thisCluster(cyclicPermutation);
     
-    % Check if all spin have the same S.
-    if ~all(state_multiplicity(thisCluster)==state_multiplicity(thisCluster(1)))
+    % Decide if the cluster should be skipped:
+    % check if all spin have the same I,
+    % and that if I >= 1 is enabled. 
+    skipCluster = (~all(state_multiplicity(thisCluster)==state_multiplicity(thisCluster(1)))) ...
+      || (spinHalfOnly && state_multiplicity(thisCluster(1)) > 2);
+    
+    if skipCluster
       switch clusterSize
         case 1
           Coherences_1(iCluster,:) = ones(size(Coherences_1(iCluster,:) ));
@@ -217,7 +229,7 @@ for clusterSize = 1:Method_order
           Coherences_6(iCluster,:) = ones(size(Coherences_6(iCluster,:) ));          
       end
       continue;
-    end
+    end 
     
     % Set subcluster indices.
     [SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
@@ -460,6 +472,14 @@ if doHDCCE
   AuxiliarySignal_3 = SubclusterIndices_2;
   AuxiliarySignal_4 = dimensionality;
   Signals = [];
+return
+end
+if doOffsetCCE
+[Signals, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4] ...
+  = doOffsetClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
+  SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,SubclusterIndices_5,SubclusterIndices_6,...
+  timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
+Signal = Signals(Method_order,:);
 return
 end
 [Signals, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4] ...

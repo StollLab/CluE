@@ -126,15 +126,9 @@ if System.nuclear_quadrupole
   % The Pure Quadrupole Resonance of the Deuteron in Ice. 
   % Journal of Magnetic Resonance (1969) 1975, 20 (3), 515–519. 
   % https://doi.org/10.1016/0022-2364(75)90008-6.
-  eta = 0.112*ones(1,Npdb*numberUnitCells);
-  e2qQh = 213.4e3*ones(1,Npdb*numberUnitCells); % Hz
+  %   eta = 0.112*ones(1,Npdb*numberUnitCells);
+  %   e2qQh = 213.4e3*ones(1,Npdb*numberUnitCells); % Hz
   
-  if System.nuclear_quadrupole_scale_e2qQh ~= 1
-    e2qQh = e2qQh.*System.nuclear_quadrupole_scale_e2qQh;
-  end
-  if System.nuclear_quadrupole_scale_eta ~= 1
-    eta = eta.*System.nuclear_quadrupole_scale_eta;
-  end
 end
 
 Initial_Electron_Coordinates = System.Electron.Coordinates;
@@ -482,7 +476,7 @@ for uc = 1:nCells
           e2qQh_ = 0.1945e6; % Hz
           xQ = [0,0,0];
         end
-        Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei);
+        Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei,System);
        
         %{
         if norm(zQ)==0
@@ -616,7 +610,7 @@ for uc = 1:nCells
               e2qQh_ = 3.5*1e6; % Hz
               eta_ = 0.68;
               
-              Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei);
+              Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei,System);
             end
             
           end

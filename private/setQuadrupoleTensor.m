@@ -1,4 +1,4 @@
-function Nuclei = setQuadrupoleTensor(e2qQh_,eta_,zQ,xQ,iNuc,Nuclei)
+function Nuclei = setQuadrupoleTensor(e2qQh,eta,zQ,xQ,iNuc,Nuclei,System)
 if norm(zQ)==0
   disp('Failed to set quadrupole tensor orientation.')
   return;
@@ -22,7 +22,11 @@ yQ = yQ/norm(yQ);
 R_Q2L = [xQ; yQ; zQ]; % rotation matrix from Q to lab frame
 
 I = Nuclei.Spin(iNuc);
+System.nuclear_quadrupole_scale_e2qQh;
 
+
+e2qQh_ = e2qQh*System.nuclear_quadrupole_scale_e2qQh;
+eta_ = eta*System.nuclear_quadrupole_scale_eta;
 Qtensor_Q = e2qQh_/4/I/(2*I-1)*diag([-1+eta_, -1-eta_, 2]);
 Qtensor_L = R_Q2L*Qtensor_Q*R_Q2L';
 

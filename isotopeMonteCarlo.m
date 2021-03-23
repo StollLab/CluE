@@ -62,7 +62,7 @@ saveCounter = 0;
 doReset = true;
 
 % Try to continue from canceled run.
-if isfile(savefile)
+if isfile(savefile) && ~(isfield(Data,'overwriteLevel') && Data.overwriteLevel ==2 )
   try
     load(savefile,'signals','progress','TM','N','twotau');
     disp('Save data loaded.');
