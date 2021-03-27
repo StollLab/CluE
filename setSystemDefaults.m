@@ -3,7 +3,7 @@
 % New Function
 % ========================================================================
 
-function [System,Method, Data] = setSystemDefaults(System,Method, Data)
+function [System,Method, Data, statistics] = setSystemDefaults(System,Method, Data)
 
 if ~isfield(Method, 'sparseMemory')
   Method.sparseMemory = false;
@@ -727,4 +727,11 @@ end
 if ~isfield(System,'HydrogenExchange')
   System.HydrogenExchange = 'OH';
 end  
+
+
+
+statistics.parameters.radius = System.radius;
+statistics.parameters.neighborCutoffCriteria = Method.Criteria;
+statistics.parameters.neighborCutoff = Method.cutoff;
+statistics.parameters.gridSize = System.gridSize;
 end

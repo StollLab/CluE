@@ -1,4 +1,4 @@
-function [signals,TM] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
+function [signals,TM,statistics] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
 
 if (dN < 1)
   error('The parameter dN >= 1.')
@@ -64,7 +64,7 @@ doReset = true;
 % Try to continue from canceled run.
 if isfile(savefile) && ~(isfield(Data,'overwriteLevel') && Data.overwriteLevel ==2 )
   try
-    load(savefile,'signals','progress','TM','N','twotau');
+    load(savefile,'signals','progress','TM','N','twotau','statistics');
     disp('Save data loaded.');
     
     doReset = false;
@@ -78,6 +78,7 @@ if doReset
   progress = false(1,2);
   signals = zeros(2*N,System.timepoints);
   TM = zeros(1,2*N);
+  statistics = cell(1,2*N);
 end
 
 % ENUM
@@ -112,7 +113,7 @@ if ~progress(INITIAL_TRIALS)
       fprintf('Setting Method.seed to %d.\n',Method.seed)
       
       fprintf('Running initial trial %d/%d.\n', ii,N);
-      [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+      [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
       
       saveCounter = saveCounter + 1;
       
@@ -164,7 +165,7 @@ if ~progress(CONVERGENCE_TRIALS)
         
         
         fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
-        [signals(ii,:),twotau,TM(ii)] = CluE(System,Method,Data);
+        [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
         
         saveCounter = saveCounter + 1;
         
