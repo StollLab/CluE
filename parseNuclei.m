@@ -35,7 +35,12 @@ for multiplicity = 2:4
   Nuclei.SpinOperators{multiplicity} = generateSpinOperators(S,maxClusterSize);
 %   rot = generateRotationMatrices(spinDim,numberMethyl)
 end
-
+if Method.allowHDcoupling % allowMixedSpins
+  [Nuclei.SpinOperators_HD,Nuclei.SpinXiXjOperators_HD,Nuclei.SpinXiXjOperators_DH] ...
+    = assembleMixedSpinOperator(Nuclei.SpinOperators{2}{1},Nuclei.SpinOperators{3}{1},true);
+  Nuclei.SpinOperators_DH = assembleMixedSpinOperator(Nuclei.SpinOperators{3}{1},Nuclei.SpinOperators{2}{1}, false);
+end
+  
 nuT = System.Methyl.tunnel_splitting;
 if System.Methyl.include
   % Nuclei.rotationalMatrix{clusterSize,numberOfMethyls}
@@ -294,7 +299,7 @@ for uc = 1:nCells
     else
 
       isDeuteriumTurnedProtium_ = ( strcmp(type,'D') && isSolvent(inucleus) && (rand() > System.deuteriumFraction) );
-      doParseAsH_ = (isProtium_ || isDeuteriumTurnedProtium_);
+      doParseAsH_ = (isProtium_ || isDeuteriumTurnedProtium_ || System.spinHalfOnly);
     end
     
     if  doParseAsH_
@@ -898,9 +903,13 @@ Z = abs(Z - [0;0;1]);
 X = abs(X - [1;0;0]);
 if (sum(X) + sum(Z)) > 1e-12
   disp(sum(X) + sum(Z));
-  error('Coordinates not aligned.');
+  warning('Coordinates not aligned.');
+  
+  if (sum(X) + sum(Z)) > 1e-9
+    disp(sum(X) + sum(Z));
+    error('Coordinates not aligned.');
+  end
 end
-
 end
 
 

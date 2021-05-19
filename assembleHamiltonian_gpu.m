@@ -86,7 +86,7 @@ for iSpin = 1:clusterSize
   % Calculate nuclear quadrupole Hamiltonian
   if useNQ && state_multiplicity(iSpin) > 2
     Q_ = Qtensors(:,:,iSpin);
-    [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin);
+    [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin,SpinXiXjOp);
     H_nuclear_quadrupole = ...
       Q_(1,1)*SpinXiXjOp(:,:,xx) + ...
       Q_(1,2)*SpinXiXjOp(:,:,xy) + ...
@@ -638,15 +638,18 @@ rz = IJ(6); lz = IJ(7);
 rr = IJ(8); ll = IJ(9);
 end
 
-function [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin)
+function [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin,SpinXiXjOp)
 
 % ENUM for spin-operator indices.
 XX_ = 1;  XY_ = 4;  XZ_ = 7;
 YX_ = 2;  YY_ = 5;  YZ_ = 8;
 ZX_ = 3;  ZY_ = 6;  ZZ_ = 9;
 
-off = (iSpin-1)*9;
-
+if size(SpinXiXjOp,3)==9
+  off = 0;
+else
+  off = (iSpin-1)*9;
+end
 xx = XX_ + off;
 xy = XY_ + off;
 xz = XZ_ + off;

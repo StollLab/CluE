@@ -12,8 +12,9 @@ Nuclei.maxSpin = max(Nuclei.Spin);
 Adjacency = true(Nuclei.number,Nuclei.number,Method.extraOrder);
 for isize = 1:Method.extraOrder
   Adjacency(:,:,isize) = Nuclei.valid'*Nuclei.valid > 0;
-  Adjacency(:,:,isize) = Adjacency(:,:,isize).*pwstat.Same_g;
- 
+  if ~Method.allowHDcoupling
+    Adjacency(:,:,isize) = Adjacency(:,:,isize).*pwstat.Same_g;
+  end
   % Loop over all criteria used to determine an edge.
   num_criteria = numel(Method.Criteria);
   for ii = 1:num_criteria

@@ -110,6 +110,18 @@ SpinXiXjOps = Nuclei.SpinXiXjOperators;
   SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6]...
   = initializeSpinOps(maxSpinClusterSize, Op, SpinXiXjOps);
 
+Method_allowHDcoupling = Method.allowHDcoupling;
+if Method_allowHDcoupling
+  SpinOperators_HD = Nuclei.SpinOperators_HD;
+  SpinOperators_DH = Nuclei.SpinOperators_DH;
+  SpinXiXjOperators_HD = Nuclei.SpinXiXjOperators_HD;
+  SpinXiXjOperators_DH = Nuclei.SpinXiXjOperators_DH;
+else
+  SpinOperators_HD = [];
+  SpinOperators_DH = [];
+  SpinXiXjOperators_HD = [];
+  SpinXiXjOperators_DH = [];
+end
 
 numberClusters = Nuclei.numberClusters(1:maxSuperclusterSize);
 nucleiList = 1:numberClusters(1);
@@ -210,8 +222,11 @@ for clusterSize = 1:Method_order
     % Decide if the cluster should be skipped:
     % check if all spin have the same I,
     % and that if I >= 1 is enabled. 
-    skipCluster = (~all(state_multiplicity(thisCluster)==state_multiplicity(thisCluster(1)))) ...
-      || (spinHalfOnly && state_multiplicity(thisCluster(1)) > 2);
+%     skipCluster = (~all(state_multiplicity(thisCluster)==state_multiplicity(thisCluster(1)))) ...
+      skipCluster =  (spinHalfOnly && state_multiplicity(thisCluster(1)) > 2);
+    if ~ Method_allowHDcoupling
+      skipCluster = skipCluster || (~all(state_multiplicity(thisCluster)==state_multiplicity(thisCluster(1))));
+    end
     
     if skipCluster
       switch clusterSize
@@ -241,10 +256,11 @@ for clusterSize = 1:Method_order
       SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11, SubclusterIndices_12);
     
     % Select the appropriate spin operator.
-    [SpinOp,SpinXiXjOp] = getSpinOps( thisClusterSize,Nuclei_Spin(Cluster(1)),...
+    [SpinOp,SpinXiXjOp] = getSpinOps( thisClusterSize,Nuclei_Spin(Cluster),...
       Spin2Op1,Spin3Op1,Spin4Op1, Spin2Op2,Spin3Op2,Spin4Op2, Spin2Op3,Spin3Op3,Spin4Op3, ...
       Spin2Op4,Spin3Op4,Spin4Op4, Spin2Op5,Spin3Op5,Spin4Op5, Spin2Op6,Spin3Op6,Spin4Op6, ...
-      SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6);
+      SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6, ...
+      SpinOperators_HD, SpinOperators_DH,SpinXiXjOperators_HD,SpinXiXjOperators_DH);
     
  
     
@@ -838,7 +854,7 @@ end
 % ========================================================================
 % Select the Spin Operator
 % ========================================================================
-function [SpinOp,SpinXiXjOp] = getSpinOps(thisClusterSize,Nuclei_Spin,...
+function [SpinOp,SpinXiXjOp] = getSpinOps(thisClusterSize,Nuclei_Spins,...
   Spin2Op1,Spin3Op1,Spin4Op1, ...
   Spin2Op2,Spin3Op2,Spin4Op2, ...
   Spin2Op3,Spin3Op3,Spin4Op3, ...
@@ -846,7 +862,21 @@ function [SpinOp,SpinXiXjOp] = getSpinOps(thisClusterSize,Nuclei_Spin,...
   Spin2Op5,Spin3Op5,Spin4Op5, ...
   Spin2Op6,Spin3Op6,Spin4Op6, ...
   SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
-  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6)
+  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6, ...
+  SpinOperators_HD, SpinOperators_DH,SpinXiXjOperators_HD,SpinXiXjOperators_DH)
+
+% "ENUM"
+HD_SPIN_OP = -1; DH_SPIN_OP = -2;
+
+if all(Nuclei_Spins == Nuclei_Spins(1))
+  Nuclei_Spin = Nuclei_Spins(1);
+elseif length(Nuclei_Spins)==2
+  if Nuclei_Spins(1)==1/2 && Nuclei_Spins(2)==1
+    Nuclei_Spin = HD_SPIN_OP;
+  elseif Nuclei_Spins(2)==1/2 && Nuclei_Spins(1)==1
+    Nuclei_Spin = DH_SPIN_OP;
+  end
+end
 
 switch thisClusterSize
   case 1
@@ -860,6 +890,8 @@ switch thisClusterSize
       case 3/2
         SpinOp = Spin4Op1;
         SpinXiXjOp = [];
+      otherwise
+        error('Cluster contains unrecognized spins.');
     end
     
   case 2
@@ -873,6 +905,14 @@ switch thisClusterSize
       case 3/2
         SpinOp = Spin4Op2;
         SpinXiXjOp = [];
+      case HD_SPIN_OP
+        SpinOp = SpinOperators_HD;
+        SpinXiXjOp = SpinXiXjOperators_HD;
+      case DH_SPIN_OP
+        SpinOp = SpinOperators_DH;
+        SpinXiXjOp = SpinXiXjOperators_DH;
+      otherwise
+        error('Cluster contains unrecognized spins.');
     end
     
   case 3
@@ -886,6 +926,8 @@ switch thisClusterSize
       case 3/2
         SpinOp = Spin4Op3;
         SpinXiXjOp = [];
+      otherwise
+        error('Cluster contains unrecognized spins.');
     end
     
   case 4
@@ -899,6 +941,8 @@ switch thisClusterSize
       case 3/2
         SpinOp = Spin4Op4;
         SpinXiXjOp = [];
+      otherwise
+        error('Cluster contains unrecognized spins.');
     end
     
   case 5
@@ -912,6 +956,8 @@ switch thisClusterSize
       case 3/2
         SpinOp = Spin4Op5;
         SpinXiXjOp = [];
+      otherwise
+        error('Cluster contains unrecognized spins.');
     end
     
   case 6
@@ -925,6 +971,8 @@ switch thisClusterSize
       case 3/2
         SpinOp = Spin4Op6;
         SpinXiXjOp = [];
+      otherwise
+        error('Cluster contains unrecognized spins.');
     end
     
   otherwise

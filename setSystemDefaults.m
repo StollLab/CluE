@@ -68,6 +68,9 @@ end
 if ~isfield(Method,'order')
   Method.order = 2;
 end
+if ~isfield(Method,'allowHDcoupling')
+  Method.allowHDcoupling = false;
+end
 if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
   Method.Criteria = {'dipole'};
 end
