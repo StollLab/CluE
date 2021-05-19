@@ -405,7 +405,7 @@ for iOri = 1:nOrientations
   Calculate_Signal{iOri} = true;
   
   % check if file alread exists
-  if isfile(temp_file) && ~(saveAll || Method.getContributions)
+  if Method.partialSave && isfile(temp_file) && ~(saveAll || Method.getContributions)
     try
       % load partial save
       load(temp_file,'signal','order_n','seed','statistics');
