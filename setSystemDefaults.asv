@@ -118,12 +118,12 @@ if numel(Method.cutoff.dipole) < Method.order
   Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
 end
 if numel(Method.cutoff.dipoleHalf) < Method.order
-  n_ = numel(Method.cutoff.dipoleHalf);
-  Method.cutoff.dipoleHalf(n_:Method.order) = Method.cutoff.dipoleHalf(n_);
+  n_ = numel(Method.cutoff.dipole);
+  Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
 end
-if numel(Method.cutoff.dipoleOne) < Method.order
-  n_ = numel(Method.cutoff.dipoleOne);
-  Method.cutoff.dipoleOne(n_:Method.order) = Method.cutoff.dipoleOne(n_);
+if numel(Method.cutoff.dipole) < Method.order
+  n_ = numel(Method.cutoff.dipole);
+  Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
 end
 if isfield(Method.cutoff, 'maxAmax') && numel(Method.cutoff.maxAmax) < Method.order
   n_ = numel(Method.cutoff.maxAmax);

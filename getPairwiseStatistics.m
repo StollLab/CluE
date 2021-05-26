@@ -55,6 +55,8 @@ pwstat.Cylindrical_Distance = vecnorm(pwstat.Coordinates(:,1:2),2,2);
 pwstat.theta = acos(pwstat.Coordinates(:,3)./pwstat.Distance);
 cosTheta2 = (pwstat.Coordinates(:,3)./pwstat.Distance).^2;
 
+pwstat.maxDistance = max(pwstat.Distance,pwstat.Distance');
+
 cos_phi= pwstat.Coordinates(:,1)./pwstat.Cylindrical_Distance;
 pwstat.phi = acos(cos_phi) + (1 - sign(pwstat.Coordinates(:,2)))*pi/2;
 

@@ -43,13 +43,13 @@ for isize = 1:Method.extraOrder
           end
           
       case 'dipoleHalf'
-        Min_dipole_ = Nuclei.Spin == 1/2;
+        Min_dipole_ = Nuclei.Spin ~= 1/2;
         Min_dipole_ = Min_dipole_ & Min_dipole_';
         if Ori_cutoffs
-          Min_dipole_ = ~Min_dipole_ | (Min_dipole_ & abs(pwstat.Nuclear_Dipole) >= Method.cutoff.dipoleHalf(isize));
+          Min_dipole_ = Min_dipole_ | abs(pwstat.Nuclear_Dipole) >= Method.cutoff.dipoleHalf(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         else
-          Min_dipole_ = ~Min_dipole_ | (Min_dipole_ & abs(pwstat.Nuclear_Dipole_perpendicular) >= Method.cutoff.dipoleHalf(isize));
+          Min_dipole_ = Min_dipole_ | abs(pwstat.Nuclear_Dipole_perpendicular) >= Method.cutoff.dipoleHalf(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         end
           
@@ -115,15 +115,6 @@ for isize = 1:Method.extraOrder
         isMethyl = strcmp(Nuclei.Type,'CH3');
         isCH3 = isMethyl + isMethyl' == 2;
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*isCH3;
-        
-        
-      case 'same g'
-        Adjacency(:,:,isize) = Adjacency(:,:,isize).*pwstat.Same_g;
-        
-      case 'spin 1/2 only'
-        Sele_ = Nuclei.Spin == 1/2;
-        Sele_ = Sele_ & Sele_';
-        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Sele_;
     end
   end
 end

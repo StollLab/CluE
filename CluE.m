@@ -766,14 +766,37 @@ end
 % Calculates signal for a set of orientations
 % ========================================================================
 function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] ...
-    = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta,isignal,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,iSignal_max)
+    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,isignal,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,iSignal_max)
      
-% grid point indices
-if System.newIsotopologuePerOrientation
-  Nuclei = newHydronIsotopologue(Nuclei,System);
-  if verbose
-    fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
-  end    
+  
+  % grid point indices
+  if System.newIsotopologuePerOrientation
+    Nuclei = newHydronIsotopologue(Nuclei,System);
+    if verbose
+      fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
+    end
+    % Get coupling statistics.
+%     Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
+%     if Method.Ori_cutoffs
+%       Nuclei.Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
+%       Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
+%       for clusterSize = 1:min(Method.order, numel(inClusters))
+%         % Combine arrays.
+%         C = [Clusters{clusterSize}; inClusters{clusterSize}];
+%         
+%         % Sort clusters
+%         C = sortrows(C);
+%         
+%         % Remove duplicates
+%         keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+%         Clusters{clusterSize} = C(keep,:);
+%       end
+      % Clusters = pruneClusters(Nuclei,Clusters,System);
+%     else
+      Clusters = inClusters;
+%     end
+else
+  Clusters = inClusters;
 end
 igrid = SignalsToCalculate(isignal);
 
@@ -922,7 +945,7 @@ if Method.Ori_cutoffs
   
   Statistics = getPairwiseStatistics(System, Nuclei);
   Nuclei.Statistics = Statistics;
-  Adjacency = getAdjacencyMatrix(Nuclei,Method);
+  Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
   Nuclei.Adjacency = Adjacency;
   
   Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,Method.extraOrder,{});
