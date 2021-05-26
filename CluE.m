@@ -375,6 +375,7 @@ Signals{nOrientations} = [];
 TM(nOrientations) = 0;
 AuxiliarySignal{nOrientations} = [];
 Calculate_Signal{nOrientations} = true;
+Ori_Clusters = cell(nOrientations,1);
 
 % update progress
 Progress.Order_n_Mean = 'pending';
@@ -408,8 +409,11 @@ for iOri = 1:nOrientations
   if Method.partialSave && isfile(temp_file) && ~(saveAll || Method.getContributions)
     try
       % load partial save
-      load(temp_file,'signal','order_n','seed','statistics');
-      
+      if Method.Ori_cutoffs
+        load(temp_file,'signal','order_n','seed','statistics','iOri_Clusters');
+      else
+        load(temp_file,'signal','order_n','seed','statistics');
+      end
       % check progress
       if seed ~= Method.seed %&& progress_powder
         error('RNG seeds do not match.  Loaded data may be inconsistant.')
@@ -429,6 +433,9 @@ for iOri = 1:nOrientations
         Signals{iOri} = signal;
         Order_n_Signals{iOri} = order_n;
         Statistics{iOri} = statistics;
+        if Method.Ori_cutoffs
+          Ori_Clusters{iOri} = iOri_Clusters;
+        end
       end
       
         
@@ -448,7 +455,6 @@ Temp_Order_n_Signals{numberOfSignals+1} = [];
 
 
 graphs = cell(numberOfSignals,1);
-Ori_Clusters = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing;
 
@@ -457,7 +463,7 @@ if parallelComputing
   
   parfor iOri = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri},Ori_Clusters{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
       iOri,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,nOrientations);
     
@@ -834,6 +840,9 @@ if Method.partialSave
   parsavefile.progress_powder = true;
   parsavefile.seed = Method.seed;
   parsavefile.statistics = Statistics_isignal;
+  if Method.Ori_cutoffs
+    parsavefile.iOri_Clusters = iOri_Clusters;
+  end
 end
 
 end
