@@ -105,7 +105,10 @@ if ~isfield(System,'radius_nonSpinHalf')
 end
 if ~isfield(Method.cutoff,'radius_nonSpinHalf') 
   Method.cutoff.radius_nonSpinHalf = System.radius_nonSpinHalf;
+else
+  System.radius_nonSpinHalf = Method.cutoff.radius_nonSpinHalf;
 end
+
 if ~isfield(Method,'lock_bAmax')
   Method.lock_bAmax = false;
 end
@@ -752,6 +755,10 @@ if ~isfield(System,'newIsotopologuePerOrientation')
     System.newIsotopologuePerOrientation = true;
   end
 end
+if ~isfield(System,'doPruneNuclei')
+  System.doPruneNuclei = false;
+end
+
 if ~isfield(System,'HydrogenExchange')
   System.HydrogenExchange = 'OH';
 end  

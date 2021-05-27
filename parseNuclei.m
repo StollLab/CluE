@@ -300,6 +300,7 @@ for uc = 1:nCells
 
       isDeuteriumTurnedProtium_ = ( strcmp(type,'D') && isSolvent(inucleus) && (rand() > System.deuteriumFraction) );
       doParseAsH_ = (isProtium_ || isDeuteriumTurnedProtium_ || System.spinHalfOnly);
+      
     end
     
     if  doParseAsH_
@@ -702,6 +703,7 @@ catch
   return
 end 
 
+
 % Rotate coordinates if requested by user via System.X/Y/Z
 %-------------------------------------------------------------------------------
 containsXYZ = [isfield(System,'X') isfield(System,'Y') isfield(System,'Z')];
@@ -773,17 +775,73 @@ end
 
 
 % Clear excess entries.
+
+Nuclei.isSolvent(Nuclei.number+1:end) = [];
 Nuclei.quadrupole2lab(:,:,Nuclei.number+1:end) = [];
 Nuclei.Qtensor(:,:,Nuclei.number+1:end) = [];
 Nuclei.quadrupoleXaxis(Nuclei.number+1:end,:) = [];
 Nuclei.quadrupoleYaxis(Nuclei.number+1:end,:) = [];
 Nuclei.quadrupoleZaxis(Nuclei.number+1:end,:) = [];
-
 Nuclei.hyperfine2lab(:,:,Nuclei.number+1:end) = [];
 Nuclei.Atensor(:,:,Nuclei.number+1:end) = [];
-Nuclei.FermiContact(Nuclei.number+1:end,:) = [];
-Nuclei.Azz(Nuclei.number+1:end,:) = [];
+Nuclei.FermiContact(Nuclei.number+1:end) = [];
+Nuclei.Azz(Nuclei.number+1:end) = [];
 
+
+
+if System.doPruneNuclei
+  if System.newIsotopologuePerOrientation
+    Nuclei = newHydronIsotopologue(Nuclei,System);
+    System.newIsotopologuePerOrientation = false;
+  end
+  keep = Nuclei.Spin == 1/2 | vecnorm(Nuclei.Coordinates') <= Method.cutoff.radius_nonSpinHalf(1);
+
+  
+
+  oldIndex = Nuclei.Index;
+  newIndex = oldIndex;
+  cumsum_keep = cumsum(keep);
+  newIndex(keep)  = cumsum_keep(keep);
+  newIndex(~keep) = 0;
+  newIndex(end:Npdb)=0;
+  Nuclei.Index = 1:sum(keep);
+  Nuclei.Type = {Nuclei.Type{keep}};
+  Nuclei.Element = {Nuclei.Element{keep}};
+  for iNuc = 1:Nuclei.number
+      Nuclei.Connected{iNuc} = newIndex(Nuclei.Connected{iNuc});
+  end
+  Nuclei.Connected = {Nuclei.Connected{keep}};
+  
+  Nuclei.Spin = Nuclei.Spin(keep); % hbar
+  Nuclei.StateMultiplicity = Nuclei.StateMultiplicity(keep);
+  Nuclei.Nuclear_g = Nuclei.Nuclear_g(keep);
+  Nuclei.Coordinates = Nuclei.Coordinates(keep,:);
+  Nuclei.PDBCoordinates = Nuclei.PDBCoordinates(keep,:);
+  Nuclei.MoleculeID = Nuclei.MoleculeID(keep);
+  Nuclei.Exchangeable = Nuclei.Exchangeable(keep);
+  Nuclei.NumberStates = Nuclei.NumberStates(keep);
+  Nuclei.valid = Nuclei.valid(keep);
+  Nuclei.isWater = Nuclei.isWater(keep);
+  Nuclei.Abundance = Nuclei.Abundance(keep);
+  
+  Nuclei.isSolvent = Nuclei.isSolvent(keep);
+  Nuclei.quadrupole2lab = Nuclei.quadrupole2lab(:,:,keep);
+  Nuclei.Qtensor = Nuclei.Qtensor(:,:,keep);
+  Nuclei.quadrupoleXaxis = Nuclei.quadrupoleXaxis(keep,:);
+  Nuclei.quadrupoleYaxis = Nuclei.quadrupoleYaxis(keep,:);
+  Nuclei.quadrupoleZaxis = Nuclei.quadrupoleZaxis(keep,:);
+  Nuclei.hyperfine2lab = Nuclei.hyperfine2lab(:,:,keep);
+  Nuclei.Atensor = Nuclei.Atensor(:,:,keep);
+  Nuclei.FermiContact = Nuclei.FermiContact(keep);
+  Nuclei.Azz = Nuclei.Azz(keep);
+  % get number of nuclei
+  try
+    Nuclei.number = uint32(size(Nuclei.Index,2));
+  catch
+    warning('No nuclear spins remaining after pruning.')
+    return
+  end
+end
 
 
 % Get coupling statistics.

@@ -34,6 +34,17 @@ if ~isempty(options.seed)
   fprintf('Using rng seed to options.seed = %d.\n',options.seed)
   rng(options.seed);
 end
+if ~isfield(options,'parallelComputing')
+  options.parallelComputing = false;
+end
+if isfield(Method,'parallelComputing') && Method.parallelComputing && options.parallelComputing
+  error('Method.parallelComputing & options.parallelComputing cannot both be true.')
+end
+if options.parallelComputing
+  delete(gcp('nocreate'));
+  numCores = feature('numcores');
+  pool = parpool(numCores);
+end
 
 % Set RNG to ensure that repeats on the same initial conditions
 % give identical results. 
@@ -101,30 +112,64 @@ if ~progress(INITIAL_TRIALS)
     iiStart = N + 1;
   end
   
-  for ii= iiStart:N
-    
-    % Skip loaded trials.
-    if signals(ii,1)==0
+  rng(nextSeed(1));
+  Method.seed = nextSeed(1);
+  nextSeed = randi(iMax,1,N);
+  indices = iiStart:N;
+  N_ = length(indices);
   
-      rng(nextSeed);
-      Method.seed = nextSeed;
-      nextSeed = randi(iMax);
-      
-      fprintf('Setting Method.seed to %d.\n',Method.seed)
-      
-      fprintf('Running initial trial %d/%d.\n', ii,N);
-      [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
-      
-      saveCounter = saveCounter + 1;
-      
-      % Save in case run is canceled.
-      if saveCounter >= saveEveryN
-        saveCounter = 0;
-        save(savefile);
+  if options.parallelComputing
+    % Skip loaded trials.
+    if ~all(signals(indices,1)==1)
+      temp_signals = signals(indices,:);
+      temp_twotau = -1*ones(size(signals(indices,:)));
+      temp_TM = TM(indices);
+      temp_statistics = {statistics{indices}};
+      parfor ii=1:N_
+        
+        Method_ = Method;
+        Method_.seed = nextSeed(ii);
+        
+        fprintf('Setting Method.seed to %d.\n',Method_.seed)
+        
+        fprintf('Running initial trial %d/%d.\n', indices(ii),N);
+        [temp_signals(ii,:),temp_twotau(ii,:),temp_TM(ii),~,~,temp_statistics{ii}] = CluE(System,Method_,Data);
+        
       end
       
+      signals(indices,:) = temp_signals;
+      TM(indices) = temp_TM;
+      for ii=1:dN
+        statistics{indices(ii)} = temp_statistics{ii};
+        if temp_twotau(ii,1)~= -1
+          twotau = temp_twotau(ii,:);
+        end
+      end
     end
-    
+  else
+    for ind_ = 1:N_
+      ii = indices(ind_);
+      
+      % Skip loaded trials.
+      if signals(ii,1)==0
+        
+        Method.seed = nextSeed(ind_);
+        
+        fprintf('Setting Method.seed to %d.\n',Method.seed)
+        
+        fprintf('Running initial trial %d/%d.\n', ii,N);
+        [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
+        
+        saveCounter = saveCounter + 1;
+        
+        % Save in case run is canceled.
+        if saveCounter >= saveEveryN
+          saveCounter = 0;
+          save(savefile,'-v7.3');
+        end
+        
+      end
+    end
     % Find the overall mean signal, and TM.
     v3 = mean(signals(1:ii,:),1);
     TM(ii) = getTM(twotau,v3);
@@ -138,7 +183,7 @@ if ~progress(INITIAL_TRIALS)
   progress(INITIAL_TRIALS) = true;
   
   % Save.
-  save(savefile);
+  save(savefile,'-v7.3');
 end
 
 saveCounter = 0;
@@ -152,38 +197,72 @@ if ~progress(CONVERGENCE_TRIALS)
   % Run convergence loop.
   while ~isConverged
     
+    
+    rng(nextSeed(1));
+    Method.seed = nextSeed(1);
+    nextSeed = randi(iMax,1,dN);
+    
     % Loop over new trials.
-    for ii=N+1:(N+dN)
-      
-      % Skip loaded trials
-      if signals(ii,1)==0
-        
-        rng(nextSeed);
-        Method.seed = nextSeed;
-        nextSeed = randi(iMax);
-        fprintf('Setting Method.seed to %d.\n',Method.seed)
+    indices = N+1:(N+dN);
+    
+    if options.parallelComputing
+      % Skip loaded trials.
+      if ~all(signals(indices,1)==1)
         
         
-        fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
-        [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
+        temp_signals = signals(indices,:);
+        temp_TM = TM(indices);
+        temp_statistics = {statistics{indices}};
+        parfor ii=1:dN
+          
+          Method_ = Method;
+          Method_.seed = nextSeed(ii);
+          
+          fprintf('Setting Method.seed to %d.\n',Method_.seed)
+          
+          
+          fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
+          [temp_signals(ii,:),~,temp_TM(ii),~,~,temp_statistics{ii}] = CluE(System,Method_,Data);
+          
+        end
         
-        saveCounter = saveCounter + 1;
-        
-        % Save in case run is canceled.
-        if saveCounter >= saveEveryN
-          saveCounter = 0;
-          save(savefile);
+        signals(indices,:) = temp_signals;
+        TM(indices) = temp_TM;
+        for ii=1:dN
+          statistics{indices(ii)} = temp_statistics{ii};
         end
       end
-      
-      % Find the overall mean signal, and TM.
-      v3 = mean(signals(1:ii,:),1);
-      TM(ii) = getTM(twotau,v3);
-      
-      fprintf('TM  = %d us.\n',TM(ii)*1e6);
-      
+    else
+      for ind_ = 1:dN
+        ii = indices(ind_);
+        
+        % Skip loaded trials
+        if signals(ii,1)==0
+          
+          Method.seed = nextSeed(ind_);
+          
+          fprintf('Setting Method.seed to %d.\n',Method.seed)
+          
+          
+          fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
+          [signals(ii,:),~,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
+          
+          saveCounter = saveCounter + 1;
+          
+          % Save in case run is canceled.
+          if saveCounter >= saveEveryN
+            saveCounter = 0;
+            save(savefile,'-v7.3');
+          end
+        end
+      end
     end
+    % Find the overall mean signal, and TM.
+    v3 = mean(signals(1:ii,:),1);
+    TM(ii) = getTM(twotau,v3);
     
+    fprintf('TM  = %d us.\n',TM(ii)*1e6);
+    save(savefile,'-v7.3');
     % Partition trials into two qual parts.
     N_ = (N+dN);
     
@@ -209,7 +288,7 @@ if ~progress(CONVERGENCE_TRIALS)
       
       % Check that another round will not exceed limit..
       if N + 2*dN > maxN
-        save(savefile);
+        save(savefile,'-v7.3');
         return;
       end
       
@@ -219,12 +298,17 @@ if ~progress(CONVERGENCE_TRIALS)
       % Initialize memory.
       signals(N+dN,:) = 0;
       TM(N+dN) = 0;
+      statistics{N+dN} = {};
       
       conNum = conNum + 1;
     end
     
     % Save.
-    save(savefile);
+    save(savefile,'-v7.3');
   end
+end
+
+if options.parallelComputing
+  delete(pool)
 end
 end
