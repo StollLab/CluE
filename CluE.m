@@ -528,8 +528,12 @@ if ~isempty(pool)
   delete(pool);
 end
 
-statistics.Statistics = Statistics;
-statistics.uncertainty = uncertainty; 
+if System.doPruneNuclei
+  statistics = Nuclei.Isotopologue;
+else
+  statistics.Statistics = Statistics;
+  statistics.uncertainty = uncertainty;
+end
 Nuclei.graphs = graphs;
 % ========================================================================
 % End of main loop
