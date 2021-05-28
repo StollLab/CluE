@@ -320,7 +320,7 @@ for uc = 1:nCells
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.Abundance = 1;
-      
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       % CH3_A =========================================================
     elseif strcmp(type,'CH3')
       iNuc = iNuc +1;
@@ -449,6 +449,7 @@ for uc = 1:nCells
       Nuclei.valid(iNuc)= true;
       Nuclei.isWater(iNuc) = isWater(inucleus);
       Nuclei.Abundance(iNuc) = 1;
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       
       
       % Set up quadrupole tensors for water deuterons
@@ -533,6 +534,7 @@ for uc = 1:nCells
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.isWater(iNuc) = isWater(inucleus);
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       
       Nuclei.Abundance(iNuc) = 0.0107;
       
@@ -556,6 +558,7 @@ for uc = 1:nCells
       Nuclei.NumberStates(iNuc) = int8(3);
       Nuclei.valid(iNuc)= true;
       Nuclei.isWater(iNuc) = isWater(inucleus);
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       Nuclei.Abundance(iNuc) = 0.99632;
       
       
@@ -643,6 +646,7 @@ for uc = 1:nCells
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.isWater(iNuc) = isWater(inucleus);
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       
       Nuclei.Abundance(iNuc) = 0.046832;
       
@@ -667,6 +671,7 @@ for uc = 1:nCells
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.isWater(iNuc) = isWater(inucleus);
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       Nuclei.Abundance(iNuc) = 1; 
       
     elseif System.allAtoms
@@ -685,6 +690,7 @@ for uc = 1:nCells
       Nuclei.NumberStates(iNuc) = int8(2);
       Nuclei.valid(iNuc)= true;
       Nuclei.isWater(iNuc) = isWater(inucleus);
+      Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
       Nuclei.Abundance(iNuc) = 1; 
     end
     
