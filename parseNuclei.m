@@ -763,7 +763,7 @@ if System.randomOrientation
   
   % Generate random Euler angles.
   alpha_ = rand()*2*pi;
-  beta_ = rand()*2*pi;
+  beta_ = acos( 2*rand(1) - 1);
   gamma_ = rand()*2*pi;
   
   % Get rotation matrix.
