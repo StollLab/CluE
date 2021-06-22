@@ -564,7 +564,7 @@ for uc = 1:nCells
       
       switch spinCenter
         case 'TEMPO'
-          if norm(Nuclei.Coordinates((iNuc))) < System.angstrom
+          if norm(NuclearCoordinates) < System.angstrom
             % Aurich, H. G.; Hahn, K.; Stork, K.; Weiss, W. Aminyloxide
             % (nitroxide)—XXIV.
             %Tetrahedron 1977, 33 (9), 969–975. https://doi.org/10.1016/0040-4020(77)80210-X.            

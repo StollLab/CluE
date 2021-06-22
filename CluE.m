@@ -1231,8 +1231,9 @@ if ~isempty(OutputData)
             experiment_time = sim_.experiment_time;
             TM_powder = sim_.TM_powder;
             % uncertainty = sim_.uncertainty;
-            statistics = sim_.statistics;
-            
+            if isfield(sim_,'statistics')
+              statistics = sim_.statistics;
+            end
             
             if isfield(sim_,'Order_n_SignalMean')
               Order_n_SignalMean = sim_.Order_n_SignalMean;
