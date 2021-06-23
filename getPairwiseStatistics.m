@@ -125,8 +125,8 @@ pwstat.GaussianRMSD = getGaussianRMSD(modDepth,pwstat.Frequency_Pair,TM);
 %   pwstat.DistanceMatrix(pwstat.DistanceMatrix == 0) = nan;
   
   if System.Methyl.include
-    
-    for ispin  = pwstat.Methyl_Data.ID'
+    methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0)';
+    for ispin  = methylList_
       hydrons_ = ispin + [1 ,2, 3];
       
       pwstat.Nuclear_Dipole(:,ispin) = maxabs(pwstat.Nuclear_Dipole(:,hydrons_)')';
