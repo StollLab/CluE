@@ -1,9 +1,8 @@
 % Clusters = Clusters(cluster index , 1:size ,order)
 % Clusters(cluster index , size > order ,order) = 0.
 
-function [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,...
-  AuxiliarySignal_4,Signals] ... 
-       = calculateSignal_gpu(System, Method, Nuclei,Clusters)
+function [Signal, AuxiliarySignals, Signals] ... 
+       = calculateSignal(System, Method, Nuclei,Clusters)
 
 % Extract physical constants.     
 ge=System.ge; geff=System.gMatrix(3,3); 
@@ -25,31 +24,20 @@ doTR = false;
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; HAHN_TR = 6;
 
-Method_order = Method.order;
-Method_useMultipleBathStates = Method.useMultipleBathStates;
-Method_useInterlacedClusters = Method.useInterlacedClusters;
-maxSize = 6;    
-
 % Define the theory to use at the given cluster size.
 Theory = System.Theory;
-theory = Theory(Method_order,:);
-
-useMeanField = theory(10);
-useMultipleBathStates = Method_useMultipleBathStates & useMeanField;
-useInterlacedClusters = Method_useInterlacedClusters & useMeanField;
-RandomSpinVector = Nuclei.RandomSpinVector;
+theory = Theory(Method.order,:);
 
 maxSpinClusterSize = Nuclei.maxClusterSize;
 
-methylTunnelingSplitting = Nuclei.methylTunnelingSplitting;
-
-if Theory(Method_order,10)
+if Theory(Method.order,10)
   Method_extraOrder = Method.extraOrder;
   maxSuperclusterSize = Method_extraOrder;
 else
-  Method_extraOrder = Method_order;
-  maxSuperclusterSize = Method_order;
+  Method_extraOrder = Method.order;
+  maxSuperclusterSize = Method.order;
 end
+
 if strcmp(Method.method,'HD-CCE')
   doHDCCE = true;
 else
@@ -93,61 +81,23 @@ elseif strcmp(System.experiment,'Hahn-TR')
 else
   error('The experiment ''%s'' is not supported.',System.experiment);
 end
-Nuclei_Coordinates = Nuclei.Coordinates;
-Nuclei_Abundance = Nuclei.Abundance;
-Nuclei_Spin = Nuclei.Spin;
-Nuclei_g = Nuclei.Nuclear_g;
-NumberStates = Nuclei.NumberStates;
-state_multiplicity = Nuclei.StateMultiplicity;
-ZeemanStates = Nuclei.ZeemanStates;
-MeanFieldCoefficients = Nuclei.MeanFieldCoefficients;
-MeanFieldTotal = Nuclei.MeanFieldTotal;
 
-max_basis = max(NumberStates);
-useThermalEnsemble = System.useThermalEnsemble;
-States = zeros(max_basis,Nuclei.number);
+
+
 betaT = 2*pi*System.hbar /System.kT; % 1/Hz.
-Qtensors = Nuclei.Qtensor;
-Atensors = Nuclei.Atensor;
 
-
-FermiContact = Nuclei.FermiContact;
-nStates0 =System.nStates;
-nStates =System.nStates;
-spinHalfOnly = System.spinHalfOnly;
 
 % Unpack spin operators.
 Op = Nuclei.SpinOperators;
 SpinXiXjOps = Nuclei.SpinXiXjOperators;
 
-% Unpack spin operators to individual variables.
-[Spin2Op1,Spin3Op1,Spin4Op1,Spin2Op2,Spin3Op2,Spin4Op2, ...
-  Spin2Op3,Spin3Op3,Spin4Op3, Spin2Op4,Spin3Op4,Spin4Op4, ...
-  Spin2Op5,Spin3Op5,Spin4Op5, Spin2Op6,Spin3Op6,Spin4Op6, ...
-  SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
-  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6]...
-  = initializeSpinOps(maxSpinClusterSize, Op, SpinXiXjOps);
-
-Method_allowHDcoupling = Method.allowHDcoupling;
-if Method_allowHDcoupling
-  SpinOperators_HD = Nuclei.SpinOperators_HD;
-  SpinOperators_DH = Nuclei.SpinOperators_DH;
-  SpinXiXjOperators_HD = Nuclei.SpinXiXjOperators_HD;
-  SpinXiXjOperators_DH = Nuclei.SpinXiXjOperators_DH;
-else
-  SpinOperators_HD = [];
-  SpinOperators_DH = [];
-  SpinXiXjOperators_HD = [];
-  SpinXiXjOperators_DH = [];
-end
 
 numberClusters = Nuclei.numberClusters(1:maxSuperclusterSize);
-nucleiList = 1:numberClusters(1);
 maxNumberClusters = max(numberClusters(1:maxSuperclusterSize));
 
 
 % CluserArray(iCluster,:,clusterSize) = nuclear indices.
-ClusterArray = zeros(maxNumberClusters,Method_order,Method_order);
+ClusterArray = zeros(maxNumberClusters,Method.order,Method.order);
  
 % Change data type of Clusters to a 3D array.
 for isize = 1:Method_extraOrder 
@@ -159,46 +109,20 @@ end
 lockRotors = System.Methyl.lockRotors;
 methylMethod1 = System.Methyl.method==0;
 % Initialize coherences and subcluster indices.
-[Coherences_1, SubclusterIndices_2, Coherences_2, ...
-  SubclusterIndices_3, Coherences_3, SubclusterIndices_4, Coherences_4, ...
-  SubclusterIndices_5, Coherences_5, SubclusterIndices_6, Coherences_6, ...
-  SubclusterIndices_7, Coherences_7, SubclusterIndices_8, Coherences_8, ...
-  SubclusterIndices_9, Coherences_9, SubclusterIndices_10, Coherences_10, ...
-  SubclusterIndices_11, Coherences_11, SubclusterIndices_12, Coherences_12,...
+[Coherences, SubclusterIndices, ...
   rotationalMatrix_c1_m1, rotationalMatrix_d1_m1, ...
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
-  = initializeCoherences(Method_order, numberClusters, ...
+  = initializeCoherences(Method, numberClusters, ...
   Nuclei.rotationalMatrix,timepoints^dimensionality,methylMethod1,...
-  lockRotors,System.Methyl.methylMethylCoupling,maxSize);
+  lockRotors,System.Methyl.methylMethylCoupling);
 
 
 % Methyl Groups
 isMethylCarbon = strcmp(Nuclei.Type,'CH3');
 isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
 
-%-------------------------------------------------------------------------------
-% gpu code
-%
-% At this point all varables should be in a gpu compatible form,
-% and can be trasnfered over to the gpu. 
-%
-% if useGPU
-%   dataOnGPU = trasferDataToGPU();
-% end
-%
-% gpu code
-
-% ISSUE NOTE: GPU not yet implemented.
-dataOnGPU = false;
-if ~dataOnGPU
-  warning(['The CluE GPU feature is not yet implemented.  ',...
-    'CluE will run on the CPU.']);
-end
-%-------------------------------------------------------------------------------
-
-
-for clusterSize = 1:Method_order
+for clusterSize = 1:Method.order
  
   % Find coherences
   numClusters = numberClusters(clusterSize);
@@ -206,14 +130,19 @@ for clusterSize = 1:Method_order
   for iCluster = numClusters:-1:1
     Cluster = ClusterArray(iCluster,1:clusterSize,clusterSize); 
    
-    if any(isMethylHydron(Cluster) )
-      error(['Error in calculateSignal_gpu(): ',...
+    if System.Methyl.method ~= 2 && any(isMethylHydron(Cluster) )
+      error(['Error in calculateSignal(): ',...
         'A methyl hydron is misplaced.']);
     end
+    if System.Methyl.method == 2 && any(isMethylCarbon(Cluster) )
+      error(['Error in calculateSignal(): ',...
+        'A methyl carbon is misplaced.']);
+    end
     if(  length(unique(Cluster)) <  length( Cluster )  )
-      error(['Error in calculateSignal_gpu(): ',...
+      error(['Error in calculateSignal(): ',...
         'Cluster constains duplicate indices.']);
     end
+    
     % Check if iCluster is valid.
     if Cluster(1,1) == 0, continue; end
     
@@ -244,18 +173,21 @@ for clusterSize = 1:Method_order
       end
 
     end
+    
     if(  length(unique(thisCluster)) <  length( thisCluster )  )
-      error(['Error in calculateSignal_gpu(): ',...
+      error(['Error in calculateSignal(): ',...
         'This cluster constains duplicate indices.']);  
     end
-    if mod(sum(isMethylHydron(thisCluster) ),3) ~= 0
-      error(['Error in calculateSignal_gpu(): ',...
+    if System.Methyl.method ~= 2 && mod(sum(isMethylHydron(thisCluster) ),3) ~= 0
+      error(['Error in calculateSignal(): ',...
         'This cluster contains a partial methyl group.']);  
     end
     if any(isMethylCarbon(thisCluster) )
-      error(['Error in calculateSignal_gpu(): ',...
+      error(['Error in calculateSignal(): ',...
         'A methyl carbon is misplaced.']);
     end
+    
+    
     % Generate methyl permutations.
     cyclicPermutation = thisCluster;
     if lockRotors || ~methylMethod1
@@ -269,94 +201,33 @@ for clusterSize = 1:Method_order
     % Decide if the cluster should be skipped:
     % check if all spin have the same I,
     % and that if I >= 1 is enabled. 
-      skipCluster =  (spinHalfOnly && state_multiplicity(thisCluster(1)) > 2);
-    if ~ Method_allowHDcoupling
-      skipCluster = skipCluster || (~all(state_multiplicity(thisCluster) ...
-        == state_multiplicity(thisCluster(1))));
-    end
+    skipCluster =  (System.spinHalfOnly && Nuclei.StateMultiplicity(thisCluster(1)) > 2);
+    skipCluster = skipCluster || (~all(Nuclei.StateMultiplicity(thisCluster) ...
+      == Nuclei.StateMultiplicity(thisCluster(1))));
+   
     
     if skipCluster
-      switch clusterSize
-        case 1
-          Coherences_1(iCluster,:) = ones(size(Coherences_1(iCluster,:) ));
-        case 2
-          Coherences_2(iCluster,:) = ones(size(Coherences_2(iCluster,:) ));
-        case 3
-          Coherences_3(iCluster,:) = ones(size(Coherences_3(iCluster,:) ));
-        case 4
-          Coherences_4(iCluster,:) = ones(size(Coherences_4(iCluster,:) ));
-        case 5
-          Coherences_5(iCluster,:) = ones(size(Coherences_5(iCluster,:) ));
-        case 6
-          Coherences_6(iCluster,:) = ones(size(Coherences_6(iCluster,:) ));          
-      end
-      continue;
-    end 
-    
-    % Set subcluster indices.
-    [SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
-      SubclusterIndices_5,SubclusterIndices_6, ...
-      SubclusterIndices_7, SubclusterIndices_8,...
-      SubclusterIndices_9,SubclusterIndices_10,...
-      SubclusterIndices_11,SubclusterIndices_12] ...
-      = setSubclusterIndices( ClusterArray,clusterSize,iCluster,...
-      SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
-      SubclusterIndices_5,SubclusterIndices_6,...
-      SubclusterIndices_7, SubclusterIndices_8,...
-      SubclusterIndices_9,SubclusterIndices_10,...
-      SubclusterIndices_11, SubclusterIndices_12);
-    
-    % Select the appropriate spin operator.
-    [SpinOp,SpinXiXjOp] = getSpinOps( thisClusterSize,Nuclei_Spin(Cluster),...
-      Spin2Op1,Spin3Op1,Spin4Op1, Spin2Op2,Spin3Op2,Spin4Op2, ...
-      Spin2Op3,Spin3Op3,Spin4Op3, Spin2Op4,Spin3Op4,Spin4Op4, ...
-      Spin2Op5,Spin3Op5,Spin4Op5, Spin2Op6,Spin3Op6,Spin4Op6, ...
-      SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, SpinXiXjOp_4, ...
-      SpinXiXjOp_5, SpinXiXjOp_6, SpinOperators_HD, SpinOperators_DH, ...
-      SpinXiXjOperators_HD,SpinXiXjOperators_DH);
-    
- 
-    
-    if useInterlacedClusters(Method_order,clusterSize)
-      
-      % Get union of all clusters that contain the primary cluster.
-      SuperclusterUnion = findSuperClusterUnion(...
-        ClusterArray,clusterSize,iCluster);
-      
-      randStateIndex = randperm(3^numel(SuperclusterUnion));
-      % Get the set of nuclei not in the primary cluster 
-      % that unions with the primary cluster to give SuperclusterUnion.
-      ClusterComplement = SuperclusterUnion( ...
-        ~any(SuperclusterUnion==thisCluster',1)  );      
-      
-      [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,...
-        thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, hbar,...
-        theory,B1x,B1y,nuRF);
-      
-      tensors0 = tensors;
-      if useThermalEnsemble
-        nStates(clusterSize) = max( 1, min(nStates0(clusterSize),prod(...
-          state_multiplicity(ClusterComplement))));
-      else
-        nStates(clusterSize) = max( 1, min(nStates0(clusterSize),prod(...
-          state_multiplicity(SuperclusterUnion))));
-      end
-      
-    elseif useMultipleBathStates
-      ClusterComplement = nucleiList(  ~any(nucleiList==thisCluster',1)  );
-      
-      [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, Nuclei_Coordinates,...
-        thisCluster,Atensors,magneticField, ge,geff, muB, muN, mu0, ...
-        hbar,theory,B1x,B1y,nuRF);
-      tensors0 = tensors;
+      Coherences{clusterSize}(iCluster,:) = ones(size(Coherences{clusterSize}(iCluster,:) ));
     end
     
+    % Set subcluster indices.
+    SubclusterIndices{clusterSize}(:,:,iCluster) = findSubclusters_gpu(...
+      ClusterArray,clusterSize,iCluster,clusterSize);
+    
+    % Select the appropriate spin operator.
+    spinMultiplicity = Nuclei.StateMultiplicity(thisCluster(1));
+    SpinOp = Op{spinMultiplicity}{thisClusterSize};
+    if spinMultiplicity==3
+      SpinXiXjOp = SpinXiXjOps{thisClusterSize};
+    else
+      SpinXiXjOp = [];
+    end
     H_alphaMF = 0;
     H_betaMF = 0;
     
     
     % density matrix size
-    SpinSpaceDim = prod(state_multiplicity(thisCluster));
+    SpinSpaceDim = prod(Nuclei.StateMultiplicity(thisCluster));
     HilbertSpaceDim = SpinSpaceDim*nPerm;
     
     switch nPerm
@@ -386,7 +257,7 @@ for clusterSize = 1:Method_order
     end
     Ha = Hb;
     
-    for iave = 1:nStates(clusterSize)
+    for iave = 1:System.nStates(clusterSize)
       
     % Loop over cyclic permutations.
       for iPerm = 1:nPerm
@@ -395,16 +266,16 @@ for clusterSize = 1:Method_order
         thisCluster = cyclicPermutation(iPerm,:);
         
         % Get interaction tensors.
-        [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei_g, ...
-          Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff,...
+        [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
+          Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField, ge,geff,...
           muB, muN, mu0, hbar,theory,B1x,B1y,nuRF);
-        qtensors = Qtensors(:,:,thisCluster);
+        qtensors = Nuclei.Qtensor(:,:,thisCluster);
         
         if doTR        
-          [tensors_TR,~] = pairwisetensors_gpu(Nuclei_g, ...
-          Nuclei_Coordinates,thisCluster,Atensors,magneticField, ge,geff,...
+          [tensors_TR,~] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
+          Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField, ge,geff,...
           muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2);
-        qtensors = Qtensors(:,:,thisCluster);
+        qtensors = Nuclei.Qtensors(:,:,thisCluster);
         else
           tensors_TR = [];
         end
@@ -412,97 +283,44 @@ for clusterSize = 1:Method_order
         
         
         % Build Hamiltonians.
+        % [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,...
+        %   tensors,SpinOp,Qtensors,SpinXiXjOp,...
+        %   theory,...
+        %   isMethyl,...
+        %   methylMethod, ...
+        %   methylTunnelingSplitting, ...
+        %   methylID)
         [H_alpha,H_beta] = ...
-          assembleHamiltonian_gpu(state_multiplicity(thisCluster),...
-          tensors,SpinOp,qtensors,SpinXiXjOp, theory,isMethylHydron(thisCluster),...
-          methylMethod1,methylTunnelingSplitting(thisCluster,thisCluster));
+          assembleHamiltonian_gpu(Nuclei.StateMultiplicity(thisCluster),...
+          tensors,SpinOp,qtensors,SpinXiXjOp, theory,...
+          isMethylHydron(thisCluster),...
+          System.Methyl.method,...
+          Nuclei.methylTunnelingSplitting(thisCluster,thisCluster),...
+          Nuclei.MethylID(thisCluster) ...
+          );
         
         if ~isempty(tensors_TR)
         [H_alpha_TR,H_beta_TR] = ...
-          assembleHamiltonian_gpu(state_multiplicity(thisCluster),...
-          tensors,SpinOp,qtensors,SpinXiXjOp, theory,isMethylHydron(thisCluster),...
-          methylMethod1, methylTunnelingSplitting(thisCluster,thisCluster));
+          assembleHamiltonian_gpu(Nuclei.StateMultiplicity(thisCluster),...
+          tensors,SpinOp,qtensors,SpinXiXjOp, theory,...
+          isMethylHydron(thisCluster),System.Methyl.method, ...
+          Nuclei.methylTunnelingSplitting(thisCluster,thisCluster),...
+          Nuclei.MethylID(thisCluster));
         else
         H_alpha_TR = [];
         H_beta_TR = [];  
         end
         
-        if useInterlacedClusters(Method_order,clusterSize)          
-          if ~useThermalEnsemble
-            
-            % density matrix size
-            dm_size = prod(state_multiplicity(thisCluster));
-            
-            % Initialize density matrix.
-            densityMatrix = zeros(dm_size);
-            
-            % Set cluster spin-state.
-            dm_index = mod(iave,dm_size) + 1;
-            densityMatrix(dm_index,dm_index) = 1;
-            iState = randStateIndex(iave); % iState = floor(iave/dm_size)+1;
-            
-           
-          else
-            densityMatrix = [];
-            
-            % density matrix size
-            dm_size = prod(state_multiplicity(thisCluster));
-            
-            iState = randStateIndex(iave);
-          end
+     
           
-          % Adjust tensors for external fields.
-          if ~isempty(ClusterComplement)
-            if useInterlacedClusters(Method_order,clusterSize)
-              tensors = getInterlacedTensors(tensors0,zeroIndex, ...
-                thisCluster,ClusterComplement,iState,...
-                Nuclei_g,state_multiplicity,Nuclei_Coordinates, muN, mu0, hbar);
-            else
-              tensors = getMeanMagneticFieldTensors(tensors,...
-                RandomSpinVector, thisCluster,ClusterComplement,iState,...
-                Nuclei_g,Nuclei_Coordinates, muN, mu0, hbar);
-            end
-            %tensors = tensors0; % TEMPORARY
-          else
-            tensors = tensors0;
-            if iave >1
-              continue;
-            end
-          end
-          
-          [H_alpha,H_beta] = ...
-            assembleHamiltonian_gpu(state_multiplicity(thisCluster),...
-            tensors,SpinOp,qtensors,SpinXiXjOp,...
-            theory,isMethylHydron(thisCluster),methylMethod1, ...
-            methylTunnelingSplitting(thisCluster,thisCluster));
-          
-        elseif useMultipleBathStates
-          iState = iave;
-          tensors = getMeanMagneticFieldTensors(tensors,RandomSpinVector,...
-            thisCluster,ClusterComplement,iState,...
-                Nuclei_g,Nuclei_Coordinates, muN, mu0, hbar);
-          
-          [H_alpha,H_beta] = ...
-            assembleHamiltonian_gpu(state_multiplicity(thisCluster),...
-            tensors,SpinOp,qtensors,SpinXiXjOp,theory,isMethylHydron(thisCluster),...
-            methylMethod1,methylTunnelingSplitting(thisCluster,thisCluster));
-          
-          if useThermalEnsemble
-            densityMatrix = [];
-          else
-            densityMatrix = getDensityMatrix(ZeemanStates(iave,thisCluster),...
-              state_multiplicity(thisCluster),thisCluster);
-          end
+        if System.useThermalEnsemble
+          densityMatrix = [];
         else
-          
-          if useThermalEnsemble
-            densityMatrix = [];
-          else
-            densityMatrix = getDensityMatrix(ZeemanStates(iave,thisCluster),...
-              state_multiplicity(thisCluster),thisCluster);
-          end
-          
+          densityMatrix = getDensityMatrix(Nuclei.ZeemanStates(iave,thisCluster),...
+            Nuclei.StateMultiplicity(thisCluster),thisCluster);
         end
+        
+        
         
         % Add mean field term to the Hamiltonian.
         Halpha = H_alpha + H_alphaMF;
@@ -524,106 +342,33 @@ for clusterSize = 1:Method_order
           Ha_TR = [];
         end
       end
+ 
+      % Calculate cluster coherence.
+      Coherences{clusterSize}(iCluster,:) = Coherences{clusterSize}(iCluster,:)  +  ...
+        propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+        EXPERIMENT,densityMatrix, System.useThermalEnsemble, betaT);
       
-      % Calculate cluster coherence.      
-      switch clusterSize
-        case 1
-          Coherences_1(iCluster,:) = Coherences_1(iCluster,:)  +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-            EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
-        case 2
-          Coherences_2(iCluster,:) = Coherences_2(iCluster,:)  + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-            EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
-        case 3
-          Coherences_3(iCluster,:) = Coherences_3(iCluster,:) +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-            EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
-        case 4
-          Coherences_4(iCluster,:) = Coherences_4(iCluster,:) +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-            EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
-        case 5
-          Coherences_5(iCluster,:) = Coherences_5(iCluster,:) +   ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-            EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
-        case 6
-          Coherences_6(iCluster,:) = Coherences_6(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-            EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);      
-      end
-    end 
-  end 
+    end
+  end
 end
 
-
-for clusterSize = 1:Method_order
-  switch clusterSize
-    case 1
-      unusedClusters = find(Coherences_1(:,1)==0)';
-      Coherences_1(unusedClusters,:) = 1;
-    case 2
-      unusedClusters = find(Coherences_2(:,1)==0)';
-      Coherences_2(unusedClusters,:) = 1;
-    case 3
-      unusedClusters = find(Coherences_3(:,1)==0)';
-      Coherences_3(unusedClusters,:) = 1;
-    case 4
-      unusedClusters = find(Coherences_4(:,1)==0)';
-      Coherences_4(unusedClusters,:) = 1;
-    case 5
-      unusedClusters = find(Coherences_5(:,1)==0)';
-      Coherences_5(unusedClusters,:) = 1;
-    case 6
-      unusedClusters = find(Coherences_6(:,1)==0)';
-      Coherences_6(unusedClusters,:) = 1;
+% Unused coherences need to be re-initialized to unity.
+for clusterSize = 1:Method.order
+  unusedClusters = find(  Coherences{clusterSize}(:,1)==0  )';
+  if ~isempty(unusedClusters)
+    Coherences{clusterSize}(unusedClusters,:) = 1;
   end
 end
 
 % Calculate signal
 %-------------------------------------------------------------------------------
-if doHDCCE
-  Signal = ClusterArray;
-  AuxiliarySignal_1 = Coherences_1;
-  AuxiliarySignal_2 = Coherences_2;
-  AuxiliarySignal_3 = SubclusterIndices_2;
-  AuxiliarySignal_4 = dimensionality;
-  Signals = [];
-return
-end
-if doOffsetCCE
-[Signals, AuxiliarySignal_1,AuxiliarySignal_2,...
-  AuxiliarySignal_3,AuxiliarySignal_4] ...
-  = doOffsetClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,...
-  Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
-  SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
-  SubclusterIndices_5,SubclusterIndices_6,...
-  timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
-Signal = Signals(Method_order,:);
-return
-end
-[Signals, AuxiliarySignal_1,AuxiliarySignal_2,...
-  AuxiliarySignal_3,AuxiliarySignal_4] ...
-  = doClusterCorrelationExpansion_gpu(Coherences_1,Coherences_2,...
-  Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
-  SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
-  SubclusterIndices_5,SubclusterIndices_6,...
-  timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
+[Signals, AuxiliarySignals] = doClusterCorrelationExpansion(...
+  Coherences,ClusterArray,SubclusterIndices,...
+  timepoints,dimensionality, Method.order,numberClusters);
  
 
-Signal = Signals(Method_order,:);
+Signal = Signals(Method.order,:);
 %-------------------------------------------------------------------------------
-% gpu code end
-%
-% At this point the data should be transfered back to the cpu.
-%
-% if useGPU
-%   transferDataToCPU();
-% end
-%
-% gpu code end
-%-------------------------------------------------------------------------------
-% return; % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 end
 
 
@@ -1081,18 +826,15 @@ end
 % Select the Spin Operator
 % ==============================================================================
 function [SpinOp,SpinXiXjOp] = getSpinOps(thisClusterSize,Nuclei_Spins,...
-  Spin2Op1,Spin3Op1,Spin4Op1, ...
-  Spin2Op2,Spin3Op2,Spin4Op2, ...
-  Spin2Op3,Spin3Op3,Spin4Op3, ...
-  Spin2Op4,Spin3Op4,Spin4Op4, ...
-  Spin2Op5,Spin3Op5,Spin4Op5, ...
-  Spin2Op6,Spin3Op6,Spin4Op6, ...
-  SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
-  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6, ...
+  Op, SpinXiXjOp, ...
   SpinOperators_HD, SpinOperators_DH,SpinXiXjOperators_HD,SpinXiXjOperators_DH)
 
 % "ENUM"
 HD_SPIN_OP = -1; DH_SPIN_OP = -2;
+
+
+spinOp = Op{spinMultiplicity}{thisClusterSize};
+SpinXiXjOp = SpinXiXjOps{thisClusterSize};
 
 if all(Nuclei_Spins == Nuclei_Spins(1))
   Nuclei_Spin = Nuclei_Spins(1);
@@ -1383,72 +1125,43 @@ end
 % Initialize Coherences
 % ========================================================================
 
-function [Coherences_1, SubclusterIndices_2, Coherences_2, ...
-  SubclusterIndices_3, Coherences_3, SubclusterIndices_4, Coherences_4, ...
-  SubclusterIndices_5, Coherences_5, SubclusterIndices_6, Coherences_6, ...
-  SubclusterIndices_7, Coherences_7, SubclusterIndices_8, Coherences_8, ...
-  SubclusterIndices_9, Coherences_9, SubclusterIndices_10, Coherences_10, ...
-  SubclusterIndices_11, Coherences_11, SubclusterIndices_12, Coherences_12,...
+function [Coherences, SubclusterIndices , ...
   rotationalMatrix_c1_m1, rotationalMatrix_d1_m1, ...
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
-  = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei_rotationalMatrix,nt,includeMethyls,lockRotor, ...
-  Methyl_methylMethylCoupling,maxSize)
+  = initializeCoherences(Method, numberClusters, ...
+  Nuclei_rotationalMatrix, nt,  includeMethyls,lockRotor, ...
+  Methyl_methylMethylCoupling)
 
 % nt = timepoints^dimensionality;
 % includeMethyls = System.Methyl.include
+SubclusterIndices = cell(1,Method.order);
 
-Coherences_1 = [];
-SubclusterIndices_2 = [];
-Coherences_2 = [];
-SubclusterIndices_3 = [];
-Coherences_3 = [];
-SubclusterIndices_4 = [];
-Coherences_4 = [];
-SubclusterIndices_5 = [];
-Coherences_5 = [];
-SubclusterIndices_6 = [];
-Coherences_6 = [];
-SubclusterIndices_7 = [];
-Coherences_7 = [];
-SubclusterIndices_8 = [];
-Coherences_8 = [];
-SubclusterIndices_9 = [];
-Coherences_9 = [];
-SubclusterIndices_10 = [];
-Coherences_10 = [];
-SubclusterIndices_11 = [];
-Coherences_11 = [];
-SubclusterIndices_12 = [];
-Coherences_12 = [];
-rotationalMatrix_c1_m1 = [];
-rotationalMatrix_d1_m1 = [];
-rotationalMatrix_c2_m1 = [];
-rotationalMatrix_c2_m2 = [];
-rotationalMatrix_d2_m1 = [];
-rotationalMatrix_d2_m2 = [];
-for iclusterSize = 1:Method_order
-  switch iclusterSize
+for iclusterSize = 1:Method.order
+  
+  Coherences{iclusterSize} = zeros(numberClusters(iclusterSize),nt);
     
-    % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
-    % the jth cluster of size subCluster_size that is a subcluster of
-    % the ith ccluster of size clusterSize.
+  % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
+  % the jth cluster of size subCluster_size that is a subcluster of
+  % the ith ccluster of size clusterSize.
+  
+  subCluster_size_= ceil(iclusterSize/2);
+  
+  SubclusterIndices{iclusterSize} = zeros(nchoosek(iclusterSize,subCluster_size_), iclusterSize , ...
+    numberClusters(iclusterSize));
+
+  switch iclusterSize
+  
     
     case 1
-      Coherences_1 = zeros(numberClusters(iclusterSize),nt);
       if includeMethyls && ~lockRotor
         rotationalMatrix_c1_m1 = Nuclei_rotationalMatrix{1,1}; 
-        
       else
         rotationalMatrix_c1_m1 = [];
         rotationalMatrix_d1_m1 = [];
       end
-    case 2
-      SubclusterIndices_2 = zeros(nchoosek(iclusterSize,1), iclusterSize , ...
-        numberClusters(iclusterSize));
-      Coherences_2 = zeros(numberClusters(iclusterSize),nt);
       
+    case 2
       if includeMethyls && ~lockRotor
         rotationalMatrix_c2_m1 = Nuclei_rotationalMatrix{2,1};
         if Methyl_methylMethylCoupling
@@ -1462,108 +1175,10 @@ for iclusterSize = 1:Method_order
         rotationalMatrix_d2_m1 = [];
         rotationalMatrix_d2_m2 = [];
       end
-      
-    case 3
-      SubclusterIndices_3 = zeros(nchoosek(iclusterSize,1), iclusterSize , ...
-        numberClusters(iclusterSize));
-      Coherences_3 = zeros(numberClusters(iclusterSize),nt);
-    case 4
-      SubclusterIndices_4 = zeros(nchoosek(iclusterSize,2), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_4 = zeros(numberClusters(iclusterSize),nt);
-    case 5
-      SubclusterIndices_5 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_5 = zeros(numberClusters(iclusterSize),nt);
-    case 6
-      SubclusterIndices_6 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_6 = zeros(numberClusters(iclusterSize),nt);
-    case 7
-      SubclusterIndices_7 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_7 = zeros(numberClusters(iclusterSize),nt);
-    case 8
-      SubclusterIndices_8 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_8 = zeros(numberClusters(iclusterSize),nt);
-    case 9
-      SubclusterIndices_9 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_9 = zeros(numberClusters(iclusterSize),nt);
-    case 10
-      SubclusterIndices_10 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_10 = zeros(numberClusters(iclusterSize),nt);
-    case 11
-      SubclusterIndices_11 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_11 = zeros(numberClusters(iclusterSize),nt);
-    case 12
-      SubclusterIndices_12 = zeros(nchoosek(iclusterSize,3), iclusterSize , ...
-         numberClusters(iclusterSize));
-      Coherences_12 = zeros(numberClusters(iclusterSize),nt);
-  end
+end
   
 end
 
-
-
-% Define placeholder variables for variables that need to be defined but do
-% not contribute to the calculation for the selected order.
-for iclusterSize = Method_order+1:maxSize
-  
-      switch iclusterSize 
-        
-        case 1
-          Coherences_1 = 0;  
-          
-          rotationalMatrix_c1_m1 = [];
-          rotationalMatrix_d1_m1 = [];
-        
-        case 2
-          SubclusterIndices_2 = []; 
-          Coherences_2 = 0;
-          
-          rotationalMatrix_c2_m1 = [];
-          rotationalMatrix_c2_m2 = [];
-          rotationalMatrix_d2_m1 = [];
-          rotationalMatrix_d2_m2 = [];
-        
-        case 3
-          SubclusterIndices_3 = [];
-          Coherences_3 = 0;
-        case 4
-          SubclusterIndices_4 = 1;
-          Coherences_4 = 0;
-          
-        case 5
-          SubclusterIndices_5 = [];
-          Coherences_5 = 0;
-        case 6
-          SubclusterIndices_6 = 1;
-          Coherences_6 = 0;
-        case 7
-          SubclusterIndices_7 = 1;
-          Coherences_7 = 0;
-        case 8
-          SubclusterIndices_8 = 1;
-          Coherences_8 = 0;
-        case 9
-          SubclusterIndices_9 = 1;
-          Coherences_9 = 0;
-        case 10
-          SubclusterIndices_10 = 1;
-          Coherences_10 = 0;
-        case 11
-          SubclusterIndices_11 = 1;
-          Coherences_11 = 0;
-        case 12
-          SubclusterIndices_12 = 1;
-          Coherences_12 = 0;
-      end
-      
-end
 end
 
 % ========================================================================

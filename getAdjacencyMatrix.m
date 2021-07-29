@@ -111,11 +111,16 @@ for isize = 1:Method.extraOrder
         MaxR_ = MaxR_ | pwstat.maxDistance <= Method.cutoff.radius_nonSpinHalf;
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*MaxR_;
         
-      case 'methyl only'
-        isMethyl = strcmp(Nuclei.Type,'CH3');
-        isCH3 = isMethyl + isMethyl' == 2;
-        Adjacency(:,:,isize) = Adjacency(:,:,isize).*isCH3;
-        
+%       case 'methyl only' 
+%         if Method.cutoff.methylOnly(isize)
+%           if System.Methyl.method == 2
+%             isMethyl = strcmp(Nuclei.Type,'CH3_1H');
+%           else
+%             isMethyl = strcmp(Nuclei.Type,'CH3');
+%           end
+%           isCH3 = isMethyl + isMethyl' == 2;
+%           Adjacency(:,:,isize) = Adjacency(:,:,isize).*isCH3;
+%         end
         
       case 'same g'
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*pwstat.Same_g;
@@ -126,5 +131,16 @@ for isize = 1:Method.extraOrder
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Sele_;
     end
   end
+  
+  if System.Methyl.method == 2
+    % Protons within a methyl group should always be connected to each
+    % other.
+    Sele_ = Nuclei.MethylID > 0;
+    Sele_ = Sele_ & Sele_';
+    Sele_ = Sele_.*(Nuclei.MethylID==Nuclei.MethylID');
+    Adjacency(:,:,isize) = Adjacency(:,:,isize) | Sele_;
+
+  end
+  
 end
 end

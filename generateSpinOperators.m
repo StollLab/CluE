@@ -1,4 +1,4 @@
-function output = generateSpinOperators(spin,maxClusterSize)
+function output = generateSpinOperators(spin,maxClusterSize,Method_gpu)
 
 % Initialize output.
 output = cell(1,maxClusterSize);
@@ -25,7 +25,11 @@ output{1} = SpinOp_1;
 for clusterSize = 2:maxClusterSize
   
   % Get set of operator names.
-  OpNames = getOpNames(clusterSize);
+  if Method_gpu
+    OpNames = getOpNames_forGPU(clusterSize);
+  else
+    OpNames = getOpNames(clusterSize);
+  end
   
   % Get number of operators for the given cluster size.
   numOps_ = 1 + 3*clusterSize + 9*NchooseK(clusterSize,2);

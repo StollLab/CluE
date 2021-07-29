@@ -1,5 +1,16 @@
-function [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,tensors,SpinOp,Qtensors,SpinXiXjOp,...
-  theory,zeroIndex,methyl_number, MeanFieldCoefficients, MeanFieldTotal)
+function [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,...
+  tensors,SpinOp,Qtensors,SpinXiXjOp,...
+  theory,isMethyl,methylMethod, methylTunnelingSplitting, methylID)
+
+
+if methylMethod ~=2 && sum(isMethyl)>3
+  error(['CluE is not yet able to distiguish methyls from each other. ', ...
+    'Please avoid methyl-methyl coupling until this is implemented.']);
+end
+
+% debug test
+% test_spinopidx();
+% test_spinopidx2();
 
 useEZ       = theory(1);
 useNZ       = theory(2);
@@ -11,6 +22,9 @@ useNucCD    = theory(7);
 useNucEF    = theory(8);
 useNQ       = theory(9);
 useMeanField= false;
+
+% Methyl version 2
+useMethyl = methylMethod>0;
 
 clusterSize = numel(state_multiplicity);
 
@@ -29,18 +43,9 @@ Hhf = 0;
 
 E = 1; Z = 2; RAISE = 3; SZ = 4;
 Hmf = 0;
-Hmf0 = 0; %MeanFieldTotal*I0;
+Hmf0 = 0; 
 Hmf0_ = 0;
 
-%{
-if useMeanField
-  % ENUM
-  E = 1; Z = 2; RAISE = 3; SZ = 4;
-  Hmf0 = MeanFieldTotal;
-else
-  Hmf0 = 0;
-end
-%}
 
 % iSpin is the index of the nuclear spin in the cluster
 for iSpin = 1:clusterSize
@@ -166,6 +171,18 @@ for iSpin = 1:clusterSize
       Hnn_EF = 0;
     end
     
+    if useMethyl && isMethyl(iSpin) && isMethyl(jSpin) ...
+        && methylID(iSpin) == methylID(jSpin) 
+      IzJz = SpinOp(:,:,zz);
+      IpJm = SpinOp(:,:,rl);
+      ImJp = SpinOp(:,:,lr);
+      Jmethyl = -2/3*full( methylTunnelingSplitting(iSpin,jSpin) );
+      H_methyl = Jmethyl*(IzJz + 0.5*IpJm + 0.5*ImJp);
+    else
+      H_methyl = 0;
+    end
+    
+    
     if useMeanField
       
       Hmf0_ = MeanFieldCoefficients(jSpin,iSpin,Z)*Iz;
@@ -181,7 +198,7 @@ for iSpin = 1:clusterSize
     end
     
     Hmf0 = Hmf0 + Hmf0_;
-    Hnuc = Hnuc + Hnn_A + Hnn_B + Hnn_CD + Hnn_EF;
+    Hnuc = Hnuc + Hnn_A + Hnn_B + Hnn_CD + Hnn_EF + H_methyl;
     
   end
   
@@ -198,7 +215,7 @@ end
 % Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
 H_alpha = +1/2*(HEZ + Hhf + Hmf) + Hnuc + Hmf0;
 H_beta  = -1/2*(HEZ + Hhf + Hmf) + Hnuc + Hmf0;
-
+  
 % Check Hermitianity
 threshold = 1e-12;
 [isHermA,nonHermiticityA] = isHermitian(H_alpha,threshold);
@@ -259,6 +276,10 @@ if ~isHermA || ~isHermB
     
     [isHerm,nonHermiticity] = isHermitian(H_nuclear_quadrupole,threshold);
     fprintf('  H_nuclear_quadrupole non-Hermiticity = %d.\n',nonHermiticity);
+    fprintf('  pass = %d.\n',isHerm); disp(hline);
+    
+    [isHerm,nonHermiticity] = isHermitian(H_methyl,threshold);
+    fprintf('  H_methyl non-Hermiticity = %d.\n',nonHermiticity);
     fprintf('  pass = %d.\n',isHerm); disp(hline);
   end
   disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
@@ -356,6 +377,15 @@ OOEEEE (62-64):  zzEEEE +-EEEE -+EEEE
 
 function [z,r,l] = spinopidx(clusterSize,iSpin)
 
+zrl = [2,3,4] + 3*(clusterSize - iSpin);
+
+z = zrl(1);
+r = zrl(2);
+l = zrl(3);
+
+end
+
+function [z,r,l] = spinopidx_v0(clusterSize,iSpin)
 switch clusterSize
   case 1
     E = 1;
@@ -422,13 +452,72 @@ switch clusterSize
       case 1, zrl = [ZEEEEE REEEEE LEEEEE];
     end
 end
-
 z = zrl(1);
 r = zrl(2);
 l = zrl(3);
+
 end
 
+function test_spinopidx()
+
+for clusterSize = 1:6
+  for iSpin = 1:clusterSize
+    [z0,r0,l0] = spinopidx_v0(clusterSize,iSpin);
+    zrl0 = [z0,r0,l0];
+    
+    [z,r,l] = spinopidx(clusterSize,iSpin);
+    zrl1 = [z,r,l];
+    
+    if(max( abs(zrl1-zrl0))>0)
+      fprintf(['\n\nError in spinopidx(): ', ...
+        'for cluster size %d, single spin indices are \n'],clusterSize);
+      disp(zrl1);
+      disp(['when they should be'])
+      disp(zrl0);
+      error('Error above.');
+      
+    end
+  end
+end
+end
+
+
 function [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin)
+
+
+iParticle = clusterSize + 1 -iSpin;
+jParticle = clusterSize + 1 -jSpin;
+% ZZ RL LR ------------------
+offset = 3*clusterSize -1;
+m = iParticle-jParticle;
+n = jParticle-1;
+
+zzIncrementation = m + clusterSize*n -(n^2 + n)/2;
+
+zz = 3*zzIncrementation +  offset;
+rl = zz + 1;
+lr = rl + 1;
+
+% ZR ZL RZ LZ------------------
+m = clusterSize - (clusterSize - 1);
+n = clusterSize - 2;
+zzOffset = m + clusterSize*n -(n^2 + n)/2;
+
+offset = offset + 3*zzOffset + 3;
+
+zr = 4*( zzIncrementation -1) + offset;
+zl = zr + 1;
+rz = zl + 1;
+lz = rz + 1;
+
+% RR LL ------------------
+offset = offset + 4*zzOffset;
+rr = 2*( zzIncrementation -1) + offset;
+ll = rr + 1;
+end
+
+function [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2_v0(clusterSize,iSpin,jSpin)
+
 switch clusterSize
   
   case 2    
@@ -439,16 +528,19 @@ switch clusterSize
     IJ = [ZZ RL LR ZR ZL RZ LZ RR LL];
     
   case 3
-    
+
+    % ZZ RL LR ------------------
     EZZ = 11; ERL = 12; ELR = 13;
     ZEZ = 14; REL = 15; LER = 16;
     ZZE = 17; RLE = 18; LRE = 19;
-    EZR = 20; EZL = 21; ERZ = 22;
-    ELZ = 23; ZER = 24; ZEL = 25;
-    REZ = 26; LEZ = 27; ZRE = 28;
-    ZLE = 29; RZE = 30; LZE = 31;
-    ERR = 32; ELL = 33; RER = 34;
-    LEL = 35; RRE = 36; LLE = 37;
+    % ZR ZL RZ LZ------------------
+    EZR = 20; EZL = 21; ERZ = 22; ELZ = 23; 
+    ZER = 24; ZEL = 25; REZ = 26; LEZ = 27; 
+    ZRE = 28; ZLE = 29; RZE = 30; LZE = 31;
+    % RR LL ------------------
+    ERR = 32; ELL = 33; 
+    RER = 34; LEL = 35; 
+    RRE = 36; LLE = 37;
     
     switch iSpin
       case 1 % OOE or OEO
@@ -461,13 +553,15 @@ switch clusterSize
     
   case 4
     
-
+    % ZZ RL LR ------------------
     EEZZ = 14; EERL = 15; EELR = 16;
     EZEZ = 17; EREL = 18; ELER = 19;
     ZEEZ = 20; REEL = 21; LEER = 22;
     EZZE = 23; ERLE = 24; ELRE = 25;
     ZEZE = 26; RELE = 27; LERE = 28;
     ZZEE = 29; RLEE = 30; LREE = 31; 
+    
+    % ZR ZL RZ LZ------------------
     EEZR = 32; EEZL = 33; EERZ = 34; EELZ = 35; 
     EZER = 36; EZEL = 37; EREZ = 38; ELEZ = 39; 
     ZEER = 40; ZEEL = 41; REEZ = 42; LEEZ = 43;
@@ -475,6 +569,7 @@ switch clusterSize
     ZERE = 48; ZELE = 49; REZE = 50; LEZE = 51; 
     ZREE = 52; ZLEE = 53; RZEE = 54; LZEE = 55;
     
+    % RR LL ------------------
     EERR = 56; EELL = 57; 
     ERER = 58; ELEL = 59; 
     REER = 60; LEEL = 61; 
@@ -553,6 +648,7 @@ switch clusterSize
     end
     
   case 6
+    % ZZ RL LR ------------------
     EEEEZZ = 20; EEEERL = 21; EEEELR = 22;
     EEEZEZ = 23; EEEREL = 24; EEELER = 25;
     EEZEEZ = 26; EEREEL = 27; EELEER = 28;
@@ -568,36 +664,40 @@ switch clusterSize
     EZZEEE = 56; ERLEEE = 57; ELREEE = 58;
     ZEZEEE = 59; RELEEE = 60; LEREEE = 61;
     ZZEEEE = 62; RLEEEE = 63; LREEEE = 64;
-    EEEEZR = 65; EEEEZL = 66; EEEERZ = 67;
-    EEEELZ = 68; EEEZER = 69; EEEZEL = 70;
-    EEEREZ = 71; EEELEZ = 72; EEZEER = 73;
-    EEZEEL = 74; EEREEZ = 75; EELEEZ = 76;
-    EZEEER = 77; EZEEEL = 78; EREEEZ = 79;
-    ELEEEZ = 80; ZEEEER = 81; ZEEEEL = 82;
-    REEEEZ = 83; LEEEEZ = 84; EEEZRE = 85;
-    EEEZLE = 86; EEERZE = 87; EEELZE = 88;
-    EEZERE = 89; EEZELE = 90; EEREZE = 91;
-    EELEZE = 92; EZEERE = 93; EZEELE = 94;
-    EREEZE = 95; ELEEZE = 96; ZEEERE = 97;
-    ZEEELE = 98; REEEZE = 99; LEEEZE = 100;
-    EEZREE = 101; EEZLEE = 102; EERZEE = 103;
-    EELZEE = 104; EZEREE = 105; EZELEE = 106;
-    EREZEE = 107; ELEZEE = 108; ZEEREE = 109;
-    ZEELEE = 110; REEZEE = 111; LEEZEE = 112;
-    EZREEE = 113; EZLEEE = 114; ERZEEE = 115;
-    ELZEEE = 116; ZEREEE = 117; ZELEEE = 118;
-    REZEEE = 119; LEZEEE = 120; ZREEEE = 121;
-    ZLEEEE = 122; RZEEEE = 123; LZEEEE = 124;
-    EEEERR = 125; EEEELL = 126; EEERER = 127;
-    EEELEL = 128; EEREER = 129; EELEEL = 130;
-    EREEER = 131; ELEEEL = 132; REEEER = 133;
-    LEEEEL = 134; EEERRE = 135; EEELLE = 136;
-    EERERE = 137; EELELE = 138; EREERE = 139;
-    ELEELE = 140; REEERE = 141; LEEELE = 142;
-    EERREE = 143; EELLEE = 144; EREREE = 145;
-    ELELEE = 146; REEREE = 147; LEELEE = 148;
-    ERREEE = 149; ELLEEE = 150; REREEE = 151;
-    LELEEE = 152; RREEEE = 153; LLEEEE = 154;
+    
+    % ZR ZL RZ LZ------------------
+    EEEEZR = 65; EEEEZL = 66; EEEERZ = 67; EEEELZ = 68; 
+    EEEZER = 69; EEEZEL = 70; EEEREZ = 71; EEELEZ = 72; 
+    EEZEER = 73; EEZEEL = 74; EEREEZ = 75; EELEEZ = 76;
+    EZEEER = 77; EZEEEL = 78; EREEEZ = 79; ELEEEZ = 80; 
+    ZEEEER = 81; ZEEEEL = 82; REEEEZ = 83; LEEEEZ = 84; 
+    EEEZRE = 85; EEEZLE = 86; EEERZE = 87; EEELZE = 88;
+    EEZERE = 89; EEZELE = 90; EEREZE = 91; EELEZE = 92; 
+    EZEERE = 93; EZEELE = 94; EREEZE = 95; ELEEZE = 96; 
+    ZEEERE = 97; ZEEELE = 98; REEEZE = 99; LEEEZE = 100;
+    EEZREE = 101; EEZLEE = 102; EERZEE = 103; EELZEE = 104; 
+    EZEREE = 105; EZELEE = 106; EREZEE = 107; ELEZEE = 108; 
+    ZEEREE = 109; ZEELEE = 110; REEZEE = 111; LEEZEE = 112;
+    EZREEE = 113; EZLEEE = 114; ERZEEE = 115; ELZEEE = 116; 
+    ZEREEE = 117; ZELEEE = 118; REZEEE = 119; LEZEEE = 120; 
+    ZREEEE = 121; ZLEEEE = 122; RZEEEE = 123; LZEEEE = 124;
+    
+    % RR LL ------------------
+    EEEERR = 125; EEEELL = 126; 
+    EEERER = 127; EEELEL = 128; 
+    EEREER = 129; EELEEL = 130;
+    EREEER = 131; ELEEEL = 132; 
+    REEEER = 133; LEEEEL = 134; 
+    EEERRE = 135; EEELLE = 136;
+    EERERE = 137; EELELE = 138; 
+    EREERE = 139; ELEELE = 140; 
+    REEERE = 141; LEEELE = 142;
+    EERREE = 143; EELLEE = 144; 
+    EREREE = 145; ELELEE = 146; 
+    REEREE = 147; LEELEE = 148;
+    ERREEE = 149; ELLEEE = 150; 
+    REREEE = 151; LELEEE = 152; 
+    RREEEE = 153; LLEEEE = 154;
     
     switch iSpin
       case 1
@@ -636,6 +736,32 @@ rl = IJ(2); lr = IJ(3);
 zr = IJ(4); zl = IJ(5);
 rz = IJ(6); lz = IJ(7);
 rr = IJ(8); ll = IJ(9);
+
+end
+
+function test_spinopidx2()
+
+for clusterSize = 2:6
+  for iSpin = 1:clusterSize-1
+    for jSpin = iSpin+1:clusterSize
+      [zz0,rl0,lr0,zr0,zl0,rz0,lz0,rr0,ll0] = ...
+        spinopidx2_v0(clusterSize,iSpin,jSpin);
+      zrl0 = [zz0,rl0,lr0,zr0,zl0,rz0,lz0,rr0,ll0];
+      
+      [zz,rl,lr,zr,zl,rz,lz,rr,ll] = spinopidx2(clusterSize,iSpin,jSpin);
+      zrl1 = [zz,rl,lr,zr,zl,rz,lz,rr,ll];
+      
+      if(max( abs(zrl1-zrl0) )>0)
+        fprintf(['\n\nError in spinopidx2(): ', ...
+          'for cluster size %d, double spin indices are \n'],clusterSize);
+        disp(zrl1)
+        disp(['when they should be'])
+        disp(zrl0)
+        error('Error above.');
+      end
+    end
+  end
+end
 end
 
 function [xx,xy,xz,yx,yy,yz,zx,zy,zz] = spinopidx_nq(iSpin,SpinXiXjOp)

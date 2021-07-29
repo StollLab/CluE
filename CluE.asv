@@ -160,11 +160,12 @@ end
 if doFindClusters
   
   if strcmp(Method.clusterization,'tree-search')
-    if verbose, fprintf('Finding clusters of up to size %d.\n', Method.extraOrder); end
+    if verbose, fprintf('Finding clusters of up to size %d.\n', ...
+        Method.extraOrder); end
 
     if Method.combineClusters
       Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
-      for clusterSize = 1:min(Method.order, numel(inClusters))
+      for clusterSize = 1:min(Method.order, numel(inClusters),Method)
         % Combine arrays.
         C = [Clusters{clusterSize}; inClusters{clusterSize}];
         
@@ -177,11 +178,13 @@ if doFindClusters
       end
     else
       if ~Method.cutoff.sizeDependent
-      Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,inClusters);
+      Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,...
+        inClusters, Method);
       else
         Clusters = cell(1,Method.extraOrder);
         for adjacencyOrder = Method.extraOrder:-1:1
-          Clusters_ = findClusters_treeSearch(Nuclei,Method.extraOrder,adjacencyOrder,inClusters);
+          Clusters_ = findClusters_treeSearch(Nuclei,Method.extraOrder,...
+            adjacencyOrder,inClusters, Method);
           Clusters{adjacencyOrder} = Clusters_{adjacencyOrder};
         end
       end
@@ -375,6 +378,7 @@ Signals{nOrientations} = [];
 TM(nOrientations) = 0;
 AuxiliarySignal{nOrientations} = [];
 Calculate_Signal{nOrientations} = true;
+Ori_Clusters = cell(nOrientations,1);
 
 % update progress
 Progress.Order_n_Mean = 'pending';
@@ -408,8 +412,11 @@ for iOri = 1:nOrientations
   if Method.partialSave && isfile(temp_file) && ~(saveAll || Method.getContributions)
     try
       % load partial save
-      load(temp_file,'signal','order_n','seed','statistics');
-      
+      if Method.Ori_cutoffs
+        load(temp_file,'signal','order_n','seed','statistics','iOri_Clusters');
+      else
+        load(temp_file,'signal','order_n','seed','statistics');
+      end
       % check progress
       if seed ~= Method.seed %&& progress_powder
         error('RNG seeds do not match.  Loaded data may be inconsistant.')
@@ -429,6 +436,9 @@ for iOri = 1:nOrientations
         Signals{iOri} = signal;
         Order_n_Signals{iOri} = order_n;
         Statistics{iOri} = statistics;
+        if Method.Ori_cutoffs
+          Ori_Clusters{iOri} = iOri_Clusters;
+        end
       end
       
         
@@ -448,7 +458,6 @@ Temp_Order_n_Signals{numberOfSignals+1} = [];
 
 
 graphs = cell(numberOfSignals,1);
-Ori_Clusters = cell(numberOfSignals,1);
 
 parallelComputing = Method.parallelComputing;
 
@@ -457,7 +466,7 @@ if parallelComputing
   
   parfor iOri = 1:numberOfSignals
     
-    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri}] ...
+    [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri},Ori_Clusters{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
       iOri,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,nOrientations);
     
@@ -522,8 +531,12 @@ if ~isempty(pool)
   delete(pool);
 end
 
-statistics.Statistics = Statistics;
-statistics.uncertainty = uncertainty; 
+if System.doPruneNuclei
+  statistics = Nuclei.Isotopologue;
+else
+  statistics.Statistics = Statistics;
+  statistics.uncertainty = uncertainty;
+end
 Nuclei.graphs = graphs;
 % ========================================================================
 % End of main loop
@@ -776,25 +789,25 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isigna
       fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
     end
     % Get coupling statistics.
-    Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
-    if Method.Ori_cutoffs
-      Nuclei.Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
-      Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
-      for clusterSize = 1:min(Method.order, numel(inClusters))
-        % Combine arrays.
-        C = [Clusters{clusterSize}; inClusters{clusterSize}];
-        
-        % Sort clusters
-        C = sortrows(C);
-        
-        % Remove duplicates
-        keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
-        Clusters{clusterSize} = C(keep,:);
-      end
+%     Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
+%     if Method.Ori_cutoffs
+%       Nuclei.Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
+%       Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
+%       for clusterSize = 1:min(Method.order, numel(inClusters))
+%         % Combine arrays.
+%         C = [Clusters{clusterSize}; inClusters{clusterSize}];
+%         
+%         % Sort clusters
+%         C = sortrows(C);
+%         
+%         % Remove duplicates
+%         keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+%         Clusters{clusterSize} = C(keep,:);
+%       end
       % Clusters = pruneClusters(Nuclei,Clusters,System);
-    else
+%     else
       Clusters = inClusters;
-    end
+%     end
 else
   Clusters = inClusters;
 end
@@ -834,6 +847,9 @@ if Method.partialSave
   parsavefile.progress_powder = true;
   parsavefile.seed = Method.seed;
   parsavefile.statistics = Statistics_isignal;
+  if Method.Ori_cutoffs
+    parsavefile.iOri_Clusters = iOri_Clusters;
+  end
 end
 
 end
@@ -948,7 +964,8 @@ if Method.Ori_cutoffs
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
   Nuclei.Adjacency = Adjacency;
   
-  Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,Method.extraOrder,{});
+  Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,...
+    Method.extraOrder,{}, Method);
   
   for clusterSize = 1:Method.order
     % Combine arrays.
@@ -962,10 +979,12 @@ if Method.Ori_cutoffs
     Clusters{clusterSize} = C(keep,:);
     
     Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1); 
-  end
   
-  if Method.verbose
-    fprintf('Found %d orientation clusters of size %d.\n', size(Clusters{Method.order},1),Method.order);
+  
+    if Method.verbose
+      fprintf('Found %d orientation clusters of size %d.\n', ...
+        size(Clusters{clusterSize},1),clusterSize);
+    end
   end
 end
 
@@ -1063,20 +1082,36 @@ linearTimeAxis = true; % Code should be changed to enforce this.
 
 % Calculate signal
 if Method.mixed_eState
-  [Signal, Order_n_Signal,~] = calculateSignal_pulse(System, Method, Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
+  [Signal, Order_n_Signal,~] = calculateSignal_pulse(System, Method, ...
+    Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
 else
   % Calculate signal and save extra parameters (RAM intensive)
   
   % Check if the theroy is the same for every cluster size.
-  if all(all(System.Theory)==any(System.Theory)) && ~strcmp(Method.method,'HD-CCE')
-%     [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
-%       = calculateSignal_gpu(System, Method, Nuclei,Clusters);
-    [Signal, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
-      = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+  if all(all(System.Theory)==any(System.Theory)) && ...
+      ~strcmp(Method.method,'HD-CCE')
     
-    AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4};
-    
-    Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),Signals(4,:),Signals(5,:),Signals(6,:)};
+    if Method.gpu
+      [Signal, AuxiliarySignal_1,AuxiliarySignal_2,...
+        AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
+        = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+      
+      AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,...
+        AuxiliarySignal_3,AuxiliarySignal_4};
+      
+      Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),...
+        Signals(4,:),Signals(5,:),Signals(6,:)};
+    else
+      
+      [Signal, AuxiliarySignal, Signals] ...
+        = calculateSignal(System, Method, Nuclei,Clusters);
+      
+      Order_n_Signal = cell(1,Method.order);
+      
+      for ii = 1:Method.order
+        Order_n_Signal{ii} = Signals(1,ii);
+      end
+    end
   else
     Order_n_Signal = cell(1,Method.order);
     AuxiliarySignal = cell(1,Method.order);
@@ -1094,7 +1129,8 @@ else
       
       % Check for orders with the same theory.
       for jorder = iorder:MethodOrder
-        if ~all(   all(  System.Theory(iorder:jorder,:),1  )  == any(System.Theory(iorder:jorder,:),1 ) )
+        if ~all(   all(  System.Theory(iorder:jorder,:),1  )  ...
+            == any(System.Theory(iorder:jorder,:),1 ) )
           break;
         end
         new_order = jorder;
@@ -1113,8 +1149,9 @@ else
         Nuclei = newHydronIsotopologue(Nuclei,System);
         
         % Get proton auxiliary signals.
-        [ClusterArray, Coherences_1H,Coherences_2H,SubclusterIndices_2H,dimensionality,~] ...
-          = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+        [ClusterArray, Coherences_1H,Coherences_2H,...
+          SubclusterIndices_2H,dimensionality,~] ...
+          = calculateSignal_gpu(System, Method, Nuclei,Clusters);
         
         % Change all hydrons to deuteron.
         System.deuteriumFraction = 1;
@@ -1123,27 +1160,42 @@ else
         % Get deuteron auxiliary signals.
 
         [~, Coherences_1D,Coherences_2D,SubclusterIndices_2D,~,~] ...
-          = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+          = calculateSignal_gpu(System, Method, Nuclei,Clusters);
         
         
         [Signals, ...
           AuxiliarySignal_1,AuxiliarySignal_2] = ...
           doHydrogenIsotopologueCCE(...
-          Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, fractions, ClusterArray, ...
+          Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, ...
+          fractions, ClusterArray, ...
           SubclusterIndices_2H,SubclusterIndices_2D,...
-          System.timepoints,dimensionality, Method.order,Nuclei.numberClusters,Nuclei.Exchangeable,Nuclei.MoleculeID);
+          System.timepoints,dimensionality, Method.order,...
+          Nuclei.numberClusters,Nuclei.Exchangeable,Nuclei.MoleculeID);
         
         System.deuteriumFraction = fractions;
 
       else
         
-        [~, AuxiliarySignal_1,AuxiliarySignal_2,AuxiliarySignal_3,AuxiliarySignal_4,~] ...
-          = methyl_calculateSignal(System, Method, Nuclei,Clusters);
+        if Method.gpu
+          [~, AuxiliarySignal_1,AuxiliarySignal_2,...
+            AuxiliarySignal_3,AuxiliarySignal_4,~] ...
+            = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+        else
+          
+          [~, AuxiliarySignal_ofOrder, ~] ...
+            = calculateSignal(System, Method, Nuclei,Clusters);
+          
+          Order_n_Signal = cell(1,Method.order);
+          
+          for ii = 1:Method.order
+            Order_n_Signal{ii} = Signals(1,ii);
+          end
+        end
       end
       % Record the appropraite signals.
       for record_order = iorder:new_order
         
-        
+        if Method.gpu
         switch record_order
           case 1
             AuxiliarySignal{record_order} = AuxiliarySignal_1;
@@ -1154,11 +1206,14 @@ else
           case 4
             AuxiliarySignal{record_order} = AuxiliarySignal_4;
         end
-      
+        else
+          AuxiliarySignal{record_order} = AuxiliarySignal{record_order};
+        end
        
           Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
           if record_order > 1
-            Order_n_Signal{record_order} = Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
+            Order_n_Signal{record_order} = ...
+              Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
           end
         
       
@@ -1218,8 +1273,9 @@ if ~isempty(OutputData)
             experiment_time = sim_.experiment_time;
             TM_powder = sim_.TM_powder;
             % uncertainty = sim_.uncertainty;
-            statistics = sim_.statistics;
-            
+            if isfield(sim_,'statistics')
+              statistics = sim_.statistics;
+            end
             
             if isfield(sim_,'Order_n_SignalMean')
               Order_n_SignalMean = sim_.Order_n_SignalMean;

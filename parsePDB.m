@@ -75,7 +75,10 @@ for iline = 1:nLines
     
     VanDerWaalsRadii(iNucleus) = getVanDerWaalsRadius(Element_);
     % Determine if atom is not part of the solvent.
-    if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL') && ~strcmp(ResidueName_,'MGLY') && ~strcmp(ResidueName_,'MGL')
+    if ~strcmp(ResidueName_,'WAT')  && ~strcmp(ResidueName_,'SOL') ...
+        && ~strcmp(ResidueName_,'MGLY') && ~strcmp(ResidueName_,'MGL') ...
+        && ~strcmp(ResidueName_,'TIP') && ~strcmp(ResidueName_,'IP3') ...
+        && ~strcmp(ResidueName_,'DOP') && ~strcmp(ResidueName_,'OPC') 
       isSolvent(iNucleus) = false;
     else
       isSolvent(iNucleus) = true;

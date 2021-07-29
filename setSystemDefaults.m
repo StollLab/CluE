@@ -74,6 +74,26 @@ end
 if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
   Method.Criteria = {'dipole'};
 end
+
+num_criteria = numel(Method.Criteria);
+for ii = 1:num_criteria
+  switch Method.Criteria{ii}
+    case 'methyl only'
+      if ~isfield(Method.cutoff,'methylOnly')
+        Method.cutoff.methylOnly = true(1,Method.order);
+      end
+      break;
+      
+    case 'methyl coupled only'
+      if ~isfield(Method.cutoff,'methylCoupledOnly')
+        Method.cutoff.methylCoupledOnly = true(1,Method.order);
+      end
+      break;
+  end
+end
+
+
+
 zer = zeros(1,Method.order);
 if ~isfield(Method,'cutoff') 
   Method.cutoff.modulation = zer;
@@ -87,6 +107,8 @@ if ~isfield(Method,'cutoff')
   Method.cutoff.min_distance = zer;
   Method.cutoff.hyperfine_sup = inf + zer;
   Method.cutoff.hyperfine_inf = zer;
+  Method.cutoff.methylOnly = false(1,Method.order);
+  Method.cutoff.methylCoupledOnly = false(1,Method.order);
 end
 if ~isfield(Method.cutoff,'bAmax') 
   Method.cutoff.bAmax = zer;
@@ -116,6 +138,21 @@ if ~isfield(Method,'Ori_cutoffs')
   Method.Ori_cutoffs = false;
 end
 
+if ~isfield(Method.cutoff,'methylOnly')
+  Method.cutoff.methylOnly = false(1,Method.order);
+end
+if numel(Method.cutoff.methylOnly) < Method.order
+  n_ = numel(Method.cutoff.methylOnly);
+  Method.cutoff.methylOnly(n_:Method.order) = Method.cutoff.methylOnly(n_);
+end
+
+if ~isfield(Method.cutoff,'methylCoupledOnly')
+  Method.cutoff.methylCoupledOnly = false(1,Method.order);
+end
+if numel(Method.cutoff.methylCoupledOnly) < Method.order
+  n_ = numel(Method.cutoff.methylCoupledOnly);
+  Method.cutoff.methylCoupledOnly(n_:Method.order) = Method.cutoff.methylCoupledOnly(n_);
+end
 if numel(Method.cutoff.dipole) < Method.order
   n_ = numel(Method.cutoff.dipole);
   Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
@@ -391,6 +428,9 @@ if ~isfield(System,'Methyl')
 end
 if ~isfield(System.Methyl,'include')
   System.Methyl.include = false;
+end
+if ~isfield(System.Methyl,'method')
+  System.Methyl.method = 0;
 end
 if ~isfield(System.Methyl,'methylMethylCoupling')
   System.Methyl.methylMethylCoupling = false;
@@ -707,6 +747,22 @@ else
   Method.mixed_eState = false;
 end
 
+
+if ~isfield(System,'RF')
+  System.RF.B1x = 0;
+  System.RF.B1y = 0;
+  System.RF.nuRF = 0;
+end
+if ~isfield(System.RF, 'B1x')
+  System.RF.B1x = 0;
+end
+if ~isfield(System.RF, 'B1y')
+  System.RF.B1y = 0;
+end
+if ~isfield(System.RF, 'nuRF')
+  System.RF.nuRF = 0;
+end
+
 if ~isfield(Method,'vectorized')
   Method.vectorized = false;
 end
@@ -763,7 +819,9 @@ if ~isfield(System,'HydrogenExchange')
   System.HydrogenExchange = 'OH';
 end  
 
-
+if ~isfield(System,'isUnitCell')
+  System.isUnitCell = true;
+end
 
 statistics.parameters.radius = System.radius;
 statistics.parameters.neighborCutoffCriteria = Method.Criteria;

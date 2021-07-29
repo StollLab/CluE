@@ -22,14 +22,12 @@ for ispin = 1:N
   if strcmp(Nuclei.Type{ispin},'CH3') && System.Methyl.include
     pwstat.Methyl_Data.number_methyls = pwstat.Methyl_Data.number_methyls + 1;
     pwstat.Methyl_Data.ID(pwstat.Methyl_Data.number_methyls) = ispin;
-%     continue;
+ 
   end
   
   % Loop over all nuclear spins with a higher index than ispin.
   for jspin = ispin+1:N
-%     if strcmp(Nuclei.Type{ispin},'CH3')
-%       continue;
-%     end
+ 
     deltaR_ = pwstat.Coordinates(ispin,:)-pwstat.Coordinates(jspin,:);
     
     % Set separation matrix entry.
@@ -49,6 +47,7 @@ for ispin = 1:N
     pwstat.PhiMatrix(jspin,ispin) = pwstat.PhiMatrix(ispin,jspin);
   end
 end  
+
 % Coordinates
 pwstat.Distance = vecnorm(pwstat.Coordinates,2,2);
 pwstat.Cylindrical_Distance = vecnorm(pwstat.Coordinates(:,1:2),2,2);

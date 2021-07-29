@@ -34,18 +34,10 @@ Hhf = 0;
 E = 1; Z = 2; RAISE = 3; SZ = 4;
 
 Hmf = 0;
-Hmf0 = 0; %MeanFieldTotal*I0;
+Hmf0 = 0;
 Hmf0_ = 0;
 
-%{
-if useMeanField
-  % ENUM
-  E = 1; Z = 2; RAISE = 3; SZ = 4;
-  Hmf0 = MeanFieldTotal;
-else
-  Hmf0 = 0;
-end
-%}
+
 
 % iSpin is the index of the nuclear spin in the cluster
 for iSpin = 1:clusterSize
