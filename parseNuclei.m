@@ -534,7 +534,8 @@ end
 % Nuclear magnetic resonance line shapes of methyl groups
 % undergoing tunnelling rotation
 
-Nuclei.methylTunnelingSplitting = sparse(Nuclei.number,Nuclei.number);
+Nuclei.methylTunnelingSplitting = sparse( ...
+  double(Nuclei.number),double(Nuclei.number));
 for iNuc = 1:Nuclei.number
   if strcmp(Nuclei.Type{iNuc}, 'CH3')
     Nuclei.methylTunnelingSplitting(iNuc+1,iNuc+2) = nuT;
