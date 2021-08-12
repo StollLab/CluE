@@ -7,7 +7,7 @@
 %   Method       structure with fields for the method
 %   pdbFileName  name of PDB file
 
-function [Nuclei, System]= parseNuclei(System,Method,pdbFileName)
+function [Nuclei, System]= parseNuclei(System,Method,Data,pdbFileName)
 
 % set values to unspecified fields
 System = setIsotopeDefaults(System,Method);
@@ -44,7 +44,7 @@ end
 Nuclei.isSolvent = isSolvent;
 
 % Set electron coordinates in the pdb frame.
-Electron_pdbCoordinates = getElectronCoordinates(System,pdbCoordinates,pdbID);
+Nuclei.Electron_pdbCoordinates = getElectronCoordinates(System,pdbCoordinates,pdbID);
 
 % number of PDB entries used
 Npdb = length(Type);
@@ -77,7 +77,7 @@ if System.RandomEnsemble.include
   
   [pdbCoordinates,Type,Connected,Indices_nonSolvent,pdbID,MoleculeID,...
     numberH,isSolvent,isWater,Exchangeable,VanDerWaalsRadii] = ...
-    addRandomSpins(System, Electron_pdbCoordinates, ...
+    addRandomSpins(System, Nuclei.Electron_pdbCoordinates, ...
     pdbCoordinates,Type,Connected,Indices_nonSolvent,pdbID,...
     MoleculeID,numberH,isSolvent,isWater,Exchangeable,VanDerWaalsRadii);
   
@@ -93,7 +93,8 @@ end
 
 
 System.UnitCell = UnitCell;
-cellshifts = getCellShifts(pdbCoordinates, Electron_pdbCoordinates, System);
+cellshifts = getCellShifts(pdbCoordinates, Nuclei.Electron_pdbCoordinates,...
+  System);
 numberUnitCells = size(cellshifts,1);
 
 Nuclei.quadrupole2lab = zeros(3,3,numberH(2)*numberUnitCells);
@@ -116,7 +117,7 @@ for uc = 1:numberUnitCells
   Delta_R = cellshifts(uc,:);
   
   ElectronCenteredCoordinates = ...
-    scaleFactor*(pdbCoordinates + Delta_R - Electron_pdbCoordinates);
+    scaleFactor*(pdbCoordinates + Delta_R - Nuclei.Electron_pdbCoordinates);
   
   % loop over all nuclei
   for inucleus = 1:size(Type,2)
@@ -167,7 +168,7 @@ for uc = 1:numberUnitCells
       Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
       Nuclei.Nuclear_g(iNuc) = 5.58569;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
-      Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:);
+      Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
       Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.Exchangeable(iNuc) = Exchangeable(inucleus);
       Nuclei.NumberStates(iNuc) = int8(2);
@@ -186,15 +187,16 @@ for uc = 1:numberUnitCells
       Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
       Nuclei.Nuclear_g(iNuc) = 5.58569;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
-      Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:);
+      Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
       Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.Exchangeable(iNuc) = false; 
       Nuclei.NumberStates(iNuc) = int8(8);
       Nuclei.valid(iNuc)= System.Methyl.method~=2; % 
       
       ID_ref_ = find(Methyl_Data.ID(:,1)==inucleus);
-      Nuclei.Group_ID{iNuc} = Methyl_Data.ID(ID_ref_,2);
-      Nuclei.MethylID(iNuc) = -Methyl_Data.ID(ID_ref_,2);
+      methylID_ = Methyl_Data.ID(ID_ref_,2) + max(Methyl_Data.ID(:,2))*(uc - 1);
+      Nuclei.Group_ID{iNuc} = methylID_;
+      Nuclei.MethylID(iNuc) = -methylID_;
       Nuclei.Auxiliary_ID(iNuc,:) = Methyl_Data.Hydron_ID{inucleus};
 
       
@@ -212,11 +214,11 @@ for uc = 1:numberUnitCells
       Nuclei.Coordinates((iNuc),:) = ...
         scaleFactor*(...
         Methyl_Data.Hydron_Coordinates{inucleus}(1,:) ...
-        + Delta_R - Electron_pdbCoordinates);
+        + Delta_R - Nuclei.Electron_pdbCoordinates);
       Nuclei.PDBCoordinates((iNuc),:) = ...
-        Methyl_Data.Hydron_Coordinates{inucleus}(1,:);
+        Methyl_Data.Hydron_Coordinates{inucleus}(1,:) + Delta_R;
       Nuclei.NumberStates(iNuc) = int8(2);
-      Nuclei.MethylID(iNuc) = Methyl_Data.ID(ID_ref_,2);
+      Nuclei.MethylID(iNuc) = methylID_;
       Nuclei.valid(iNuc) = System.Methyl.method==2; 
       Nuclei.Abundance(iNuc) = 1;
       
@@ -231,11 +233,11 @@ for uc = 1:numberUnitCells
       Nuclei.Coordinates((iNuc),:) = ...
         scaleFactor*(...
         Methyl_Data.Hydron_Coordinates{inucleus}(2,:) ...
-        + Delta_R - Electron_pdbCoordinates);
+        + Delta_R - Nuclei.Electron_pdbCoordinates);
       Nuclei.PDBCoordinates((iNuc),:) = ...
-        Methyl_Data.Hydron_Coordinates{inucleus}(2,:);
+        Methyl_Data.Hydron_Coordinates{inucleus}(2,:) + Delta_R;
       Nuclei.NumberStates(iNuc) = int8(2);
-      Nuclei.MethylID(iNuc) = Methyl_Data.ID(ID_ref_,2);
+      Nuclei.MethylID(iNuc) = methylID_;
       Nuclei.valid(iNuc)= System.Methyl.method==2; 
       Nuclei.Abundance(iNuc) = 1;
       
@@ -250,11 +252,11 @@ for uc = 1:numberUnitCells
       Nuclei.Coordinates((iNuc),:) = ...
         scaleFactor*(...
         Methyl_Data.Hydron_Coordinates{inucleus}(3,:) ...
-        + Delta_R - Electron_pdbCoordinates);
+        + Delta_R - Nuclei.Electron_pdbCoordinates);
       Nuclei.PDBCoordinates((iNuc),:) = ... 
-        Methyl_Data.Hydron_Coordinates{inucleus}(3,:);
+        Methyl_Data.Hydron_Coordinates{inucleus}(3,:) + Delta_R;
       Nuclei.NumberStates(iNuc) = int8(2);
-      Nuclei.MethylID(iNuc) = Methyl_Data.ID(ID_ref_,2);
+      Nuclei.MethylID(iNuc) = methylID_;
       Nuclei.valid(iNuc)= System.Methyl.method==2; 
       Nuclei.isWater(iNuc) = false; 
       Nuclei.Abundance(iNuc) = 1;
@@ -270,7 +272,7 @@ for uc = 1:numberUnitCells
       Nuclei.StateMultiplicity(iNuc) = 2*Nuclei.Spin(iNuc) +1;
       Nuclei.Nuclear_g(iNuc) = 0.857438;
       Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
-      Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:);
+      Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
       %Nuclei.pdbID(iNuc) = pdbID(inucleus);
       Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
       Nuclei.Exchangeable(iNuc) = Exchangeable(inucleus);
@@ -668,9 +670,15 @@ Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
 [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
+
 Nuclei.ZeemanStates = setRandomZeemanState(Nuclei);
 [Nuclei.RandomDenityMatrices,Nuclei.RandomSpinVector] = ...
   setRandomDensityMatrix(Nuclei);
+
+
+
+writeSpinPDB(Nuclei,ones(1,Nuclei.number),...
+  [Data.OutputData, '_spinSystem.pdb']);
 
 % Clean
 Nuclei.State = [];
@@ -693,6 +701,7 @@ else
   Nuclei.isWater = [];
 end    
 
+checkNuclei(Nuclei);
 end
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -866,25 +875,6 @@ for iinucleus = Nuclei.number:-1:1
 end
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-% Sets the initial bath state with a Boltzmann distribution.
-% Both output variables contain the same information, but are formated
-% differently.
-function ZeemanState = setRandomZeemanState(Nuclei)
-
-nStates = Nuclei.nStates; 
-maxnStates = max(nStates);
-ZeemanState = zeros(maxnStates,Nuclei.number);
-
-% Loop through all nuclei.
-for iSpin = 1:Nuclei.number
-  I = Nuclei.Spin(iSpin);
-  ZeemanState(:,iSpin) =  randi(2*I+1,maxnStates,1); 
-  
-end
-end
 
 
 function [randDen,randSpin] = setRandomDensityMatrix(Nuclei)
@@ -1136,7 +1126,7 @@ end
   
 % Multiply the current number of cells by the number in this dimension.
 numUnitCells = prod( 1 +  numUCplus + numUCminus);
-if numUnitCells
+if numUnitCells == 1
   cellshifts = zeros(1,3);
   return;
 end
@@ -1187,6 +1177,7 @@ end
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function Nuclei = defineSpinOperators(Nuclei,System, Method)
 
+nuT = System.Methyl.tunnel_splitting;
 maxSize = 10;
 maxClusterSize = [0,6,6];
 if System.Methyl.methylMethylCoupling
@@ -1376,3 +1367,29 @@ end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function allPass = checkNuclei(Nuclei)
+
+METHYLID = 1;
+pass(METHYLID) = true;
+
+for ii=1:Nuclei.number
+  if Nuclei.MethylID(ii) > 0
+  
+    pass(METHYLID) = pass(METHYLID)*( ...
+      sum(Nuclei.MethylID==Nuclei.MethylID(ii)) ==3);
+
+  elseif Nuclei.MethylID(ii) < 0
+    
+    pass(METHYLID) = pass(METHYLID)*( ...
+      sum(Nuclei.MethylID==Nuclei.MethylID(ii)) ==1);
+  
+  end
+end
+if ~pass(METHYLID)
+  error(['Error in checkNuclei(): ', 'methylID is not correctly set up.']);
+end
+
+  allPass = all(pass(METHYLID)); 
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

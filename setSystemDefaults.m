@@ -326,6 +326,10 @@ end
 if numel(System.nStates) < Method.order
   System.nStates(end+1:Method.order) = 1;
 end
+
+if~isfield(Method,'includeAllSubclusters')
+  Method.includeAllSubclusters = false;
+end
 % Toggle between calculating the spin Hamiltonian or pairwise couplings.
 if ~isfield(Method,'HamiltonianType')
   Method.HamiltonianType = 'pairwise';
@@ -438,13 +442,13 @@ end
 if ~isfield(System.Methyl,'moment_of_inertia')
   System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
 end
-if ~isfield(System.Methyl,'V3')
+if ~isfield(System.Methyl,'V3') && ~isfield(System.Methyl,'tunnel_splitting')
   System.Methyl.V3 = 86*1e-3*System.eV;
 end
 if ~isfield(System.Methyl,'lockRotors')
   System.Methyl.lockRotors = false;
 end
-if ~isfield(System.Methyl,'tunnel_spliting')
+if ~isfield(System.Methyl,'tunnel_splitting')
   System.Methyl.omega_harmonic_oscillator = sqrt(9*System.Methyl.V3/System.Methyl.moment_of_inertia); % rad/s
   
 %   System.Methyl.instanton_action = 8*System.Methyl.moment_of_inertia*System.Methyl.omega_harmonic_oscillator/9; % J*s

@@ -12,7 +12,9 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii] = parsePDB(filename,System)
+function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, ...
+  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii]...
+  = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -131,14 +133,16 @@ for iline = 1:nLines
     referenceNucleus = numbers(1);
     ConnectedNuclei = numbers(2:end);
     
-    Connected{referenceNucleus} = unique([Connected{referenceNucleus},ConnectedNuclei]);
+    Connected{referenceNucleus} = unique(...
+      [Connected{referenceNucleus},ConnectedNuclei]);
     
     for index_ = Connected{referenceNucleus}
       if index_ == referenceNucleus
         continue
       end
       if index_>nLines
-        disp('CONECT data is not readable: check that whitspaces separate each number.');
+        disp(['CONECT data is not readable:',...
+          'check that whitspaces separate each number.']);
         continue
       end
       if ~isempty(Connected{index_})
@@ -161,8 +165,10 @@ for iline = 1:nLines
           otherwise
             Exchangeable(referenceNucleus) = System.defaultExchangability;
         end
-        if ~isempty(exchangable_) && exchangable_~= Exchangeable(referenceNucleus)
-          fprintf('Inconsistant exchangability for nucleus %d.\n',referenceNucleus);
+        if ~isempty(exchangable_) && exchangable_~=...
+            Exchangeable(referenceNucleus)
+          fprintf('Inconsistant exchangability for nucleus %d.\n', ...
+            referenceNucleus);
           disp('    Using System.defaultExchangability.')
           break;
         end
@@ -175,13 +181,23 @@ for iline = 1:nLines
     % Parse information about unit cell
     
     UnitCell.isUnitCell = true;
-    values_ = sscanf(line_(7:54),'%f %f %f %f %f %f');
+    try
+      values_ = sscanf(line_(7:66),'%f %f %f %f %f %f %s %i');
+    catch
+      values_ = sscanf(line_(7:end),'%f %f %f %f %f %f');
+    end
     UnitCell.ABC = values_(1:3)*System.angstrom; % angstrom -> m
     UnitCell.Angles = values_(4:6)*pi/180; % degree -> rad
+    if length(values_)>=8
+      UnitCell.spaceGroup = values_(8);
+    else
+      UnitCell.spaceGroup = 1;
+    end
     
   end
   
 end
+
 
 % Removed unused array slots.
 isSolvent(iNucleus+1:end) = [];
@@ -191,8 +207,52 @@ Type(iNucleus+1:end) = [];
 Exchangeable(iNucleus+1:end) = [];
 Indices_nonSolvent = find(~isSolvent);
 isWater(iNucleus+1:end) = [];
+VanDerWaalsRadii(iNucleus+1:end) = [];
+Connected(iNucleus+1:end) = [];
+
+if UnitCell.isUnitCell && UnitCell.spaceGroup == -1
+  [Coordinates,Type,Connected, Indices_nonSolvent, ...
+  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii]...
+  = mirrorPDB(Coordinates,Type,Connected, Indices_nonSolvent, ...
+  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii);
+end
 
 end
+
+
+
+
+function [Coordinates,Type,Connected, Indices_nonSolvent, ...
+  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii]...
+  = mirrorPDB(Coordinates,Type,Connected, Indices_nonSolvent, ...
+  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii)
+
+
+  Coordinates_ = -Coordinates;
+  Coordinates = [Coordinates;Coordinates_];
+  
+  Type = [Type(:);Type(:)]';
+  
+  N = length(pdbID);
+  pdbID = [pdbID,pdbID(end)+1:pdbID(end)+N];
+  
+  numConnect = size(Connected,2);
+  for ii = 1:numConnect
+    Connected{ii+N} = Connected{ii} + N;
+  end
+  
+  Indices_nonSolvent = [Indices_nonSolvent,Indices_nonSolvent+N];
+  MoleculeID = [MoleculeID,MoleculeID+MoleculeID(end)];
+  numberH = 2*numberH;
+  isSolvent = [isSolvent,isSolvent];
+  isWater = [isWater,isWater];
+  Exchangeable = [Exchangeable,Exchangeable];
+  VanDerWaalsRadii = [VanDerWaalsRadii,VanDerWaalsRadii];
+  
+
+  
+end
+
 
 
 

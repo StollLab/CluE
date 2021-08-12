@@ -21,7 +21,8 @@
 %}
 function [tensors,zeroIndex] = pairwisetensors_gpu(...
   Nuclei_g, Nuclei_Coordinates,Cluster,HF_tensor, magneticField, ge, geff,...
-  muB, muN, mu0, hbar,theory,B1x,B1y,nuRF)
+  muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
+          mean_Dipole_z_Z, mean_Dipole_x_iy_Z)
 
 zeroIndex = min(Cluster) - 1;
 Indices = fliplr(Cluster);
@@ -39,6 +40,7 @@ useRF       = abs(B1x)>0 || abs(B1y) >0;
 if useEZ
   tensors(3,3,1,1) = constructElectronZeeman(magneticField,geff, muB, hbar);
 end
+
 
 inucleus = 0;
 for i_index_nucleus = Indices
@@ -63,6 +65,22 @@ for i_index_nucleus = Indices
     tensors(2,2,1+inucleus,1+inucleus) = constructNuclearZeeman(...
       Nuclei_g,i_index_nucleus,B1y, muN, hbar);
   end
+
+  
+  % Add mean fields.
+  if ~isempty( mean_Dipole_z_Z)
+    tensors(3,3,1+inucleus,1+inucleus) = tensors(3,3,1+inucleus,1+inucleus)...
+      + mean_Dipole_z_Z(i_index_nucleus);
+  end
+  if ~isempty(mean_Dipole_x_iy_Z)
+    % x
+    tensors(1,1,1+inucleus,1+inucleus) = tensors(1,1,1+inucleus,1+inucleus)...
+      + real(mean_Dipole_x_iy_Z(i_index_nucleus));
+    % y
+    tensors(2,2,1+inucleus,1+inucleus) = tensors(2,2,1+inucleus,1+inucleus)...
+      + imag(mean_Dipole_x_iy_Z(i_index_nucleus));
+  end
+
   
   % Hyperfine
   if useHF

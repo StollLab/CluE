@@ -16,37 +16,28 @@ if System.Methyl.include
   pwstat.Methyl_Data.ID = zeros(Nuclei.Methyl_Data.number_methyls,1);
   pwstat.Methyl_Data.number_methyls = 0;
 end
-% Loop over all nuclear spins.
-for ispin = 1:N
+
+
+% Methyl Groups
+isMethylCarbon = strcmp(Nuclei.Type,'CH3');
+isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
+
+pwstat.Methyl_Data.number_methyls = sum(isMethylCarbon);
+pwstat.Methyl_Data.ID = double(Nuclei.Index(isMethylCarbon));
+
+deltaX = pwstat.Coordinates(:,1)-pwstat.Coordinates(:,1)';
+deltaY = pwstat.Coordinates(:,2)-pwstat.Coordinates(:,2)';
+deltaZ = pwstat.Coordinates(:,3)-pwstat.Coordinates(:,3)';
+
+pwstat.DistanceMatrix = sqrt(deltaX.^2 + deltaY.^2 + deltaZ.^2);
+pwstat.Cylindrical_DistanceMatrix = sqrt(deltaX.^2 + deltaY.^2);
+
+pwstat.ThetaMatrix = acos(deltaZ./pwstat.DistanceMatrix);
+pwstat.PhiMatrix = acos(deltaX./pwstat.Cylindrical_DistanceMatrix) ...
+  + pi*(deltaY<0);
+
+pwstat.PhiMatrix(deltaY==0) = 0;
  
-  if strcmp(Nuclei.Type{ispin},'CH3') && System.Methyl.include
-    pwstat.Methyl_Data.number_methyls = pwstat.Methyl_Data.number_methyls + 1;
-    pwstat.Methyl_Data.ID(pwstat.Methyl_Data.number_methyls) = ispin;
- 
-  end
-  
-  % Loop over all nuclear spins with a higher index than ispin.
-  for jspin = ispin+1:N
- 
-    deltaR_ = pwstat.Coordinates(ispin,:)-pwstat.Coordinates(jspin,:);
-    
-    % Set separation matrix entry.
-    pwstat.DistanceMatrix(ispin,jspin) = norm(deltaR_);
-    pwstat.Cylindrical_DistanceMatrix(ispin,jspin) = norm(deltaR_(1:2));
-    
-    cosTheta_ = deltaR_(3)/pwstat.DistanceMatrix(ispin,jspin);
-    pwstat.ThetaMatrix(ispin,jspin) = acos(cosTheta_);
-    
-    cosPhi_ = deltaR_(1)/pwstat.Cylindrical_DistanceMatrix(ispin,jspin);
-    pwstat.PhiMatrix(ispin,jspin) = acos(cosPhi_) + (1 - sign( deltaR_(2) ))*pi/2;
-    
-    % Use the symmetric nature of the separation matrix to set the ispin > jspin entries. 
-    pwstat.DistanceMatrix(jspin,ispin) = pwstat.DistanceMatrix(ispin,jspin);
-    pwstat.Cylindrical_DistanceMatrix(jspin,ispin) = pwstat.Cylindrical_DistanceMatrix(ispin,jspin);
-    pwstat.ThetaMatrix(jspin,ispin) = pwstat.ThetaMatrix(ispin,jspin);
-    pwstat.PhiMatrix(jspin,ispin) = pwstat.PhiMatrix(ispin,jspin);
-  end
-end  
 
 % Coordinates
 pwstat.Distance = vecnorm(pwstat.Coordinates,2,2);
@@ -76,12 +67,25 @@ pwstat.DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
 
 
 % Nuclear Dipole-Dipole
-b_perp = 0.25*(System.mu0/4/pi).*(Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2; % J m^3.
-b_perp = -b_perp./pwstat.DistanceMatrix.^3; % J.
-b_perp = b_perp/(System.h); % Hz.
-b = b_perp.*(1-3*cos(pwstat.ThetaMatrix).^2);
-pwstat.Nuclear_Dipole_perpendicular = 4*b_perp; % Hz.
+b_fliflopPerp = -(0.25*(System.mu0/4/pi).* ...
+  (Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2) ...
+  ./pwstat.DistanceMatrix.^3; % J.
+
+b_fliflopPerp = b_fliflopPerp/(System.h); % Hz.
+b = b_fliflopPerp.*(1-3*cos(pwstat.ThetaMatrix).^2);
+pwstat.Nuclear_Dipole_perpendicular = 4*b_fliflopPerp; % Hz.
 pwstat.Nuclear_Dipole = 4*b; % Hz.
+
+
+pwstat.Nuclear_Dipole_x_iy_Z = zeroDiag(...
+  pwstat.Nuclear_Dipole_perpendicular.* ...
+  exp(1i*pwstat.PhiMatrix) .* ...
+  sin(pwstat.ThetaMatrix) .* cos(pwstat.ThetaMatrix)...
+);
+if any(isnan(pwstat.Nuclear_Dipole_x_iy_Z(:)))
+  error(['Error in getPairwiseStatistics(): ', ...
+    'Nuclear_Dipole_x_iy_Z contains NANs.']);
+end
 
 % |bA_{mav}|^{1/2}.
 pwstat.Amax = max( abs(pwstat.Hyperfine_perpendicular), abs(pwstat.Hyperfine_perpendicular'));
@@ -101,7 +105,7 @@ pwstat.Modulation_Depth_p = modDepth_p;
 pwstat.Modulation_Depth = modDepth;
 
 % modulation frequency
-pwstat.Frequency_Pair_p =  b_perp.*sqrt(1+cp.^2); % Hz
+pwstat.Frequency_Pair_p =  b_fliflopPerp.*sqrt(1+cp.^2); % Hz
 pwstat.Frequency_Pair   =  b.*sqrt(1+c.^2); % Hz
 
 % delta_gm_gn
@@ -124,7 +128,7 @@ pwstat.GaussianRMSD = getGaussianRMSD(modDepth,pwstat.Frequency_Pair,TM);
 %   pwstat.DistanceMatrix(pwstat.DistanceMatrix == 0) = nan;
   
   if System.Methyl.include
-    methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0)';
+    methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0);
     for ispin  = methylList_
       hydrons_ = ispin + [1 ,2, 3];
       

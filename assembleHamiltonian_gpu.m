@@ -3,10 +3,6 @@ function [H_alpha,H_beta] = assembleHamiltonian_gpu(state_multiplicity,...
   theory,isMethyl,methylMethod, methylTunnelingSplitting, methylID)
 
 
-if methylMethod ~=2 && sum(isMethyl)>3
-  error(['CluE is not yet able to distiguish methyls from each other. ', ...
-    'Please avoid methyl-methyl coupling until this is implemented.']);
-end
 
 % debug test
 % test_spinopidx();

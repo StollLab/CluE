@@ -80,7 +80,7 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   Progress.LoadSavedData = true;
   
 elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') || strcmp(InputData,'System.RandomEnsemble.include')
-  [Nuclei, System] = parseNuclei(System, Method, InputData);
+  [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
   System.Electron.Coordinates = [0,0,0];
   if Nuclei.number < 1
     Signals{1} = ones(size(System.Time));
@@ -369,6 +369,13 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   GridInfo.Alpha      = Alpha;
   GridInfo.Beta       = Beta;
   
+elseif strcmp(System.averaging,'random')
+  
+  % Generate random Euler angles.
+  Alpha = rand(1,gridSize)*2*pi;
+  Beta = acos( 2*rand(1,gridSize) - 1);
+  gridWeight = ones(gridSize,1)/gridSize;
+
 end
 
 nOrientations = gridSize;
@@ -958,7 +965,7 @@ Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 Statistics = Nuclei.Statistics;
 Ori_Clusters = [];
 if Method.Ori_cutoffs
-  
+
   Statistics = getPairwiseStatistics(System, Nuclei);
   Nuclei.Statistics = Statistics;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);

@@ -19,11 +19,6 @@ function Clusters = findClusters_treeSearch(Nuclei,order,adjacencyOrder,...
 N = Nuclei.number;
 
 inOrder = numel(inClusters);
-methylCoupledOnly = any(strcmp(Method.Criteria,'methyl coupled only'));
-% Methyl Groups
-isMethylCarbon = strcmp(Nuclei.Type,'CH3');
-isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
-isMethyl = isMethylCarbon | isMethylHydron;
 
 % Get adjacency matrix and convert to logical
 if (inOrder < order) && (inOrder>=2)
@@ -84,12 +79,6 @@ for clusterSize = 2:order
   for icluster = 1:numC_
     cluster = Clusters{clusterSize-1}(icluster,:);
 
-    if methylCoupledOnly ...
-        && Method.cutoff.methylCoupledOnly(clusterSize)
-      if ~any(isMethyl(cluster))
-        continue;
-      end
-    end
     % Find all vertices connected to nuclei in cluster
     neighbors = any(Adjacency(:,cluster),2);
     
@@ -142,6 +131,53 @@ for clusterSize = 2:order
   end
   Clusters{clusterSize} = C(keep,:);
   
+end
+
+
+methylCoupledOnly = any(strcmp(Method.Criteria,'methyl coupled only'));
+
+
+if methylCoupledOnly
+  
+  % Methyl Groups
+  isMethylCarbon = strcmp(Nuclei.Type,'CH3');
+  isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
+  isMethyl = isMethylCarbon | isMethylHydron;
+  
+  for clusterSize = 1:order
+    if ~Method.cutoff.methylCoupledOnly(clusterSize)
+      continue;
+    end
+    
+    C = Clusters{clusterSize};
+    
+    keep  = any(isMethyl(C),2);
+    
+    Clusters{clusterSize} = C(keep,:);
+  end
+end
+
+if Method.includeAllSubclusters
+  Clusters{order};
+  for clusterSize = order-1:-1:1
+    
+    C = Clusters{clusterSize};
+    for ii=1:clusterSize+1
+      C = [C; [Clusters{clusterSize+1}(:,1:ii-1), ...
+        Clusters{clusterSize+1}(:,ii+1:clusterSize+1) ]  ];
+    end
+    
+    % Sort nuclei in each cluster by nuclei index
+    C = sort(C,2);
+    
+    % Sort clusters
+    C = sortrows(C);
+    
+    % Remove duplicates
+    keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+    Clusters{clusterSize} = C(keep,:);
+    
+  end
 end
 
 end

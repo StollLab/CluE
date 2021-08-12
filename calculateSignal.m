@@ -28,6 +28,15 @@ FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; HAHN_TR = 6;
 Theory = System.Theory;
 theory = Theory(Method.order,:);
 
+useMeanFields = theory(10);
+if useMeanFields
+  Nuclear_Dipole_z_Z = zeroDiag(Nuclei.Statistics.Nuclear_Dipole);
+  Nuclear_Dipole_x_iy_Z = zeroDiag(Nuclei.Statistics.Nuclear_Dipole_x_iy_Z);
+else
+  Nuclear_Dipole_z_Z = [];
+  Nuclear_Dipole_x_iy_Z = [];
+end
+
 maxSpinClusterSize = Nuclei.maxClusterSize;
 
 if Theory(Method.order,10)
@@ -122,6 +131,9 @@ methylMethod1 = System.Methyl.method==0;
 isMethylCarbon = strcmp(Nuclei.Type,'CH3');
 isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
 
+
+[Nuclei.ZeemanStates,Nuclei.ZeemanSpinStates] = ...
+  setRandomZeemanState(Nuclei);
 for clusterSize = 1:Method.order
  
   % Find coherences
@@ -257,7 +269,27 @@ for clusterSize = 1:Method.order
     end
     Ha = Hb;
     
+    
     for iave = 1:System.nStates(clusterSize)
+      if useMeanFields
+        
+        ZeemanStates = Nuclei.ZeemanStates(iave,:);
+        spinState = Nuclei.ZeemanSpinStates(iave,:);
+        spinState(thisCluster) = 0;
+        if(size(spinState,2)>1)
+          spinState = spinState';
+        end
+        
+        mean_Dipole_z_Z = Nuclear_Dipole_z_Z*spinState;
+        mean_Dipole_x_iy_Z = Nuclear_Dipole_x_iy_Z*spinState;
+        
+        %       mean_Dipole_z_Z = mean_Dipole_z_Z;
+        %       mean_Dipole_x_iy_Z = mean_Dipole_x_iy_Z;
+      else
+        mean_Dipole_z_Z = [];
+        mean_Dipole_x_iy_Z = [];
+      end
+    
       
     % Loop over cyclic permutations.
       for iPerm = 1:nPerm
@@ -268,13 +300,15 @@ for clusterSize = 1:Method.order
         % Get interaction tensors.
         [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
           Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField, ge,geff,...
-          muB, muN, mu0, hbar,theory,B1x,B1y,nuRF);
+          muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
+          mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
         qtensors = Nuclei.Qtensor(:,:,thisCluster);
         
         if doTR        
           [tensors_TR,~] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
           Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField, ge,geff,...
-          muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2);
+          muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2,...
+          mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
         qtensors = Nuclei.Qtensors(:,:,thisCluster);
         else
           tensors_TR = [];
@@ -316,7 +350,7 @@ for clusterSize = 1:Method.order
         if System.useThermalEnsemble
           densityMatrix = [];
         else
-          densityMatrix = getDensityMatrix(Nuclei.ZeemanStates(iave,thisCluster),...
+          densityMatrix = getDensityMatrix(ZeemanStates(iave,thisCluster),...
             Nuclei.StateMultiplicity(thisCluster),thisCluster);
         end
         
@@ -349,6 +383,8 @@ for clusterSize = 1:Method.order
         EXPERIMENT,densityMatrix, System.useThermalEnsemble, betaT);
       
     end
+    Coherences{clusterSize}(iCluster,:) = ...
+      Coherences{clusterSize}(iCluster,:)/Coherences{clusterSize}(iCluster,1);
   end
 end
 
@@ -1149,6 +1185,14 @@ for iclusterSize = 1:Method.order
   
   SubclusterIndices{iclusterSize} = zeros(nchoosek(iclusterSize,subCluster_size_), iclusterSize , ...
     numberClusters(iclusterSize));
+  
+  % Initialize
+  rotationalMatrix_c1_m1 = [];
+  rotationalMatrix_d1_m1 = [];
+  rotationalMatrix_c2_m1 = [];
+  rotationalMatrix_c2_m2 = [];
+  rotationalMatrix_d2_m1 = [];
+  rotationalMatrix_d2_m2 = [];
 
   switch iclusterSize
   
