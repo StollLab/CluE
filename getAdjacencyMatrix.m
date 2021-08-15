@@ -20,8 +20,8 @@ for isize = 1:Method.extraOrder
   for ii = 1:num_criteria
     switch Method.Criteria{ii}
       case 'distance'
-        Max_R_ = pwstat.DistanceMatrix <= Method.r0;
-        Min_R_ = pwstat.DistanceMatrix > Method.r_min;
+        Max_R_ = pwstat.DistanceMatrix <= Method.cutoff.rMax;
+        Min_R_ = pwstat.DistanceMatrix > Method.cutoff.rMin;
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Max_R_.*Min_R_;
         
       case 'modulation'

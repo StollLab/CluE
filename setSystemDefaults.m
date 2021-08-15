@@ -89,6 +89,15 @@ for ii = 1:num_criteria
         Method.cutoff.methylCoupledOnly = true(1,Method.order);
       end
       break;
+      
+    case 'distance'
+      if ~isfield(Method.cutoff,'rMax')
+        Method.cutoff.rMax = inf;
+      end
+      if ~isfield(Method.cutoff,'rMin')
+        Method.cutoff.rMin = 0;
+      end
+      break;
   end
 end
 
@@ -779,6 +788,9 @@ if ~strcmp(Data.path2CluE(end-5:end),[filesep 'CluE' filesep])
 end  
 if ~isfield(Data,'OutputData')
   Data.OutputData = '';
+end
+if ~isfield(Data,'writeSpinPDB')
+  Data.writeSpinPDB = true;
 end
 if ~isfield(Data,'saveLevel')
   Data.saveLevel = 0;

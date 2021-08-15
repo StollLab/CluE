@@ -676,10 +676,12 @@ Nuclei.ZeemanStates = setRandomZeemanState(Nuclei);
 [Nuclei.RandomDenityMatrices,Nuclei.RandomSpinVector] = ...
   setRandomDensityMatrix(Nuclei);
 
-
-
-writeSpinPDB(Nuclei,ones(1,Nuclei.number),...
-  [Data.OutputData, '_spinSystem.pdb']);
+if Data.writeSpinPDB;
+  try
+    writeSpinPDB(Nuclei,ones(1,Nuclei.number),...
+      [Data.OutputData, '_spinSystem.pdb']);
+  end
+end
 
 % Clean
 Nuclei.State = [];
