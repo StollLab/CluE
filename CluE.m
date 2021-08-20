@@ -475,7 +475,7 @@ if parallelComputing
     
     [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri},Ori_Clusters{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
-      iOri,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,nOrientations);
+      iOri,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,nOrientations);
     
     TempSignals{iOri} = TempSignals_;
     Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
@@ -491,7 +491,7 @@ else
     
     [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics{iOri},graphs{iOri},Ori_Clusters{iOri}] ...
       = getOrientationSignals(System,Method,Nuclei,Clusters, Alpha,Beta, ...
-      iOri,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,nOrientations);
+      iOri,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,nOrientations);
     
     TempSignals{iOri} = TempSignals_;
     Temp_Order_n_Signals{iOri} = Temp_Order_n_Signals_;
@@ -557,8 +557,7 @@ if ~Method.sparseMemory
   end
   
   for iOri = 1:nOrientations
-    
-    if System.newIsotopologuePerOrientation
+    if ~Method.reparseNuclei && System.newIsotopologuePerOrientation
       Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber = Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber ...
         + Statistics{iOri}.Isotopologue.TypeNumber/nOrientations;
       
@@ -786,44 +785,27 @@ end
 % Calculates signal for a set of orientations
 % ========================================================================
 function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] ...
-    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,isignal,verbose,OutputData,Progress,SignalsToCalculate,gridWeight,iSignal_max)
+    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,isignal,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,iSignal_max)
      
   
   % grid point indices
-  if System.newIsotopologuePerOrientation
+  if System.newIsotopologuePerOrientation && ~Method.reparseNuclei
     Nuclei = newHydronIsotopologue(Nuclei,System);
     if verbose
       fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
     end
-    % Get coupling statistics.
-%     Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
-%     if Method.Ori_cutoffs
-%       Nuclei.Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
-%       Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
-%       for clusterSize = 1:min(Method.order, numel(inClusters))
-%         % Combine arrays.
-%         C = [Clusters{clusterSize}; inClusters{clusterSize}];
-%         
-%         % Sort clusters
-%         C = sortrows(C);
-%         
-%         % Remove duplicates
-%         keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
-%         Clusters{clusterSize} = C(keep,:);
-%       end
-      % Clusters = pruneClusters(Nuclei,Clusters,System);
-%     else
-      Clusters = inClusters;
-%     end
-else
-  Clusters = inClusters;
-end
-igrid = SignalsToCalculate(isignal);
+    
+    Clusters = inClusters;
+    
+  else
+    Clusters = inClusters;
+  end
+  igrid = SignalsToCalculate(isignal);
 
 % calculate coherence signal
 [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
-  Alpha(igrid),Beta(igrid),verbose,OutputData,Progress);
+  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData);
 
 if System.newIsotopologuePerOrientation
   Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
@@ -952,7 +934,7 @@ end
 % Calculate signal for one orientation
 % ========================================================================
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,Ori_Clusters] = ...
-  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,OutputData,Progress)
+  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,OutputData,Data,InputData)
 
 % Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
@@ -966,6 +948,13 @@ Statistics = Nuclei.Statistics;
 Ori_Clusters = [];
 if Method.Ori_cutoffs
 
+  if Method.reparseNuclei
+    [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
+    Statistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
+    Statistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
+    Statistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
+    Statistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
+  end
   Statistics = getPairwiseStatistics(System, Nuclei);
   Nuclei.Statistics = Statistics;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
@@ -998,10 +987,11 @@ end
 % Rotate bath spin tensors.
 for inucleus = 1:Nuclei.number
   Nuclei.Atensor(:,:,inucleus) = R_pdb2lab*Nuclei.Atensor(:,:,inucleus)*R_pdb2lab';
-  Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
-  % Elementwise Qtensor manipulation used for testing.  The default filter is ones(3); 
-  Nuclei.Qtensor(:,:,inucleus) = Nuclei.Qtensor(:,:,inucleus).*System.nuclear_quadrupole_filter;
-  
+  if ~System.limitToSpinHalf
+    Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
+    % Elementwise Qtensor manipulation used for testing.  The default filter is ones(3);
+    Nuclei.Qtensor(:,:,inucleus) = Nuclei.Qtensor(:,:,inucleus).*System.nuclear_quadrupole_filter;
+  end
 end
 
 % Rotate the g-matrix.

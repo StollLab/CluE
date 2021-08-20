@@ -80,7 +80,7 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   Progress.LoadSavedData = true;
   
 elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') || strcmp(InputData,'System.RandomEnsemble.include')
-  [Nuclei, System] = parseNuclei(System, Method, InputData);
+  [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
   System.Electron.Coordinates = [0,0,0];
   if Nuclei.number < 1
     Signals{1} = ones(size(System.Time));
@@ -369,6 +369,13 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   GridInfo.Alpha      = Alpha;
   GridInfo.Beta       = Beta;
   
+elseif strcmp(System.averaging,'random')
+  
+  % Generate random Euler angles.
+  Alpha = rand(1,gridSize)*2*pi;
+  Beta = acos( 2*rand(1,gridSize) - 1);
+  gridWeight = ones(gridSize,1)/gridSize;
+
 end
 
 nOrientations = gridSize;
@@ -550,8 +557,9 @@ if ~Method.sparseMemory
   end
   
   for iOri = 1:nOrientations
-    
-    if System.newIsotopologuePerOrientation
+    if Method.reparseNuclei
+      % 
+    elseif System.newIsotopologuePerOrientation
       Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber = Nuclei.PowderStatistics.Isotopologue.Mean_TypeNumber ...
         + Statistics{iOri}.Isotopologue.TypeNumber/nOrientations;
       
@@ -816,7 +824,7 @@ igrid = SignalsToCalculate(isignal);
 % calculate coherence signal
 [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
-  Alpha(igrid),Beta(igrid),verbose,OutputData,Progress);
+  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData);
 
 if System.newIsotopologuePerOrientation
   Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
@@ -945,7 +953,7 @@ end
 % Calculate signal for one orientation
 % ========================================================================
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,Ori_Clusters] = ...
-  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,OutputData,Progress)
+  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,OutputData,Data,InputData)
 
 % Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
@@ -958,7 +966,14 @@ Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 Statistics = Nuclei.Statistics;
 Ori_Clusters = [];
 if Method.Ori_cutoffs
-  
+
+  if Method.reparseNuclei
+    [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
+    Statistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
+    Statistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
+    Statistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
+    Statistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
+  end
   Statistics = getPairwiseStatistics(System, Nuclei);
   Nuclei.Statistics = Statistics;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
@@ -1185,11 +1200,6 @@ else
           [~, AuxiliarySignal_ofOrder, ~] ...
             = calculateSignal(System, Method, Nuclei,Clusters);
           
-          Order_n_Signal = cell(1,Method.order);
-          
-          for ii = 1:Method.order
-            Order_n_Signal{ii} = Signals(1,ii);
-          end
         end
       end
       % Record the appropraite signals.
@@ -1207,7 +1217,7 @@ else
             AuxiliarySignal{record_order} = AuxiliarySignal_4;
         end
         else
-          AuxiliarySignal{record_order} = AuxiliarySignal{record_order};
+          AuxiliarySignal{record_order} = AuxiliarySignal_ofOrder{record_order};
         end
        
           Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);

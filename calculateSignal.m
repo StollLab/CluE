@@ -302,14 +302,22 @@ for clusterSize = 1:Method.order
           Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField, ge,geff,...
           muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
           mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
-        qtensors = Nuclei.Qtensor(:,:,thisCluster);
+        if ~System.limitToSpinHalf
+          qtensors = Nuclei.Qtensor(:,:,thisCluster);
+        else
+          qtensors = 0;
+        end
         
-        if doTR        
+        if doTR
           [tensors_TR,~] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
-          Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField, ge,geff,...
-          muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2,...
-          mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
-        qtensors = Nuclei.Qtensors(:,:,thisCluster);
+            Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField, ge,geff,...
+            muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2,...
+            mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
+          if ~System.limitToSpinHalf
+            qtensors = Nuclei.Qtensors(:,:,thisCluster);
+          else
+            qtensors = 0;
+          end
         else
           tensors_TR = [];
         end

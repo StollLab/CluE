@@ -146,7 +146,9 @@ end
 if ~isfield(Method,'Ori_cutoffs')
   Method.Ori_cutoffs = false;
 end
-
+if ~isfield(Method,'reparseNuclei')
+  Method.reparseNuclei = false;
+end
 if ~isfield(Method.cutoff,'methylOnly')
   Method.cutoff.methylOnly = false(1,Method.order);
 end
@@ -661,10 +663,7 @@ end
 if Method.useMultipleBathStates && System.useThermalEnsemble
   error('The setting of Method.useMultipleBathStates= useThermalEnsemble = true is not supported.');
 end
-% System limiting options
-if ~isfield(System,'limitToSpinHalf')
-  System.limitToSpinHalf = false;
-end
+
 
 if ~isfield(System,'solventOnly')
   System.solventOnly = false;
@@ -677,7 +676,10 @@ end
 if ~isfield(System,'spinHalfOnly')
   System.spinHalfOnly = false;
 end
-
+% System limiting options
+if ~isfield(System,'limitToSpinHalf')
+  System.limitToSpinHalf = Method.reparseNuclei && System.spinHalfOnly;
+end
 if ~isfield(System,'deuterateProtein')
   System.deuterateProtein = false;
 end
