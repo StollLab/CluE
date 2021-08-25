@@ -1,4 +1,4 @@
-function Nuclei = setHyperfineTensor(Azz,Afc,zA,xA,iNuc,Nuclei)
+function Atensor_L = setHyperfineTensor(Azz,Afc,zA,xA,iNuc,Nuclei)
 if norm(zA)==0
   warning('Failed to set quadrupole tensor orientation.')
   return;
@@ -23,6 +23,6 @@ I = Nuclei.Spin(iNuc);
 Atensor_A = eye(3)*Afc + diag(Azz/2*[-1,-1,2]);
 Atensor_L = R_A2L*Atensor_A*R_A2L';
 
-Nuclei.hyperfine2lab(:,:,iNuc) = R_A2L;
-Nuclei.Atensor(:,:,iNuc) = Atensor_L;
+% Nuclei.hyperfine2lab(:,:,iNuc) = R_A2L;
+% Nuclei.Atensor(:,iNuc) = Atensor_L(:);
 end

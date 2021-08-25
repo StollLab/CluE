@@ -986,7 +986,10 @@ end
 
 % Rotate bath spin tensors.
 for inucleus = 1:Nuclei.number
-  Nuclei.Atensor(:,:,inucleus) = R_pdb2lab*Nuclei.Atensor(:,:,inucleus)*R_pdb2lab';
+  
+  Nuclei.Atensor(inucleus,:) = reshape( ...
+    R_pdb2lab*reshape( full(Nuclei.Atensor(inucleus,:))',3,3)*R_pdb2lab' , ...
+    9,1);
   if ~System.limitToSpinHalf
     Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
     % Elementwise Qtensor manipulation used for testing.  The default filter is ones(3);

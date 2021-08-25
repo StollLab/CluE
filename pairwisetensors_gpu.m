@@ -20,7 +20,7 @@
   hbar = System.hbar;
 %}
 function [tensors,zeroIndex] = pairwisetensors_gpu(...
-  Nuclei_g, Nuclei_Coordinates,Cluster,HF_tensor, magneticField, ge, geff,...
+  Nuclei_g, Nuclei_Coordinates,Cluster,Atensor, magneticField, ge, geff,...
   muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
           mean_Dipole_z_Z, mean_Dipole_x_iy_Z)
 
@@ -84,7 +84,7 @@ for i_index_nucleus = Indices
   
   % Hyperfine
   if useHF
-    hf_tensor = HF_tensor(:,:,i_index_nucleus);
+    hf_tensor = reshape( full( Atensor(:,i_index_nucleus))',3,3) ;
     if any(hf_tensor~=0)
       tensors(:,:,1,1+inucleus ) =  hf_tensor;
     else
