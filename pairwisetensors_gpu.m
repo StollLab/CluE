@@ -84,7 +84,7 @@ for i_index_nucleus = Indices
   
   % Hyperfine
   if useHF
-    hf_tensor = reshape( full( Atensor(:,i_index_nucleus))',3,3) ;
+    hf_tensor = reshape( full( Atensor(i_index_nucleus,:))',3,3) ;
     if any(hf_tensor~=0)
       tensors(:,:,1,1+inucleus ) =  hf_tensor;
     else

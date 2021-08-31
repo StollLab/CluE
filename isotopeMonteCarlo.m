@@ -1,4 +1,4 @@
-function [signals,TM,statistics] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
+function [signals,TM,statistics,twotau] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
 
 if (dN < 1)
   error('The parameter dN >= 1.')

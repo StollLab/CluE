@@ -538,7 +538,7 @@ if ~isempty(pool)
   delete(pool);
 end
 
-if System.doPruneNuclei
+if System.doPruneNuclei && ~Method.reparseNuclei
   statistics = Nuclei.Isotopologue;
 else
   statistics.Statistics = Statistics;
@@ -807,7 +807,7 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isigna
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
   Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData);
 
-if System.newIsotopologuePerOrientation
+if System.newIsotopologuePerOrientation  && ~Method.reparseNuclei
   Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
 end
 

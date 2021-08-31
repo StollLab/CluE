@@ -1305,11 +1305,13 @@ Coordinates = pdbCoordinates - ElectronCoor;
 
 pdbMinX = min(Coordinates,[],1);
 pdbMaxX = max(Coordinates,[],1);
+pdbDeltaX = pdbMaxX - pdbMinX;
+
 
 % Find the minimum number of additional cells needed.
-% Floor() is used since this is in addition to the center cell.
-numUCplus = floor( System.radius./pdbMaxX );
-numUCminus = floor( -System.radius./pdbMinX );
+numUCplus = ceil( (System.radius - pdbMaxX)./pdbDeltaX );
+numUCminus = ceil( ( System.radius - abs(pdbMinX) )./pdbDeltaX );
+
 
 % consistency check
 if any(numUCplus < 0) || any(numUCminus < 0)
