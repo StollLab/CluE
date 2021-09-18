@@ -784,8 +784,10 @@ end
 % ========================================================================
 % Calculates signal for a set of orientations
 % ========================================================================
-function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] ...
-    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,isignal,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,iSignal_max)
+function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
+  Statistics_isignal,graphs_isignal,iOri_Clusters] ...
+    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,...
+    isignal,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,iSignal_max)
      
   
   % grid point indices
@@ -948,14 +950,16 @@ Statistics = Nuclei.Statistics;
 Ori_Clusters = [];
 if Method.Ori_cutoffs
 
+  isotopologueStatistics = [];
   if Method.reparseNuclei
     [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
-    Statistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
-    Statistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
-    Statistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
-    Statistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
+    isotopologueStatistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
+    isotopologueStatistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
+    isotopologueStatistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
+    isotopologueStatistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
   end
   Statistics = getPairwiseStatistics(System, Nuclei);
+  Statistics.isotopologueStatistics = isotopologueStatistics;
   Nuclei.Statistics = Statistics;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
   Nuclei.Adjacency = Adjacency;

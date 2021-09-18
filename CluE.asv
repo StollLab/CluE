@@ -538,7 +538,7 @@ if ~isempty(pool)
   delete(pool);
 end
 
-if System.doPruneNuclei
+if System.doPruneNuclei && ~Method.reparseNuclei
   statistics = Nuclei.Isotopologue;
 else
   statistics.Statistics = Statistics;
@@ -784,8 +784,10 @@ end
 % ========================================================================
 % Calculates signal for a set of orientations
 % ========================================================================
-function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] ...
-    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,isignal,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,iSignal_max)
+function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
+  Statistics_isignal,graphs_isignal,iOri_Clusters] ...
+    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,...
+    isignal,verbose,OutputData,Data,InputData,SignalsToCalculate,gridWeight,iSignal_max)
      
   
   % grid point indices
@@ -807,7 +809,7 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isigna
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
   Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData);
 
-if System.newIsotopologuePerOrientation
+if System.newIsotopologuePerOrientation  && ~Method.reparseNuclei
   Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
 end
 
@@ -948,12 +950,13 @@ Statistics = Nuclei.Statistics;
 Ori_Clusters = [];
 if Method.Ori_cutoffs
 
+  isotopologueStatistics = [];
   if Method.reparseNuclei
     [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
-    Statistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
-    Statistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
-    Statistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
-    Statistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
+    isotopologueStatistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
+    isotopologueStatistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
+    isotopologueStatistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
+    isotopologueStatistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
   end
   Statistics = getPairwiseStatistics(System, Nuclei);
   Nuclei.Statistics = Statistics;
@@ -987,9 +990,9 @@ end
 % Rotate bath spin tensors.
 for inucleus = 1:Nuclei.number
   
-  Nuclei.Atensor(:,inucleus) = reshape( ...
-    R_pdb2lab*reshape( full(Nuclei.Atensor(:,inucleus)),3,3)*R_pdb2lab' , ...
-    ;
+  Nuclei.Atensor(inucleus,:) = reshape( ...
+    R_pdb2lab*reshape( full(Nuclei.Atensor(inucleus,:))',3,3)*R_pdb2lab' , ...
+    9,1);
   if ~System.limitToSpinHalf
     Nuclei.Qtensor(:,:,inucleus) = R_pdb2lab*Nuclei.Qtensor(:,:,inucleus)*R_pdb2lab';
     % Elementwise Qtensor manipulation used for testing.  The default filter is ones(3);

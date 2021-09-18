@@ -9,6 +9,10 @@
 
 function [Nuclei, System]= parseNuclei(System,Method,Data,pdbFileName)
 
+if Method.useCentralSpinSystem
+  [Nuclei, System] = centralSpinSystem(System,Method,Data);
+  return;
+end
 % set values to unspecified fields
 System = setIsotopeDefaults(System,Method);
 spinCenter = System.spinCenter;
@@ -118,6 +122,8 @@ Nuclei.number_1H_nonExchangeable = 0;
 Nuclei.number_2H_exchangeable = 0;
 Nuclei.number_2H_nonExchangeable = 0;
 
+Nuclei.pdbNumber = size(Type,2);
+
 % loop over x unit cell spacings
 iNuc = uint32(0);
 for uc = 1:numberUnitCells
@@ -129,7 +135,7 @@ for uc = 1:numberUnitCells
     scaleFactor*(pdbCoordinates + Delta_R - Nuclei.Electron_pdbCoordinates);
   
   % loop over all nuclei
-  for inucleus = 1:size(Type,2)
+  for inucleus = 1:Nuclei.pdbNumber
     type = Type{inucleus};
     
     % get nuclear connection data
@@ -159,6 +165,8 @@ for uc = 1:numberUnitCells
   
 end
 
+
+Nuclei.ucpdbID = (Nuclei.ucpdbID-1)*Nuclei.pdbNumber + Nuclei.pdbID;
 
 % translate origin to electron
 System.Electron.Coordinates = [0,0,0];
@@ -476,6 +484,8 @@ if  doParseAs1H_
   Nuclei.Nuclear_g(iNuc) = 5.58569;
   Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
   Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
+  Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.ucpdbID(iNuc) = uc;
   Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
   Nuclei.Exchangeable(iNuc) = Exchangeable(inucleus);
   Nuclei.NumberStates(iNuc) = int8(2);
@@ -484,10 +494,10 @@ if  doParseAs1H_
   Nuclei.Abundance(iNuc) = 1;
   Nuclei.isSolvent(iNuc) = isSolvent(inucleus);
   Nuclei.isWater(iNuc) = isWater(inucleus);
-  if Nuclei.Exchangeable
-    Nuclei.number_1H_exchangeable + Nuclei.number_1H_exchangeable + 1;
+  if Nuclei.Exchangeable(iNuc)
+    Nuclei.number_1H_exchangeable = Nuclei.number_1H_exchangeable + 1;
   else
-    Nuclei.number_1H_nonExchangeable + Nuclei.number_1H_nonExchangeable + 1;
+    Nuclei.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable + 1;
   end
   % CH3_A =========================================================
 elseif strcmp(type,'CH3')
@@ -501,6 +511,8 @@ elseif strcmp(type,'CH3')
   Nuclei.Nuclear_g(iNuc) = 5.58569;
   Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
   Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
+  Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.ucpdbID(iNuc) = uc;
   Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
   Nuclei.Exchangeable(iNuc) = false;
   Nuclei.NumberStates(iNuc) = int8(8);
@@ -577,9 +589,9 @@ elseif strcmp(type,'CH3')
   % D =============================================================
 elseif strcmp(type,'D') && System.deuterium
   if Exchangeable(inucleus)
-    Nuclei.number_2H_exchangeable + Nuclei.number_2H_exchangeable + 1;
+    Nuclei.number_2H_exchangeable = Nuclei.number_2H_exchangeable + 1;
   else
-    Nuclei.number_2H_nonExchangeable + Nuclei.number_2H_nonExchangeable + 1;
+    Nuclei.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable + 1;
   end
   if System.limitToSpinHalf
     return;
@@ -594,7 +606,8 @@ elseif strcmp(type,'D') && System.deuterium
   Nuclei.Nuclear_g(iNuc) = 0.857438;
   Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
   Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
-  %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.ucpdbID(iNuc) = uc;
   Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
   Nuclei.Exchangeable(iNuc) = Exchangeable(inucleus);
   Nuclei.NumberStates(iNuc) = int8(3);
@@ -653,7 +666,8 @@ elseif strcmp(type,'C') && System.carbon
   Nuclei.Nuclear_g(iNuc) = 1.4048;
   Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
   Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:);
-  %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.ucpdbID(iNuc) = uc;
   Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
   Nuclei.Exchangeable(iNuc) = Exchangeable(inucleus);
   Nuclei.NumberStates(iNuc) = int8(2);
@@ -678,7 +692,8 @@ elseif strcmp(type,'N') && System.nitrogen  && ~System.limitToSpinHalf
   Nuclei.Nuclear_g(iNuc) = 0.403761;
   Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
   Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:);
-  %Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.ucpdbID(iNuc) = uc;
   Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
   Nuclei.Exchangeable(iNuc) = Exchangeable(inucleus);
   Nuclei.NumberStates(iNuc) = int8(3);
@@ -842,7 +857,7 @@ function ... %Nuclei =
   
 Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
-if(Nuclei.Statistics.Distance > System.radius*scaleFactor)
+if any(Nuclei.Statistics.Distance > System.radius*scaleFactor)
   error(['Error in parseNuclei(): ','Nuclei beyond the distance cutoff ', ...
     'remain in the system.'])
 end

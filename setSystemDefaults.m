@@ -5,6 +5,13 @@
 
 function [System,Method, Data, statistics] = setSystemDefaults(System,Method, Data)
 
+if ~isfield(Method,'errorTolerance')
+  Method.errorTolerance = 1e-9;
+end
+if ~isfield(Method,'useCentralSpinSystem')
+  Method.useCentralSpinSystem = false;
+end
+
 if ~isfield(Method, 'sparseMemory')
   Method.sparseMemory = false;
 end
