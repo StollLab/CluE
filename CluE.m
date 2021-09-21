@@ -79,9 +79,10 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   clear newMethod
   Progress.LoadSavedData = true;
   
-elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') || strcmp(InputData,'System.RandomEnsemble.include')
+elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') ...
+    || strcmp(InputData,'System.RandomEnsemble.include')
   [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
-  System.Electron.Coordinates = [0,0,0];
+  
   if Nuclei.number < 1
     Signals{1} = ones(size(System.Time));
     SignalMean = Signals{1};
@@ -935,8 +936,10 @@ end
 % ========================================================================
 % Calculate signal for one orientation
 % ========================================================================
-function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,Ori_Clusters] = ...
-  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,OutputData,Data,InputData)
+function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,...
+  Ori_Clusters] = ...
+  beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,...
+  OutputData,Data,InputData)
 
 % Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
@@ -958,11 +961,14 @@ if Method.Ori_cutoffs
     isotopologueStatistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
     isotopologueStatistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
   end
-  Statistics = getPairwiseStatistics(System, Nuclei);
-  Statistics.isotopologueStatistics = isotopologueStatistics;
-  Nuclei.Statistics = Statistics;
+  
+  StatisticsTemporary = getPairwiseStatistics(System, Nuclei);
+  Nuclei.Statistics = StatisticsTemporary;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
   Nuclei.Adjacency = Adjacency;
+  
+  Statistics.isotopologueStatistics = isotopologueStatistics;
+  Nuclei.Statistics = Statistics;
   
   Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,...
     Method.extraOrder,{}, Method);

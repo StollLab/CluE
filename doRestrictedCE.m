@@ -38,11 +38,11 @@ for inucleus = 1:nNuclei
   % Calculating hyperfine coupling
   gamma_e = -System.Electron.g*System.muB/System.hbar;
   
-  Rn = norm(System.Electron.Coordinates - Nuclei.Coordinates(inucleus,:) );
+  Rn = norm(Nuclei.Coordinates(inucleus,:) );
   
   gamma_n = Nuclei.Nuclear_g(inucleus)*System.muN/System.hbar;
   
-  cosTheta2 = cosFieldAngle(System.Electron.Coordinates,Nuclei.Coordinates(inucleus,:))^2;
+  cosTheta2 = cosFieldAngle([0,0,0],Nuclei.Coordinates(inucleus,:))^2;
   
   Hyperfine(inucleus) = Nuclei.Hyperfine(inucleus)- ...
     (System.mu0/4/pi)*gamma_n*gamma_e*System.hbar*(1-3*cosTheta2)*Rn^-3;

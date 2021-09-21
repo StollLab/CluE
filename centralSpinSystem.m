@@ -379,9 +379,6 @@ if System.RandomEnsemble.include
 end  
 
 
-% translate origin to electron
-System.Electron.Coordinates = [0,0,0];
-
 % get number of nuclei
 Nuclei.number = number_-1; 
 

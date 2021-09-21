@@ -3,7 +3,7 @@ clear;
 clear centralSpinSystem;
 clc;
 
-Data.InputData = 'TEMPO_Gly_70A.pdb';
+Data.InputData = 'mTEMPO_Gly_70A.pdb';
 
 System.radius = 12e-10; % m.
 System.Electron.Coordinates = {28,29};
@@ -19,9 +19,13 @@ System.particleOptions = {...
 Method.Criteria = {'dipole'};
 Method.cutoff.dipole = 10^3; % Hz
 Method.getNuclearContributions = true;
+Method.getNuclearStatistics = true;
+
+Method.Ori_cutoffs = true;
 
 [System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
 Nuclei0 = parseNuclei(System,Method,Data,Data.InputData);
+[~, System]= centralSpinSystem(System,Method,Data);
 [Nuclei, System]= centralSpinSystem(System,Method,Data);
 
 %% Check number
@@ -183,3 +187,22 @@ else
   disp('valid nuclei: pass')
 end
 
+%%
+DeltaDistanceMatrix = Nuclei0.Statistics.DistanceMatrix(idx0,idx0) ...
+  - Nuclei.Statistics.DistanceMatrix(idx,idx);
+
+if max(abs(DeltaDistanceMatrix(:) ))>0
+  disp('DistanceMatrix: fail')
+else
+  disp('DistanceMatrix: pass')
+end
+
+%%
+DeltaAdjacency = Nuclei0.Adjacency(idx0,idx0,1) ...
+  - Nuclei.Adjacency(idx,idx,1);
+
+if max(abs(DeltaAdjacency(:) ))>0
+  disp('Adjacency: fail')
+else
+  disp('Adjacency: pass')
+end
