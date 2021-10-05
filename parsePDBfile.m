@@ -124,7 +124,7 @@ for iline = 1:nLines
     n = n + 1;    
     
     % Parse information about atom.   
-    pdbData.serial(n)     = str2double(line_(7:11));
+    pdbData.serial(n)     = sscanf(line_(7:11),'%u'); 
     pdbData.name{n}       = strtrim( line_(13:16) );
     pdbData.altLoc{n}     = strtrim( line_(17) );
     pdbData.resName{n}    = strtrim( line_(18:20) );
@@ -134,17 +134,17 @@ for iline = 1:nLines
     pdbData.chainID{n}    = strtrim( line_(22) );
     pdbData.resSeq(n)     = str2double(line_(23:26));
     pdbData.iCode{n}      = strtrim( line_(27) );
-    pdbData.x(n)          = str2double(line_(31:38))*angstrom;
-    pdbData.y(n)          = str2double(line_(39:46))*angstrom;
-    pdbData.z(n)          = str2double(line_(47:54))*angstrom;
-    pdbData.occupancy(n)  = str2double(line_(55:60));
-    pdbData.tempFactor(n) = str2double(line_(61:66));
+    pdbData.x(n)          = sscanf(line_(31:38),'%f')*angstrom;
+    pdbData.y(n)          = sscanf(line_(39:46),'%f')*angstrom;
+    pdbData.z(n)          = sscanf(line_(47:54),'%f')*angstrom;
+    pdbData.occupancy(n)  = sscanf(line_(55:60),'%f');
+    pdbData.tempFactor(n) = sscanf(line_(61:66),'%f');
     pdbData.element{n}    = strtrim( line_(77:78) );
     pdbData.charge{n}     = strtrim( line_(79:80) );
     
   % Check if line contains connection data.  
   elseif strncmp(line_,'CONECT',6)
-    % Initialize connetion array.
+    % Initialize connection array.
     if isempty(pdbData.connections)
       pdbData.connections = cell(1,iNucleus);
     end
@@ -154,28 +154,34 @@ for iline = 1:nLines
     
     currentLine = strtrim(line_);
     currentLine = reshape(currentLine(7:end),5,[]).';
-    
+     
     numConnect  = size(currentLine,1);
     if numConnect < 2
       continue;
     end
-    referenceNucleus = str2double(currentLine(1,:));
-    
+
+    referenceNucleus =  sscanf(line_(7:11),'%u');
 
     for ii = 2:numConnect
-      index = str2double(currentLine(ii,:));
+      index  =  sscanf(line_(2+5*ii:6+5*ii),'%u'); 
       pdbData.connections(index,referenceNucleus) = 1;
-      pdbData.connections(referenceNucleus,index) = 1;
     end
-     
+
   end
   
 end
 
+testConnectios = pdbData.connections - pdbData.connections';
+if max(abs(testConnectios(:) ))>0
+  error(['Error in parsePDBfile(): ', ...
+    'connections matrix is not symmetric.']);
+end
 
 if strcmp(pdbData.sGroup,'P -1')
   addMirrorPDB();
 end
+
+pdbData.number_resSeq = numel(unique(pdbData.resSeq));
 
 return;
 

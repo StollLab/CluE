@@ -9,7 +9,8 @@
 %    .OutputData name of mat file to store results
 %    .saveLevel  0 (standard), 1 (more), 2 (all)
 
-function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei,statistics] = CluE(System,Method,Data)
+function [SignalMean, experiment_time, ...
+  TM_powder,Order_n_SignalMean,Nuclei,statistics] = CluE(System,Method,Data)
 
 tic
 
@@ -18,7 +19,8 @@ tic
 % set defaults base on specified parameters and for unspecified parameters
 [System, Method, Data,statistics] = setSystemDefaults(System,Method,Data);
 
-[OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method);
+[OutputData,doReturn,SignalMean,experiment_time,...
+  TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method);
 if doReturn, toc; return; end
 
 
@@ -81,6 +83,10 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   
 elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') ...
     || strcmp(InputData,'System.RandomEnsemble.include')
+  
+  if Method.useCentralSpinSystem
+    System.pdb = parsePDBfile(Data.InputData, System.angstrom);
+  end
   [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
   
   if Nuclei.number < 1
@@ -1237,7 +1243,8 @@ end
 %==========================================================================
 % Set Output Data
 %==========================================================================
-function [OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,statistics] = setOuput(Data,Method)
+function [OutputData,doReturn,SignalMean,experiment_time,...
+  TM_powder,Order_n_SignalMean,Nuclei,statistics] = setOuput(Data,Method)
 doReturn = false;
 SignalMean  = [];
 experiment_time = [];

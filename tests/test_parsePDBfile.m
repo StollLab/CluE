@@ -19,12 +19,15 @@ Method.getNuclearContributions = true;
 pdbData = parsePDBfile(Data.InputData, System.angstrom);
 
 
-[pdbCoordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,MoleculeID,...
-  numberH,isSolvent,isWater,Exchangeable,VanDerWaalsRadii] ...
-  = parsePDB(Data.InputData,System);
+% [pdbData0.pdbCoordinates,...
+%   pdbData0.Type,pdbData0.UnitCell,pdbData0.Connected,...
+%   pdbData0.Indices_nonSolvent,pdbData0.pdbID,pdbData0.MoleculeID,...
+%   pdbData0.numberH,pdbData0.isSolvent,pdbData0.isWater,pdbData0.Exchangeable,...
+%   pdbData0.VanDerWaalsRadii] ...
+  pdbData0 = parsePDB(Data.InputData,System);
 
 %% Check number
-number0 = numel(Type);
+number0 = numel(pdbData0.Type);
 if pdbData.number ~= number0
   error(['Error in tesr_parsePDBfile(): ',...
     'parsePDFfile() found ', num2str(pdbData.number),...
@@ -35,7 +38,7 @@ end
 %% Check Coordinates
 
 coordinates = [pdbData.x,pdbData.y,pdbData.z];  
-DeltaCoor = pdbCoordinates - coordinates;
+DeltaCoor = pdbData0.Coordinates - coordinates;
 err = vecnorm(DeltaCoor');
 if max(err(:))>1e-12
   plot(err)
@@ -47,7 +50,7 @@ else
 end
 
 %% Check ID
-Delta_ID = pdbID - pdbData.serial';
+Delta_ID = pdbData0.pdbID - pdbData.serial';
 if max(abs(Delta_ID(:)) ) >1e-12
   plot(Delta_ID)
   xlabel('index')

@@ -7,7 +7,7 @@
 %   Method       structure with fields for the method
 %   pdbFileName  name of PDB file
 
-function [Nuclei, System]= centralSpinSystem(System,Method,Data)
+function [Nuclei, System]= centralSpinSystem(System,Method,Data,pdb_)
  
 System = setCentralSpinSystemDefaults(System,Method);
 
@@ -62,7 +62,7 @@ numberMethyls_         = 0;
 numberParticleClasses_ = 0;
 particleClassID_       = [];
 particles_             = cell(0,0);
-pdb_                   = parsePDBfile(Data.InputData, System.angstrom);
+%pdb_                   = parsePDBfile(Data.InputData, System.angstrom);
 originVec_             = getElectronCoordinates(...
                           System,[pdb_.x,pdb_.y,pdb_.z],pdb_.serial);
 pdbID_                 = []; 
@@ -103,6 +103,8 @@ uniqueID  = -1;
 % Get PDB number.     
 ipdb = mod(ucpdb, pdb_.number);
 if ipdb==0, ipdb = pdb_.number; end
+uc = ceil(ucpdb/pdb_.number);
+
 
 % Check if particle type with resName has been initialized.
 isUnique = true;
@@ -143,7 +145,7 @@ particles_{uniqueID}.associatedParticlesCollection{...
   particles_{uniqueID}.number} = associatedParticles;
 
 % Record molecule ID number.
-moleculeID_(iparticle) = pdb_.resSeq(ipdb);
+moleculeID_(iparticle) = pdb_.resSeq(ipdb) + (uc-1)*pdb_.number;
 
 % Record PDB number.
 pdbID_(iparticle) = ucpdb;
@@ -158,6 +160,15 @@ end
 % Update residue list.
 residueList_{iparticle} = resName;
 
+if ~particles_{uniqueID}.exchangeable && ~any(moleculeID_(iparticle)...
+    ==moleculeID_(particles_{uniqueID}.membersOnePerMolecule))
+  
+  particles_{uniqueID}.membersOnePerMolecule = ...
+    [particles_{uniqueID}.membersOnePerMolecule,iparticle];
+  
+  particles_{uniqueID}.numberMolecules = particles_{uniqueID}.numberMolecules+1;
+
+end
 
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -241,6 +252,98 @@ if ~pass(METHYLID)
 end
 
   allPass = all(pass(METHYLID)); 
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function preliminaryParticle = analyzeParticle(index_pdb)
+  
+pdbParticle =   getParticleClass(pdb_.element{index_pdb});
+preliminaryParticle.particleEnum = PARTICLE_NONE;
+
+preliminaryParticle.associatedParticles = {};
+
+switch pdbParticle
+  % Hydrogen
+  case {PARTICLE_HYDROGEN, PARTICLE_PROTIUM, PARTICLE_DEUTERIUM}
+    
+    if ~System.include_hydrogen
+      return;
+    end
+    
+    % Assume protium unless specified otherwise.
+    isH1 = pdbParticle ~= PARTICLE_DEUTERIUM;
+    
+    if (isH1 && ~System.include_1H)  || (~isH1 && ~System.include_2H)
+      return;
+    end
+    
+    isExchangeable = isHydronExchangeable(index_pdb);
+    
+    % Set hydron type.
+    if isH1 && isExchangeable
+      preliminaryParticle.particleEnum = PARTICLE_1H_EXCHANGEABLE;
+      
+    elseif ~isH1 && isExchangeable
+      preliminaryParticle.particleEnum = PARTICLE_2H_EXCHANGEABLE;
+      
+    elseif isH1 && ~isExchangeable
+      preliminaryParticle.particleEnum = PARTICLE_1H_NONEXCHANGEABLE;
+      
+    else
+      preliminaryParticle.particleEnum = PARTICLE_2H_NONEXCHANGEABLE;
+    end
+    
+    % Carbon
+  case PARTICLE_CARBON
+    if System.Methyl.include
+      
+      % Check if carbon is a methyl carbon.
+      methylHydrons =  isMethyl(index_pdb);
+      
+      % All indices will be unique if it is a methyl.
+      if ~(methylHydrons(1)==methylHydrons(2) ...
+          || methylHydrons(1) == methylHydrons(3) ...
+          || methylHydrons(2) == methylHydrons(3))
+        
+        preliminaryParticle.particleEnum = PARTICLE_C_METHYL;
+        preliminaryParticle.associatedParticles = methylHydrons;
+        
+        numberMethyls_ = numberMethyls_ + 1;
+        
+        methylIDs_(numberMethyls_) = index_pdb;
+      end
+    elseif System.include_13C
+      preliminaryParticle.particleEnum = PARTICLE_12C;
+    end
+    
+    % Nitrogen
+  case PARTICLE_NITROGEN
+    if System.include_14N
+      preliminaryParticle.particleEnum = PARTICLE_14N;
+    elseif System.include_15N
+      preliminaryParticle.particleEnum = PARTICLE_15N;
+    end
+    
+    
+    % Silicon
+  case PARTICLE_SILICON
+    if System.include_29Si
+      preliminaryParticle.particleEnum = PARTICLE_29SI;
+    end
+    
+    % Electron
+  case PARTICLE_ELECTRON
+    if System.include_electron
+      preliminaryParticle.particleEnum = PARTICLE_ELECTRON;
+    end
+    
+  otherwise
+    preliminaryParticle.particleEnum = PARTICLE_NONE;
+end
+
+return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -417,13 +520,13 @@ if ~Method.getNuclearContributions
   Nuclei.Element = [];
 end
 
-if System.newIsotopologuePerOrientation
+% if System.newIsotopologuePerOrientation
   Nuclei.MoleculeIDunique = unique(Nuclei.MoleculeID);
-else
-  Nuclei.MoleculeID = [];
-  Nuclei.Connected = [];
-  Nuclei.isWater = [];
-end    
+% else
+%   Nuclei.MoleculeID = [];
+%   Nuclei.Connected = [];
+%   Nuclei.isWater = [];
+% end    
 
 checkNuclei();  
 return;
@@ -454,22 +557,25 @@ if numUnitCells == 0
 end
 
 for itype = 1:numberParticleClasses_
-
-  % Copy particle indices.
-  indices = particles_{itype}.members;
-
-  % Get associated indices.
-  associatedParticlesCollection = ...
-    particles_{itype}.associatedParticlesCollection;
-
+  
   % Get particle label.
   particleEnum = particles_{itype}.particleEnum;
-
+  
   if particleEnum==PARTICLE_CENTRALSPIN
     continue;
   end
+  
   % Get number of particles in one cell.
-  N = particles_{itype}.number;
+  if particles_{itype}.exchangeable
+    % Copy particle indices.
+    indices = particles_{itype}.members;
+    N = particles_{itype}.number;
+  else
+    % Copy particle indices.
+    indices = particles_{itype}.membersOnePerMolecule;
+    N = particles_{itype}.numberMolecules;
+  end
+  
   ucN =  numUnitCells*N ;
 
   clearMembers(itype);
@@ -517,23 +623,40 @@ for itype = 1:numberParticleClasses_
     % Get PDB number.
     ipdb = pdbID( baseIndex );
     
-    % Define index to store unit cell and ipdb info together.
-    ucpdb = ipdb + ucIndexOffset;
     
-    if ~isParticleWithinSystem(ipdb, cellShifts_(:,uc)), continue; end
-    
-    associatedParticles = associatedParticlesCollection{ particleIndex };
-    %getAssociatedParticles(itype,particleIndex);
-    
-    for iAssoPart = 1:length( associatedParticles )
-      associatedParticles(iAssoPart) = ...
-        associatedParticles(iAssoPart) + ucIndexOffset;
+    if particles_{itype}.exchangeable
+      sameMoleculeList = pdbID(baseIndex);
+    else
+      sameMoleculeList = pdb_.serial( pdb_.resSeq==pdb_.resSeq(ipdb) );
     end
+    
+
     
     % Add particle copy of particle in this unit cell.
     resName = particles_{itype}.resName;
-    addParticle(particleEnum,resName, associatedParticles, number_+1, ucpdb);
-    
+    for jpdb=sameMoleculeList'
+      
+      if ~isParticleWithinSystem(jpdb, cellShifts_(:,uc)), continue; end
+      
+      % Get particleEnum and associatedParticles.
+      preliminaryParticle = analyzeParticle(jpdb);
+     
+      if preliminaryParticle.particleEnum ~= particleEnum, continue; end
+      
+      % Define index to store unit cell and ipdb info together.
+      ucpdb = jpdb + ucIndexOffset;
+      
+      % Extract associatedParticles. 
+      associatedParticles = preliminaryParticle.associatedParticles;
+      
+      % Add unit cell offset to associatedParticles.
+      for iAssoPart = 1:length( associatedParticles )
+        associatedParticles(iAssoPart) = ...
+          associatedParticles(iAssoPart) + ucIndexOffset;
+      end
+      
+      addParticle(particleEnum,resName, associatedParticles, number_+1, ucpdb);
+    end
   end
 end
 
@@ -552,113 +675,17 @@ for ipdb = 1:pdb_.number
     
   % Ignore particles outside the system radius.
   if ~isParticleWithinSystem(ipdb, 0), continue; end
-
-  pdbParticle =   getParticleClass(pdb_.element{ipdb});
-  particleEnum = PARTICLE_NONE;
-
-  associatedParticles = {};
   
-  switch pdbParticle
-    % Hydrogen
-    case {PARTICLE_HYDROGEN, PARTICLE_PROTIUM, PARTICLE_DEUTERIUM}
-
-    if ~System.include_hydrogen
-      break;
-    end
-    
-    % Assume protium unless specified otherwise.                         
-    isH1 = pdbParticle ~= PARTICLE_DEUTERIUM;
-      
-    if (isH1 && ~System.include_1H)  || (~isH1 && ~System.include_2H) 
-      break;
-    end
-
-    isExchangeable = isHydronExchangeable(ipdb);
-
-    % Set hydron type.
-    if isH1 && isExchangeable 
-      particleEnum = PARTICLE_1H_EXCHANGEABLE;
-      
-    elseif ~isH1 && isExchangeable
-      particleEnum = PARTICLE_2H_EXCHANGEABLE;
-      
-    elseif isH1 && ~isExchangeable
-      particleEnum = PARTICLE_1H_NONEXCHANGEABLE;
-      
-    else
-      particleEnum = PARTICLE_2H_NONEXCHANGEABLE;
-    end
-      
-    % Carbon
-    case PARTICLE_CARBON
-      if System.Methyl.include
-        
-        % Check if carbon is a methyl carbon.
-        methylHydrons =  isMethyl(ipdb);
-        
-        % All indices will be unique if it is a methyl.
-        if ~(methylHydrons(1)==methylHydrons(2) ...
-            || methylHydrons(1) == methylHydrons(3) ...
-            || methylHydrons(2) == methylHydrons(3))
-          
-          particleEnum = PARTICLE_C_METHYL;
-          associatedParticles = methylHydrons;
-          
-          numberMethyls_ = numberMethyls_ + 1;
-          
-          methylIDs_(numberMethyls_) = ipdb;
-        end
-      elseif System.include_13C
-        particleEnum = PARTICLE_12C;
-      end
-    
-    % Nitrogen
-    case PARTICLE_NITROGEN
-      if System.include_14N 
-        particleEnum = PARTICLE_14N;
-      elseif System.include_15N
-        particleEnum = PARTICLE_15N;
-      end
-        
-
-    % Silicon
-    case PARTICLE_SILICON
-      if System.include_29Si
-         particleEnum = PARTICLE_29SI;
-      end
-
-    % Electron
-    case PARTICLE_ELECTRON
-      if System.include_electron
-        particleEnum = PARTICLE_ELECTRON;
-      end
-
-    otherwise
-      particleEnum = PARTICLE_NONE;
-  end
-
-  if particleEnum ~= PARTICLE_NONE
+  preliminaryParticle = analyzeParticle(ipdb);
+  
+  if preliminaryParticle.particleEnum ~= PARTICLE_NONE
     % Add particle.
     resName = pdb_.resName{ipdb};
-    addParticle(particleEnum,resName, associatedParticles, number_+1, ipdb);
+    addParticle(preliminaryParticle.particleEnum,resName,...
+      preliminaryParticle.associatedParticles, number_+1, ipdb);
 
   end
 end
-%{
-for itype =1:numberParticleClasses_
-
-  optionIDs = searchParticles( particles_{itype}.particleEnum, ...
-      particles_{itype}.resName );
-    
-  if isempty(optionIDs)
-    continue;
-  elseif length(optionIDs) > 1
-    error( ['Error in CentralSpinSystem::buildPrimaryCell(): ', ...
-      'could not uniquely set particle.'])
-  end
-    
-end
-%}
   
 return;
 end
@@ -864,6 +891,9 @@ particleClassID_ = particleClassID_(1:number_);
 moleculeID_ = moleculeID_(1:number_);                                                     
 pdbID_ = pdbID_(1:number_);                                                          
 residueList_ = residueList_(1:number_);  
+ 
+numberMethyls_ = 0;
+% methylIDs_ = [];
 return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -874,7 +904,9 @@ function clearMembers(index)
   
 particles_{index}.associatedParticlesCollection_ = {}; 
 particles_{index}.members = [];
+particles_{index}.membersOnePerMolecule = [];
 particles_{index}.number = 0;
+particles_{index}.numberMolecules = 0;
 
 return;
 end
@@ -1897,8 +1929,10 @@ particles_{numberParticleClasses_}.particleEnum = particleEnum;
 particles_{numberParticleClasses_}.ID = numberParticleClasses_;
 
 % Initialize other values.
-particles_{numberParticleClasses_}.number = 0;
 particles_{numberParticleClasses_}.members = [];
+particles_{numberParticleClasses_}.membersOnePerMolecule = [];
+particles_{numberParticleClasses_}.number = 0;
+particles_{numberParticleClasses_}.numberMolecules = 0;
 
 % Initialize option values.
 particles_{numberParticleClasses_}.abundance = 1;
@@ -2554,11 +2588,11 @@ end
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 % Rotate coordinates if requested by user via System.X/Y/Z
 %-------------------------------------------------------------------------------
-function ... %[Nuclei,System] = 
-    setOrientation()%Nuclei,System, pdbCoordinates)
-pdbCoordinates = Nuclei.PDBCoordinates;
+function setOrientation()
 
+pdbCoordinates = [pdb_.x,pdb_.y,pdb_.z];
 containsXYZ = [isfield(System,'X') isfield(System,'Y') isfield(System,'Z')];
+
 if sum(containsXYZ)>=2
   
   % if nucleus index is given in X/Y/Z, calculate vector from electron to that

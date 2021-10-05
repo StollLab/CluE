@@ -38,7 +38,7 @@ function writeSpinPDB(Nuclei,NuclerContribution,outfilename)
      line = padstring(line,11);
      
      str = Nuclei.Element{n};
-     str = [str,dec2hex(n)];
+%      str = [str,dec2hex(n)];
      str = padstring(str,16-11,'left');
      line = [line, str];
      line = padstring(line,16);

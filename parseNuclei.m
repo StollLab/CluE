@@ -7,10 +7,10 @@
 %   Method       structure with fields for the method
 %   pdbFileName  name of PDB file
 
-function [Nuclei, System]= parseNuclei(System,Method,Data,pdbFileName)
+function [Nuclei, System]= parseNuclei(System,Method,Data,pdbFile)
 
 if Method.useCentralSpinSystem
-  [Nuclei, System] = centralSpinSystem(System,Method,Data);
+  [Nuclei, System] = centralSpinSystem(System,Method,Data,System.pdb);
   return;
 end
 % set values to unspecified fields
@@ -31,21 +31,35 @@ Nuclei.graphCriterion = Method.graphCriterion;
 
 % scale volume
 scaleFactor = System.scale;
-
-Nuclei.dataSource = pdbFileName;
-
-% open data file
-if ~strcmp(pdbFileName,'System.RandomEnsemble.include')
-[pdbCoordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,MoleculeID,...
-  numberH,isSolvent,isWater,Exchangeable,VanDerWaalsRadii] ...
-  = parsePDB(pdbFileName,System);
-else
-  pdbCoordinates = [];
-  isSolvent = [];
-  Type = {};
-  UnitCell.isUnitCell = false;
-  numberH = [0,0,0];
-end
+if ischar(pdbFile)
+  Nuclei.dataSource = pdbFile;
+  
+  % open data file
+  if ~strcmp(pdbFile,'System.RandomEnsemble.include')
+    %     [pdbCoordinates,Type,UnitCell,Connected,Indices_nonSolvent,pdbID,MoleculeID,...
+    %       numberH,isSolvent,isWater,Exchangeable,VanDerWaalsRadii] ...
+    pdbFile = parsePDB(pdbFile,System);
+  else
+    pdbCoordinates = [];
+    isSolvent = [];
+    Type = {};
+    UnitCell.isUnitCell = false;
+    numberH = [0,0,0];
+  end
+end  
+pdbCoordinates = pdbFile.Coordinates;
+Type = pdbFile.Type;
+UnitCell = pdbFile.UnitCell;
+Connected = pdbFile.Connected;
+Indices_nonSolvent = pdbFile.Indices_nonSolvent;
+pdbID = pdbFile.pdbID;
+MoleculeID = pdbFile.MoleculeID;
+numberH = pdbFile.numberH;
+isSolvent  = pdbFile.isSolvent;
+isWater = pdbFile.isWater;
+Exchangeable = pdbFile.Exchangeable;
+VanDerWaalsRadii = pdbFile.VanDerWaalsRadii;
+pdbFile = [];
 Nuclei.isSolvent = isSolvent;
 
 % Set electron coordinates in the pdb frame.
@@ -168,8 +182,6 @@ end
 
 Nuclei.ucpdbID = (Nuclei.ucpdbID-1)*Nuclei.pdbNumber + Nuclei.pdbID;
 
-% translate origin to electron
-System.Electron.Coordinates = [0,0,0];
 
 % get number of nuclei
 try
@@ -228,13 +240,13 @@ if ~Method.getNuclearContributions
   Nuclei.Element = [];
 end
 
-if System.newIsotopologuePerOrientation
+% if System.newIsotopologuePerOrientation
   Nuclei.MoleculeIDunique = unique(Nuclei.MoleculeID);
-else
-  Nuclei.MoleculeID = [];
-  Nuclei.Connected = [];
-  Nuclei.isWater = [];
-end    
+% else
+%   Nuclei.MoleculeID = [];
+%   Nuclei.Connected = [];
+%   Nuclei.isWater = [];
+% end    
 
 checkNuclei(Nuclei);
 % end
@@ -511,7 +523,7 @@ elseif strcmp(type,'CH3')
   Nuclei.Nuclear_g(iNuc) = 5.58569;
   Nuclei.Coordinates((iNuc),:) = NuclearCoordinates;
   Nuclei.PDBCoordinates((iNuc),:)= pdbCoordinates(inucleus,:) + Delta_R;
-  Nuclei.pdbID(iNuc) = pdbID(inucleus);
+  Nuclei.pdbID(iNuc) = -1; % pdbID(inucleus);
   Nuclei.ucpdbID(iNuc) = uc;
   Nuclei.MoleculeID(iNuc) = MoleculeID(inucleus);
   Nuclei.Exchangeable(iNuc) = false;
@@ -1393,26 +1405,23 @@ if iscell(Electron_Coordinates)
     ReplaceNuclei(irep) = find(pdbID==replaceNuclei(irep));
   end
   % place the electron at the mean coordinates
-  System.Electron.Coordinates = mean( Coordinates(ReplaceNuclei,:),1);
-  
   % set initial electron coordinates to a 3-vector
-  Electron_Coordinates = System.Electron.Coordinates;
+  Electron_Coordinates = mean( Coordinates(ReplaceNuclei,:),1);
   
   
   
 elseif length(System.Electron.Coordinates) == 1
   
   replaceNucleus = System.Electron.Coordinates;
-  System.Electron.Coordinates = Coordinates(replaceNucleus,:);
   Electron_Coordinates = Coordinates(replaceNucleus,:);
   
 elseif length(System.Electron.Coordinates) == 2
   
   replaceNucleus1 = System.Electron.Coordinates(1);
   replaceNucleus2 = System.Electron.Coordinates(2);
-  System.Electron.Coordinates = ...
+  Electron_Coordinates = ...
     0.5*( Coordinates(replaceNucleus1,:) +Coordinates(replaceNucleus2,:));
-  Electron_Coordinates = System.Electron.Coordinates;
+ 
   
 end
 end

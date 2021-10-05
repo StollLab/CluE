@@ -20,19 +20,28 @@ Method.Criteria = {'dipole'};
 Method.cutoff.dipole = 10^3; % Hz
 Method.getNuclearContributions = true;
 
+Data.writeSpinPDB = false;
+
 [System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
-Nuclei0 = parseNuclei(System,Method,Data,Data.InputData);
-[Nuclei, System]= centralSpinSystem(System,Method,Data);
+
+
+pdb0 = parsePDB(Data.InputData,System);
+Nuclei0 = parseNuclei(System,Method,Data,pdb0 );
+
+pdb_ = parsePDBfile(Data.InputData, System.angstrom);
+[Nuclei, System]= centralSpinSystem(System,Method,Data,pdb_);
 
 %% Check number
 if Nuclei0.number~=Nuclei.number
   clc
-  disp('    1H   13C   14N')
+  disp('    1H   Hex   Hnx   13C   14N')
   disp(' ')
 
-  H=1; C =2;  N=3;
-  num0 = [0,0,0];
+  H=1; HEX = 2; HNX = 3; C =4;  N=5;
+  num0 = [0,0,0,0,0];
   
+  num0(HEX) = Nuclei0.number_1H_exchangeable;
+  num0(HNX) = Nuclei0.number_1H_nonExchangeable;
   for ii = 1:Nuclei0.number
     if strcmp(Nuclei0.Type{ii},'1H')
       num0(H) = num0(H) +1;
@@ -44,7 +53,10 @@ if Nuclei0.number~=Nuclei.number
   end
   disp(num0);
   
-  num = [0,0,0];
+  num = [0,0,0,0,0];
+  
+  num(HEX) = Nuclei.number_1H_exchangeable;
+  num(HNX) = Nuclei.number_1H_nonExchangeable;
   
   for ii = 1:Nuclei.number
     if strcmp(Nuclei.Type{ii},'1H')
@@ -174,3 +186,16 @@ else
   disp('coor: pass')
 end
 
+%% MoleculeID
+MoleculeID = sort(Nuclei.MoleculeID(2:end));
+MoleculeID0 = sort(Nuclei0.MoleculeID);
+
+checkSum =  sum(Nuclei0.MoleculeIDunique)- sum(Nuclei.MoleculeIDunique);
+
+DeltaMolID = MoleculeID0-MoleculeID;
+
+if checkSum~=0 || max(abs(DeltaMolID))>0  
+  disp('Molecule ID: fail')
+else
+  disp('Molecule ID: pass')
+end

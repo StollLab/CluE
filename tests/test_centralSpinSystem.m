@@ -22,11 +22,14 @@ Method.getNuclearContributions = true;
 Method.getNuclearStatistics = true;
 
 Method.Ori_cutoffs = true;
-
 [System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
-Nuclei0 = parseNuclei(System,Method,Data,Data.InputData);
-[~, System]= centralSpinSystem(System,Method,Data);
-[Nuclei, System]= centralSpinSystem(System,Method,Data);
+
+pdb0 = parsePDB(Data.InputData,System);
+% System0 = System;
+Nuclei0 = parseNuclei(System,Method,Data,pdb0);
+pdb_ = parsePDBfile(Data.InputData, System.angstrom);
+% [~, System]= centralSpinSystem(System,Method,Data,pdb_);
+[Nuclei, System]= centralSpinSystem(System,Method,Data,pdb_);
 
 %% Check number
 if Nuclei0.number~=Nuclei.number
@@ -198,11 +201,27 @@ else
 end
 
 %%
-DeltaAdjacency = Nuclei0.Adjacency(idx0,idx0,1) ...
-  - Nuclei.Adjacency(idx,idx,1);
+DeltaAdjacency = Nuclei0.Adjacency(idx0,idx0,:) ...
+  - Nuclei.Adjacency(idx,idx,:);
 
-if max(abs(DeltaAdjacency(:) ))>0
+if max(abs(DeltaAdjacency(:) ))>0 || ...
+    sum(Nuclei0.Adjacency(:)) ~= sum(Nuclei.Adjacency(:))
   disp('Adjacency: fail')
 else
   disp('Adjacency: pass')
+end
+
+
+%% MoleculeID
+MoleculeID = sort(Nuclei.MoleculeID(2:end));
+MoleculeID0 = sort(Nuclei0.MoleculeID);
+
+checkSum =  sum(Nuclei0.MoleculeIDunique)- sum(Nuclei.MoleculeIDunique);
+
+DeltaMolID = MoleculeID0-MoleculeID;
+
+if checkSum~=0 || max(abs(DeltaMolID))>0  
+  disp('Molecule ID: fail')
+else
+  disp('Molecule ID: pass')
 end

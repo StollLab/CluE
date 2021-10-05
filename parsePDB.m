@@ -12,9 +12,7 @@
 %   pbdID       pdb ID
 %   numberH     [nProtons nDeuterons nHydrogensTotal]
 
-function [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, ...
-  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii]...
-  = parsePDB(filename,System)
+function pdbData = parsePDB(filename,System)
 
 % Open pdb file.
 fh = fopen(filename);
@@ -216,6 +214,24 @@ if UnitCell.isUnitCell && UnitCell.spaceGroup == -1
   = mirrorPDB(Coordinates,Type,Connected, Indices_nonSolvent, ...
   pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii);
 end
+
+% [Coordinates,Type,UnitCell,Connected, Indices_nonSolvent, ...
+%  pdbID,MoleculeID,numberH, isSolvent,isWater,Exchangeable,VanDerWaalsRadii]
+
+pdbData.Coordinates = Coordinates;
+% pdbData.pdbCoordinates = pdbCoordinates;
+pdbData. Type = Type;
+pdbData. UnitCell = UnitCell;
+pdbData. Connected = Connected;
+pdbData. Indices_nonSolvent = Indices_nonSolvent;
+pdbData. pdbID = pdbID;
+pdbData. MoleculeID = MoleculeID;
+pdbData. numberH = numberH;
+pdbData. isSolvent  = isSolvent;
+pdbData. isWater = isWater;
+pdbData.Exchangeable = Exchangeable;
+pdbData.VanDerWaalsRadii = VanDerWaalsRadii;
+
 
 end
 
