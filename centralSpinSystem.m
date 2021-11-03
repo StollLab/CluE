@@ -2401,6 +2401,8 @@ for iopt=1:4:Nopt
         particles_{particleIndex}.barrierPotential = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'doRandomIsotopes')
         particles_{particleIndex}.doRandomIsotopes = particleOptions{iopt+3};
+      elseif strcmp(particleOptions{iopt+2},'exchangeable')
+        particles_{particleIndex}.exchangeable = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'hf_Azz')
         particles_{particleIndex}.hf_Azz = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'hf_FermiContact')
