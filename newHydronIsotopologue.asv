@@ -118,7 +118,7 @@ switch System.HydrogenExchange
     error('Could not generate isotopologue.');
 end
 
-is1H = cellfun(@(x)isequal(x,'1H'),Nuclei.Type) & isSolvent;
+is1H = cellfun(@(x)isequal(x,'1H'),{Nuclei.Type(:)}) & isSolvent;
 is2H = cellfun(@(x)isequal(x,'2H'),Nuclei.Type) & isSolvent;
 isExch = Nuclei.Exchangeable;
 n1H = sum(is1H); % number of solvent protons.
@@ -138,14 +138,14 @@ Pn =  n2Hn/nHn;
 
 
 fprintf('Target: \n  P(D) = %d/%d = %d. \n  P(D|OH) = %d/%d = %d.\n  P(D|CH) = %d/%d = %d.\n',...
-  nHx*System.deuteriumFraction + nHn*System.deuteriumFraction_nonExchangeable, nH, Ptarget, ...
-  nHx*System.deuteriumFraction, nH, System.deuteriumFraction,...
-  nHn*System.deuteriumFraction_nonExchangeable, nH, System.deuteriumFraction_nonExchangeable);
+  round(nHx*System.deuteriumFraction + nHn*System.deuteriumFraction_nonExchangeable), nH, Ptarget, ...
+  round(nHx*System.deuteriumFraction), nHx, System.deuteriumFraction,...
+  round(nHn*System.deuteriumFraction_nonExchangeable), nHn, System.deuteriumFraction_nonExchangeable);
 
 fprintf('Initialized %d hydrons: \n  P(D) = %d/%d = %d. \n  P(D|OH) = %d/%d = %d.\n  P(D|CH) = %d/%d = %d.\n',nH,...
   n2H, (n1H+n2H), P, ...
   n2Hx, nHx, Px, ...
-  Pn);
+  n2Hn, nHn, Pn);
 
 
 Isotopologue = Nuclei;

@@ -356,7 +356,7 @@ function assembleNuclei()
 
 % Initialize
 Nuclei.Index = 1:(number_-1); % set here.
-Nuclei.Type = cell(number_-1,1);
+Nuclei.Type = cell(1,number_-1);
 Nuclei.Element = cell(number_-1,1);
 % Nuclei.Connected = cell(number_,1); % not needed.
 Nuclei.Spin = zeros(1,number_-1);

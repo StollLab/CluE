@@ -799,6 +799,12 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
   
   % grid point indices
   if System.newIsotopologuePerOrientation && ~Method.reparseNuclei
+
+    if Method.useCentralSpinSystem
+      error(['Error in getOrientationSignals(): ',...
+        'Method.useCentralSpinSystem is not yet compatible with',...
+        ' System.newIsotopologuePerOrientation.']);
+    end
     Nuclei = newHydronIsotopologue(Nuclei,System);
     if verbose
       fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
