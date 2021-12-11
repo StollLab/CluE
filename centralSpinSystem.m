@@ -53,22 +53,23 @@ PARTICLE_ENUM = ienum; ienum = ienum + 1;
 if(PARTICLE_ENUM+1-ienum ~= 0)
   error(['Error in centralSpinSystem(): ', 'enums are incorrect.']);
 end
-
-cellShifts_            = [];
-methylIDs_             = [];
-moleculeID_            = [];
-number_                = 0; 
-numberMethyls_         = 0;
-numberParticleClasses_ = 0;
-particleClassID_       = [];
-particles_             = cell(0,0);
-%pdb_                   = parsePDBfile(Data.InputData, System.angstrom);
-originVec_             = getElectronCoordinates(...
-                          System,[pdb_.x,pdb_.y,pdb_.z],pdb_.serial);
-pdbID_                 = []; 
-residueList_           = cell(0,0); 
-uniqueResidueList_     = {}; 
-zeroIndex_             = {};
+associatedParticleMatrix_ = sparse(0,0); % indexed by CluE indices.
+associatedPDBMatrix_ = sparse(pdb_.number,pdb_.number); % indexed by pdb ID.
+cellShifts_              = [];
+% methylIDs_               = [];
+moleculeID_              = [];
+number_                  = 0; 
+numberMethyls_           = 0;
+numberParticleClasses_   = 0;
+particleClassID_         = [];
+particles_               = cell(0,0);
+%pdb_                     = parsePDBfile(Data.InputData, System.angstrom);
+originVec_               = getElectronCoordinates(...
+                            System,[pdb_.x,pdb_.y,pdb_.z],pdb_.serial);
+pdbID_                   = []; 
+residueList_             = cell(0,0); 
+uniqueResidueList_       = {}; 
+zeroIndex_               = {};
 
 
 buildSystem();
@@ -138,17 +139,42 @@ if isUnique && isParticleValid(particleEnum, pdb_.resName{ipdb})
   particleClassID_(iparticle) = particles_{numberParticleClasses_}.ID;
 
 end
+
+% Check if the particle is already a member of this particle class.
+if any(pdbID_(particles_{uniqueID}.members)==ucpdb)
+  return;
+end
+
 % Add parttcle to member set.
-particles_{uniqueID}.members  = [particles_{uniqueID}.members,iparticle];
+particles_{uniqueID}.members  = unique(...
+  [particles_{uniqueID}.members,iparticle]);
+
 particles_{uniqueID}.number = length(particles_{uniqueID}.members);
+
+% TO DO: REPLACE associatedParticlesCollection WITH associatedPDBMatrix.
 particles_{uniqueID}.associatedParticlesCollection{...
   particles_{uniqueID}.number} = associatedParticles;
+
+if uc==1
+  for iAsso = 1:numel(associatedParticles)
+    iaParticle = associatedParticles(iAsso);
+    associatedPDBMatrix_(iaParticle,ipdb) = iaParticle;
+  end
+end
 
 % Record molecule ID number.
 moleculeID_(iparticle) = pdb_.resSeq(ipdb) + (uc-1)*pdb_.number;
 
 % Record PDB number.
+if numel(pdbID_) >= iparticle && pdbID_(iparticle) ~= ucpdb
+  error(['Error in addParticle(): ',...
+    'particle ', num2str(iparticle), 'is already asigned pdb ID ',...
+    num2str(pdbID_(iparticle)), ' and cannot be re-asigned pdb ID ', ...
+    num2str(ucpdb), '.']);
+end
+  
 pdbID_(iparticle) = ucpdb;
+
 
 if iparticle == number_+1
   % Count this particle.
@@ -175,94 +201,12 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function adjustAssociatedParticles()
-  
-% Loop over all types of particles.
-for itype = 1:numberParticleClasses_
- if particles_{itype}.particleEnum == PARTICLE_CENTRALSPIN
-   continue;
- end
- 
-  % Get associated indices.
-  associatedParticlesCollection = ...
-    particles_{itype}.associatedParticlesCollection;
- 
-  % Loop over all instances of those particles;
-  for ii = 1:particles_{itype}.number          
-
-     % Loop over the associated particles for each.
-     for jj = 1:size( associatedParticlesCollection{ii},1)   
-
-       % Get current value.
-       oldVal = associatedParticlesCollection{ii}(jj);
-
-       % Adjust value for unused particles.
-       adjVal = ucpdbID2Index(oldVal);
-
-       % Assign new value.
-       associatedParticlesCollection{ii}(jj) = adjVal;
-                                                                                 
-     end                                                                           
-  end    
-   particles_{itype}.associatedParticlesCollection = ...
-       associatedParticlesCollection;
-end
-
-for ii = 1:length(methylIDs_)
-                                                                                 
-  % Get the index of the methyl group class ii.                                 
-  oldVal = methylIDs_(ii);
-
-  % Adjust value for unused particles.
-  adjVal = ucpdbID2Index(oldVal) ;
-       
-  % Assign new value.
-  methylIDs_(ii) = adjVal;
-end
-
-return;
-end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function allPass = checkNuclei()
-
-METHYLID = 1;
-pass(METHYLID) = true;
-
-if System.Methyl.include
-  for ii=1:Nuclei.number
-    if Nuclei.MethylID(ii) > 0
-      
-      pass(METHYLID) = pass(METHYLID)*( ...
-        sum(Nuclei.MethylID==Nuclei.MethylID(ii)) ==3);
-      
-    elseif Nuclei.MethylID(ii) < 0
-      
-      pass(METHYLID) = pass(METHYLID)*( ...
-        sum(Nuclei.MethylID==Nuclei.MethylID(ii)) ==1);
-      
-    end
-  end
-end
-
-if ~pass(METHYLID)
-  error(['Error in checkNuclei(): ', 'methylID is not correctly set up.']);
-end
-
-  allPass = all(pass(METHYLID)); 
-end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function preliminaryParticle = analyzeParticle(index_pdb)
   
 pdbParticle =   getParticleClass(pdb_.element{index_pdb});
 preliminaryParticle.particleEnum = PARTICLE_NONE;
 
-preliminaryParticle.associatedParticles = {};
+preliminaryParticle.associatedParticles = [];
 
 switch pdbParticle
   % Hydrogen
@@ -312,7 +256,7 @@ switch pdbParticle
         
         numberMethyls_ = numberMethyls_ + 1;
         
-        methylIDs_(numberMethyls_) = index_pdb;
+%         methylIDs_(numberMethyls_) = index_pdb;
       end
     elseif System.include_13C
       preliminaryParticle.particleEnum = PARTICLE_12C;
@@ -371,6 +315,7 @@ Nuclei.methylTunnelingSplitting = sparse(number_-1,number_-1);
 Nuclei.Exchangeable = zeros(1,number_-1);
 Nuclei.NumberStates = int8(zeros(1,number_-1));
 Nuclei.MethylID = zeros(1,number_-1);
+methylCounter = 0;
 % Nuclei.valid = true(1,number_-1); % not needed.
 % Nuclei.isWater = true(1,number_-1); % not needed.
 Nuclei.isSolvent = true(1,number_-1);
@@ -435,8 +380,10 @@ for iparticle = 2:number_
   end
   
   if particleEnum == PARTICLE_C_METHYL
-    
-    hydrons = getAssociatedParticles(itype,iparticle);
+    methylCounter = methylCounter + 1;
+
+    %     hydrons = getAssociatedParticles(itype,iparticle);
+    hydrons = nonzeros(associatedParticleMatrix_(:,iparticle)) - 1;
     
     nuT = particles_{itype}.tunnelSplitting;
     
@@ -447,9 +394,14 @@ for iparticle = 2:number_
         Nuclei.methylTunnelingSplitting(iH,jH) = nuT;
       end
     end
-    
-    error(['Error in assembleNuclei(): ', ...
-      'Nuclei.MethylID not set.  Please update source code.'])
+
+    Nuclei.MethylID(iNuc) = -methylCounter;
+    for ih = 1:3
+      iH = hydrons(ih);
+      Nuclei.MethylID(iH) = methylCounter;
+    end
+%     error(['Error in assembleNuclei(): ', ...
+%       'Nuclei.MethylID not set.  Please update source code.'])
   end
   
 end
@@ -471,7 +423,8 @@ Nuclei.graphCriterion = Method.graphCriterion;
 Nuclei.Electron_pdbCoordinates = originVec_';
   
 if System.Methyl.include %&& System.Methyl.method ~= 2
-    error('Error in centralSpinSystem(): methyl code not yet implemented.');
+  Nuclei.Methyl_Data.number_methyls = methylCounter;
+%     error('Error in centralSpinSystem(): methyl code not yet implemented.');
 else
   Nuclei.Methyl_Data = [];
 end
@@ -531,6 +484,61 @@ end
 checkNuclei();  
 return;
 end 
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function buildAssociatedParticlematrix()
+
+% Resize matrix.
+associatedParticleMatrix_(number_,number_) = 0;
+
+% Loop through all particles in system.
+for iParticle = 1:number_
+
+  % Get pdb information.
+  ucpdb = pdbID_(iParticle);
+  
+  uc = ceil(ucpdb/pdb_.number);
+  
+  ipdb = mod(ucpdb,pdb_.number);
+  if ipdb==0, ipdb = pdb_.number; end
+
+  % Get non-zero column elements, the particles associated with ipdb. 
+  associatedPDBcol = nonzeros(associatedPDBMatrix_(:,ipdb));
+  for iAsso = 1:numel(associatedPDBcol)
+
+    % Find associated particles if they exist.
+    assoiParticle = find(pdbID_ ==  ...
+      (associatedPDBcol(iAsso) + (uc-1)*pdb_.number));
+    
+    % Add missing associated particles.
+    if isempty(assoiParticle)
+      itype = particleClassID_(iParticle);
+
+      assoiParticle = number_;
+
+      associatedPart = analyzeParticle(associatedPDBcol(iAsso));
+
+      addParticle(associatedPart.particleEnum, particles_{itype}.resName, ...
+        [], number_+1, (uc-1)*pdb_.number + associatedPDBcol(iAsso));
+
+      if assoiParticle==number_
+        error(['Error in buildAssociatedParticlematrix(): ', ...
+        'particle could not be added.']);
+      else
+        assoiParticle = number_;
+      end
+
+    elseif numel(assoiParticle)>1
+      error(['Error in buildAssociatedParticlematrix(): ', ...
+        'particle has been added multiple times.']);
+    end
+
+    associatedParticleMatrix_(assoiParticle,iParticle) = assoiParticle;
+  end
+end
+end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
@@ -618,6 +626,7 @@ for itype = 1:numberParticleClasses_
     % Get index of particle copy in the primary cell.
     particleIndex =  mod( particleIndex, N);
     if particleIndex==0, particleIndex = N; end
+    
     baseIndex = indices( particleIndex );
     
     % Get PDB number.
@@ -646,16 +655,35 @@ for itype = 1:numberParticleClasses_
       % Define index to store unit cell and ipdb info together.
       ucpdb = jpdb + ucIndexOffset;
       
-      % Extract associatedParticles. 
-      associatedParticles = preliminaryParticle.associatedParticles;
+      % Add unit cell offset to associatedParticles. 
+      associatedParticles = preliminaryParticle.associatedParticles ...
+        + ucIndexOffset;
       
-      % Add unit cell offset to associatedParticles.
-      for iAssoPart = 1:length( associatedParticles )
-        associatedParticles(iAssoPart) = ...
-          associatedParticles(iAssoPart) + ucIndexOffset;
+      % Since methyl carbons add their hydrons, some particle may already be
+      % added.
+      alreadyAdded = find(pdbID_==ucpdb);
+      if ~isempty(alreadyAdded)
+
+        if numel(alreadyAdded) > 1
+          error(['Error in buidExtraCellss(): ', ...
+            'pdb ID ',num2str(ucpbd),' added multiple times.']);
+        end
+
+        alreadyAddedID = particleClassID_(alreadyAdded);
+        if particles_{alreadyAddedID}.particleEnum ...
+            == preliminaryParticle.particleEnum
+          error(['Error in buildExtraCells: ',...
+            'cannot overwrite particle index ', num2str(alreadyAdded), ...
+            ', ', getParticleString(particles_{alreadyAddedID}.particleEnum),...
+            ' with ',getParticleString(preliminaryParticle.particleEnum), '.']);
+        end
+
+        continue;    
       end
       
+      
       addParticle(particleEnum,resName, associatedParticles, number_+1, ucpdb);
+
     end
   end
 end
@@ -686,7 +714,7 @@ for ipdb = 1:pdb_.number
 
   end
 end
-  
+
 return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -713,9 +741,14 @@ function buildSystem()
   buildPrimaryCell();
   
   buildExtraCells();
-  
+
+  buildAssociatedParticlematrix()
+
   % Adjust indices for dropped particles.
-  adjustAssociatedParticles();
+  %adjustAssociatedParticles();
+
+  % Set methyls.
+  setMethyls();
 
 return;
 end
@@ -753,6 +786,40 @@ return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function allPass = checkNuclei()
+
+METHYLID = 1;
+pass(METHYLID) = true;
+
+if System.Methyl.include
+  for ii=1:Nuclei.number
+    if Nuclei.MethylID(ii) > 0
+      
+      pass(METHYLID) = pass(METHYLID)*( ...
+        sum(Nuclei.MethylID==Nuclei.MethylID(ii)) ==3);
+      
+    elseif Nuclei.MethylID(ii) < 0
+      
+      pass(METHYLID) = pass(METHYLID)*( ...
+        sum(Nuclei.MethylID==Nuclei.MethylID(ii)) ==1);
+      
+    end
+
+    if ~pass(METHYLID)
+      error(['Error in checkNuclei(): ', 'methylID is not correctly set up.']);
+    end
+  end
+end
+
+
+
+  allPass = all(pass(METHYLID)); 
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 % This function checks the system for errors.  More checks should be added as
 % as bugs are are found and/or the code grows. 
@@ -760,6 +827,9 @@ function checkSystem()
 
   
 n = 0;
+nCmethyl = 0;
+nHmethyl = 0;
+
 allMembers = zeros(number_,1) - 1;
 
 % Check that the number of particles matches the count from all particle
@@ -778,6 +848,12 @@ for itype=1:numberParticleClasses_
   end
   allMembers(n+1:n+n0) = particles_{itype}.members;
   n = n + n0;
+
+  if particles_{itype}.particleEnum == PARTICLE_1H_METHYL
+    nHmethyl = nHmethyl + particles_{itype}.number;
+  elseif particles_{itype}.particleEnum == PARTICLE_C_METHYL
+    nCmethyl = nCmethyl + particles_{itype}.number; 
+  end 
 end
 
 % Check that the system has the correct number of particles.
@@ -786,6 +862,11 @@ if n ~= number_
       'Error in checkSystem(): ', 'system has ', num2str(n),...
       ' members, but reports ', num2str(number_), ' members'...
       ])  ;
+end
+
+if 3*nCmethyl ~= nHmethyl
+  error(['Error in checkSystem(): ', 'there ', num2str(nCmethyl), ...
+    'methyl carbons, but ', num2str(nHmethyl), ' methy hydrodrons.']);  
 end
 
 % Check for multi-counted particles.
@@ -1048,31 +1129,6 @@ for imol = 1:length(uniqueResidueList_)-1
   fprintf([uniqueResidueList_{imol}, ', ']);                            
 end   
 fprintf( [uniqueResidueList_{end}, ' }.\n']);   
-return;
-end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function associatedParticles = getAssociatedParticles(itype,iparticle)
-
-idx = 0;  
-for imem = 1:particles_{itype}.number
-  if iparticle == particles_{itype}.members(imem)
-    idx=imem;
-    break;
-  end
-end
-
-if idx>0
-associatedParticles = ...
-    particles_{itype}.associatedParticlesCollection{idx};
-else
-  error(['Error in getAssociatedParticles(): ', 'particle ',...
-    num2str(iparticle), ' is not a member of particle class ', ...
-    particles_{itype}.particleName, ' ', particles_{itype}.resName, '.']);
-end
-
 return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -1954,7 +2010,7 @@ particles_{numberParticleClasses_}.NQ_eta = 0;
 particles_{numberParticleClasses_}.NQ_x = {};
 particles_{numberParticleClasses_}.NQ_y = {};
 particles_{numberParticleClasses_}.NQ_z = {};
-particles_{numberParticleClasses_}.spinMultiplicity = 0;
+particles_{numberParticleClasses_}.spinMultiplicity = 1;
 particles_{numberParticleClasses_}.switchParticle = PARTICLE_UNSET;
 particles_{numberParticleClasses_}.tunnelSplitting = 0;
 
@@ -2153,7 +2209,29 @@ for iParticle=1:number_
 end
 return;
 end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function setOptions()
+
+deactivateIndices = [];
+
+if System.Methyl.include
+  if System.Methyl.method == 2
+    deactivateIndices = findParticleClasses(PARTICLE_C_METHYL, 'ALL');
+  else
+    error(['Error in setOptions(): ', ...
+      'methyl method ',  num2str(System.Methyl.method), ' not supported.']);
+  end
+end
+
+for itype = deactivateIndices
+  particles_{itype}.active = false;
+end
+
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -2257,7 +2335,7 @@ switch particleEnum
   case {PARTICLE_CARBON, PARTICLE_12C}
     particles_{particleIndex}.atomType = PARTICLE_CARBON;
     particles_{particleIndex}.isNucleus = true;
-    particles_{particleIndex}.spinMultiplicity = 0;
+    particles_{particleIndex}.spinMultiplicity = 1;
     particles_{particleIndex}.switchParticle = PARTICLE_13C;
     
   case PARTICLE_13C  
@@ -2271,7 +2349,7 @@ switch particleEnum
   case PARTICLE_C_METHYL
     particles_{particleIndex}.atomType = PARTICLE_CARBON;
     particles_{particleIndex}.isNucleus = true;
-    particles_{particleIndex}.spinMultiplicity = 0;
+    particles_{particleIndex}.spinMultiplicity = 1;
     particles_{particleIndex}.switchParticle = PARTICLE_13C_METHYL;
     
   case PARTICLE_13C_METHYL
@@ -2331,7 +2409,7 @@ switch particleEnum
   case {PARTICLE_OXYGEN, PARTICLE_16O}
     particles_{particleIndex}.atomType = PARTICLE_OXYGEN;
     particles_{particleIndex}.isNucleus = true;
-    particles_{particleIndex}.spinMultiplicity = 0;
+    particles_{particleIndex}.spinMultiplicity = 1;
     particles_{particleIndex}.switchParticle = PARTICLE_17O;
     
   case PARTICLE_17O
@@ -2345,7 +2423,7 @@ switch particleEnum
   case {PARTICLE_SILICON, PARTICLE_28SI}
     particles_{particleIndex}.atomType = PARTICLE_SILICON;
     particles_{particleIndex}.isNucleus = true;
-    particles_{particleIndex}.spinMultiplicity = 0;
+    particles_{particleIndex}.spinMultiplicity = 1;
     particles_{particleIndex}.switchParticle = PARTICLE_29SI;
     
   case PARTICLE_29SI
@@ -2464,10 +2542,8 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function index = ucpdbID2Index(ucpdb)
-
-  % Get unit cell index.
-  uc = ceil(ucpdb/pdb_.number);
+%{
+  function index = ucpdbID2Index(ucpdb)
   
   % Loop through all indices, starting in the correct unit cell.
   index = find(pdbID_ == ucpdb);
@@ -2476,14 +2552,25 @@ function index = ucpdbID2Index(ucpdb)
     return;
   end
   
+  % Get unit cell index.
+  uc = ceil(ucpdb/pdb_.number);
+
   % Get PDB number.
   ipdb = mod(ucpdb,pdb_.number);
 
   % The list should be complete.  Report error.
-  error(['Error in ucpdbID2Index(): could not find index ', ...
-   num2str(ipdb), ' unit cell ', num2str(uc), '.']);
+  if isempty(index)
+    error(['Error in ucpdbID2Index(): could not find index for', ...
+      num2str(ipdb), ' unit cell ', num2str(uc), '.']);
+  else
+    disp('index = ');
+    disp(index);
 
+    error(['Error in ucpdbID2Index(): found multiple indices for', ...
+      num2str(ipdb), ' unit cell ', num2str(uc), '.']);
+  end
 end
+%}
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
@@ -2497,13 +2584,16 @@ setCoordinates();
 setIsotopologue();
 
 % Set methyls.
-setMethyls();
+% setMethyls();
 
 % Set nuclear quadrupoles.
 setQuadrupoles()
 
 % Set nuclear quadrupoles.
 setHyperfine()
+
+% Set post setup options.
+setOptions();
 
 % Check for errors.
 checkSystem();  
@@ -2714,21 +2804,31 @@ for itype = 1:numberParticleClasses_
   if isUnique
     methylHID = numberParticleClasses_ + 1;
   end
-
+  
+  % Set hydron tunnel splitting to the methyl tunnel splitting.   
+  particles_{methylHID}.tunnelSplitting = particles_{itype}.tunnelSplitting;
+  
   % Get hydrons associated with this kind of metthyl.
-  methylAssociatedParticlesCollection = ...
-    particles_{itype}.associatedParticlesCollection;
+  %   methylAssociatedParticlesCollection = ...
+  %     particles_{itype}.associatedParticlesCollection;
 
   % Loop over methyls of this kind.
-  for imethyl=1:length(methylAssociatedParticlesCollection)
+  %   for imethyl=1:length(methylAssociatedParticlesCollection)
+  for imethyl=1:particles_{itype}.number
 
     % Get methyl ID within Particle Class.
     methylCID = particles_{itype}.members(imethyl);
-  
+
     % Get the indices for the 3 methyl hydrons.
-    methylHydrons = ...
-      methylAssociatedParticlesCollection{imethyl};
-    
+    %     methylHydrons = ...
+    %       methylAssociatedParticlesCollection{imethyl};
+    methylHydrons = nonzeros(associatedParticleMatrix_(:,methylCID));
+    if numel(methylHydrons) ~= 3
+      error(['Error in setMethyls(): ', ...
+        'methyl carbon ', num2str(methylCID), ' has ', ...
+        num2str(numel(methylHydrons)), ' instead of 3 hydrons.' ]);
+    end
+
     % Loop over methyl hydrons.  
     for iHydron = 1:3
 
@@ -2755,7 +2855,7 @@ for itype = 1:numberParticleClasses_
         printParticleInfo( particles_{hydronAddress} );
                 
         error(['Error in setMethyls(): methyl hydron, ', ...
-          num2str(hydronAddress), 'catagorized as ',  ...
+          num2str(hydronAddress), ' catagorized as ',  ...
           particles_{hydronAddress}.resName, ' ',...
           getParticleString(hydronAddress), '.']);
       end
@@ -2884,8 +2984,12 @@ function ... %Nuclei =
 Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
 if any(Nuclei.Statistics.Distance > System.radius*System.scale)
-  error(['Error in parseNuclei(): ','Nuclei beyond the distance cutoff ', ...
-    'remain in the system.'])
+  if System.Methyl.include
+    % TO DO: ADD CHECK.
+  else
+    error(['Error in parseNuclei(): ','Nuclei beyond the distance cutoff ', ...
+      'remain in the system.'])
+  end
 end
 
 
@@ -3191,6 +3295,15 @@ end
 
 if ~isfield(System, 'solventMolecules')
   System.solventMolecules = {'SOL','WAT','MGL'};
+end
+
+if ~isfield(System,'particleOptions')
+  System.particleOptions = {};
+end
+for iopt=1:4:numel(System.particleOptions)
+  if strcmp(System.particleOptions{iopt}, 'methyl')
+    System.particleOptions{iopt} = 'C_methyl';
+  end
 end
 
 end

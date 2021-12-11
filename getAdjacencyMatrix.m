@@ -158,6 +158,11 @@ for isize = 1:Method.extraOrder
     Sele_ = Sele_.*(Nuclei.MethylID==Nuclei.MethylID');
     Adjacency(:,:,isize) = Adjacency(:,:,isize) | Sele_;
 
+    
+    isMethylCarbon = strcmp(Nuclei.Type,'CH3');
+    Adjacency(isMethylCarbon,:,isize) = false;
+    Adjacency(:,isMethylCarbon,isize) = false;
+
   end
   
 end
