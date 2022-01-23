@@ -143,7 +143,7 @@ if methylCoupledOnly
   isMethylCarbon = strcmp(Nuclei.Type,'CH3');
   isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
   isMethyl = isMethylCarbon | isMethylHydron;
-  
+
   for clusterSize = 1:order
     if ~Method.cutoff.methylCoupledOnly(clusterSize)
       continue;
@@ -151,7 +151,7 @@ if methylCoupledOnly
     
     C = Clusters{clusterSize};
     
-    keep  = any(isMethyl(C),2);
+    keep  = sum(isMethyl(C),2) >= Method.cutoff.methylCoupledOnlyNumber;
     
     Clusters{clusterSize} = C(keep,:);
   end

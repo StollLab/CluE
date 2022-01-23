@@ -179,6 +179,8 @@ end
 
 if strcmp(pdbData.sGroup,'P -1')
   addMirrorPDB();
+elseif strcmp(pdbData.sGroup,'R3c') || strcmp(pdbData.sGroup,'H 3 c')
+  addR3c()
 end
 
 pdbData.number_resSeq = numel(unique(pdbData.resSeq));
@@ -199,7 +201,7 @@ function addMirrorPDB()
   pdbData.y           = [pdbData.y; -pdbData.y];
   pdbData.z           = [pdbData.z; -pdbData.z];
   pdbData.occupancy   = [pdbData.occupancy; pdbData.occupancy];
-  pdbData.tempFactor  = [pdbData.occupancy; pdbData.tempFactor];
+  pdbData.tempFactor  = [pdbData.tempFactor; pdbData.tempFactor];
   pdbData.element     = [pdbData.element(:); pdbData.element(:)];
   pdbData.charge      = [pdbData.charge(:); pdbData.charge(:)];
   
@@ -208,6 +210,101 @@ function addMirrorPDB()
   pdbData.connections(N+1:2*N,N+1:2*N) = pdbData.connections;
 
   
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function addR3c() 
+  Ncopy = 6;
+  NNcopy = [Ncopy,1];
+  N = pdbData.number;
+  pdbData.number = Ncopy*N;
+  connections = pdbData.connections;
+  pdbData.connections = sparse(pdbData.number,pdbData.number);
+  for icon = 1:Ncopy
+    pdbData.connections((icon-1)*N+1:icon*N,(icon-1)*N+1:icon*N) = connections;
+  end
+
+  serialN = pdbData.serial(end);
+  resN = pdbData.resSeq(end);
+  pdbData.serial      = repmat(pdbData.serial,NNcopy);
+  pdbData.serial      = pdbData.serial ...
+    +serialN.*floor([0:numel(pdbData.serial)-1]'./serialN);
+  pdbData.name        = repmat(pdbData.name(:),NNcopy);
+  pdbData.altLoc      = repmat(pdbData.altLoc(:), NNcopy);
+  pdbData.resName     = repmat(pdbData.resName(:), NNcopy);
+  pdbData.chainID     = repmat(pdbData.chainID(:), NNcopy);
+  pdbData.resSeq      = repmat(pdbData.resSeq,NNcopy);
+  pdbData.resSeq      = pdbData.resSeq ...
+    + resN.*floor([0:numel(pdbData.resSeq)-1]'./resN);
+  pdbData.iCode       = repmat(pdbData.iCode(:), NNcopy);
+  pdbData.occupancy   = repmat(pdbData.occupancy, NNcopy);
+  pdbData.tempFactor  = repmat(pdbData.tempFactor, NNcopy);
+  pdbData.element     = repmat(pdbData.element(:), NNcopy);
+  pdbData.charge      = repmat(pdbData.charge(:), NNcopy);
+  
+%  1>   x           , y           , z
+%  2>   1/3 + x     , 2/3 + y     , 2/3 + z
+%  3>   2/3 + x     , 1/3 + y     , 1/3 + z
+%  4>   -y          , x - y       , z
+%  5>   -x + y      , -x          , z
+%  6>   1/3 - y     , 2/3 + x - y , 2/3 + z
+%  7>   1/3 - x + y , 2/3 - x     , 2/3 + z
+%  8>   2/3 - y     , 1/3 + x - y , 1/3 + z
+%  9>   2/3 - x + y , 1/3 - x     , 1/3 + z
+% 10>   -y          , -x          , 1/2 + z
+% 11>   1/3 - y     , 2/3 - x     , 1/6 + z
+% 12>   2/3 - y     , 1/3 - x     , 5/6 + z
+% 13>   -x + y      , y           , 1/2 + z
+% 14>   x           , x - y       , 1/2 + z
+% 15>   1/3 - x + y , 2/3 + y     , 1/6 + z
+% 16>   1/3 + x     , 2/3 + x - y , 1/6 + z
+% 17>   2/3 - x+y   , 1/3 + y     , 5/6 + z
+% 18>   2/3 + x     , 1/3 + x - y , 5/6 + z
+
+% TO DO: DOUBLE CHECK x0, y0, AND z0 ASSIGNMENTS,
+x0 = pdbData.a;
+x = pdbData.x/x0;
+
+y0 = pdbData.b;
+y = pdbData.y/y0;
+z0 = pdbData.c;
+z = pdbData.z/z0;
+
+% pdbData.x = [       x; 1/3+x;   2/3+x;    -y;  -x+y; 1/3-y; ...
+%               1/3-x+y; 2/3-y; 2/3-x+y;    -y; 1/3-y; 2/3-y; ...    
+%                  -x+y    ; x; 1/3-x+y; 1/3+x; 2/3-x+y; 2/3+x].*x0;  
+
+% pdbData.x = [       x; 1/3+x;   2/3+x;    -y;    -x+y; 1/3-y;...
+%               1/3-x+y; 2/3-y; 2/3-x+y;    -y;   1/3-y; 2/3-y;...
+%                  -x+y;     x; 1/3-x+y; 1/3+x; 2/3-x+y; 2/3+x].*x0;
+% 
+% pdbData.y = [      y;  2/3+y; 1/3+y;     x-y;    -x; 2/3+x-y;...
+%               2/3-x; 1/3+x-y; 1/3-x;      -x; 2/3-x; 1/3-x;...
+%                   y;     x-y; 2/3+y; 2/3+x-y; 1/3+y; 1/3+x-y].*y0;
+% 
+% pdbData.y = [     y;   2/3+y; 1/3+y;     x-y;    -x; 2/3+x-y;...
+%               2/3-x; 1/3+x-y; 1/3-x;      -x; 2/3-x;   1/3-x;...
+%                   y;     x-y; 2/3+y; 2/3+x-y; 1/3+y; 1/3+x-y;].*y0;
+
+% pdbData.z = [     z; 2/3+z; 1/3+z;     z;     z; 2/3+z;...
+%               2/3+z; 1/3+z; 1/3+z; 1/2+z; 1/6+z; 5/6+z;...
+%               1/2+z; 1/2+z; 1/6+z; 1/6+z; 5/6+z; 5/6+z].*z0;
+
+% pdbData.z = [     z; 2/3+z; 1/3+z;     z;     z; 2/3+z;...
+%               2/3+z; 1/3+z; 1/3+z; 1/2+z; 1/6+z; 5/6+z;...
+%               1/2+z; 1/2+z; 1/6+z; 1/6+z; 5/6+z; 5/6+z].*z0;
+
+
+pdbData.x = [ x; z; y; 1/2+x; 1/2+z; 1/2+y].*x0;
+pdbData.y = [ y; x; z; 1/2+z; 1/2+y; 1/2+x].*y0;
+pdbData.z = [ z; y; x; 1/2+y; 1/2+x; 1/2+z].*z0;
+% 
+% pdbData.x = [pdbData.x;-pdbData.x];
+% pdbData.y = [pdbData.y;-pdbData.y];
+% pdbData.z = [pdbData.z;-pdbData.z];
+
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 end

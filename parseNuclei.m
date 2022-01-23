@@ -541,6 +541,7 @@ elseif strcmp(type,'CH3')
   
   
   iNuc = iNuc +1;
+  Nuclei.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable + 1;
   Nuclei.Index(iNuc) = iNuc;
   Nuclei.Type{iNuc} = 'CH3_1H';
   Nuclei.Element{iNuc} = type;
@@ -560,6 +561,7 @@ elseif strcmp(type,'CH3')
   Nuclei.Abundance(iNuc) = 1;
   
   iNuc = iNuc +1;
+  Nuclei.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable + 1;
   Nuclei.Index(iNuc) = iNuc;
   Nuclei.Type{iNuc} = 'CH3_1H';
   Nuclei.Element{iNuc} = type;
@@ -579,6 +581,7 @@ elseif strcmp(type,'CH3')
   Nuclei.Abundance(iNuc) = 1;
   
   iNuc = iNuc +1;
+  Nuclei.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable + 1;
   Nuclei.Index(iNuc) = iNuc;
   Nuclei.Type{iNuc} = 'CH3_1H';
   Nuclei.Element{iNuc} = type;
@@ -869,7 +872,9 @@ function ... %Nuclei =
   
 Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
-if any(Nuclei.Statistics.Distance > System.radius*scaleFactor)
+if System.Methyl.include
+  % TO DO: ADD CHECK.
+elseif any(Nuclei.Statistics.Distance > System.radius*scaleFactor)
   error(['Error in parseNuclei(): ','Nuclei beyond the distance cutoff ', ...
     'remain in the system.'])
 end

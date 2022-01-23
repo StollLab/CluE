@@ -9,7 +9,8 @@
 %    .OutputData name of mat file to store results
 %    .saveLevel  0 (standard), 1 (more), 2 (all)
 
-function [SignalMean, experiment_time, TM_powder,Order_n_SignalMean,Nuclei,statistics] = CluE(System,Method,Data)
+function [SignalMean, experiment_time, ...
+  TM_powder,Order_n_SignalMean,Nuclei,statistics] = CluE(System,Method,Data)
 
 tic
 
@@ -18,7 +19,8 @@ tic
 % set defaults base on specified parameters and for unspecified parameters
 [System, Method, Data,statistics] = setSystemDefaults(System,Method,Data);
 
-[OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method);
+[OutputData,doReturn,SignalMean,experiment_time,...
+  TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method);
 if doReturn, toc; return; end
 
 
@@ -36,6 +38,10 @@ elseif strcmp(System.experiment,'CPMG') || strcmp(System.experiment,'CPMG-2D')
   experiment_time = 4*System.Time;% + 2*System.Time_;
 elseif strcmp(System.experiment,'CPMG-const')
     experiment_time = 2*System.Time;
+elseif strcmp(System.experiment,'CP_N')
+  experiment_time = 2*System.nPulses*System.Time;
+elseif strcmp(System.experiment,'Uhrig_N')
+  experiment_time = 2*System.nPulses*System.Time;
 end
 
 % save input data
@@ -81,6 +87,10 @@ if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved 
   
 elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') ...
     || strcmp(InputData,'System.RandomEnsemble.include')
+  
+  if Method.useCentralSpinSystem
+    System.pdb = parsePDBfile(Data.InputData, System.angstrom);
+  end
   [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
   
   if Nuclei.number < 1
@@ -793,6 +803,12 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
   
   % grid point indices
   if System.newIsotopologuePerOrientation && ~Method.reparseNuclei
+
+    if Method.useCentralSpinSystem
+      error(['Error in getOrientationSignals(): ',...
+        'Method.useCentralSpinSystem is not yet compatible with',...
+        ' System.newIsotopologuePerOrientation.']);
+    end
     Nuclei = newHydronIsotopologue(Nuclei,System);
     if verbose
       fprintf('Generated a new hydron isotopologue for orientation %d.\n',isignal)
@@ -808,7 +824,7 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
 % calculate coherence signal
 [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
-  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData);
+  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData,isignal);
 
 if System.newIsotopologuePerOrientation  && ~Method.reparseNuclei
   Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
@@ -939,7 +955,7 @@ end
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,...
   Ori_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,...
-  OutputData,Data,InputData)
+  OutputData,Data,InputData,isignal)
 
 % Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
@@ -955,7 +971,9 @@ if Method.Ori_cutoffs
 
   isotopologueStatistics = [];
   if Method.reparseNuclei
-    [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
+    if isignal>1
+      [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
+    end
     isotopologueStatistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
     isotopologueStatistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
     isotopologueStatistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;
@@ -1237,7 +1255,8 @@ end
 %==========================================================================
 % Set Output Data
 %==========================================================================
-function [OutputData,doReturn,SignalMean,experiment_time,TM_powder,Order_n_SignalMean,Nuclei,statistics] = setOuput(Data,Method)
+function [OutputData,doReturn,SignalMean,experiment_time,...
+  TM_powder,Order_n_SignalMean,Nuclei,statistics] = setOuput(Data,Method)
 doReturn = false;
 SignalMean  = [];
 experiment_time = [];

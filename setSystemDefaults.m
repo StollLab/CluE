@@ -273,7 +273,7 @@ if length(Method.MonteCarlo.Fraction)==1
   Method.MonteCarlo.Fraction = Method.MonteCarlo.Fraction*ones(1,Method.order);
 end
 if length(Method.MonteCarlo.Fraction) < Method.order
-    Method.MonteCarlo.Fraction = ones(1,Method.order);
+    Fraction = ones(1,Method.order);
   for ii = Method.order_lower_bound:Method.order
     Fraction(ii) = Method.MonteCarlo.Fraction(1+ii-Method.order_lower_bound);
   end
@@ -457,6 +457,9 @@ end
 if ~isfield(System.Methyl,'methylMethylCoupling')
   System.Methyl.methylMethylCoupling = false;
 end
+if ~isfield(Method.cutoff,'methylCoupledOnlyNumber')
+  Method.cutoff.methylCoupledOnlyNumber = 1;
+end
 if ~isfield(System.Methyl,'moment_of_inertia')
   System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
 end
@@ -519,6 +522,15 @@ end
 if ~isfield(System,'experiment')
   System.experiment = 'Hahn';
 end
+if ~isfield(System,'nPulses') 
+  
+  if strcmp(System.experiment,'CP_N') || strcmp(System.experiment,'Uhrig_N')
+    error(['Please specify the number of pi pulses via "System.nPulses".']) ;
+  end
+  System.nPulses = "parameter not needed";
+ 
+end
+
 
 if ~isfield(System,'t0')
   System.t0 = 0;
@@ -567,6 +579,10 @@ switch System.experiment
     System.dimensionality = 1;
   case 'CPMG-2D'
     System.dimensionality = 2;
+  case 'CP_N'
+    System.dimensionality = 1;
+  case 'Uhrig_N'
+    System.dimensionality = 1;
   otherwise
   error('The experiment ''%s'' is not supported.',System.experiment);
 end  

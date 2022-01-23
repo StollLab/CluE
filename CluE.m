@@ -38,6 +38,10 @@ elseif strcmp(System.experiment,'CPMG') || strcmp(System.experiment,'CPMG-2D')
   experiment_time = 4*System.Time;% + 2*System.Time_;
 elseif strcmp(System.experiment,'CPMG-const')
     experiment_time = 2*System.Time;
+elseif strcmp(System.experiment,'CP_N')
+  experiment_time = 2*System.nPulses*System.Time;
+elseif strcmp(System.experiment,'Uhrig_N')
+  experiment_time = 2*System.nPulses*System.Time;
 end
 
 % save input data
@@ -820,7 +824,7 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
 % calculate coherence signal
 [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
-  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData);
+  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData,isignal);
 
 if System.newIsotopologuePerOrientation  && ~Method.reparseNuclei
   Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
@@ -951,7 +955,7 @@ end
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,...
   Ori_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,...
-  OutputData,Data,InputData)
+  OutputData,Data,InputData,isignal)
 
 % Assign temporary value to AuxiliarySignal
 AuxiliarySignal = 'pending';
@@ -967,7 +971,9 @@ if Method.Ori_cutoffs
 
   isotopologueStatistics = [];
   if Method.reparseNuclei
-    [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
+    if isignal>1
+      [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
+    end
     isotopologueStatistics.number_1H_exchangeable = Nuclei.number_1H_exchangeable;
     isotopologueStatistics.number_1H_nonExchangeable = Nuclei.number_1H_nonExchangeable;
     isotopologueStatistics.number_2H_exchangeable = Nuclei.number_2H_exchangeable;

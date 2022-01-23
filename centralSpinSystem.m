@@ -130,7 +130,7 @@ end
 % Initialize if it does not already exist.
 if isUnique && isParticleValid(particleEnum, pdb_.resName{ipdb}) 
 
-  pushParticle(particleEnum, resName);
+  addParticle_new(particleEnum, resName);
   
   % Create new particle type. 
   uniqueID = particles_{numberParticleClasses_}.ID;
@@ -196,6 +196,82 @@ if ~particles_{uniqueID}.exchangeable && ~any(moleculeID_(iparticle)...
 
 end
 
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function addParticle_new(particleEnum, resName)     
+ 
+% Update particle type number.  
+numberParticleClasses_ = numberParticleClasses_ + 1;
+
+% Set identification values.  
+particles_{numberParticleClasses_}.particleName = ...
+  getParticleString(particleEnum);
+particles_{numberParticleClasses_}.resName = resName;
+particles_{numberParticleClasses_}.particleEnum = particleEnum;
+particles_{numberParticleClasses_}.ID = numberParticleClasses_;
+
+% Initialize other values.
+particles_{numberParticleClasses_}.members = [];
+particles_{numberParticleClasses_}.membersOnePerMolecule = [];
+particles_{numberParticleClasses_}.number = 0;
+particles_{numberParticleClasses_}.numberMolecules = 0;
+
+% Initialize option values.
+particles_{numberParticleClasses_}.abundance = 1;
+particles_{numberParticleClasses_}.active = true;
+particles_{numberParticleClasses_}.atomType = PARTICLE_UNSET;
+particles_{numberParticleClasses_}.associatedParticlesCollection = {};
+particles_{numberParticleClasses_}.barrierPotential = 0;
+particles_{numberParticleClasses_}.doRandomIsotopes = [];
+particles_{numberParticleClasses_}.exchangeable = true;
+particles_{numberParticleClasses_}.gFactor = 0;
+particles_{numberParticleClasses_}.hf_Azz = 0;
+particles_{numberParticleClasses_}.hf_FermiContact = 0;
+particles_{numberParticleClasses_}.hf_x = {};
+particles_{numberParticleClasses_}.hf_y = {};
+particles_{numberParticleClasses_}.hf_z = {};
+particles_{numberParticleClasses_}.isNucleus = false; 
+particles_{numberParticleClasses_}.NQ_e2qQh = 0;
+particles_{numberParticleClasses_}.NQ_eta = 0;
+particles_{numberParticleClasses_}.NQ_x = {};
+particles_{numberParticleClasses_}.NQ_y = {};
+particles_{numberParticleClasses_}.NQ_z = {};
+particles_{numberParticleClasses_}.spinMultiplicity = 1;
+particles_{numberParticleClasses_}.switchParticle = PARTICLE_UNSET;
+particles_{numberParticleClasses_}.extraCellSwitchParticle = PARTICLE_UNSET;
+particles_{numberParticleClasses_}.tunnelSplitting = 0;
+
+% Set default options.
+setParticle(numberParticleClasses_, particleEnum,resName);
+
+% Set user specified options.
+setParticleOptions(numberParticleClasses_, System.particleOptions);
+
+particleClassIndex = findParticleClasses(...
+  particles_{numberParticleClasses_}.switchParticle, resName);
+ 
+if numel(particleClassIndex)==1 ...
+    && particles_{particleClassIndex}.doRandomIsotopes
+  particles_{numberParticleClasses_}.abundance = ...
+    1 - particles_{particleClassIndex}.abundance;
+elseif numel(particleClassIndex) > 1
+  error(['Error in addParticle_new():',...
+    ' multiple switch particles found.']);
+end
+
+ 
+if isempty(particles_{numberParticleClasses_}.doRandomIsotopes)
+  
+  particles_{numberParticleClasses_}.doRandomIsotopes = ...
+    (particles_{numberParticleClasses_}.abundance<1) && ...
+    particles_{numberParticleClasses_}.switchParticle ~= PARTICLE_UNSET;
+  
+end
+
+return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -464,7 +540,11 @@ end
 Nuclei.State = [];
 
 if ~Method.getNuclearStatistics
-  Nuclei.Statistics = [];
+  Statistics = struct();
+  Statistics.Nuclear_Dipole = Nuclei.Statistics.Nuclear_Dipole;
+  Statistics.Nuclear_Dipole_x_iy_Z = Nuclei.Statistics.Nuclear_Dipole_x_iy_Z; 
+
+  Nuclei.Statistics = Statistics;
   Nuclei.DistanceMatrix = [];
 end
 
@@ -604,6 +684,22 @@ for itype = 1:numberParticleClasses_
 
     % Draw a random set of indices. 
     selectedIndices = randperm(ucNtotal,ucN);
+  elseif particles_{itype}.extraCellSwitchParticle == PARTICLE_VOID ...
+      && particles_{itype}.abundance < 1 
+
+    useRandomParticles = true;
+
+    % Get total number of particles in all unit cells outside the primary cell.
+    ucNtotal = (numUnitCells-1)*N;
+
+    % Get number to use.
+    pd = makedist('Binomial','N',ucNtotal,'p',particles_{itype}.abundance);
+    ucN = random(pd);
+
+    % Use all indices from the primary cell 
+    % and draw a random set of indices for the extra cells. 
+    selectedIndices =[1:N, N + randperm(ucNtotal,ucN)];
+
   end
 
   % Loop through particles.
@@ -645,7 +741,7 @@ for itype = 1:numberParticleClasses_
     resName = particles_{itype}.resName;
     for jpdb=sameMoleculeList'
       
-      if ~isParticleWithinSystem(jpdb, cellShifts_(:,uc)), continue; end
+      if ~isParticleWithinSystem(jpdb, cellShifts_(:,uc),true), continue; end
       
       % Get particleEnum and associatedParticles.
       preliminaryParticle = analyzeParticle(jpdb);
@@ -702,7 +798,7 @@ numberMethyls_ = 0;
 for ipdb = 1:pdb_.number
     
   % Ignore particles outside the system radius.
-  if ~isParticleWithinSystem(ipdb, 0), continue; end
+  if ~isParticleWithinSystem(ipdb, 0, false), continue; end
   
   preliminaryParticle = analyzeParticle(ipdb);
   
@@ -725,7 +821,7 @@ end
 function buildSystem()
   
   % Initialize the observed spin.
-  pushParticle(PARTICLE_CENTRALSPIN, 'detect');
+  addParticle_new(PARTICLE_CENTRALSPIN, 'detect');
   particles_{numberParticleClasses_}.members = 0;
   particles_{numberParticleClasses_}.number = 1;
   residueList_{numberParticleClasses_} = 'detect';
@@ -764,13 +860,28 @@ type_idx = particleClassID_(iParticle);
 % Get the new particle type.
 newParticle = particles_{type_idx}.switchParticle;   
 
+% Get the unit cell pdb number.
+ucpdb = pdbID_(iParticle);
+
+% Get unit cell index.
+uc = ceil(ucpdb/pdb_.number);
+
+% Check if the particle is outside the primary cell and has a different 
+% switch particle defined for the extra cell.
+% Note, void particle should have accounted for already. 
+if uc > 1 ...
+    && isParticleValid(particles_{type_idx}.extraCellSwitchParticle, ...
+    particles_{type_idx}.resName) ...
+    && particles_{type_idx}.extraCellSwitchParticle ~= PARTICLE_VOID
+  
+  newParticle = particles_{type_idx}.extraCellSwitchParticle;   
+end
+
 % Get the indices for any associated particles.
 associatedParticles = ...
   particles_{type_idx}.associatedParticlesCollection{...
   particles_{type_idx}.members==iParticle};
 
-% Get the unit cell pdb number.
-ucpdb = pdbID_(iParticle);
 
 % Remove particle from current ParticleClass.                               
 if ~removeMember(type_idx, iParticle) 
@@ -1381,11 +1492,18 @@ elseif strcmp(particleStr, 'void')
 
 elseif strcmp(particleStr, 'M')
   particleEnum = PARTICLE_VOID;
-  
+
+elseif strcmp(particleStr, 'S')
+  particleEnum = PARTICLE_VOID;
+
+elseif strcmp(particleStr, 'P')
+  particleEnum = PARTICLE_VOID;  
+
 elseif strcmp(particleStr, 'centralSpin')
   particleEnum = PARTICLE_CENTRALSPIN;
 else
-  error('Error in getParticleClass: could not identify particle type.');
+  error(['Error in getParticleClass: could not identify particle type "',...
+    particleStr,'".']);
 end
     
 return;
@@ -1558,7 +1676,7 @@ for jParticle = 1:number_
   testEnum = particles_{particleClassID_(jParticle)}.particleEnum;
   
   if atomType
-    testEnum = getParticleAtom(testEnum);
+    testEnum = getAtomType(testEnum);
   end
   
   if particleType == testEnum
@@ -1655,24 +1773,53 @@ elseif ischar(X)
   elseif length(X)>=4 && strcmp(X(1:4),'bond')
     
     idx_pdb = mod(pdbID_(particle_index),pdb_.number);
-    indices = find(pdb_.connections(:,idx_pdb));
+    pdb_connect_idx = find(pdb_.connections(:,idx_pdb));
     
-    if(numel(indices) ~= 1)
+     atomType = PARTICLE_ALL;
+     spcIdx = find(X==' ');
+     if length(X)>=5 &&  X(5)=='-'
+       atomType = getAtomType(getParticleClass(X(6:spcIdx-1)));
+     end
+
+     if atomType ~= PARTICLE_ALL
+       N = length(pdb_connect_idx);
+       for iidx = 1:N
+         pdb_connect_idx(iidx) = pdb_connect_idx(iidx)*...
+           (atomType==getAtomType(getParticleClass(...
+           pdb_.element(pdb_connect_idx(iidx)))));
+       end
+       pdb_connect_idx(pdb_connect_idx==0) = [];
+     end
+
+     N = length(pdb_connect_idx);
+     if isempty(spcIdx)
+       k = 1;
+     else
+       k = mod(str2double(X(spcIdx+1:end)),N);
+       if k==0, k=N; end
+     end
+     if(numel(pdb_connect_idx) == 0)
       error(['Error in getTensorAxes(): ',...
         'could not identify a unique bond axis.']);
     end
     
-    other_index = indices(1);
+    other_index = pdb_connect_idx(k);
     x(1,1) = pdb_.x(other_index) - pdb_.x(idx_pdb);
     x(2,1) = pdb_.y(other_index) - pdb_.y(idx_pdb);
     x(3,1) = pdb_.z(other_index) - pdb_.z(idx_pdb);
     
   elseif length(X)>4 && strcmp(X(1:4),'same') 
     if isempty(sameMoleculeList)
-      sameMoleculeList = getSameMoleculeList(particle_index,particleEnum,false);
+
+      atomType = PARTICLE_ALL;
+      spcIdx = find(X==' ');
+      if(X(5)=='-')
+        atomType = getAtomType(getParticleClass(X(6:spcIdx-1)));
+      end
+      sameMoleculeList = getSameMoleculeList(particle_index,atomType,false);
       N = length(sameMoleculeList);
       n = find(sameMoleculeList == particle_index);
-      k = mod(n + str2double(X(5:end)),N);
+      k = mod(n + str2double(X(spcIdx+1:end)),N);
       if k==0, k=N; end
       x(1,1) = pdb_.x(k) - pdb_.x(pdbID_(particle_index));
       x(2,1) = pdb_.y(k) - pdb_.y(pdbID_(particle_index));
@@ -1739,7 +1886,7 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function inSys = isParticleWithinSystem(ipdb, cellShift)
+  function inSys = isParticleWithinSystem(ipdb, cellShift,useInnerCutoff)
   
 % Get pdb coordinate vector;
 rVec = [pdb_.x(ipdb); pdb_.y(ipdb); pdb_.z(ipdb) ];
@@ -1754,6 +1901,10 @@ if r > System.load_radius
   inSys  = false; 
 else
   inSys = true;
+end
+
+if inSys && useInnerCutoff && r < System.inner_radius
+      inSys  = false;
 end
 
 return;
@@ -1972,80 +2123,6 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function pushParticle(particleEnum, resName)     
- 
-% Update particle type number.  
-numberParticleClasses_ = numberParticleClasses_ + 1;
-
-% Set identification values.  
-particles_{numberParticleClasses_}.particleName = ...
-  getParticleString(particleEnum);
-particles_{numberParticleClasses_}.resName = resName;
-particles_{numberParticleClasses_}.particleEnum = particleEnum;
-particles_{numberParticleClasses_}.ID = numberParticleClasses_;
-
-% Initialize other values.
-particles_{numberParticleClasses_}.members = [];
-particles_{numberParticleClasses_}.membersOnePerMolecule = [];
-particles_{numberParticleClasses_}.number = 0;
-particles_{numberParticleClasses_}.numberMolecules = 0;
-
-% Initialize option values.
-particles_{numberParticleClasses_}.abundance = 1;
-particles_{numberParticleClasses_}.active = true;
-particles_{numberParticleClasses_}.atomType = PARTICLE_UNSET;
-particles_{numberParticleClasses_}.associatedParticlesCollection = {};
-particles_{numberParticleClasses_}.barrierPotential = 0;
-particles_{numberParticleClasses_}.doRandomIsotopes = [];
-particles_{numberParticleClasses_}.exchangeable = true;
-particles_{numberParticleClasses_}.gFactor = 0;
-particles_{numberParticleClasses_}.hf_Azz = 0;
-particles_{numberParticleClasses_}.hf_FermiContact = 0;
-particles_{numberParticleClasses_}.hf_x = {};
-particles_{numberParticleClasses_}.hf_y = {};
-particles_{numberParticleClasses_}.hf_z = {};
-particles_{numberParticleClasses_}.isNucleus = false; 
-particles_{numberParticleClasses_}.NQ_e2qQh = 0;
-particles_{numberParticleClasses_}.NQ_eta = 0;
-particles_{numberParticleClasses_}.NQ_x = {};
-particles_{numberParticleClasses_}.NQ_y = {};
-particles_{numberParticleClasses_}.NQ_z = {};
-particles_{numberParticleClasses_}.spinMultiplicity = 1;
-particles_{numberParticleClasses_}.switchParticle = PARTICLE_UNSET;
-particles_{numberParticleClasses_}.tunnelSplitting = 0;
-
-% Set default options.
-setParticle(numberParticleClasses_, particleEnum,resName);
-
-% Set user specified options.
-setParticleOptions(numberParticleClasses_, System.particleOptions);
-
-particleClassIndex = findParticleClasses(...
-  particles_{numberParticleClasses_}.switchParticle, resName);
- 
-if numel(particleClassIndex)==1 && particles_{particleClassIndex}.doRandomIsotopes
-  particles_{numberParticleClasses_}.abundance = ...
-    1 - particles_{particleClassIndex}.abundance;
-elseif numel(particleClassIndex) > 1
-  error(['Error in pushParticle():',...
-    ' multiple switch particles found.']);
-end
-
- 
-if isempty(particles_{numberParticleClasses_}.doRandomIsotopes)
-  
-  particles_{numberParticleClasses_}.doRandomIsotopes = ...
-    (particles_{numberParticleClasses_}.abundance<1) && ...
-    particles_{numberParticleClasses_}.switchParticle ~= PARTICLE_UNSET;
-  
-end
-
-return;
-end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function success  = removeMember(address, index)
   
 toRemove = find(particles_{address}.members==index);
@@ -2126,6 +2203,13 @@ for itype = 1:numberParticleClasses_
   
   % Loop through all particles of this type.
   for imem = 1:nMember
+
+    if particles_{itype}.extraCellSwitchParticle==PARTICLE_VOID
+      iParticle = particles_{itype}.members(imem);
+      % Get unit cell index.
+      uc = ceil(pdbID_(iParticle)/pdb_.number);
+      if uc>1, continue; end
+    end
     if rand() > particles_{itype}.abundance
     
       iParticle = particles_{itype}.members(imem);
@@ -2139,17 +2223,6 @@ for itype = 1:numberParticleClasses_
 
 
 end
-
-% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-%
-% ISSUE NOTES (DELETE THIS COMMENT ONCE ADDRESSED)
-%
-% THE NON-EXCHANGEABLE SAME MOLECULE ISOTOPE CHANGE CODE HAS 
-% NOT YET BEEN VERIFIED.  
-% VERIFICATION SHOULD BE DONE ONCE THE CODE TO RECORD AND PRINT THE 
-% ISOTOPE STATISTICS  HAS BEEN WRITTEN.
-%
-% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 % Write loop.
 for iParticle=1:number_
@@ -2226,7 +2299,7 @@ if System.Methyl.include
   end
 end
 
-for itype = deactivateIndices
+for itype = deactivateIndices'
   particles_{itype}.active = false;
 end
 
@@ -2304,9 +2377,9 @@ switch particleEnum
     % https:%doi.org/10.1016/0022-2364(75)90008-6.
     particles_{particleIndex}.NQ_eta = 0.112;
     particles_{particleIndex}.NQ_e2qQh = 213.4e3; % Hz
-    particles_{particleIndex}.NQ_z = 'bond';
+    particles_{particleIndex}.NQ_z = 'bond-oxygen +1';
     if strcmp(resName,'WAT') || strcmp(resName,'SOL')
-      particles_{particleIndex}.NQ_x = 'same-PARTICLE_HYDROGEN +1';
+      particles_{particleIndex}.NQ_x = 'same-hydrogen +1';
     else
       particles_{particleIndex}.NQ_x = 'random';
     end
@@ -2465,8 +2538,20 @@ Nopt = length(particleOptions);
 for iopt=1:4:Nopt
   if strcmp(particleOptions{iopt}, particleStr) || ...
       strcmp(particleOptions{iopt}, atomStr)
-    if strcmp(particleOptions{iopt+1}, resName) || ...
-        strcmp(particleOptions{iopt+1}, 'all')
+
+    resBool = ~strcmp(particleOptions{iopt+1}(1),'!');
+    if resBool
+      optRes = particleOptions{iopt+1};
+    else
+      % Remove '!' from start.
+      optRes = particleOptions{iopt+1}(2:end);
+    end
+
+    % Try to set option if resName is specified in particleOptions{iopt+1},
+    % if resName not specified as avoided using '!', 
+    % or if particleOptions{iopt+1}=='all'.
+    if (strcmp(optRes, resName) == resBool) || ...
+        (strcmp(optRes, 'all') && resBool)
       
       if strcmp(particleOptions{iopt+2},'abundance')
         particles_{particleIndex}.abundance = particleOptions{iopt+3};
@@ -2507,6 +2592,9 @@ for iopt=1:4:Nopt
         particles_{particleIndex}.spinMultiplicity = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'switchParticle')
         particles_{particleIndex}.switchParticle = ...
+          getParticleClass(particleOptions{iopt+3});
+      elseif strcmp(particleOptions{iopt+2},'extraCellSwitchParticle')
+        particles_{particleIndex}.extraCellSwitchParticle = ...
           getParticleClass(particleOptions{iopt+3});
       elseif strcmp(particleOptions{iopt+2},'tunnelSplitting')
         particles_{particleIndex}.tunnelSplitting = particleOptions{iopt+3};
@@ -2633,9 +2721,14 @@ for iSpin = zeroIndex_+1:number_
   coordinates_(:,iSpin) = xyz - originVec_ + cellShifts_(:,uc);
 end  
 
-coorTest = (coordinates_(1,:)==coordinates_(1,:)').* ...
-  (coordinates_(2,:)==coordinates_(2,:)').* ...
-  (coordinates_(3,:)==coordinates_(3,:)') - eye(number_);
+coorTest = ...
+  (coordinates_(1,zeroIndex_+1:number_)==...
+  coordinates_(1,zeroIndex_+1:number_)').* ...
+  (coordinates_(2,zeroIndex_+1:number_)==...
+  coordinates_(2,zeroIndex_+1:number_)').* ...
+  (coordinates_(3,zeroIndex_+1:number_)==...
+  coordinates_(3,zeroIndex_+1:number_)')...
+  - eye(number_-zeroIndex_);
 
 if max(abs(coorTest(:))) > Method.errorTolerance
   error(['Error in setCoordinates(): ', ...

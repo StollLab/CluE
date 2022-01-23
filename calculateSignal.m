@@ -23,6 +23,7 @@ doTR = false;
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; HAHN_TR = 6;
+CP_N = 7; UHRIG_N = 8;
 
 % Define the theory to use at the given cluster size.
 Theory = System.Theory;
@@ -87,6 +88,12 @@ elseif strcmp(System.experiment,'Hahn-TR')
   B1x2 =  System.RF.B1x(2);
   B1y2 =  System.RF.B1y(2);
   nuRF2 = System.RF.nuRF(2);
+elseif strcmp(System.experiment,'CP_N')
+  EXPERIMENT = CP_N;
+  total_time = 2*System.nPulses*System.Time(end);
+elseif strcmp(System.experiment,'Uhrig_N')
+  EXPERIMENT = UHRIG_N;
+  total_time = 2*System.nPulses*System.Time(end);
 else
   error('The experiment ''%s'' is not supported.',System.experiment);
 end
@@ -358,7 +365,7 @@ for clusterSize = 1:Method.order
         if System.useThermalEnsemble
           densityMatrix = [];
         else
-          densityMatrix = getDensityMatrix(ZeemanStates(iave,thisCluster),...
+          densityMatrix = getDensityMatrix(ZeemanStates(thisCluster),...
             Nuclei.StateMultiplicity(thisCluster),thisCluster);
         end
         
@@ -388,7 +395,8 @@ for clusterSize = 1:Method.order
       % Calculate cluster coherence.
       Coherences{clusterSize}(iCluster,:) = Coherences{clusterSize}(iCluster,:)  +  ...
         propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
-        EXPERIMENT,densityMatrix, System.useThermalEnsemble, betaT);
+        EXPERIMENT,densityMatrix, System.useThermalEnsemble, betaT, ...
+        System.nPulses);
       
     end
     Coherences{clusterSize}(iCluster,:) = ...
@@ -440,10 +448,12 @@ end
 function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,...
   Hamiltonian_beta,Hamiltonian_alpha,...
   Hamiltonian_beta_TR,Hamiltonian_alpha_TR ,...
-  EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
+  EXPERIMENT, densityMatrix, useThermalEnsemble, betaT, nPulses)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; HAHN_TR = 6;
+CP_N = 7; UHRIG_N = 8;
+
 
 % Ensure subHamiltinians are Hermitian.
 Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
@@ -460,6 +470,11 @@ end
 
 % Vectorize density matrix.
 vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
+
+
+
+t_Uhrig = 0;
+
 
 % Generate propagators for time element dt.
 [dU_beta, dU_beta2] = propagator_eig(Hamiltonian_beta,dt,dt2);
@@ -572,8 +587,35 @@ for iTime = 1:timepoints
         * U_beta_TR*U_beta*U_alpha_TR*U_alpha;
       
       v(iTime) = vecDensityMatrixT*U_(:);
-      
-      
+    
+    case CP_N
+      % Generate time dependent detection operator.
+      U_aa = U_alpha*U_alpha;
+      U_bb = U_beta*U_beta;
+
+      if mod(nPulses,2)==0
+        U_ = ( U_alpha*( (U_bb*U_aa)^( nPulses/2 - 1) )*U_bb*U_alpha )' ...
+               *( U_beta* ( (U_aa*U_bb)^( nPulses/2 - 1) )*U_aa*U_beta  );
+      else
+        U_ = (  U_beta*( (U_aa*U_bb)^( (nPulses-1)/2) )*U_alpha )' ...
+            *( U_alpha*( (U_bb*U_aa)^( (nPulses-1)/2) )*U_beta  );
+        
+      end
+
+      v(iTime) = vecDensityMatrixT*U_(:); 
+
+    case UHRIG_N
+      % t_i = (2*tau)*sin^2[ (pi*i)/(2*(N+1)) ].
+
+      if iTime< Ndt
+        t_Uhrig = t_Uhrig + dt*2*nPulses;
+      else 
+        t_Uhrig = t_Uhrig + dt2*2*nPulses;
+      end
+        
+      v(iTime) = getUhrigN(t_Uhrig, Hamiltonian_beta,Hamiltonian_alpha,...
+      vecDensityMatrixT, nPulses);
+
   end
   
   
@@ -610,7 +652,90 @@ if any(abs(v) - 1 > 1e-9)
   error('Coherence error: coherence cannot be larger than 1.');
 end 
 end
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function v_iTime = getUhrigN(total_time, Hamiltonian_beta,Hamiltonian_alpha,...
+      vecDensityMatrixT, nPulses)
+% t_i = T*sin^2[ (pi*i)/(2*(N+1)) ].
 
+% delays = T*1/2*(cos(pi*([indices,N+1]-1)/( (N+1) ) ) ...
+%        - cos(pi*[indices,N+1]/( (N+1) ) ));
+
+% Since the Uhrig pulse sequence is symmetric about the  half-way point,
+% only half the delays need to explicitly propogated.
+
+
+if mod(nPulses,2)==0
+  % Since the Uhrig pulse sequence is symmetric about the  half-way point,
+  % only half the delays need to explicitly propogated.
+  indices = 0:ceil( (nPulses+1)/2) ;
+  delta_t = total_time * diff(sin(indices*pi/( 2*(nPulses+1) ) ).^2);
+
+  % Split the last delat in two parts if needed.
+  delta_t(end) = delta_t(end)/2;
+
+  U_ket0 = 1;
+  U_ket1 = 1;
+  U_bra0 = 1;
+  U_bra1 = 1;
+  useHbeta = true;
+  for t = delta_t
+    if useHbeta
+      H_ket = Hamiltonian_beta;
+      H_bra = Hamiltonian_alpha;
+    else
+      H_ket = Hamiltonian_alpha;
+      H_bra = Hamiltonian_beta;
+    end
+    useHbeta = ~useHbeta;
+
+    U_prop = propagator_eig(H_ket,t);
+    U_ket0 = U_prop*U_ket0;
+    U_ket1 = U_ket1*U_prop;
+
+    U_prop = propagator_eig(H_bra,t);
+    U_bra0 = U_prop*U_bra0;
+    U_bra1 = U_bra1*U_prop;
+  end
+
+else
+  
+%   indices = 0:ceil(nPulses+1);
+%   delta_t = total_time * diff(sin(indices*pi/( 2*(nPulses+1) ) ).^2);
+indices = 0:( (nPulses+1)/2) ;
+delta_t = total_time * diff(sin(indices*pi/( 2*(nPulses+1) ) ).^2);
+
+  U_ket0 = 1;
+  U_ket1 = 1;
+  U_bra0 = 1;
+  U_bra1 = 1;
+
+  useHbeta = true;
+  for t = delta_t
+    if useHbeta
+      H_ket = Hamiltonian_beta;
+      H_bra = Hamiltonian_alpha;
+    else
+      H_ket = Hamiltonian_alpha;
+      H_bra = Hamiltonian_beta;
+    end
+    useHbeta = ~useHbeta;
+
+    U_prop = propagator_eig(H_ket,t);
+    U_ket0 = U_prop*U_ket0;
+    U_bra1 = U_bra1*U_prop;
+
+    U_prop = propagator_eig(H_bra,t);
+    U_bra0 = U_prop*U_bra0;
+    U_ket1 = U_ket1*U_prop;
+  end
+
+end
+U_ = (U_bra1*U_bra0)' * (U_ket1*U_ket0);
+
+v_iTime = vecDensityMatrixT*U_(:);
+
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 % ========================================================================
 % Subcluster Function
@@ -690,9 +815,14 @@ function [U1,U2] = propagator_eig(Ham,t1,t2)
 %Ham = (Ham+Ham')/2; % "hermitianize" Hamiltonian
 [EigenVectors, EigenValues] = eig(Ham);
 Udiag1 = exp(-2i*pi*diag(EigenValues)*t1);
-Udiag2 = exp(-2i*pi*diag(EigenValues)*t2);
+
 U1 = EigenVectors*diag(Udiag1)*EigenVectors';
-U2 = EigenVectors*diag(Udiag2)*EigenVectors';
+if nargin>2
+  Udiag2 = exp(-2i*pi*diag(EigenValues)*t2);
+  U2 = EigenVectors*diag(Udiag2)*EigenVectors';
+else
+  U2 = 1;
+end
 end
 
 

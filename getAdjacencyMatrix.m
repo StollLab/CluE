@@ -153,10 +153,13 @@ for isize = 1:Method.extraOrder
   if System.Methyl.method == 2
     % Protons within a methyl group should always be connected to each
     % other.
-    Sele_ = Nuclei.MethylID > 0;
-    Sele_ = Sele_ & Sele_';
-    Sele_ = Sele_.*(Nuclei.MethylID==Nuclei.MethylID');
-    Adjacency(:,:,isize) = Adjacency(:,:,isize) | Sele_;
+    isMethylHydron = Nuclei.MethylID > 0;
+    isMethylHydron = isMethylHydron & isMethylHydron';
+    isSameMethyl = (Nuclei.MethylID==Nuclei.MethylID');
+
+    Sele_ = isMethylHydron.*isSameMethyl;
+    Adjacency(:,:,isize) = (Adjacency(:,:,isize) + Sele_) > 0;
+%     Adjacency(:,:,isize)
 
     
     isMethylCarbon = strcmp(Nuclei.Type,'CH3');

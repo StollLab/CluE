@@ -31,7 +31,8 @@ for isize = 1:order
           continue;
         end
         
-        AuxiliarySignals{isize}(iCluster,:) = AuxiliarySignals{isize}(iCluster,:) ...
+        AuxiliarySignals{isize}(iCluster,:) = ...
+          AuxiliarySignals{isize}(iCluster,:) ...
           ./AuxiliarySignals{jsize}(subcluster_index,:);
         
       end
