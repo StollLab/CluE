@@ -40,10 +40,13 @@ end
 if isfield(Method,'parallelComputing') && Method.parallelComputing && options.parallelComputing
   error('Method.parallelComputing & options.parallelComputing cannot both be true.')
 end
+
+if ~isfield(options,'numCores')
+  options.numCores = feature('numcores');
+end
 if options.parallelComputing
   delete(gcp('nocreate'));
-  numCores = feature('numcores');
-  pool = parpool(numCores);
+  pool = parpool(options.numCores);
 end
 
 % Set RNG to ensure that repeats on the same initial conditions

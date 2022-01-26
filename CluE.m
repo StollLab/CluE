@@ -921,7 +921,7 @@ end
 % ========================================================================
 % New Function
 % ========================================================================
-
+%{
 function DensityMatrix = getDensityMatrix(Nuclei, Cluster)
 
 dimension = prod(Nuclei.NumberStates(Cluster));
@@ -948,7 +948,7 @@ end
 
 end
 
-
+%}
 % ========================================================================
 % Calculate signal for one orientation
 % ========================================================================
@@ -980,7 +980,7 @@ if Method.Ori_cutoffs
     isotopologueStatistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
   end
   
-  StatisticsTemporary = getPairwiseStatistics(System, Nuclei);
+  StatisticsTemporary = getPairwiseStatistics(System, Method, Nuclei);
   Nuclei.Statistics = StatisticsTemporary;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
   Nuclei.Adjacency = Adjacency;

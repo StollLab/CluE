@@ -7,7 +7,8 @@ numberClusters = Nuclei.numberClusters;
 DistanceMatrix = Nuclei.DistanceMatrix;
 Method_order = Method.order;
 
-ClusterGeo = getClusterGeoStats(inClusters,Coordinates, DistanceMatrix,numberClusters,Method_order); 
+ClusterGeo = getClusterGeoStats(inClusters,Coordinates,...
+    DistanceMatrix,numberClusters,Method_order); 
 
 ModulationDepth = Nuclei.Statistics{1}.Modulation_Depth_p; % = matrix(N);
 Hyperfine = abs(Nuclei.Statistics{1}.Hyperfine_perpendicular); % = matrix(N,1);
@@ -27,7 +28,11 @@ ClusterH{isize}.Hyperfine  = Hyperfine;
 for isize = 2:Method_order
   
   nC_ = numberClusters(isize);
-  ClusterH{isize} = getClusterHStats(Hyperfine,DeltaHyperfine,Nuclear_Dipole, ModulationDepth,Frequency_Pair,Adjacency,Coordinates,inClusters,ClusterGeo,numberClusters,isize,TM_powder);
+  ClusterH{isize} = getClusterHStats(...
+      Hyperfine,DeltaHyperfine,Nuclear_Dipole,...
+      ModulationDepth,Frequency_Pair,Adjacency,...
+      Coordinates,inClusters,ClusterGeo,...
+      numberClusters,isize,TM_powder);
 
 
 

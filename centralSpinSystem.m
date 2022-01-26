@@ -537,7 +537,7 @@ if Data.writeSpinPDB
 end
 
 % Clean
-Nuclei.State = [];
+% Nuclei.State = [];
 
 if ~Method.getNuclearStatistics
   Statistics = struct();
@@ -699,6 +699,7 @@ for itype = 1:numberParticleClasses_
     % Use all indices from the primary cell 
     % and draw a random set of indices for the extra cells. 
     selectedIndices =[1:N, N + randperm(ucNtotal,ucN)];
+    ucN = ucN + N;
 
   end
 
@@ -3074,7 +3075,7 @@ end
 function ... %Nuclei = 
   computeNuclearInteractions()%Nuclei,System, Method,scaleFactor)
   
-Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
+Nuclei.Statistics = getPairwiseStatistics(System, Method, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
 if any(Nuclei.Statistics.Distance > System.radius*System.scale)
   if System.Methyl.include
@@ -3124,7 +3125,7 @@ Nuclei.numberStartSpins = ...
 Nuclei.kT = System.kT;
 
 % set thermal equilibrium state
-[Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
+% [Nuclei.State, ~]= setThermalEnsembleState(System,Nuclei);
 
 Nuclei.ZeemanStates = setRandomZeemanState(Nuclei);
 [Nuclei.RandomDenityMatrices,Nuclei.RandomSpinVector] = ...
@@ -3191,6 +3192,7 @@ end
 % Sets the initial bath state with a Boltzmann distribution.
 % Both output variables contain the same information, but are formated
 % differently.
+%{
 function [State,ZeemanStates] = setThermalEnsembleState(System,Nuclei)
 
 ZeemanStates = zeros(Nuclei.number, 2*Nuclei.maxSpin+1);
@@ -3247,6 +3249,7 @@ for iinucleus = Nuclei.number:-1:1
   
 end
 end
+%}
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 

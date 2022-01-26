@@ -870,7 +870,7 @@ end
 function ... %Nuclei = 
   computeNuclearInteractions()%Nuclei,System, Method,scaleFactor)
   
-Nuclei.Statistics = getPairwiseStatistics(System, Nuclei);
+Nuclei.Statistics = getPairwiseStatistics(System, Method, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
 if System.Methyl.include
   % TO DO: ADD CHECK.
