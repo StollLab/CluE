@@ -874,7 +874,7 @@ Nuclei.Statistics = getPairwiseStatistics(System, Method, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
 if System.Methyl.include
   % TO DO: ADD CHECK.
-elseif any(Nuclei.Statistics.Distance > System.radius*scaleFactor)
+elseif any(vecnorm(Nuclei.Coordinates,2,2) > System.radius*scaleFactor)
   error(['Error in parseNuclei(): ','Nuclei beyond the distance cutoff ', ...
     'remain in the system.'])
 end

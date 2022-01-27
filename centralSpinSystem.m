@@ -59,7 +59,7 @@ cellShifts_              = [];
 % methylIDs_               = [];
 moleculeID_              = [];
 number_                  = 0; 
-numberMethyls_           = 0;
+% numberMethyls_           = 0;
 numberParticleClasses_   = 0;
 particleClassID_         = [];
 particles_               = cell(0,0);
@@ -70,7 +70,8 @@ pdbID_                   = [];
 residueList_             = cell(0,0); 
 uniqueResidueList_       = {}; 
 zeroIndex_               = {};
-
+r0_                      = System.load_radius;
+r0_nonHalf_               = Method.cutoff.radius_nonSpinHalf(1);
 
 buildSystem();
 
@@ -330,7 +331,7 @@ switch pdbParticle
         preliminaryParticle.particleEnum = PARTICLE_C_METHYL;
         preliminaryParticle.associatedParticles = methylHydrons;
         
-        numberMethyls_ = numberMethyls_ + 1;
+%         numberMethyls_ = numberMethyls_ + 1;
         
 %         methylIDs_(numberMethyls_) = index_pdb;
       end
@@ -568,7 +569,7 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function buildAssociatedParticlematrix()
+function buildAssociatedParticleMatrix()
 
 % Resize matrix.
 associatedParticleMatrix_(number_,number_) = 0;
@@ -742,7 +743,7 @@ for itype = 1:numberParticleClasses_
     resName = particles_{itype}.resName;
     for jpdb=sameMoleculeList'
       
-      if ~isParticleWithinSystem(jpdb, cellShifts_(:,uc),true), continue; end
+      if ~isParticleWithinSystem(r0_, jpdb, cellShifts_(:,uc),true), continue; end
       
       % Get particleEnum and associatedParticles.
       preliminaryParticle = analyzeParticle(jpdb);
@@ -793,13 +794,13 @@ end
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function buildPrimaryCell()
 
-numberMethyls_ = 0;
+% numberMethyls_ = 0;
 
 % Loop through all nuclei.
 for ipdb = 1:pdb_.number
     
   % Ignore particles outside the system radius.
-  if ~isParticleWithinSystem(ipdb, 0, false), continue; end
+  if ~isParticleWithinSystem(r0_, ipdb, 0, false), continue; end
   
   preliminaryParticle = analyzeParticle(ipdb);
   
@@ -839,7 +840,7 @@ function buildSystem()
   
   buildExtraCells();
 
-  buildAssociatedParticlematrix()
+  buildAssociatedParticleMatrix()
 
   % Adjust indices for dropped particles.
   %adjustAssociatedParticles();
@@ -1085,7 +1086,7 @@ moleculeID_ = moleculeID_(1:number_);
 pdbID_ = pdbID_(1:number_);                                                          
 residueList_ = residueList_(1:number_);  
  
-numberMethyls_ = 0;
+% numberMethyls_ = 0;
 % methylIDs_ = [];
 return;
 end
@@ -1887,7 +1888,7 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-  function inSys = isParticleWithinSystem(ipdb, cellShift,useInnerCutoff)
+  function inSys = isParticleWithinSystem(r0, ipdb, cellShift,useInnerCutoff)
   
 % Get pdb coordinate vector;
 rVec = [pdb_.x(ipdb); pdb_.y(ipdb); pdb_.z(ipdb) ];
@@ -1898,7 +1899,7 @@ rVec = rVec - originVec_ + cellShift;
 r = norm(rVec,2);
   
 % Ignore particles outside the system radius.
-if r > System.load_radius 
+if r > r0 
   inSys  = false; 
 else
   inSys = true;
@@ -2122,6 +2123,116 @@ return;
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+% This function searches through and removes particles that are not needed.
+function pruneSystem()
+
+% Currently only a non-spin distance cutoff is used for pruning.  
+if r0_nonHalf_ >= r0_
+  return;
+end
+
+% Initialize all particles to keep.
+keep = true(number_,1);
+
+% Loop through all particle types.
+for itype=1:numberParticleClasses_
+
+  if particles_{itype}.particleEnum==PARTICLE_CENTRALSPIN
+    continue;
+  end
+
+
+  % Loop though all member of the particle class.
+  for imem=1:particles_{itype}.number
+
+    % Get the particle index.
+    iparticle = particles_{itype}.members(imem);
+
+    % Check spin multiplicity.
+    if particles_{itype}.spinMultiplicity > 2
+
+      % Get unit cell pdb index.
+      ucpdb = pdbID_(iparticle);
+
+      % Get pdb index.
+      ipdb = mod(ucpdb,pdb_.number);
+      if ipdb==0, ipdb = pdb_.number; end
+
+      % Get unit cell index.
+      uc = ceil(ucpdb/pdb_.number);
+
+      % Determine if paricle is with the system.
+      keep(iparticle)  = isParticleWithinSystem(r0_nonHalf_, ...
+        ipdb, cellShifts_(:,uc), true);
+    end
+  end
+end
+
+% Loop through all particle types.
+for itype=1:numberParticleClasses_
+
+  if particles_{itype}.particleEnum==PARTICLE_CENTRALSPIN
+    continue;
+  end
+
+  members = particles_{itype}.members;
+
+  % Loop though all member of the particle class.
+  for imem=1:numel(members)
+    
+    % Get the particle index.
+    iparticle = members(imem);
+    
+    % Check if the particle is to be removed.
+    if  ~keep(iparticle)
+      
+      % Remove particle.
+      if ~removeMember(itype, iparticle)
+        error(['Error in pruneSystem(): ',...
+          'could not remove particle', num2str(iparticle), ...
+          'from particle class ', particles_{itype}.particleName, ' ', ...
+          particles_{itype}.resName, '.']);
+      end
+    end
+  end
+end
+
+% Update records for removed particles.
+if any(~keep)
+
+  % Get new indices.
+  reindex = cumsum(keep);
+  reindex(~keep) = -1;
+
+  % Adjust indices to be consecutive.  
+  for itype=1:numberParticleClasses_
+    if particles_{itype}.particleEnum==PARTICLE_CENTRALSPIN
+      continue;
+    end
+    particles_{itype}.members = reindex(particles_{itype}.members);
+    particles_{itype}.membersOnePerMolecule ...
+      = reindex(particles_{itype}.membersOnePerMolecule);
+
+  end
+  associatedParticleMatrix_(associatedParticleMatrix_>0)...
+    =reindex(nonzeros(associatedParticleMatrix_));
+
+
+  % Remove indices for removed particles.
+  moleculeID_              = moleculeID_(keep);
+  particleClassID_         = particleClassID_(keep);
+  pdbID_                   = pdbID_(keep);
+  associatedParticleMatrix_ = associatedParticleMatrix_(keep,keep);
+  
+  % Determine total number of particles. 
+  number_                  = sum(keep);
+
+  % numberMethyls_           = ;
+end
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function success  = removeMember(address, index)
@@ -2666,11 +2777,14 @@ end
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function refreshSystem()
 
-% Set coordinates.  
-setCoordinates();
 
 % Set isotopologue
 setIsotopologue();
+
+pruneSystem();
+
+% Set coordinates.  
+setCoordinates();
 
 % Set methyls.
 % setMethyls();
@@ -3077,7 +3191,7 @@ function ... %Nuclei =
   
 Nuclei.Statistics = getPairwiseStatistics(System, Method, Nuclei);
 Nuclei.DistanceMatrix = Nuclei.Statistics.DistanceMatrix;
-if any(Nuclei.Statistics.Distance > System.radius*System.scale)
+if any(vecnorm(Nuclei.Coordinates,2,2) > System.radius*System.scale)
   if System.Methyl.include
     % TO DO: ADD CHECK.
   else

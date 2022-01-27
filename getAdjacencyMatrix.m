@@ -101,17 +101,23 @@ for isize = 1:Method.extraOrder
         
       case 'delta hyperfine'
         if Ori_cutoffs
-          Min_DeltaA_ = abs(pwstat.DeltaHyperfine) ...
+          DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
+          Min_DeltaA_ = abs(DeltaHyperfine) ...
             > Method.cutoff.hyperfine_inf(isize);
-          Max_DeltaA_ = abs(pwstat.DeltaHyperfine) ...
+          Max_DeltaA_ = abs(DeltaHyperfine) ...
             < Method.cutoff.hyperfine_sup(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+          clear('DeltaHyperfine');
         else
-          Min_DeltaA_ = abs(pwstat.DeltaHyperfine_perpendicular) ...
+          DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular ...
+            - pwstat.Hyperfine_perpendicular';
+          Min_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
             > Method.cutoff.hyperfine_inf(isize);
-          Max_DeltaA_ = abs(pwstat.DeltaHyperfine_perpendicular) ...
+          Max_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
             < Method.cutoff.hyperfine_sup(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+
+          clear('DeltaHyperfine_perpendicular');
         end
         
       case 'Gaussian RMSD'
@@ -124,10 +130,13 @@ for isize = 1:Method.extraOrder
         end
       
       case 'radius_nonSpinHalf'
+        maxDistance = vecnorm(Nuclei.Coordinates,2,2);
+        maxDistance = max(maxDistance,maxDistance');
         MaxR_ = Nuclei.Spin == 1/2;
         MaxR_ = MaxR_ & MaxR_';
-        MaxR_ = MaxR_ | pwstat.maxDistance <= Method.cutoff.radius_nonSpinHalf;
+        MaxR_ = MaxR_ | maxDistance <= Method.cutoff.radius_nonSpinHalf;
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*MaxR_;
+        clear('maxDistance');
         
 %       case 'methyl only' 
 %         if Method.cutoff.methylOnly(isize)

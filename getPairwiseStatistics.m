@@ -33,7 +33,9 @@ STAT_SPATIAL = ienum; ienum = ienum +1;
 STAT_HYPERFINE = ienum; ienum = ienum +1;
 STAT_NUCLEAR_DIPOLE = ienum; ienum = ienum +1;
 STAT_BAMAX = ienum; ienum = ienum +1;
-STAT_ANALYTIC_HAHN= ienum; ienum = ienum +1;
+STAT_ANALYTIC_HAHN = ienum; ienum = ienum +1;
+STAT_PERPENDICULAR = ienum; ienum = ienum +1;
+STAT_DELTAHYPERFINE = ienum; ienum = ienum +1;
 STAT_NUM_ENUM = ienum-1;
 
 
@@ -54,7 +56,7 @@ if System.Methyl.include
   pwstat.Methyl_Data.number_methyls = sum(isMethylCarbon);
   pwstat.Methyl_Data.ID = double(Nuclei.Index(isMethylCarbon));
 
-  methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0);
+%   methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0);
 end
 
 
@@ -63,9 +65,8 @@ deltaY = Nuclei.Coordinates(:,2)-Nuclei.Coordinates(:,2)';
 deltaZ = Nuclei.Coordinates(:,3)-Nuclei.Coordinates(:,3)';
 
 pwstat.DistanceMatrix = sqrt(deltaX.^2 + deltaY.^2 + deltaZ.^2);
-pwstat.Distance = vecnorm(Nuclei.Coordinates,2,2);
 
-cosTheta2 = (Nuclei.Coordinates(:,3)./pwstat.Distance ).^2;
+cosTheta2 = (Nuclei.Coordinates(:,3)./vecnorm(Nuclei.Coordinates,2,2) ).^2;
 
 gamma_e = -System.Electron.g*System.muB/System.hbar;
 gamma_n = Nuclei.Nuclear_g*System.muN/System.hbar;
@@ -99,18 +100,32 @@ end
 % Hyperfine
 if stat_bools(STAT_HYPERFINE)
 
-  pwstat.Hyperfine_perpendicular = Nuclei.FermiContact ...
+  pwstat.Hyperfine= (Nuclei.FermiContact ...
     - System.hbar^2.*(System.mu0/4/pi).*gamma_n'.*gamma_e .* ...
-    pwstat.Distance.^-3; % J
+    vecnorm(Nuclei.Coordinates,2,2).^-3) ...
+    .*(1-3*cosTheta2); % J
 
-  pwstat.Hyperfine_perpendicular ...
-    = pwstat.Hyperfine_perpendicular/(System.h); % Hz.
-
-  pwstat.DeltaHyperfine_perpendicular ...
-    = pwstat.Hyperfine_perpendicular - pwstat.Hyperfine_perpendicular';
-
-  pwstat.Hyperfine = pwstat.Hyperfine_perpendicular.*(1-3*cosTheta2);
+  pwstat.Hyperfine = pwstat.Hyperfine/(System.h); % Hz.
+  
+if stat_bools(STAT_DELTAHYPERFINE)
   pwstat.DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
+end
+
+if stat_bools(STAT_PERPENDICULAR) 
+    pwstat.Hyperfine_perpendicular = Nuclei.FermiContact ...
+    - System.hbar^2.*(System.mu0/4/pi).*gamma_n'.*gamma_e .* ...
+    vecnorm(Nuclei.Coordinates,2,2).^-3; % J
+
+    pwstat.Hyperfine_perpendicular ...
+      = pwstat.Hyperfine_perpendicular/(System.h); % Hz.
+
+    if stat_bools(STAT_DELTAHYPERFINE)
+      pwstat.DeltaHyperfine_perpendicular ...
+        = pwstat.Hyperfine_perpendicular - pwstat.Hyperfine_perpendicular';
+    end
+
+end
+
 end
 
 % Nuclear Dipole-Dipole
@@ -131,6 +146,8 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
     PhiMatrix(deltaY==0) = 0;
   end
 
+
+
   b_fliflopPerp = -(0.25*(System.mu0/4/pi).* ...
     (Nuclei.Nuclear_g'.*Nuclei.Nuclear_g).*System.muN^2) ...
     ./pwstat.DistanceMatrix.^3; % J.
@@ -139,12 +156,18 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
 
   b = b_fliflopPerp.*(1-3*cos(ThetaMatrix).^2);
 
-  pwstat.Nuclear_Dipole_perpendicular = 4*b_fliflopPerp; % Hz.
+
+  if stat_bools(STAT_PERPENDICULAR)
+    pwstat.Nuclear_Dipole_perpendicular = 4*b_fliflopPerp; % Hz.
+    pwstat.Nuclear_Dipole_perpendicular ...
+      = inf2nan(pwstat.Nuclear_Dipole_perpendicular);
+  end
+
 
   pwstat.Nuclear_Dipole = 4*b; % Hz.
 
   pwstat.Nuclear_Dipole_x_iy_Z = zeroDiag(...
-    pwstat.Nuclear_Dipole_perpendicular.* ...
+    4*b_fliflopPerp.* ...
     exp(1i*PhiMatrix) .* ...
     sin(ThetaMatrix) .* cos(ThetaMatrix)...
     );
@@ -179,8 +202,6 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
 %     end
 
     pwstat.Nuclear_Dipole = inf2nan(pwstat.Nuclear_Dipole);
-    pwstat.Nuclear_Dipole_perpendicular ...
-      = inf2nan(pwstat.Nuclear_Dipole_perpendicular);
   end
 
   % |bA_{mav}|^{1/2}.
@@ -301,18 +322,23 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<    
 function whichStatistics(Method)
-stat_bools(STAT_SPATIAL) = true;
 stat_bools(STAT_HYPERFINE) = true;
 stat_bools(STAT_NUCLEAR_DIPOLE) = true;
-
+if ~Method.Ori_cutoffs
+  stat_bools(STAT_PERPENDICULAR) = true;
+end
 for ii = 1:numel(Method.Criteria)
   switch Method.Criteria{ii}
 
     case {'minimum-frequency','Gaussian RMSD','modulation'}
       stat_bools(STAT_ANALYTIC_HAHN) = true;
 
-    case {'bAmax','minAmax','maxAmax','delta hyperfine'}
+    case {'bAmax','minAmax','maxAmax'}
       stat_bools(STAT_BAMAX) = true;
+      stat_bools(STAT_DELTAHYPERFINE) = true;
+
+    case {'delta hyperfine'}
+      stat_bools(STAT_DELTAHYPERFINE) = true;
 
 
   end

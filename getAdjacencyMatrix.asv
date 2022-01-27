@@ -101,15 +101,19 @@ for isize = 1:Method.extraOrder
         
       case 'delta hyperfine'
         if Ori_cutoffs
-          Min_DeltaA_ = abs(pwstat.DeltaHyperfine) ...
+          DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
+          Min_DeltaA_ = abs(DeltaHyperfine) ...
             > Method.cutoff.hyperfine_inf(isize);
-          Max_DeltaA_ = abs(pwstat.DeltaHyperfine) ...
+          Max_DeltaA_ = abs(DeltaHyperfine) ...
             < Method.cutoff.hyperfine_sup(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+          DeltaHyperfine = [];
         else
-          Min_DeltaA_ = abs(pwstat.DeltaHyperfine_perpendicular) ...
+          DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular ...
+            - pwstat.Hyperfine_perpendicular';
+          Min_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
             > Method.cutoff.hyperfine_inf(isize);
-          Max_DeltaA_ = abs(pwstat.DeltaHyperfine_perpendicular) ...
+          Max_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
             < Method.cutoff.hyperfine_sup(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
         end
@@ -153,10 +157,18 @@ for isize = 1:Method.extraOrder
   if System.Methyl.method == 2
     % Protons within a methyl group should always be connected to each
     % other.
-    Sele_ = Nuclei.MethylID > 0;
-    Sele_ = Sele_ & Sele_';
-    Sele_ = Sele_.*(Nuclei.MethylID==Nuclei.MethylID');
-    Adjacency(:,:,isize) = Adjacency(:,:,isize) | Sele_;
+    isMethylHydron = Nuclei.MethylID > 0;
+    isMethylHydron = isMethylHydron & isMethylHydron';
+    isSameMethyl = (Nuclei.MethylID==Nuclei.MethylID');
+
+    Sele_ = isMethylHydron.*isSameMethyl;
+    Adjacency(:,:,isize) = (Adjacency(:,:,isize) + Sele_) > 0;
+%     Adjacency(:,:,isize)
+
+    
+    isMethylCarbon = strcmp(Nuclei.Type,'CH3');
+    Adjacency(isMethylCarbon,:,isize) = false;
+    Adjacency(:,isMethylCarbon,isize) = false;
 
   end
   
