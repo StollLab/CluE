@@ -49,6 +49,13 @@ if options.parallelComputing
   pool = parpool(options.numCores);
 end
 
+if ~isfield(options,'conserveMemory')
+  options.conserveMemory = true;
+end
+if ~isfield(options,'concentration_1H')
+  options.concentration_1H = true;
+end
+
 % Set RNG to ensure that repeats on the same initial conditions
 % give identical results. 
 iMax = 2^20;
@@ -93,7 +100,7 @@ if doReset
   signals = zeros(2*N,System.timepoints);
   TM = zeros(1,2*N);
   statistics = cell(1,2*N);
-end
+ end
 
 % ENUM
 INITIAL_TRIALS = 1;  CONVERGENCE_TRIALS = 2;
@@ -310,8 +317,67 @@ if ~progress(CONVERGENCE_TRIALS)
     save(savefile,'-v7.3');
   end
 end
+if exist('v1')
+  clear('v1');
+end
+if exist('v2')
+  clear('v2');
+end
+if exist('v3')
+  clear('v3');
+end
+if options.concentration_1H
+  number_samples = 0;
+  number_1H_exchangeable = 0;
+  number_1H_nonExchangeable = 0;
+  number_2H_exchangeable = 0;
+  number_2H_nonExchangeable = 0;
+  for ii = 1:numel(statistics)
+    if isfield(statistics{ii},'Statistics')
+      for jj = 1:numel(statistics{ii}.Statistics)
+        if isfield(statistics{ii}.Statistics{jj},'isotopologueStatistics')
+          iStat = statistics{ii}.Statistics{jj}.isotopologueStatistics;
+          number_samples = number_samples + 1;
+          number_1H_exchangeable = number_1H_exchangeable ...
+            + iStat.number_1H_exchangeable;
+          number_1H_nonExchangeable = number_1H_nonExchangeable ...
+            + iStat.number_1H_nonExchangeable;
+          number_2H_exchangeable = number_2H_exchangeable ...
+            + iStat.number_2H_exchangeable;
+          number_2H_nonExchangeable = number_2H_nonExchangeable ...
+            + iStat.number_2H_nonExchangeable;
 
+        end
+        if options.conserveMemory
+          if isfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole')
+            statistics{ii}.Statistics{jj} = ...
+              rmfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole');
+          end
+          if isfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole_x_iy_Z')
+            statistics{ii}.Statistics{jj} = ...
+              rmfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole_x_iy_Z');
+          end
+        end
+      end
+    end
+  end
+
+  mean_number_1H = (number_1H_exchangeable + number_1H_nonExchangeable)...
+    /number_samples;
+  mean_number_2H = (number_2H_exchangeable + number_2H_nonExchangeable)...
+    /number_samples;
+  volume = 4*pi/3*System.radius^3;
+  concentration_1H_number_per_m3 = mean_number_1H/volume;
+  avogadro= 6.022140857e23;
+  concentration_1H_Molar = concentration_1H_number_per_m3/avogadro/1000; 
+  %   mean_number_H = number_1H + number_2H;
+  %   mean_proton_fraction = number_1H/number_H;
+  %   mean_deuteron_fraction = number_2H/number_H;
+end
+SignalMean = mean(signals,1);
+SignalMean = SignalMean/SignalMean(1);
 if options.parallelComputing
   delete(pool)
 end
+save(savefile,'-v7.3');
 end

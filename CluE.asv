@@ -759,6 +759,22 @@ if verbose
   fprintf('\nNuclear spin decoherence time = %d s. \n',TM_powder);
 end
 
+if Method.conserveMemory
+  if isfield(statistics,'Statistics')
+    for jj = 1:numel(statistics{ii}.Statistics)
+      if isfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole')
+        statistics.Statistics{jj} = ...
+          rmfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole');
+      end
+      if isfield(statistics.Statistics{jj},'Nuclear_Dipole_x_iy_Z')
+        statistics.Statistics{jj} = ...
+          rmfield(statistics{ii}.Statistics{jj},'Nuclear_Dipole_x_iy_Z');
+      end
+
+    end
+  end
+end
+
 if false
   v_ee = eeDecoherence(System, Method, experiment_time, Nuclei);
   save(OutputData,'v_ee','-append');
@@ -921,7 +937,7 @@ end
 % ========================================================================
 % New Function
 % ========================================================================
-
+%{
 function DensityMatrix = getDensityMatrix(Nuclei, Cluster)
 
 dimension = prod(Nuclei.NumberStates(Cluster));
@@ -948,7 +964,7 @@ end
 
 end
 
-
+%}
 % ========================================================================
 % Calculate signal for one orientation
 % ========================================================================
@@ -980,7 +996,7 @@ if Method.Ori_cutoffs
     isotopologueStatistics.number_2H_nonExchangeable = Nuclei.number_2H_nonExchangeable;
   end
   
-  StatisticsTemporary = getPairwiseStatistics(System, Nuclei);
+  StatisticsTemporary = getPairwiseStatistics(System, Method, Nuclei);
   Nuclei.Statistics = StatisticsTemporary;
   Adjacency = getAdjacencyMatrix(System, Nuclei,Method);
   Nuclei.Adjacency = Adjacency;

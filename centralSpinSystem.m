@@ -2197,6 +2197,7 @@ for itype=1:numberParticleClasses_
       end
     end
   end
+  
 end
 
 % Update records for removed particles.

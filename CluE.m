@@ -759,6 +759,22 @@ if verbose
   fprintf('\nNuclear spin decoherence time = %d s. \n',TM_powder);
 end
 
+if Method.conserveMemory
+  if isfield(statistics,'Statistics')
+    for jj = 1:numel(statistics.Statistics)
+      if isfield(statistics.Statistics{jj},'Nuclear_Dipole')
+        statistics.Statistics{jj} = ...
+          rmfield(statistics.Statistics{jj},'Nuclear_Dipole');
+      end
+      if isfield(statistics.Statistics{jj},'Nuclear_Dipole_x_iy_Z')
+        statistics.Statistics{jj} = ...
+          rmfield(statistics.Statistics{jj},'Nuclear_Dipole_x_iy_Z');
+      end
+
+    end
+  end
+end
+
 if false
   v_ee = eeDecoherence(System, Method, experiment_time, Nuclei);
   save(OutputData,'v_ee','-append');
