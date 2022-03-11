@@ -11,6 +11,11 @@ end
 for isize = 1:clusterSize
   C_ = [ Clusters1{isize}; Clusters2{isize}];
   
+  if isempty(C_)
+    Clusters{isize} = C_;
+    continue;
+  end
+
   % Sort nuclei in each cluster by nuclei index
   C_ = sort(C_,2);
   
@@ -21,6 +26,7 @@ for isize = 1:clusterSize
   keep = [true; any(C_(1:end-1,:)~=C_(2:end,:),2)];
   
   Clusters{isize} = C_(keep,:);
+
 end
 
 

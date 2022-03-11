@@ -124,13 +124,21 @@ for clusterSize = 2:order
   
   % Remove duplicates
   keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
-  if isempty(C)
+  if ~isempty(C)
+    
+    Clusters{clusterSize} = C(keep,:);
+
+  elseif Method.emptyClusterSetsOkay
+  
+    Clusters{clusterSize} = C;
+
+  else
     error(['Error in findClusters_treeSearch(): ', ...
       'no cluster found of size ', num2str(clusterSize), ...
-      '.  Try relaxing a cutoff.'])
+      '.  Try relaxing a cutoff or setting',...
+      '\n  Method.emptyClusterSetsOkay = true;'])
   end
-  Clusters{clusterSize} = C(keep,:);
-  
+
 end
 
 

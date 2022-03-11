@@ -143,7 +143,9 @@ if ~progress(INITIAL_TRIALS)
         fprintf('Setting Method.seed to %d.\n',Method_.seed)
         
         fprintf('Running initial trial %d/%d.\n', indices(ii),N);
-        [temp_signals(ii,:),temp_twotau(ii,:),temp_TM(ii),~,~,temp_statistics{ii}] = CluE(System,Method_,Data);
+        [temp_signals(ii,:),temp_twotau(ii,:),...
+            temp_TM(ii),~,~,temp_statistics{ii}] ...
+            = CluE(System,Method_,Data);
         
       end
       

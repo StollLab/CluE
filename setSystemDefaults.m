@@ -319,6 +319,10 @@ end
 if ~isfield(Method,'useInterlacedClusters')
   Method.useInterlacedClusters = false;
 end
+
+if ~isfield(Method,'emptyClusterSetsOkay')
+  Method.emptyClusterSetsOkay = false;
+end
 % if any(Method.useInterlacedClusters(:)) && Method.useMultipleBathStates
 %   error('Method.useInterlacedClusters and Method.useMultipleBathStates are not compatiple.')
 % end
@@ -825,6 +829,9 @@ if ~isfield(Data,'ClusterData')
   Data.exitOnFailedLoad = false;
 else
   Data.exitOnFailedLoad = true;
+end
+if ~isfield(Data,'outPDBoptions')
+  Data.outPDBoptions.Honly = false;
 end
 
 if strcmp(Method.method,'HD-CCE')

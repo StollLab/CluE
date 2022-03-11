@@ -529,12 +529,18 @@ setOrientation(); %Nuclei,System, pdbCoordinates);
 computeNuclearInteractions(); %Nuclei,System, Method,scaleFactor);
 
 if Data.writeSpinPDB
-  try
+%   try
+outPDBfile = Data.OutputData;
+if numel(outPDBfile)>3 && strcmp(outPDBfile(end-3:end),'.mat')
+  outPDBfile = outPDBfile(1:end-4);
+end
+outPDBfile = [outPDBfile,'_spinSystem.pdb'];
+
     writeSpinPDB(Nuclei,ones(1,Nuclei.number),...
-      [Data.OutputData, '_spinSystem.pdb']);
-  catch
-    warning('Warning: could not write spin pdb.')
-  end
+      outPDBfile,Data.outPDBoptions);
+%   catch
+%     warning('Warning: could not write spin pdb.')
+%   end
 end
 
 % Clean

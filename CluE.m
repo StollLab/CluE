@@ -686,16 +686,19 @@ if ~isempty(OutputData)
   switch Data.saveLevel
     case 0
       if Method.sparseMemory
-        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder','Progress','uncertainty','GridInfo','-append');
+        save(OutputData,'SignalMean','Order_n_SignalMean','TM_powder',...
+            'Progress','uncertainty','GridInfo','-append');
       else
-        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress','uncertainty','GridInfo','-append');
+        save(OutputData,'SignalMean','Signals','TM','TM_powder',...
+            'Progress','uncertainty','GridInfo','-append');
       end
     case 1
       if Method.sparseMemory
         save(OutputData,'Nuclei','Order_n_Signals','GridInfo','-append');
       else
         save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
-          'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty','GridInfo','-append');
+          'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty',...
+          'GridInfo','-append');
       end
     case 2
       save(OutputData,'-v7.3');
@@ -1016,8 +1019,15 @@ if Method.Ori_cutoffs
     
     % Remove duplicates
     keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
-    Clusters{clusterSize} = C(keep,:);
-    
+    if ~isempty(C)
+      Clusters{clusterSize} = C(keep,:);
+    elseif Method.emptyClusterSetsOkay
+      Clusters{clusterSize} = C;
+    else
+      error(['Error in beginCalculateSignal(): ',
+        'no clusters found.']);
+
+    end
     Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1); 
   
   
