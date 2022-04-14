@@ -140,8 +140,11 @@ for iline = 1:nLines
     pdbData.occupancy(n)  = sscanf(line_(55:60),'%f');
     pdbData.tempFactor(n) = sscanf(line_(61:66),'%f');
     pdbData.element{n}    = strtrim( line_(77:78) );
-    pdbData.charge{n}     = strtrim( line_(79:80) );
-    
+    if numel(line_)>=80
+      pdbData.charge{n}     = strtrim( line_(79:80) );
+    else
+      pdbData.charge{n}     = '0';
+    end
   % Check if line contains connection data.  
   elseif strncmp(line_,'CONECT',6)
     % Initialize connection array.

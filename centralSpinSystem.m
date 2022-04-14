@@ -402,8 +402,9 @@ Nuclei.valid = true(1,number_-1);
 Nuclei.Atensor = sparse(number_-1,9);
 Nuclei.FermiContact = sparse(number_-1,1);
 Nuclei.Azz = sparse(number_-1,1);
-
-
+Nuclei.associatedParticleMatrix = associatedParticleMatrix_;
+Nuclei.associatedParticleMatrix(...
+  find(nonzeros(Nuclei.associatedParticleMatrix)));
 Nuclei.number_1H_exchangeable = ...
   findParticles(PARTICLE_1H_EXCHANGEABLE, 'ALL', true);
 
@@ -444,8 +445,9 @@ for iparticle = 2:number_
   Nuclei.Exchangeable(iNuc) = particles_{itype}.exchangeable;
   Nuclei.NumberStates(iNuc) = int8(particles_{itype}.spinMultiplicity);
   Nuclei.isSolvent(iNuc) = isMoleculeSolvent(particles_{itype}.resName);
-  Nuclei.valid(iNuc) = particles_{itype}.active;
-  
+  if Nuclei.valid(iNuc)
+    Nuclei.valid(iNuc) = particles_{itype}.active;
+  end
   if particles_{itype}.NQ_e2qQh ~= 0
     idx = particles_{itype}.members==iparticle;
     Nuclei.Qtensor(:,:,iNuc) = particles_{itype}.Qtensor{idx};
@@ -460,7 +462,27 @@ for iparticle = 2:number_
     methylCounter = methylCounter + 1;
 
     %     hydrons = getAssociatedParticles(itype,iparticle);
-    hydrons = nonzeros(associatedParticleMatrix_(:,iparticle)) - 1;
+    associatedWithMethyl = nonzeros(associatedParticleMatrix_(:,iparticle));
+
+    if System.Methyl.method==1
+      Nuclei.valid(associatedWithMethyl-1) = false;
+    end
+    hydrons = zeros(3,1);
+    hydronCounter = 0;
+    for iasso =associatedWithMethyl'
+
+
+      if particles_{particleClassID_(iasso)}.particleEnum ~=PARTICLE_1H_METHYL
+        continue;
+      end
+      hydronCounter = hydronCounter + 1;
+      hydrons(hydronCounter) = iasso - 1;
+    end
+    if hydronCounter ~= 3
+      error(['Error in assembleNuclei(): ', ...
+        'methyl group has', num2str(hydronCounter), ' protons.']);
+    end
+%     hydrons = nonzeros(associatedParticleMatrix_(:,iparticle)) - 1;
     
     nuT = particles_{itype}.tunnelSplitting;
     
@@ -483,6 +505,7 @@ for iparticle = 2:number_
   
 end
   
+
 defineSpinOperators();
 
 Nuclei.nStates = System.nStates; 
@@ -775,7 +798,7 @@ for itype = 1:numberParticleClasses_
 
         alreadyAddedID = particleClassID_(alreadyAdded);
         if particles_{alreadyAddedID}.particleEnum ...
-            == preliminaryParticle.particleEnum
+            ~= preliminaryParticle.particleEnum
           error(['Error in buildExtraCells: ',...
             'cannot overwrite particle index ', num2str(alreadyAdded), ...
             ', ', getParticleString(particles_{alreadyAddedID}.particleEnum),...
@@ -1140,6 +1163,100 @@ end
 %}
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function expandMethylClusters()
+
+if System.Methyl.numberExtraProtons < 1, return; end
+  
+ distanceMatrix = zeros(number_,number_);
+ for ii=1:number_
+        distanceMatrix(ii,ii) = inf;
+   for jj=ii+1:number_
+     distanceMatrix(ii,jj) = vecnorm(coordinates_(:,ii) - coordinates_(:,jj));
+     distanceMatrix(jj, ii) = distanceMatrix(ii,jj);
+   end
+ end
+
+
+ % Loop over non-methyl protons.
+ 
+ %  counterNonMethyl = 0;
+ %  counterMethyl = 0;
+ %  for jtype = 2:numberParticleClasses_
+ %    if particles_{jtype}.particleEnum == PARTICLE_C_METHYL
+ %      counterMethyl = counterNonMethyl + particles_{jtype}.number;
+ %    end
+ %
+ %    if particles_{jtype}.particleEnum == PARTICLE_1H_EXCHANGEABLE ...
+ %        || particles_{jtype}.particleEnum == PARTICLE_1H_NONEXCHANGEABLE
+ %      counterNonMethyl = counterNonMethyl + particles_{jtype}.number;
+ %    end
+ %  end
+ %
+%  methylCarbons = zeros(counterMethyl,1);
+%  nonMethylProtons = zeros(counterNonMethyl,1);
+
+
+%  % Reset counters
+%  counterNonMethyl = 0;
+%  counterMethyl = 0;
+% 
+%  for jtype = 2:numberParticleClasses_
+%    if particles_{jtype}.particleEnum == PARTICLE_C_METHYL
+%      methylCarbons(...
+%        counterMethyl+1,counterNonMethyl + particles_{jtype}.number) ...
+%        = particles_{jtype}.members;
+%      counterMethyl = counterNonMethyl + particles_{jtype}.number;
+%    end
+% 
+%    if particles_{jtype}.particleEnum == PARTICLE_1H_EXCHANGEABLE ...
+%        || particles_{jtype}.particleEnum == PARTICLE_1H_NONEXCHANGEABLE
+% 
+%     nonMethylProtons(...
+%       counterNonMethyl+1,counterNonMethyl+particles_{jtype}.number) ...
+%       = particles_{jtype}.members;
+% 
+%     counterNonMethyl = counterNonMethyl + particles_{jtype}.number;
+%    end
+%  end
+
+ methylCarbons = findParticles(PARTICLE_C_METHYL, 'ALL', false);
+ nonMethylProtons = [findParticles(PARTICLE_1H_EXCHANGEABLE, 'ALL', false),...
+   findParticles(PARTICLE_1H_EXCHANGEABLE, 'ALL', false)];
+
+ % Add numberExtraProtons extra protons to each methyl cluster.
+ for iadd = 1:System.Methyl.numberExtraProtons
+   success = false;
+   % Loop over methyl carbons.
+   for imethyl = methylCarbons
+
+
+     % Get distance
+     distances = distanceMatrix(imethyl,nonMethylProtons);
+     minDistance = min(distances);
+
+     if minDistance==inf, continue; end
+
+     closestProton = nonMethylProtons(distances==minDistance);
+     associatedParticleMatrix_(closestProton,imethyl) = closestProton;
+     distanceMatrix(:,closestProton) = inf;
+     distanceMatrix(closestProton,:) = inf;
+
+     if imethyl==methylCarbons(end), success = true; end
+
+   end
+   if ~success
+     error(['Error in expandMethylClusters(): ',...
+       'could not add any more extra particles.']);
+   end
+
+ end
+
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function particleIndices = findParticles(particleEnum, resName, countOnly)
   
@@ -1170,7 +1287,7 @@ end
 particleIndices = zeros(num,0);
 num = 0;
 
-for itype = indices
+for itype = indices'
   particleIndices(num+1:num+particles_{itype}.number) = ...
     particles_{itype}.members;
   num = num + particles_{itype}.number;  
@@ -1703,12 +1820,12 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function xyz = getTensorAxes(X,Y,Z,particle_index,particleEnum)
+function xyz = getTensorAxes(X,Y,Z,particle_index)
 xyz = zeros(3);
 
-xyz(:,1) = getTensorAxis(X,particle_index,particleEnum);
-xyz(:,2) = getTensorAxis(Y,particle_index,particleEnum);
-xyz(:,3) = getTensorAxis(Z,particle_index,particleEnum);
+xyz(:,1) = getTensorAxis(X,particle_index);
+xyz(:,2) = getTensorAxis(Y,particle_index);
+xyz(:,3) = getTensorAxis(Z,particle_index);
 
 isSet = vecnorm(xyz) > 0;
 
@@ -1739,7 +1856,7 @@ end
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function x = getTensorAxis(X,particle_index,particleEnum)
+function x = getTensorAxis(X,particle_index)
 
 x = zeros(3,1);  
 sameMoleculeList = [];
@@ -1781,6 +1898,9 @@ elseif ischar(X)
   elseif length(X)>=4 && strcmp(X(1:4),'bond')
     
     idx_pdb = mod(pdbID_(particle_index),pdb_.number);
+    if idx_pdb == 0
+        idx_pdb = pdb_.number;
+    end
     pdb_connect_idx = find(pdb_.connections(:,idx_pdb));
     
      atomType = PARTICLE_ALL;
@@ -2412,6 +2532,8 @@ deactivateIndices = [];
 if System.Methyl.include
   if System.Methyl.method == 2
     deactivateIndices = findParticleClasses(PARTICLE_C_METHYL, 'ALL');
+  elseif System.Methyl.method == 1
+    deactivateIndices = findParticleClasses(PARTICLE_1H_METHYL, 'ALL');
   else
     error(['Error in setOptions(): ', ...
       'methyl method ',  num2str(System.Methyl.method), ' not supported.']);
@@ -2542,6 +2664,7 @@ switch particleEnum
     particles_{particleIndex}.atomType = PARTICLE_CARBON;
     particles_{particleIndex}.isNucleus = true;
     particles_{particleIndex}.spinMultiplicity = 1;
+    particles_{particleIndex}.gFactor = 5.5856946893;
     particles_{particleIndex}.switchParticle = PARTICLE_13C_METHYL;
     
   case PARTICLE_13C_METHYL
@@ -2794,7 +2917,10 @@ pruneSystem();
 setCoordinates();
 
 % Set methyls.
-% setMethyls();
+setMethyls();
+
+% Expand methyl clusters
+expandMethylClusters();
 
 % Set nuclear quadrupoles.
 setQuadrupoles()
@@ -2875,7 +3001,7 @@ function setHyperfine()
       
       R_A2L = getTensorAxes(...
         particles_{itype}.hf_x,particles_{itype}.hf_y,particles_{itype}.hf_z,...
-        particles_{itype}.members(imem),particles_{itype}.particleEnum);
+        particles_{itype}.members(imem));
       
       
       Azz = particles_{itype}.hf_Azz;
@@ -3116,7 +3242,7 @@ function setQuadrupoles()
       
       R_Q2L = getTensorAxes(...
         particles_{itype}.NQ_x,particles_{itype}.NQ_y,particles_{itype}.NQ_z,...
-        particles_{itype}.members(imem),particles_{itype}.particleEnum);
+        particles_{itype}.members(imem));
       
       I = (particles_{itype}.spinMultiplicity - 1)/2;
       
@@ -3143,9 +3269,11 @@ maxSize = 10;
 maxClusterSize = [0,6,6];
 if System.Methyl.methylMethylCoupling
   methylFactor = 2*System.Methyl.include + 1;
-  maxClusterSize(2) = min(maxSize,methylFactor*Method.order);
+  maxClusterSize(2) = min(maxSize,...
+    methylFactor*Method.order + System.Methyl.numberExtraProtons);
 else
-  maxClusterSize(2)= min(maxSize,Method.order + 3);
+  maxClusterSize(2)= min(maxSize,...
+    Method.order + 3 + System.Methyl.numberExtraProtons);
 end
 Nuclei.maxClusterSize = maxClusterSize;
 
@@ -3156,7 +3284,8 @@ Nuclei.SpinOperators{multiplicity} = 1;
 
 for multiplicity = 2:3
   S = (multiplicity-1)/2;
-  Nuclei.SpinOperators{multiplicity} = generateSpinOperators(S,maxClusterSize(multiplicity),Method.gpu);
+  Nuclei.SpinOperators{multiplicity} ...
+    = generateSpinOperators(S,maxClusterSize(multiplicity),Method.gpu);
 %   rot = generateRotationMatrices(spinDim,numberMethyl)
 end
 if Method.allowHDcoupling % allowMixedSpins

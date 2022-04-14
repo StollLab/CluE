@@ -47,7 +47,7 @@ end
 % save input data
 
 if ~isfield(Data,'InputData') || ~ischar(Data.InputData)
-  error(['Data.InputData is not a valid file identifier.']);
+  error('Data.InputData is not a valid file identifier.');
 end
 InputData = Data.InputData;
 if ~isfile(InputData) 
@@ -90,6 +90,16 @@ elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') ...
   
   if Method.useCentralSpinSystem
     System.pdb = parsePDBfile(Data.InputData, System.angstrom);
+
+
+    if ~isempty(System.pdbTranslation)
+      System.pdb = translatePDB(System.pdb,System);
+    end
+
+    if System.pdbRotate
+      System.pdb = rotatePDB(System.pdb,System);
+    end
+
   end
   [Nuclei, System] = parseNuclei(System, Method, Data, InputData);
   
@@ -307,6 +317,8 @@ if strcmp(System.averaging,'powder')
   Grid.z = Grid.z(keep);
   
   % Convert xyz coordinates to alpha/beta angles
+  Alpha(numel(Grid.z)) = 0;
+  Beta(numel(Grid.z)) = 0;
   for iOri = 1:numel(Grid.z)
     
     % Determine the beta Euler angle.
@@ -415,7 +427,8 @@ for iorder = Method.order:-1:1
   end
 end
 
-SignalsToCalculate = [];
+SignalsToCalculate = zeros(nOrientations,1);
+counter_SignalsToCalculate = 0;
 saveAll = Data.saveLevel==2;
 Statistics = cell(nOrientations,1);
 % Check to see if file already exists.
@@ -459,16 +472,18 @@ for iOri = 1:nOrientations
         end
       end
       
-        
+
     catch     
-      SignalsToCalculate(end+1) = iOri;
+      counter_SignalsToCalculate = counter_SignalsToCalculate + 1;
+      SignalsToCalculate(counter_SignalsToCalculate) = iOri;
     end
   else
-    SignalsToCalculate(end+1) = iOri;
+    counter_SignalsToCalculate = counter_SignalsToCalculate + 1;
+    SignalsToCalculate(counter_SignalsToCalculate) = iOri;
   end
   
 end
-
+SignalsToCalculate(SignalsToCalculate==0) = [];
 numberOfSignals = length(SignalsToCalculate);
 
 TempSignals{numberOfSignals+1} = [];
@@ -595,7 +610,7 @@ if ~Method.sparseMemory
           disp('Order_n_SignalMean{iorder} = Order_n_SignalMean{iorder} + Order_n_Signals{isignal}{iorder};');
           fprintf('Order_n_SignalMean{%d} = Order_n_SignalMean{%d} + Order_n_Signals{%d}{%d};\n', ...
             iorder,iorder,iOri,iorder);
-          if exist('Order_n_Signals')
+          if exist('Order_n_Signals','var')
             if iscell(Order_n_Signals) && length(Order_n_Signals)>=iOri
               
               if iscell(Order_n_Signals{iOri}) && length(Order_n_Signals{iOri}) >= iorder
@@ -738,7 +753,8 @@ if Method.getClusterContributions
   else
     for iOri = 1:nOrientations
 
-      getClusterContributions([OutputData,'ClusterContribution_Ori_',num2str(iOri), '.mat'], ...
+      getClusterContributions(...
+        [OutputData,'ClusterContribution_Ori_',num2str(iOri), '.mat'], ...
         Nuclei, System, iOri, Ori_Clusters{iOri}, Signals, AuxiliarySignal, ...
         Method, experiment_time, gridWeight, TM_powder, Input, SignalMean, ...
         Order_n_SignalMean,Order_n_Signals);
@@ -748,15 +764,14 @@ end
 
 if isfield(Method, 'getNuclearContributions') && Method.getNuclearContributions
   if isnan(TM)
-    NuclearContribution.TM=TM_powder;
     fprintf('Cannot find nuclear contributions whe TM is Nan.');
   else
-    NuclearContribution = getSpinContributions(System, Nuclei, Signals, AuxiliarySignal, Clusters,Method,OutputData,gridWeight, TM_powder);
+    NuclearContribution = getSpinContributions(System, Nuclei, Signals, ...
+      AuxiliarySignal, Clusters,Method,OutputData,gridWeight, TM_powder);
     save(OutputData,'NuclearContribution','-append');
   end
-else
-  NuclearContribution = 'not calculated';
 end
+
 if verbose
   fprintf('\nCompleted Nuclear Spin Diffusion\n');
   fprintf('\nNuclear spin decoherence time = %d s. \n',TM_powder);
@@ -778,38 +793,13 @@ if Method.conserveMemory
   end
 end
 
-if false
-  v_ee = eeDecoherence(System, Method, experiment_time, Nuclei);
-  save(OutputData,'v_ee','-append');
-  SignalMean = abs(v_ee).*SignalMean;
-  disp(v_ee(end));
-end
 
-if false
-  v_ee = eeDecoherence(System, Method, experiment_time, Nuclei);
-  save(OutputData,'v_ee','-append');
-  %   SignalMean = abs(v_ee).*SignalMean;
-  SignalMean = abs(v_ee);
-  
-  disp(v_ee(end));
-end
 toc
 end
 % ========================================================================
 % ========================================================================
 
 
-
-% ========================================================================
-% Calculate propagator using diagonalization
-% ========================================================================
-
-function U = propagator_eig(Ham,t)
-%Ham = (Ham+Ham')/2; % "hermitianize" Hamiltonian
-[EigenVectors, EigenValues] = eig(Ham);
-Udiag = exp(-2i*pi*diag(EigenValues)*t);
-U = EigenVectors*diag(Udiag)*EigenVectors';
-end
 
 % ========================================================================
 % Calculates signal for a set of orientations
@@ -840,8 +830,14 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
   end
   igrid = SignalsToCalculate(isignal);
 
+if isempty(Clusters{1})
+%   error(['Error in getOrientationSignals(): ',...
+%     'empty cluster set.']);
+end
+
 % calculate coherence signal
-[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,graphs_isignal,iOri_Clusters] = ...
+[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,...
+  graphs_isignal,iOri_Clusters] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,...
   Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData,isignal);
 
@@ -1007,10 +1003,17 @@ if Method.Ori_cutoffs
   Statistics.isotopologueStatistics = isotopologueStatistics;
   Nuclei.Statistics = Statistics;
   
-  Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,...
-    Method.extraOrder,{}, Method);
-  
+  if ~Method.cutoff.sizeDependent
+    Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,...
+      Method.extraOrder,{}, Method);
+  end
+
   for clusterSize = 1:Method.order
+    if Method.cutoff.sizeDependent
+      Ori_Clusters = findClusters_treeSearch(Nuclei,clusterSize,...
+        clusterSize,{}, Method);
+    end
+
     % Combine arrays.
     C = [Clusters{clusterSize}; Ori_Clusters{clusterSize}];
     
@@ -1024,7 +1027,7 @@ if Method.Ori_cutoffs
     elseif Method.emptyClusterSetsOkay
       Clusters{clusterSize} = C;
     else
-      error(['Error in beginCalculateSignal(): ',
+      error(['Error in beginCalculateSignal(): ', ...
         'no clusters found.']);
 
     end
@@ -1083,7 +1086,7 @@ if isfield(Method,'exportHamiltonian') && Method.exportHamiltonian
   geff=System.gMatrix(3,3);
   
   [Tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, Nuclei.Coordinates,...
-    [1:Nuclei.number],Nuclei.Atensor, System.magneticField, System.ge, geff, System.muB, System.muN, System.mu0, System.hbar,System.theory,[]);
+    1:Nuclei.number,Nuclei.Atensor, System.magneticField, System.ge, geff, System.muB, System.muN, System.mu0, System.hbar,System.theory,[]);
   
   % set file name
   H_file = [OutputData(1:end-4), '_Hamiltonian.mat'];
@@ -1217,7 +1220,7 @@ else
           = calculateSignal_gpu(System, Method, Nuclei,Clusters);
         
         
-        [Signals, ...
+        [~, ...
           AuxiliarySignal_1,AuxiliarySignal_2] = ...
           doHydrogenIsotopologueCCE(...
           Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, ...
@@ -1349,10 +1352,11 @@ if ~isempty(OutputData)
       case 1
         
         newOutputFile = ['%',OutputData];
-        while isfile(newOutputFile)
-          newOutputFile = ['%',newOutputFile];
+        if isfile(newOutputFile)
+          disp(['Replacing ',newOutputFile, ' as ', newOutputFile, '.'])
+        else
+          disp(['Backing up ',OutputData, ' as ', newOutputFile, '.'])
         end
-        disp(['Backing up ',OutputData, ' as ', newOutputFile, '.'])
         if isunix
           command = ['mv ', OutputData, ' ', newOutputFile];
           system(command);

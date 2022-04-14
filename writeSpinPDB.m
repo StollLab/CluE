@@ -151,7 +151,7 @@ function writeSpinPDB(Nuclei,NuclerContribution,outfilename,options)
         else
             groupStr = ['\n\n[ ',gmx_groups{ii}, ' ]\n'];
         end
-        disp(groupStr);
+        %disp(groupStr);
         fprintf(gmxfileID,groupStr);
 
 
@@ -168,7 +168,7 @@ function writeSpinPDB(Nuclei,NuclerContribution,outfilename,options)
                 line = [line, numStr];
             end
             line = [line,'\n'];
-            disp(line);
+            %disp(line);
             fprintf(gmxfileID,line);
         end
 

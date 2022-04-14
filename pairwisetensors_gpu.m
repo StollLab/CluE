@@ -28,14 +28,14 @@ zeroIndex = min(Cluster) - 1;
 Indices = fliplr(Cluster);
 N = size(Cluster,2);
 tensors = zeros(3,3, N+1,N+1); % nspins by nspins
-MethylSelectionRules = [0,0,0;0,0,0;0,0,1];
 
 % ENUM
 useEZ       = theory(1);
 useNZ       = theory(2);
 useHF       = any(theory(3:4));
 useNucDD    = any(theory(5:8));
-useRF       = abs(B1x)>0 || abs(B1y) >0; 
+% useRF       = abs(B1x)>0 || abs(B1y) >0; 
+
 % Electron Zeeman
 if useEZ
   tensors(3,3,1,1) = constructElectronZeeman(magneticField,geff, muB, hbar);
@@ -125,9 +125,11 @@ end
 
 function NuclearZeeman = constructNuclearZeemanRotatingFrame(Nuclei_g, ...
   i_index_nucleus, magneticField, muN, hbar,nuRF)
-gn = Nuclei_g(i_index_nucleus);
-NuclearZeeman = -gn*muN*magneticField; % J.
-NuclearZeeman = NuclearZeeman/(2*pi*hbar) - nuRF; % J -> Hz
+omega_n = Nuclei_g(i_index_nucleus)*muN*magneticField/hbar;
+omegaRF = 2*pi*nuRF;
+Omega = omega_n - omegaRF;
+NuclearZeeman = -Omega; % J.
+NuclearZeeman = NuclearZeeman/(2*pi); % rad/s -> Hz
 end
 
 function Hyperfine = constructHyperfine(Nuclei_g,Nuclei_Coordinates, ...

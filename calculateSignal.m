@@ -12,17 +12,17 @@ muB = System.muB;  muN = System.muN;  mu0 = System.mu0; hbar = System.hbar;
 magneticField = System.magneticField;
 timepoints = System.timepoints;
 dt = System.dt;
-t0 = System.t0;
+
 dt2 = System.dt2;
 Ndt = System.Ndt;
  
-B1x =  System.RF.B1x;
+
 B1y =  System.RF.B1y;
-nuRF = System.RF.nuRF;
+
 doTR = false;
 
 % ENUM
-FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; HAHN_TR = 6;
+FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; %HAHN_TR = 6;
 CP_N = 7; UHRIG_N = 8;
 
 % Define the theory to use at the given cluster size.
@@ -38,7 +38,6 @@ else
   Nuclear_Dipole_x_iy_Z = [];
 end
 
-maxSpinClusterSize = Nuclei.maxClusterSize;
 
 if Theory(Method.order,10)
   Method_extraOrder = Method.extraOrder;
@@ -46,18 +45,6 @@ if Theory(Method.order,10)
 else
   Method_extraOrder = Method.order;
   maxSuperclusterSize = Method.order;
-end
-
-if strcmp(Method.method,'HD-CCE')
-  doHDCCE = true;
-else
-  doHDCCE = false;
-end
-
-if strcmp(Method.method,'OffsetCCE')
-  doOffsetCCE = true;
-else
-  doOffsetCCE = false;
 end
 
 % Convert variable to gpu compatible forms
@@ -82,9 +69,7 @@ elseif strcmp(System.experiment,'Hahn-TR')
   EXPERIMENT = HAHN;
   total_time = 2*System.Time(end);
   doTR = true;
-  B1x =  System.RF.B1x(1);
   B1y =  System.RF.B1y(1);
-  nuRF = System.RF.nuRF(1);
   B1x2 =  System.RF.B1x(2);
   B1y2 =  System.RF.B1y(2);
   nuRF2 = System.RF.nuRF(2);
@@ -97,6 +82,10 @@ elseif strcmp(System.experiment,'Uhrig_N')
 else
   error('The experiment ''%s'' is not supported.',System.experiment);
 end
+
+
+B1x =  System.RF.B1x;
+nuRF = System.RF.nuRF;
 
 
 
@@ -177,23 +166,32 @@ for clusterSize = 1:Method.order
     
     % Loop over the cluster to assign methyl rotors.
     for ii = 1:clusterSize
-
-      thisIndex = thisIndex + 1;
       
       if isMethylCarbon(Cluster(ii))
         % Count the number of metyls.
         methyl_number = methyl_number + 1;      
         
         % Unpack spins from methyl pseudo-particle.
-        thisCluster(thisIndex:thisIndex+2) = Cluster(ii) + [1,2,3];
-        thisIndex = thisIndex + 2;
+        if Method.useCentralSpinSystem
+
+          hydrons = ...
+            nonzeros(Nuclei.associatedParticleMatrix(:,Cluster(ii)+1 ))' -1;
+        else
+           hydrons = Cluster(ii) + [1,2,3];
+        end
+        thisCluster(thisIndex+1:thisIndex+numel(hydrons)) = hydrons; 
+        thisIndex = thisIndex + numel(hydrons);
       else
+        thisIndex = thisIndex + 1;
         thisCluster(thisIndex) = Cluster(ii);
       end
 
     end
-    
+    if System.Methyl.method ==1
+      thisClusterSize = numel(thisCluster);
+    end
     if(  length(unique(thisCluster)) <  length( thisCluster )  )
+
       error(['Error in calculateSignal(): ',...
         'This cluster constains duplicate indices.']);  
     end
@@ -305,10 +303,11 @@ for clusterSize = 1:Method.order
         thisCluster = cyclicPermutation(iPerm,:);
         
         % Get interaction tensors.
-        [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
+        [tensors,~] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
           Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField, ge,geff,...
           muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
           mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
+
         if ~System.limitToSpinHalf
           qtensors = Nuclei.Qtensor(:,:,thisCluster);
         else
@@ -352,7 +351,8 @@ for clusterSize = 1:Method.order
         [H_alpha_TR,H_beta_TR] = ...
           assembleHamiltonian_gpu(Nuclei.StateMultiplicity(thisCluster),...
           tensors,SpinOp,qtensors,SpinXiXjOp, theory,...
-          isMethylHydron(thisCluster),System.Methyl.method, ...
+          isMethylHydron(thisCluster), ...
+          System.Methyl.method, ...
           Nuclei.methylTunnelingSplitting(thisCluster,thisCluster),...
           Nuclei.MethylID(thisCluster));
         else
@@ -459,7 +459,6 @@ CP_N = 7; UHRIG_N = 8;
 Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
 Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
  
-
 % Get density matrix.
 if useThermalEnsemble
   DensityMatrix = propagator_eig(...
@@ -500,18 +499,6 @@ if doTR
   [dU_alpha_TR, dU_alpha2_TR] = propagator_eig(Hamiltonian_alpha_TR,dt, dt2);
 end
 
-
-% Get second experimental dimesion propagators.
-if EXPERIMENT==CPMG
-    U_beta_2 = eye(nStates);
-    U_alpha_2 = eye(nStates);
-end
-
-% Get second experimental dimesion propagators.
-if EXPERIMENT == CPMG_CONST
-  U_beta_2 = propagator_eig(Hamiltonian_beta,total_time);
-  U_alpha_2 = propagator_eig(Hamiltonian_alpha,total_time);
-end
 
 % Initialize signal.
 v= ones(1 ,timepoints);
@@ -593,12 +580,15 @@ for iTime = 1:timepoints
       U_aa = U_alpha*U_alpha;
       U_bb = U_beta*U_beta;
 
+      exponent = fix((nPulses-1)/2);
+      AABB = (U_aa*U_bb)^( exponent );
+      BBAA = (U_bb*U_aa)^( exponent );
       if mod(nPulses,2)==0
-        U_ = ( U_alpha*( (U_bb*U_aa)^( nPulses/2 - 1) )*U_bb*U_alpha )' ...
-               *( U_beta* ( (U_aa*U_bb)^( nPulses/2 - 1) )*U_aa*U_beta  );
+        U_ = ( U_alpha*BBAA*U_bb*U_alpha )' ...
+               *( U_beta*AABB*U_aa*U_beta  );
       else
-        U_ = (  U_beta*( (U_aa*U_bb)^( (nPulses-1)/2) )*U_alpha )' ...
-            *( U_alpha*( (U_bb*U_aa)^( (nPulses-1)/2) )*U_beta  );
+        U_ = (  U_beta*AABB*U_alpha )' ...
+            *( U_alpha*BBAA*U_beta  );
         
       end
 
@@ -935,7 +925,7 @@ if N==3
       3,1,2, 5,6,4, 7,8,9; ...
       1,2,3, 6,4,5, 7,8,9;...
       2,3,1, 6,4,5, 7,8,9; ...
-      3,1,2, 6,4,5, 7,8,9 ...
+      3,1,2, 6,4,5, 7,8,9; ...
       2,3,1, 4,5,6, 7,8,9; ...
       3,1,2, 4,5,6, 7,8,9; ...
       1,2,3, 5,6,4, 9,7,8;...
@@ -996,304 +986,6 @@ error('Cannot calculate cyclic permutations.');
 end
 
 
-% ==============================================================================
-% Select the Spin Operator
-% ==============================================================================
-function [SpinOp,SpinXiXjOp] = getSpinOps(thisClusterSize,Nuclei_Spins,...
-  Op, SpinXiXjOp, ...
-  SpinOperators_HD, SpinOperators_DH,SpinXiXjOperators_HD,SpinXiXjOperators_DH)
-
-% "ENUM"
-HD_SPIN_OP = -1; DH_SPIN_OP = -2;
-
-
-spinOp = Op{spinMultiplicity}{thisClusterSize};
-SpinXiXjOp = SpinXiXjOps{thisClusterSize};
-
-if all(Nuclei_Spins == Nuclei_Spins(1))
-  Nuclei_Spin = Nuclei_Spins(1);
-elseif length(Nuclei_Spins)==2
-  if Nuclei_Spins(1)==1/2 && Nuclei_Spins(2)==1
-    Nuclei_Spin = HD_SPIN_OP;
-  elseif Nuclei_Spins(2)==1/2 && Nuclei_Spins(1)==1
-    Nuclei_Spin = DH_SPIN_OP;
-  end
-end
-
-switch thisClusterSize
-  case 1
-    switch Nuclei_Spin
-      case 1/2
-        SpinOp = Spin2Op1;
-        SpinXiXjOp = [];
-      case 1
-        SpinOp = Spin3Op1;
-        SpinXiXjOp = SpinXiXjOp_1;
-      case 3/2
-        SpinOp = Spin4Op1;
-        SpinXiXjOp = [];
-      otherwise
-        error('Cluster contains unrecognized spins.');
-    end
-    
-  case 2
-    switch Nuclei_Spin
-      case 1/2
-        SpinOp = Spin2Op2;
-        SpinXiXjOp = [];
-      case 1
-        SpinOp = Spin3Op2;
-        SpinXiXjOp = SpinXiXjOp_2;
-      case 3/2
-        SpinOp = Spin4Op2;
-        SpinXiXjOp = [];
-      case HD_SPIN_OP
-        SpinOp = SpinOperators_HD;
-        SpinXiXjOp = SpinXiXjOperators_HD;
-      case DH_SPIN_OP
-        SpinOp = SpinOperators_DH;
-        SpinXiXjOp = SpinXiXjOperators_DH;
-      otherwise
-        error('Cluster contains unrecognized spins.');
-    end
-    
-  case 3
-    switch Nuclei_Spin
-      case 1/2
-        SpinOp = Spin2Op3;
-        SpinXiXjOp = [];
-      case 1
-        SpinOp = Spin3Op3;
-        SpinXiXjOp = SpinXiXjOp_3;
-      case 3/2
-        SpinOp = Spin4Op3;
-        SpinXiXjOp = [];
-      otherwise
-        error('Cluster contains unrecognized spins.');
-    end
-    
-  case 4
-    switch Nuclei_Spin
-      case 1/2
-        SpinOp = Spin2Op4;
-        SpinXiXjOp = [];
-      case 1
-        SpinOp = Spin3Op4;
-        SpinXiXjOp = SpinXiXjOp_4;
-      case 3/2
-        SpinOp = Spin4Op4;
-        SpinXiXjOp = [];
-      otherwise
-        error('Cluster contains unrecognized spins.');
-    end
-    
-  case 5
-    switch Nuclei_Spin
-      case 1/2
-        SpinOp = Spin2Op5;
-        SpinXiXjOp = [];
-      case 1
-        SpinOp = Spin3Op5;
-        SpinXiXjOp = SpinXiXjOp_5;
-      case 3/2
-        SpinOp = Spin4Op5;
-        SpinXiXjOp = [];
-      otherwise
-        error('Cluster contains unrecognized spins.');
-    end
-    
-  case 6
-    switch Nuclei_Spin
-      case 1/2
-        SpinOp = Spin2Op6;
-        SpinXiXjOp = [];
-      case 1
-        SpinOp = Spin3Op6;
-        SpinXiXjOp = SpinXiXjOp_6;
-      case 3/2
-        SpinOp = Spin4Op6;
-        SpinXiXjOp = [];
-      otherwise
-        error('Cluster contains unrecognized spins.');
-    end
-    
-  otherwise
-    error('Cluster size is too large: spin operators cannot be assigned.');
-    
-end
-end
-
-% ==============================================================================
-% Unpack Spin Operators
-% ==============================================================================
-
-function [Spin2Op1,Spin3Op1,Spin4Op1, ...
-  Spin2Op2,Spin3Op2,Spin4Op2, ...
-  Spin2Op3,Spin3Op3,Spin4Op3, ...
-  Spin2Op4,Spin3Op4,Spin4Op4, ...
-  Spin2Op5,Spin3Op5,Spin4Op5, ...
-  Spin2Op6,Spin3Op6,Spin4Op6, ...
-  SpinXiXjOp_1, SpinXiXjOp_2, SpinXiXjOp_3, ...
-  SpinXiXjOp_4, SpinXiXjOp_5, SpinXiXjOp_6]...
-  = initializeSpinOps(maxClusterSize, Op, SpinXiXjOps)
-
-% Set 1-cluster operators.
-if maxClusterSize > 0
-  Spin2Op1 = Op{2}{1};
-  Spin3Op1 = Op{3}{1};
-  Spin4Op1 = Op{4}{1};
-  SpinXiXjOp_1 = SpinXiXjOps{1};
-else
-  Spin2Op1 = [];
-  Spin3Op1 = [];
-  Spin4Op1 = [];
-  SpinXiXjOp_1 = [];
-end
-
-% Set 2-cluster operators.
-if maxClusterSize > 1
-  Spin2Op2 = Op{2}{2};
-  Spin3Op2 = Op{3}{2};
-  Spin4Op2 = Op{4}{2};
-  SpinXiXjOp_2 = SpinXiXjOps{2};
-else
-  Spin2Op2 = [];
-  Spin3Op2 = [];
-  Spin4Op2 = [];
-  SpinXiXjOp_2 =[];
-end
-
-% Set 3-cluster operators.
-if maxClusterSize > 2
-  Spin2Op3 = Op{2}{3};
-  Spin3Op3 = Op{3}{3};
-  Spin4Op3 = Op{4}{3};
-  SpinXiXjOp_3 = SpinXiXjOps{3};
-else
-  Spin2Op3 = [];
-  Spin3Op3 = [];
-  Spin4Op3 = [];
-  SpinXiXjOp_3 =[];
-end
-
-% Set 4-cluster operators.
-if maxClusterSize > 3
-  Spin3Op4 = Op{3}{4};
-  Spin2Op4 = Op{2}{4};
-  Spin4Op4 = Op{4}{4};
-  SpinXiXjOp_4 = SpinXiXjOps{4};
-else
-  Spin3Op4 = [];
-  Spin2Op4 = [];
-  Spin4Op4 = [];
-  SpinXiXjOp_4 =[];
-end
-
-% Set 5-cluster operators.
-if maxClusterSize > 4
-  Spin2Op5 = Op{2}{5};
-  Spin3Op5 = Op{3}{5};
-  Spin4Op5 = Op{4}{5};
-  SpinXiXjOp_5 = SpinXiXjOps{5};
-else
-  Spin2Op5 = [];
-  Spin3Op5 = [];
-  Spin4Op5 = [];
-  SpinXiXjOp_5 =[];
-end
-
-% Set 6-cluster operators.
-if maxClusterSize > 5
-  Spin2Op6 = Op{2}{6};
-  Spin3Op6 = Op{3}{6};
-  Spin4Op6 = Op{4}{6};
-  SpinXiXjOp_6 = SpinXiXjOps{6};
-else
-  Spin2Op6 = [];
-  Spin3Op6 = [];
-  Spin4Op6 = [];
-  SpinXiXjOp_6 =[];
-end
-
-% Set 7-cluster operators.
-if maxClusterSize > 6
-  Spin2Op7 = Op{2}{7};
-  Spin3Op7 = Op{3}{7};
-  Spin4Op7 = Op{4}{7};
-  SpinXiXjOp_7 = SpinXiXjOps{7};
-else
-  Spin2Op7 = [];
-  Spin3Op7 = [];
-  Spin4Op7 = [];
-  SpinXiXjOp_7 =[];
-end
-
-% Set 8-cluster operators.
-if maxClusterSize > 7
-  Spin2Op8 = Op{2}{8};
-  Spin3Op8 = Op{3}{8};
-  Spin4Op8 = Op{4}{8};
-  SpinXiXjOp_8 = SpinXiXjOps{8};
-else
-  Spin2Op8 = [];
-  Spin3Op8 = [];
-  Spin4Op8 = [];
-  SpinXiXjOp_8 =[];
-end
-
-% Set 9-cluster operators.
-if maxClusterSize > 8
-  Spin2Op9 = Op{2}{9};
-  Spin3Op9 = Op{3}{9};
-  Spin4Op9 = Op{4}{9};
-  SpinXiXjOp_9 = SpinXiXjOps{9};
-else
-  Spin2Op9 = [];
-  Spin3Op9 = [];
-  Spin4Op9 = [];
-  SpinXiXjOp_9 =[];
-end
-
-% Set 9-cluster operators.
-if maxClusterSize > 9
-  Spin2Op10 = Op{2}{10};
-  Spin3Op10 = Op{3}{10};
-  Spin4Op10 = Op{4}{10};
-  SpinXiXjOp_10 = SpinXiXjOps{10};
-else
-  Spin2Op10 = [];
-  Spin3Op10 = [];
-  Spin4Op10 = [];
-  SpinXiXjOp_10 =[];
-end
-
-% Set 11-cluster operators.
-if maxClusterSize > 11
-  Spin2Op11 = Op{2}{11};
-  Spin3Op11 = Op{3}{11};
-  Spin4Op11 = Op{4}{11};
-  SpinXiXjOp_11 = SpinXiXjOps{11};
-else
-  Spin2Op11 = [];
-  Spin3Op11 = [];
-  Spin4Op11 = [];
-  SpinXiXjOp_11 =[];
-end
-
-% Set 12-cluster operators.
-if maxClusterSize > 12
-  Spin2Op12 = Op{2}{12};
-  Spin3Op12 = Op{3}{12};
-  Spin4Op12 = Op{4}{12};
-  SpinXiXjOp_12 = SpinXiXjOps{12};
-else
-  Spin2Op12 = [];
-  Spin3Op12 = [];
-  Spin4Op12 = [];
-  SpinXiXjOp_12 =[];
-end
-end
-
 
 % ========================================================================
 % Initialize Coherences
@@ -1311,6 +1003,7 @@ function [Coherences, SubclusterIndices , ...
 % includeMethyls = System.Methyl.include
 SubclusterIndices = cell(1,Method.order);
 
+Coherences = cell(Method.order,1);
 for iclusterSize = 1:Method.order
   
   Coherences{iclusterSize} = zeros(numberClusters(iclusterSize),nt);
@@ -1333,16 +1026,16 @@ for iclusterSize = 1:Method.order
   rotationalMatrix_d2_m2 = [];
 
   switch iclusterSize
-  
-    
+
+
     case 1
       if includeMethyls && ~lockRotor
-        rotationalMatrix_c1_m1 = Nuclei_rotationalMatrix{1,1}; 
+        rotationalMatrix_c1_m1 = Nuclei_rotationalMatrix{1,1};
       else
         rotationalMatrix_c1_m1 = [];
         rotationalMatrix_d1_m1 = [];
       end
-      
+
     case 2
       if includeMethyls && ~lockRotor
         rotationalMatrix_c2_m1 = Nuclei_rotationalMatrix{2,1};
@@ -1357,71 +1050,12 @@ for iclusterSize = 1:Method.order
         rotationalMatrix_d2_m1 = [];
         rotationalMatrix_d2_m2 = [];
       end
-end
-  
-end
+  end
 
 end
 
-% ========================================================================
-% Set Subcluster Indices
-% ========================================================================
-function [SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
-  SubclusterIndices_5,SubclusterIndices_6, ...
-  SubclusterIndices_7,SubclusterIndices_8,...
-  SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11, ...
-  SubclusterIndices_12]...
-  = setSubclusterIndices(ClusterArray,clusterSize,iCluster,...
-  SubclusterIndices_2, SubclusterIndices_3,SubclusterIndices_4,...
-  SubclusterIndices_5,SubclusterIndices_6, ...
-  SubclusterIndices_7,SubclusterIndices_8,...
-  SubclusterIndices_9,SubclusterIndices_10,SubclusterIndices_11, ...
-  SubclusterIndices_12)
+end
 
 
-switch clusterSize
-  % SubclusterIndices_clusterSize(jCluster,subCluster_size, iCluster) =
-  % the jth cluster of size subCluster_size that is a subcluster of
-  % the ith cluster of size clusterSize.
-  case 1
-    % This is just to catch this case.  There is nothing to set.
-  case 2
-    SubclusterIndices_2(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 3
-    SubclusterIndices_3(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 4
-    SubclusterIndices_4(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 5
-    SubclusterIndices_5(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 6
-    SubclusterIndices_6(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 7
-    SubclusterIndices_7(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 8
-    SubclusterIndices_8(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 9
-    SubclusterIndices_9(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 10
-    SubclusterIndices_10(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 11
-    SubclusterIndices_11(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  case 12
-    SubclusterIndices_12(:,:,iCluster) = findSubclusters_gpu(...
-      ClusterArray,clusterSize,iCluster,clusterSize);
-  otherwise
-    fprintf('Cannot calculate clusters of size %d.\n', clusterSize);
-    error('Cluster Error');
-    
-    
-end
-end
+
+

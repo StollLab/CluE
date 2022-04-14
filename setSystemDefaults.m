@@ -456,13 +456,20 @@ if ~isfield(System.Methyl,'include')
   System.Methyl.include = false;
 end
 if ~isfield(System.Methyl,'method')
-  System.Methyl.method = 0;
+  System.Methyl.method = 2;
 end
 if ~isfield(System.Methyl,'methylMethylCoupling')
   System.Methyl.methylMethylCoupling = false;
 end
+if ~isfield(System.Methyl,'numberExtraProtons')
+  System.Methyl.numberExtraProtons = 0;
+end
 if ~isfield(Method.cutoff,'methylCoupledOnlyNumber')
-  Method.cutoff.methylCoupledOnlyNumber = 1;
+  if System.Methyl.method==1
+    Method.cutoff.methylCoupledOnlyNumber = 1;
+  else
+    Method.cutoff.methylCoupledOnlyNumber = 3;
+  end
 end
 if ~isfield(System.Methyl,'moment_of_inertia')
   System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
@@ -586,6 +593,8 @@ switch System.experiment
   case 'CP_N'
     System.dimensionality = 1;
   case 'Uhrig_N'
+    System.dimensionality = 1;
+  case 'Hahn-TR' 
     System.dimensionality = 1;
   otherwise
   error('The experiment ''%s'' is not supported.',System.experiment);
@@ -794,19 +803,45 @@ if ~isfield(System,'RF')
   System.RF.B1x = 0;
   System.RF.B1y = 0;
   System.RF.nuRF = 0;
+  System.RF.use = false;
 end
 if ~isfield(System.RF, 'B1x')
   System.RF.B1x = 0;
+  System.RF.use = true;
 end
 if ~isfield(System.RF, 'B1y')
   System.RF.B1y = 0;
+  System.RF.use = true;
 end
 if ~isfield(System.RF, 'nuRF')
   System.RF.nuRF = 0;
+  System.RF.use = true;
 end
-
+if System.RF.use && any(any( System.Theory(:,7:8)))
+  error('Only coherence order 0 dipole-dipole coupling is allowed with RF.');
+end
 if ~isfield(Method,'vectorized')
   Method.vectorized = false;
+end
+
+if ~isfield(System,'pdbTranslation')
+    System.pdbTranslation = [];
+end
+if ~isfield(System,'pdbRotate')
+    System.pdbRotate = false;
+end
+
+if System.pdbRotate && ~isfield(System,'pdbOrigin')
+    System.pdbOrigin = [0,0,0];
+end
+if System.pdbRotate && ~isfield(System,'pdbAlpha')
+    System.pdbAlpha = 0;
+end
+if System.pdbRotate && ~isfield(System,'pdbBeta')
+    System.pdbBeta = 0;
+end
+if System.pdbRotate && ~isfield(System,'pdbGamma')
+    System.pdbGamma = 0;
 end
 
 % save options

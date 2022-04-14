@@ -38,7 +38,7 @@ for ii=1:numel(groups)
 
     groupStr = ['\n[ ',groups{ii}, ' ]\n'];
 
-    disp(groupStr);
+    %disp(groupStr);
     fprintf(fileID,groupStr);
 
 
@@ -51,7 +51,7 @@ for ii=1:numel(groups)
             line = [line, num2str(indices{ii}(iline+jj-1)),' 	'];
         end
         line = [line,'\n'];
-        disp(line);
+        %disp(line);
         fprintf(fileID,line);
     end
 

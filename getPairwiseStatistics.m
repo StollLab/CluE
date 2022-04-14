@@ -5,7 +5,6 @@
 % Input Arguments
 %
 % System = struct( ...
-%  'Methyl', struct('include',bool), ...
 %  'Electron' struct('g', double), ...
 %  'muB', double, ...
 %  'muN', double, ...
@@ -45,20 +44,6 @@ else
   stat_bools = true(STAT_NUM_ENUM,1);
 end
 whichStatistics(Method);
-
-N = Nuclei.number;
-
-if System.Methyl.include
-  % Methyl Groups
-  isMethylCarbon = strcmp(Nuclei.Type,'CH3');
-  %isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
-
-  pwstat.Methyl_Data.number_methyls = sum(isMethylCarbon);
-  pwstat.Methyl_Data.ID = double(Nuclei.Index(isMethylCarbon));
-
-%   methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0);
-end
-
 
 deltaX = Nuclei.Coordinates(:,1)-Nuclei.Coordinates(:,1)';
 deltaY = Nuclei.Coordinates(:,2)-Nuclei.Coordinates(:,2)';
@@ -176,30 +161,6 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
       'Nuclear_Dipole_x_iy_Z contains NANs.']);
   end
 
-%   if System.Methyl.include 
-%     methylList_ = pwstat.Methyl_Data.ID(pwstat.Methyl_Data.ID>0);
-%     for ispin  = methylList_
-%       hydrons_ = ispin + [1 ,2, 3];
-% 
-%       pwstat.Nuclear_Dipole(:,ispin) ...
-%         = maxabs(pwstat.Nuclear_Dipole(:,hydrons_)')';
-%       
-%       pwstat.Nuclear_Dipole_perpendicular(:,ispin) ...
-%         = maxabs( pwstat.Nuclear_Dipole_perpendicular(:,hydrons_)')';
-% 
-%       for jspin  = pwstat.Methyl_Data.ID'
-%         if jspin >= ispin, break; end
-%         hydrons_j = jspin + [1 ,2, 3];
-% 
-%         pwstat.Nuclear_Dipole(jspin,ispin) ...
-%           = supabs(pwstat.Nuclear_Dipole(hydrons_j,hydrons_));
-% 
-%         pwstat.Nuclear_Dipole_perpendicular(:,ispin) ...
-%         = supabs( pwstat.Nuclear_Dipole_perpendicular(hydrons_j,hydrons_));
-% 
-%       end
-% 
-%     end
 
     pwstat.Nuclear_Dipole = inf2nan(pwstat.Nuclear_Dipole);
   end
@@ -212,23 +173,6 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
 
     pwstat.bAmax = sqrt(pwstat.Amax.*abs(pwstat.Nuclear_Dipole));
 
-%     if System.Methyl.include
-%       for ispin  = methylList_
-%         hydrons_ = ispin + [1 ,2, 3];
-% 
-%         pwstat.Amax(:,ispin) = maxabs( pwstat.Amax(:,hydrons_)')';
-%         pwstat.bAmax(:,ispin) = maxabs( pwstat.bAmax(:,hydrons_)')';
-% 
-%         for jspin  = pwstat.Methyl_Data.ID'
-%           if jspin >= ispin, break; end
-%           hydrons_j = jspin + [1 ,2, 3];
-% 
-%           pwstat.Amax(jspin,ispin) = supabs( pwstat.Amax(hydrons_j,hydrons_));
-%           pwstat.bAmax(jspin,ispin) = supabs( pwstat.bAmax(hydrons_j,hydrons_));
-%         end
-% 
-%       end
-%     end
 
     pwstat.Amax = inf2nan(pwstat.Amax);
     pwstat.bAmax = inf2nan(pwstat.bAmax);
@@ -265,48 +209,6 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
     pwstat.GaussianRMSD = getGaussianRMSD(...
       modDepth,pwstat.Frequency_Pair,TM);
 
-%     if System.Methyl.include
-%       for ispin  = methylList_
-%         hydrons_ = ispin + [1 ,2, 3];
-% 
-%         pwstat.Frequency_Pair_p(:,ispin) = maxabs( ...
-%           pwstat.Frequency_Pair_p(:,hydrons_)')';
-%         
-%         pwstat.Frequency_Pair(:,ispin) = maxabs( ...
-%           pwstat.Frequency_Pair(:,hydrons_)')';
-%         
-%         pwstat.Modulation_Depth_p(:,ispin) = maxabs( ...
-%           pwstat.Modulation_Depth_p(:,hydrons_)')';
-%         
-%         pwstat.Modulation_Depth(:,ispin) = maxabs( ...
-%           pwstat.Modulation_Depth(:,hydrons_)')';
-%         
-%         pwstat.GaussianRMSD_p(:,ispin) = maxabs( ...
-%           pwstat.GaussianRMSD_p(:,hydrons_)')';
-%         
-%         pwstat.GaussianRMSD(:,ispin) = maxabs( ...
-%           pwstat.GaussianRMSD(:,hydrons_)')';
-% 
-% 
-%         for jspin  = pwstat.Methyl_Data.ID'
-%           if jspin >= ispin, break; end
-%           hydrons_j = jspin + [1 ,2, 3];
-% 
-%           pwstat.Frequency_Pair_p(jspin,ispin) = supabs( ...
-%             pwstat.Frequency_Pair_p(hydrons_j,hydrons_));
-%           pwstat.Frequency_Pair(jspin,ispin) = supabs( ...
-%             pwstat.Frequency_Pair(hydrons_j,hydrons_));
-%           pwstat.Modulation_Depth_p(jspin,ispin) = supabs( ...
-%             pwstat.Modulation_Depth_p(hydrons_j,hydrons_));
-%           pwstat.Modulation_Depth(jspin,ispin) = supabs( ...
-%             pwstat.Modulation_Depth(hydrons_j,hydrons_));
-%           pwstat.GaussianRMSD_p(jspin,ispin) = supabs( ...
-%             pwstat.GaussianRMSD_p(hydrons_j,hydrons_));
-%           pwstat.GaussianRMSD(jspin,ispin) = supabs( ...
-%             pwstat.GaussianRMSD(hydrons_j,hydrons_));
-%         end
-% 
-%       end
 
       pwstat.Frequency_Pair_p = inf2nan(pwstat.Frequency_Pair_p);
       pwstat.Frequency_Pair = inf2nan(pwstat.Frequency_Pair);

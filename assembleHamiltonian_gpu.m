@@ -17,7 +17,6 @@ useNucB     = theory(6);
 useNucCD    = theory(7);
 useNucEF    = theory(8);
 useNQ       = theory(9);
-useMeanField= false;
 
 % Methyl version 2
 useMethyl = methylMethod>0;
@@ -33,11 +32,11 @@ clusterSize = numel(state_multiplicity);
 %if clusterSize ~= length(Cluster)
 %  error('Cluster reference failure.');
 %end
-I0 = SpinOp(:,:,1);
+% I0 = SpinOp(:,:,1);
 Hnuc = 0;
 Hhf = 0;
 
-E = 1; Z = 2; RAISE = 3; SZ = 4;
+% E = 1; Z = 2; RAISE = 3; SZ = 4;
 Hmf = 0;
 Hmf0 = 0; 
 Hmf0_ = 0;
@@ -54,10 +53,10 @@ for iSpin = 1:clusterSize
   %------------------------------------------------------------------------
 
   % Calculate nuclear Zeeman Hamiltonian
-  [z,p,m] = spinopidx(clusterSize,iSpin);
-  Iz = SpinOp(:,:,z);
-  Ix = (SpinOp(:,:,p) + SpinOp(:,:,m) )/2;
-  Iy = (SpinOp(:,:,p) - SpinOp(:,:,m) )/2i;
+  [ze,pe,me] = spinopidx(clusterSize,iSpin);
+  Iz = SpinOp(:,:,ze);
+  Ix = (SpinOp(:,:,pe) + SpinOp(:,:,me) )/2;
+  Iy = (SpinOp(:,:,pe) - SpinOp(:,:,me) )/2i;
   
   if useNZ
     H_nuclear_Zeeman = tensors(3,3,iSpin+1,iSpin+1)*Iz ...
@@ -102,13 +101,6 @@ for iSpin = 1:clusterSize
     H_nuclear_quadrupole = 0;
   end
   
-  if useMeanField
-    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,E)*I0;
-    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,Z)*Iz;
-    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)*SpinOp(:,:,p);
-    Hmf0 = Hmf0 - MeanFieldCoefficients(iSpin,iSpin,RAISE)'*SpinOp(:,:,m);
-    Hmf = Hmf - MeanFieldCoefficients(iSpin,iSpin,SZ)*I0;
-  end
   
   
   % Assemble single-nucleus terms in nuclear Hamiltonian
@@ -168,7 +160,8 @@ for iSpin = 1:clusterSize
     end
     
     if useMethyl && isMethyl(iSpin) && isMethyl(jSpin) ...
-        && methylID(iSpin) == methylID(jSpin) 
+        && methylID(iSpin) == methylID(jSpin) ...
+      && sum(methylID==methylID(iSpin))==3
       IzJz = SpinOp(:,:,zz);
       IpJm = SpinOp(:,:,rl);
       ImJp = SpinOp(:,:,lr);
@@ -178,20 +171,7 @@ for iSpin = 1:clusterSize
       H_methyl = 0;
     end
     
-    
-    if useMeanField
-      
-      Hmf0_ = MeanFieldCoefficients(jSpin,iSpin,Z)*Iz;
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)*SpinOp(:,:,p);
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(jSpin,iSpin,RAISE)'*SpinOp(:,:,m);
-      
-      [z_,p_,m_] = spinopidx(clusterSize,jSpin);
-      
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,Z)*SpinOp(:,:,z_);
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)*SpinOp(:,:,p_);
-      Hmf0_ = Hmf0_ - MeanFieldCoefficients(iSpin,jSpin,RAISE)'*SpinOp(:,:,m_);
-      
-    end
+   
     
     Hmf0 = Hmf0 + Hmf0_;
     Hnuc = Hnuc + Hnn_A + Hnn_B + Hnn_CD + Hnn_EF + H_methyl;
@@ -279,6 +259,9 @@ if ~isHermA || ~isHermB
     fprintf('  pass = %d.\n',isHerm); disp(hline);
   end
   disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+  test_spinopidx();
+  test_spinopidx2()
+  test_spinops(SpinOp,clusterSize);
   error('Cluster Hamiltonian is not Hermitian.');
 end
 
@@ -384,11 +367,11 @@ end
 function [z,r,l] = spinopidx_v0(clusterSize,iSpin)
 switch clusterSize
   case 1
-    E = 1;
+%     E = 1;
     Z = 2; R = 3; L = 4;
     zrl = [Z R L];
   case 2
-    EE = 1;
+%     EE = 1;
     EZ = 2; ER = 3; EL = 4;
     ZE = 5; RE = 6; LE = 7;
     switch iSpin
@@ -396,7 +379,7 @@ switch clusterSize
       case 2, zrl = [EZ ER EL];
     end
   case 3
-    EEE = 1;
+%     EEE = 1;
     EEZ = 2; EER = 3; EEL = 4;
     EZE = 5; ERE = 6; ELE = 7;
     ZEE = 8; REE = 9; LEE = 10;
@@ -406,7 +389,7 @@ switch clusterSize
       case 1, zrl = [ZEE REE LEE];
     end
   case 4
-    EEEE = 1;
+%     EEEE = 1;
     EEEZ = 2; EEER = 3; EEEL = 4;
     EEZE = 5; EERE = 6; EELE = 7;
     EZEE = 8; EREE = 9; ELEE = 10;
@@ -418,7 +401,7 @@ switch clusterSize
       case 1, zrl = [ZEEE REEE LEEE];
     end
   case 5
-    EEEEE = 1;
+%     EEEEE = 1;
     EEEEZ = 2; EEEER = 3; EEEEL = 4;
     EEEZE = 5; EEERE = 6; EEELE = 7;
     EEZEE = 8; EEREE = 9; EELEE = 10;
@@ -432,7 +415,7 @@ switch clusterSize
       case 1, zrl = [ZEEEE REEEE LEEEE];
     end
   case 6
-    EEEEEE = 1;
+%     EEEEEE = 1;
     EEEEEZ = 2; EEEEER = 3; EEEEEL = 4;
     EEEEZE = 5; EEEERE = 6; EEEELE = 7;
     EEEZEE = 8; EEEREE = 9; EEELEE = 10;
@@ -468,7 +451,7 @@ for clusterSize = 1:6
       fprintf(['\n\nError in spinopidx(): ', ...
         'for cluster size %d, single spin indices are \n'],clusterSize);
       disp(zrl1);
-      disp(['when they should be'])
+      disp('when they should be');
       disp(zrl0);
       error('Error above.');
       
@@ -751,7 +734,7 @@ for clusterSize = 2:6
         fprintf(['\n\nError in spinopidx2(): ', ...
           'for cluster size %d, double spin indices are \n'],clusterSize);
         disp(zrl1)
-        disp(['when they should be'])
+        disp('when they should be');
         disp(zrl0)
         error('Error above.');
       end
@@ -782,4 +765,59 @@ zx = ZX_ + off;
 zy = ZY_ + off;
 zz = ZZ_ + off;
 
+end
+
+
+function test_spinops(SpinOp,clusterSize)
+
+
+for iSpin = 1:clusterSize
+  [ze,pe,me] = spinopidx(clusterSize,iSpin);
+  for jSpin = iSpin+1:clusterSize
+
+
+    [ez,ep,em] = spinopidx(clusterSize,jSpin);
+    [zz,rl,lr,zr,zl,rz,lz,~,~] = spinopidx2(clusterSize,iSpin,jSpin);
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,ze) - 2*commutator(SpinOp(:,:,rz),SpinOp(:,:,lz) ) ...
+      )))==0);
+    
+    assert(max(max(abs( ...
+      SpinOp(:,:,ez) - 2*commutator(SpinOp(:,:,zr),SpinOp(:,:,zl) ) ...
+      )))==0);
+
+    assert(max(max(abs( ...
+      2*SpinOp(:,:,ze) - commutator(SpinOp(:,:,pe),SpinOp(:,:,me) ) ...
+      ) ))==0);
+
+    assert(max(max(abs( ...
+      2*SpinOp(:,:,ez) - commutator(SpinOp(:,:,ep),SpinOp(:,:,em) ) ...
+      ) ))==0);
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,zz) -SpinOp(:,:,ze)*SpinOp(:,:,ez) ...
+      )))==0);
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,rl) -SpinOp(:,:,pe)*SpinOp(:,:,em) ...
+      )))==0)
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,lr) -SpinOp(:,:,ep)*SpinOp(:,:,me) ...
+      )))==0)
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,ep) -SpinOp(:,:,pe) ...
+      ))) ~=0 );
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,em) -SpinOp(:,:,me) ...
+      ))) ~=0 );
+
+    assert(max(max(abs( ...
+      SpinOp(:,:,ez) -SpinOp(:,:,ze) ...
+      ))) ~=0 );
+  end
+end
 end
