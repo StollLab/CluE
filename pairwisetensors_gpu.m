@@ -25,7 +25,8 @@ function [tensors,zeroIndex] = pairwisetensors_gpu(...
           mean_Dipole_z_Z, mean_Dipole_x_iy_Z)
 
 zeroIndex = min(Cluster) - 1;
-Indices = fliplr(Cluster);
+% Indices = fliplr(Cluster);
+Indices = Cluster;
 N = size(Cluster,2);
 tensors = zeros(3,3, N+1,N+1); % nspins by nspins
 
