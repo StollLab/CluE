@@ -30,7 +30,6 @@ if Method.conserveMemory
   % so the settings are modified to reflect what is done.
   
   Method.precalculateHamiltonian = false;
-  Method.HamiltonianType = 'pairwise';
   
 end
 if ~isfield(Method,'getNuclearStatistics')
@@ -39,9 +38,7 @@ end
 if ~isfield(Method,'gpu')
   Method.gpu = false;
 end
-if ~isfield(Method,'vectorized')
-  Method.vectorized = true;
-end
+
 if ~isfield(Method,'exportHamiltonian')
   Method.exportHamiltonian = false;
 end
@@ -352,10 +349,7 @@ end
 if~isfield(Method,'includeAllSubclusters')
   Method.includeAllSubclusters = false;
 end
-% Toggle between calculating the spin Hamiltonian or pairwise couplings.
-if ~isfield(Method,'HamiltonianType')
-  Method.HamiltonianType = 'pairwise';
-end
+
 
 if ~isfield(Method,'precalculateHamiltonian')
   Method.precalculateHamiltonian = false;
@@ -819,9 +813,6 @@ if ~isfield(System.RF, 'nuRF')
 end
 if System.RF.use && any(any( System.Theory(:,7:8)))
   error('Only coherence order 0 dipole-dipole coupling is allowed with RF.');
-end
-if ~isfield(Method,'vectorized')
-  Method.vectorized = false;
 end
 
 if ~isfield(System,'pdbTranslation')
