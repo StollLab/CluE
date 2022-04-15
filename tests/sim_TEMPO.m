@@ -121,8 +121,6 @@ Method.exportHamiltonian = true;
 % parallel computing
 Method.parallelComputing = false;
 
-% Hamiltonian Type
-%Method.HamiltonianType = 'spinTensor';
 Method.partialSave = false;
 %precalculate Hamiltonian or calculate Hamiltonians clusterwise
 Method.precalculateHamiltonian = false;

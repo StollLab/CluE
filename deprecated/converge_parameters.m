@@ -16,7 +16,6 @@ end
 
 if options.pruneClusters
   Method.getClusterContributions = true;
-  Method.getClusterContributions = true;
 end
 
 System.gridSize = 1;

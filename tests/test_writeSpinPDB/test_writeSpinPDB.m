@@ -172,15 +172,11 @@ Method.getNuclearContributions = false;
 % save Hamiltonian as a cell array of 2x2 coupling matrices (bool)
 Method.exportHamiltonian = false;
 
-
-% Hamiltonian Type
-%Method.HamiltonianType = 'spinTensor';
 Method.partialSave = true;
 %precalculate Hamiltonian or calculate Hamiltonians clusterwise
 Method.precalculateHamiltonian = false;
 
 Method.conserveMemory = false;
-Method.vectorized = true;
 
 Method.gpu = false;
 

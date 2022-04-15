@@ -22,7 +22,7 @@ function [tensors,zeroIndex] = pairwisetensors(Nuclei_g, Nuclei_Coordinates,...
   Cluster,HF_tensor, magneticField, ge, geff, muB, muN, mu0, hbar,theory,MethylID)
 
 zeroIndex = min(Cluster) - 1;
-Indices = fliplr(Cluster);
+Indices = fliplr(Cluster);  % possibly a bug (see pairwiseTensors_gpu)
 N = size(Cluster,2);
 tensors = zeros(3,3, N+1,N+1); % nspins by nspins
 MethylSelectionRules = [0,0,0;0,0,0;0,0,1];
