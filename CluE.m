@@ -700,7 +700,7 @@ uncertainty = [];
 if ~isempty(OutputData)
  
   T = array2table([experiment_time',SignalMean']);
-  T.Properties.VariableNames(1:2) = {'time(s)','signal'};
+  T.Properties.VariableNames(1:2) = {'time','signal'};
   writetable(T,[OutputData(1:end-4) , '.csv']);
 
   switch Data.saveLevel

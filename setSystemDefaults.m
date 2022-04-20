@@ -624,7 +624,7 @@ if ~isfield(System,'theory')
   end
   
   if ~isfield(System,'hyperfine')
-    System.hyperfine = [true false];
+    System.hyperfine = [true true];
   end
   
   if ~isfield(System,'nuclear_dipole')
