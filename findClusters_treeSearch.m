@@ -124,6 +124,19 @@ for clusterSize = 2:order
   
   % Remove duplicates
   keep = [true; any(C(1:end-1,:)~=C(2:end,:),2)];
+
+  % 
+  useCompleteGraph = strcmp(Method.graphCriterion,'complete');
+  if useCompleteGraph && clusterSize > 2
+    for iCluster = 1:size(C,1)
+      if ~keep(iCluster), continue; end
+      
+      Cluster = C(iCluster,:);
+      keep(iCluster) = validateCluster(Cluster,Adjacency,useCompleteGraph);
+
+    end
+  end
+
   if ~isempty(C)
     
     Clusters{clusterSize} = C(keep,:);

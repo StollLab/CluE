@@ -6,7 +6,11 @@ if clusterSize == 1
   return;
 end
 
-Adjacency = Nuclei_ValidPair(Cluster,Cluster,clusterSize);
+if size(Nuclei_ValidPair,3) >= clusterSize
+  Adjacency = Nuclei_ValidPair(Cluster,Cluster,clusterSize);
+else
+  Adjacency = Nuclei_ValidPair(Cluster,Cluster,end);
+end
 
 if all(Adjacency(:)==0)
   isvalid = false;
