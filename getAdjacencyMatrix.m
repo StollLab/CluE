@@ -26,10 +26,10 @@ for isize = 1:Method.extraOrder
         
       case 'modulation'
         if Ori_cutoffs
-          Min_Mod_ = pwstat.ModulationDepth >= Method.cutoff.modulation(isize);
+          Min_Mod_ = pwstat.Modulation_Depth >= Method.cutoff.modulation(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Mod_;
         else
-          Min_Mod_ = pwstat.ModulationDepth_p ...
+          Min_Mod_ = pwstat.Modulation_Depth_p ...
             >= Method.cutoff.modulation(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Mod_;
         end
@@ -103,10 +103,10 @@ for isize = 1:Method.extraOrder
         if Ori_cutoffs
           DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
           Min_DeltaA_ = abs(DeltaHyperfine) ...
-            > Method.cutoff.hyperfine_inf(isize);
-          Max_DeltaA_ = abs(DeltaHyperfine) ...
-            < Method.cutoff.hyperfine_sup(isize);
-          Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+            > Method.cutoff.DeltaHyperfine(isize);
+          %Max_DeltaA_ = abs(DeltaHyperfine) ...
+          %  < Method.cutoff.hyperfine_sup(isize);
+          Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_;%.*Max_DeltaA_;
           clear('DeltaHyperfine');
         else
           DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular ...

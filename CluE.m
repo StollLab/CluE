@@ -66,7 +66,7 @@ Progress.complete = false;
 Progress.Completed_Orders = zeros(1,Method.order);
 
 % Save if filename is provided.
-if ~isempty(OutputData)
+if ~isempty(OutputData) && Data.saveLevel>=0
   Input.System = System;
   Input.Method = Method;
   Input.Data = Data;

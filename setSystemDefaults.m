@@ -188,6 +188,23 @@ if isfield(Method.cutoff, 'minAmax') && numel(Method.cutoff.minAmax) < Method.or
   n_ = numel(Method.cutoff.minAmax);
   Method.cutoff.minAmax(n_:Method.order) = Method.cutoff.minAmax(n_);
 end
+if isfield(Method.cutoff, 'minimum_frequency') ...
+ && numel(Method.cutoff.minimum_frequency) < Method.order
+  n_ = numel(Method.cutoff.minimum_frequency);
+  Method.cutoff.minimum_frequency(n_:Method.order) ...
+  = Method.cutoff.minimum_frequency(n_);
+end
+if isfield(Method.cutoff, 'modulation') ...
+ && numel(Method.cutoff.modulation) < Method.order
+  n_ = numel(Method.cutoff.modulation);
+  Method.cutoff.modulation(n_:Method.order) = Method.cutoff.modulation(n_);
+end
+if isfield(Method.cutoff, 'DeltaHyperfine') ...
+ && numel(Method.cutoff.DeltaHyperfine) < Method.order
+  n_ = numel(Method.cutoff.DeltaHyperfine);
+  Method.cutoff.DeltaHyperfine(n_:Method.order) ...
+   = Method.cutoff.DeltaHyperfine(n_);
+end
 
 if numel(Method.cutoff.bAmax) < Method.order
   n_ = numel(Method.cutoff.bAmax);

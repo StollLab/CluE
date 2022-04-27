@@ -772,6 +772,10 @@ for itype = 1:numberParticleClasses_
     resName = particles_{itype}.resName;
     for jpdb=sameMoleculeList'
       
+      if ~strcmp(pdb_.resName(jpdb),resName)
+        continue;
+      end
+      
       if ~isParticleWithinSystem(r0_, jpdb, cellShifts_(:,uc),true), continue; end
       
       % Get particleEnum and associatedParticles.
@@ -2916,6 +2920,7 @@ pruneSystem();
 % Set coordinates.  
 setCoordinates();
 
+% TO DO: move setMethyls() to after setIsotopologue().
 % Set methyls.
 setMethyls();
 
