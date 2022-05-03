@@ -7,6 +7,18 @@ if (N < 1)
   error('The parameter N >= 1.')
 end
 
+if strcmp(savefile(1:8),'tempIMC_')
+  error('Save file name cannot start with "tempIMC_".');
+end
+
+if strcmp(savefile(end-3:end),'.mat')
+  filename = savefile(1:end-4);
+else
+  filename = savefile;
+  savefile = [savefile,'.mat'];
+end
+
+
 
 if ~isfield(options,'saveEveryN')
   options.saveEveryN = dN;
@@ -134,18 +146,22 @@ if ~progress(INITIAL_TRIALS)
       temp_signals = signals(indices,:);
       temp_twotau = -1*ones(size(signals(indices,:)));
       temp_TM = TM(indices);
-      temp_statistics = {statistics{indices}};
+      temp_statistics = statistics(indices); % = {statistics{indices}};
       parfor ii=1:N_
         
         Method_ = Method;
         Method_.seed = nextSeed(ii);
         
+        Data_ = Data;
+        Data_.OutputData ...
+        = ['tempIMC_',num2str(ii),'_',num2str(Method_.seed),'.mat'];
+          
         fprintf('Setting Method.seed to %d.\n',Method_.seed)
         
         fprintf('Running initial trial %d/%d.\n', indices(ii),N);
         [temp_signals(ii,:),temp_twotau(ii,:),...
             temp_TM(ii),~,~,temp_statistics{ii}] ...
-            = CluE(System,Method_,Data);
+            = CluE(System,Method_,Data_);
         
       end
       
@@ -167,10 +183,15 @@ if ~progress(INITIAL_TRIALS)
         
         Method.seed = nextSeed(ind_);
         
+        Data_ = Data;
+        Data_.OutputData ...
+        = ['tempIMC_',num2str(ii),'_',num2str(Method.seed),'.mat'];
+          
         fprintf('Setting Method.seed to %d.\n',Method.seed)
         
         fprintf('Running initial trial %d/%d.\n', ii,N);
-        [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
+        [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] ...
+         = CluE(System,Method,Data_);
         
         saveCounter = saveCounter + 1;
         
@@ -224,17 +245,21 @@ if ~progress(CONVERGENCE_TRIALS)
         
         temp_signals = signals(indices,:);
         temp_TM = TM(indices);
-        temp_statistics = {statistics{indices}};
+        temp_statistics = statistics(indices); % = {statistics{indices}};
         parfor ii=1:dN
           
           Method_ = Method;
           Method_.seed = nextSeed(ii);
           
-          fprintf('Setting Method.seed to %d.\n',Method_.seed)
+          Data_ = Data;
+          Data_.OutputData ...
+          = ['tempIMC_',num2str(ii),'_',num2str(Method_.seed),'.mat'];
           
-          
+          fprintf('Setting Method.seed to %d.\n',Method_.seed) 
           fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
-          [temp_signals(ii,:),~,temp_TM(ii),~,~,temp_statistics{ii}] = CluE(System,Method_,Data);
+
+          [temp_signals(ii,:),~,temp_TM(ii),~,~,temp_statistics{ii}] ...
+          = CluE(System,Method_,Data_);
           
         end
         
@@ -256,8 +281,13 @@ if ~progress(CONVERGENCE_TRIALS)
           fprintf('Setting Method.seed to %d.\n',Method.seed)
           
           
+          Data_ = Data;
+          Data_.OutputData ...
+          = ['tempIMC_',num2str(ii),'_',num2str(Method.seed),'.mat'];
+          
           fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
-          [signals(ii,:),~,TM(ii),~,~,statistics{ii}] = CluE(System,Method,Data);
+          [signals(ii,:),~,TM(ii),~,~,statistics{ii}] ...
+            = CluE(System,Method,Data_);
           
           saveCounter = saveCounter + 1;
           
@@ -319,13 +349,13 @@ if ~progress(CONVERGENCE_TRIALS)
     save(savefile,'-v7.3');
   end
 end
-if exist('v1')
+if exist('v1','var')
   clear('v1');
 end
-if exist('v2')
+if exist('v2','var')
   clear('v2');
 end
-if exist('v3')
+if exist('v3','var')
   clear('v3');
 end
 if options.concentration_1H
@@ -368,18 +398,54 @@ if options.concentration_1H
     /number_samples;
   mean_number_2H = (number_2H_exchangeable + number_2H_nonExchangeable)...
     /number_samples;
-  volume = 4*pi/3*System.radius^3;
-  concentration_1H_number_per_m3 = mean_number_1H/volume;
+  volume_m3 = 4*pi/3*System.radius^3;
+  concentration_1H_number_per_m3 = mean_number_1H/volume_m3;
   avogadro= 6.022140857e23;
   concentration_1H_Molar = concentration_1H_number_per_m3/avogadro/1000; 
   %   mean_number_H = number_1H + number_2H;
   %   mean_proton_fraction = number_1H/number_H;
   %   mean_deuteron_fraction = number_2H/number_H;
+  
+  T = array2table([number_samples,...
+                   number_1H_exchangeable/number_samples,...
+                   number_1H_nonExchangeable/number_samples,...
+                   mean_number_1H,...
+                   number_2H_exchangeable/number_samples,...
+                   number_2H_nonExchangeable/number_samples,...
+                   mean_number_2H,...
+                   volume_m3,...
+                   concentration_1H_Molar]);
+
+  T.Properties.VariableNames(1:9) = {...
+                  'number_samples',...
+                  'mean_1H_exchangeable',...
+                  'mean_1H_nonExchangeable',...
+                  'mean_number_1H',...
+                  'mean_2H_exchangeable',...
+                  'mean_2H_nonExchangeable',...
+                  'mean_number_2H',...
+                  'volume_m3',...
+                  'concentration_1H_Molar'};
+
+  writetable(T,[filename , '_H_info.csv']);
+
 end
+
+
 SignalMean = mean(signals,1);
 SignalMean = SignalMean/SignalMean(1);
 if options.parallelComputing
   delete(pool)
 end
 save(savefile,'-v7.3');
+
+T = array2table([twotau',SignalMean']);                               
+T.Properties.VariableNames(1:2) = {'time','signal'};                           
+writetable(T,[filename , '.csv']);
+
+
+% Delete temporary files.
+delete('tempIMC_*');
+
+
 end
