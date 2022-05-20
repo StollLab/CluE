@@ -212,7 +212,7 @@ if ~progress(CONVERGENCE_TRIALS)
         
         
         temp_signals = signals(indices,:);
-        temp_TM = TM(indices);
+        %temp_TM = TM(indices);
         temp_statistics = statistics(indices); % = {statistics{indices}};
         parfor ii=1:dN
           
@@ -226,13 +226,13 @@ if ~progress(CONVERGENCE_TRIALS)
           fprintf('Setting Method.seed to %d.\n',Method_.seed) 
           fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
 
-          [temp_signals(ii,:),~,temp_TM(ii),~,~,temp_statistics{ii}] ...
+          [temp_signals(ii,:),~,~,~,~,temp_statistics{ii}] ...
           = CluE(System,Method_,Data_);
           
         end
         
         signals(indices,:) = temp_signals;
-        TM(indices) = temp_TM;
+        %TM(indices) = temp_TM;
         for ii=1:dN
           statistics{indices(ii)} = temp_statistics{ii};
         end
@@ -254,7 +254,7 @@ if ~progress(CONVERGENCE_TRIALS)
           = ['tempIMC_',num2str(ii),'_',num2str(Method.seed),'.mat'];
           
           fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
-          [signals(ii,:),~,TM(ii),~,~,statistics{ii}] ...
+          [signals(ii,:),~,~,~,~,statistics{ii}] ...
             = CluE(System,Method,Data_);
           
           saveCounter = saveCounter + 1;
@@ -267,17 +267,21 @@ if ~progress(CONVERGENCE_TRIALS)
         end
       end
     end
-    % Find the overall mean signal, and TM.
-    v3 = mean(signals(1:ii,:),1);
-    TM(ii) = getTM(twotau,v3);
-    
-    fprintf('TM  = %d us.\n',TM(ii)*1e6);
+    try
+      % Find the overall mean signal, and TM.
+      v3 = mean(signals,1);
+      v3 = v3./v3(1);
+      TM_v3 = getTM(twotau,v3);
+    catch
+      TM_v3 = inf;
+    end
+    fprintf('TM  = %d us.\n',TM_v3*1e6);
     save(savefile,'-v7.3');
     % Partition trials into two qual parts.
     N_ = (N+dN);
     
     
-    sele = twotau <= options.metric_number_TM*TM(ii);
+    sele = twotau <= options.metric_number_TM*TM_v3;
     % Get measure of difference.
     eta = 0;
     for ii = 1:N_ave
@@ -311,7 +315,7 @@ if ~progress(CONVERGENCE_TRIALS)
       
       % Initialize memory.
       signals(N+dN,:) = 0;
-      TM(N+dN) = 0;
+      %TM(N+dN) = 0;
       statistics{N+dN} = {};
       
       conNum = conNum + 1;
