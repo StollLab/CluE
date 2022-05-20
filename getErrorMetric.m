@@ -64,7 +64,13 @@ switch metric
     TM1 = getTM(t1,v1);
     TM2 = getTM(t2,v2);
     eta = abs( (TM1-TM2)/TM1);
-    
+
+  case 'max(rms,1/e)'   
+    eta_rms = sqrt(mean(  abs(v1-v2).^2   ));
+    TM1 = getTM(t1,v1);
+    TM2 = getTM(t2,v2);
+    eta_e = abs( 2*(TM1-TM2)/(TM1+TM2) );
+    eta = max(eta_rms,eta_e);
 end
 
 end

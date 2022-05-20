@@ -1,4 +1,6 @@
-function [signals,TM,statistics,twotau] = isotopeMonteCarlo(System,Method,Data, savefile,N,dN,threshold,options)
+function [signals,TM,statistics,twotau] = isotopeMonteCarlo(...
+    System,Method,Data,...
+    savefile,N,dN,threshold,options)
 
 if (dN < 1)
   error('The parameter dN >= 1.')
@@ -19,55 +21,20 @@ else
 end
 
 
+options = getIMC_options(...
+    System,Method,Data,...
+    savefile,N,dN,threshold,options);
 
-if ~isfield(options,'saveEveryN')
-  options.saveEveryN = dN;
-end
-if ~isfield(options,'maxN')
-  options.maxN = inf;
-end
-if ~isfield(options,'N_ave')
-  options.N_ave = 1000;
-end
 
-if ~isfield(options,'newProgress')
-  options.newProgress = [];
-end
-if ~isfield(options,'metric')
-  options.metric = 'rms';
-end
-if ~isfield(options,'vmin')
-  options.vmin = exp(-5);
-end
-if ~isfield(options,'seed')
-  options.seed = 42;
-end
 if ~isempty(options.seed)
   fprintf('Using rng seed to options.seed = %d.\n',options.seed)
   rng(options.seed);
 end
-if ~isfield(options,'parallelComputing')
-  options.parallelComputing = false;
-end
-if isfield(Method,'parallelComputing') && Method.parallelComputing && options.parallelComputing
-  error('Method.parallelComputing & options.parallelComputing cannot both be true.')
-end
 
-if ~isfield(options,'numCores')
-  options.numCores = feature('numcores');
-end
 if options.parallelComputing
   delete(gcp('nocreate'));
   pool = parpool(options.numCores);
 end
-
-if ~isfield(options,'conserveMemory')
-  options.conserveMemory = true;
-end
-if ~isfield(options,'concentration_1H')
-  options.concentration_1H = true;
-end
-
 % Set RNG to ensure that repeats on the same initial conditions
 % give identical results. 
 iMax = 2^20;
@@ -95,7 +62,8 @@ saveCounter = 0;
 doReset = true;
 
 % Try to continue from canceled run.
-if isfile(savefile) && ~(isfield(Data,'overwriteLevel') && Data.overwriteLevel ==2 )
+if isfile(savefile) ...
+ && ~(isfield(Data,'overwriteLevel') && Data.overwriteLevel ==2 )
   try
     load(savefile,'signals','progress','TM','N','twotau','statistics');
     disp('Save data loaded.');
@@ -112,7 +80,7 @@ if doReset
   signals = zeros(2*N,System.timepoints);
   TM = zeros(1,2*N);
   statistics = cell(1,2*N);
- end
+end
 
 % ENUM
 INITIAL_TRIALS = 1;  CONVERGENCE_TRIALS = 2;
@@ -309,6 +277,7 @@ if ~progress(CONVERGENCE_TRIALS)
     N_ = (N+dN);
     
     
+    sele = twotau <= options.metric_number_TM*TM(ii);
     % Get measure of difference.
     eta = 0;
     for ii = 1:N_ave
@@ -318,7 +287,10 @@ if ~progress(CONVERGENCE_TRIALS)
       v1 = mean(  signals(  perm( 1:ceil(N_/2)    ) ,: ) , 1);
       v2 = mean(  signals(  perm( ( ceil(N_/2) + 1 ) :N_ ) ,: ) , 1);
       
-      eta = eta + getErrorMetric(v1,v2,options.metric,twotau,twotau,options)/N_ave;
+      eta = eta + getErrorMetric(...
+          v1(sele),v2(sele),options.metric,...
+          twotau(sele),twotau(sele),...
+          options)/N_ave;
     end
     fprintf('eta  = %d.\n',eta);
     
@@ -449,3 +421,58 @@ delete('tempIMC_*');
 
 
 end
+
+
+function options = getIMC_options(...
+    System,Method,Data,...
+    savefile,N,dN,threshold,options)
+
+if ~isfield(options,'saveEveryN')
+  options.saveEveryN = dN;
+end
+if ~isfield(options,'maxN')
+  options.maxN = inf;
+end
+if ~isfield(options,'N_ave')
+  options.N_ave = 1000;
+end
+
+if ~isfield(options,'newProgress')
+  options.newProgress = [];
+end
+if ~isfield(options,'metric')
+  options.metric = 'rms';
+end
+if ~isfield(options,'metric_number_TM')
+options.metric_number_TM = inf;
+end
+if ~isfield(options,'vmin')
+  options.vmin = exp(-5);
+end
+if ~isfield(options,'seed')
+  options.seed = 42;
+end
+if ~isfield(options,'parallelComputing')
+  options.parallelComputing = false;
+end
+if isfield(Method,'parallelComputing') ...
+ && Method.parallelComputing ...
+ && options.parallelComputing
+  error(...
+   'Method.parallelComputing & options.parallelComputing cannot both be true.')
+end
+
+if ~isfield(options,'numCores')
+  options.numCores = feature('numcores');
+end
+
+if ~isfield(options,'conserveMemory')
+  options.conserveMemory = true;
+end
+if ~isfield(options,'concentration_1H')
+  options.concentration_1H = true;
+end
+
+
+end  
+
