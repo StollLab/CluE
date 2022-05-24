@@ -283,6 +283,15 @@ if Method.parallelComputing
   numCores = min(feature('numcores'), Method.numberCores);
   
   % create parallel pool
+  pc = parcluster('local');
+
+  if isfield(Method,'JobStorageLocation')
+    pc.JobStorageLocation = options.JobStorageLocation;
+  elseif Method.slurm
+    pc.JobStorageLocation = ...
+      strcat(getenv('SCRATCH'),'/', getenv('SLURM_JOB_ID'));
+  end 
+
   pool = parpool(numCores);
 else
   pool = [];

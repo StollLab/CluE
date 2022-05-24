@@ -21,9 +21,7 @@ else
 end
 
 
-options = getIMC_options(...
-    System,Method,Data,...
-    savefile,N,dN,threshold,options);
+options = getIMC_options(Method,dN,options);
 
 
 if ~isempty(options.seed)
@@ -33,7 +31,17 @@ end
 
 if options.parallelComputing
   delete(gcp('nocreate'));
-  pool = parpool(options.numCores);
+
+  pc = parcluster('local');
+
+  if isfield(options,'JobStorageLocation')
+    pc.JobStorageLocation = options.JobStorageLocation;
+  elseif options.slurm
+    pc.JobStorageLocation = ...
+      strcat(getenv('SCRATCH'),'/', getenv('SLURM_JOB_ID'));
+  end 
+
+  pool = parpool(pc,options.numCores);
 end
 % Set RNG to ensure that repeats on the same initial conditions
 % give identical results. 
@@ -428,8 +436,7 @@ end
 
 
 function options = getIMC_options(...
-    System,Method,Data,...
-    savefile,N,dN,threshold,options)
+    Method,dN,options)
 
 if ~isfield(options,'saveEveryN')
   options.saveEveryN = dN;
@@ -459,6 +466,11 @@ end
 if ~isfield(options,'parallelComputing')
   options.parallelComputing = false;
 end
+
+if ~isfield(options,'slurm')
+  options.slurm = false;
+end
+
 if isfield(Method,'parallelComputing') ...
  && Method.parallelComputing ...
  && options.parallelComputing
