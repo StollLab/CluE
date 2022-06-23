@@ -229,7 +229,7 @@ particles_{numberParticleClasses_}.barrierPotential = 0;
 particles_{numberParticleClasses_}.doRandomIsotopes = [];
 particles_{numberParticleClasses_}.exchangeable = true;
 particles_{numberParticleClasses_}.gFactor = 0;
-particles_{numberParticleClasses_}.hf_Azz = 0;
+particles_{numberParticleClasses_}.hf_Tzz = 0;
 particles_{numberParticleClasses_}.hf_FermiContact = 0;
 particles_{numberParticleClasses_}.hf_x = {};
 particles_{numberParticleClasses_}.hf_y = {};
@@ -401,7 +401,7 @@ Nuclei.valid = true(1,number_-1);
 % Nuclei.hyperfine2lab = sparse(3*3,num_);
 Nuclei.Atensor = sparse(number_-1,9);
 Nuclei.FermiContact = sparse(number_-1,1);
-Nuclei.Azz = sparse(number_-1,1);
+ Nuclei.hf_Tzz = sparse(number_-1,1);
 Nuclei.associatedParticleMatrix = associatedParticleMatrix_;
 Nuclei.associatedParticleMatrix(...
   find(nonzeros(Nuclei.associatedParticleMatrix)));
@@ -453,7 +453,7 @@ for iparticle = 2:number_
     Nuclei.Qtensor(:,:,iNuc) = particles_{itype}.Qtensor{idx};
   end
   
-  if particles_{itype}.hf_Azz ~= 0 || particles_{itype}.hf_FermiContact ~= 0
+  if particles_{itype}.hf_Tzz ~= 0 || particles_{itype}.hf_FermiContact ~= 0
     idx = particles_{itype}.members==iparticle;
     Nuclei.Atensor(iNuc,:) = particles_{itype}.Atensor{idx}(:);
   end
@@ -1044,7 +1044,7 @@ Nuclei.isSolvent(Nuclei.number+1:end) = [];
 % Nuclei.hyperfine2lab(:,Nuclei.number+1:end) = [];
 Nuclei.Atensor(Nuclei.number+1:end,:) = [];
 Nuclei.FermiContact(Nuclei.number+1:end) = [];
-Nuclei.Azz(Nuclei.number+1:end) = [];
+ Nuclei.hf_Tzz(Nuclei.number+1:end) = [];
 
 
 
@@ -1096,7 +1096,7 @@ if System.doPruneNuclei
 %     Nuclei.hyperfine2lab = Nuclei.hyperfine2lab(:,keep);
     Nuclei.Atensor = Nuclei.Atensor(keep,:);
     Nuclei.FermiContact = Nuclei.FermiContact(keep);
-    Nuclei.Azz = Nuclei.Azz(keep);
+     Nuclei.hf_Tzz =  Nuclei.hf_Tzz(keep);
 
   % get number of nuclei
   try
@@ -2694,8 +2694,10 @@ switch particleEnum
       %J. Phys. Chem. A 2001, 105 (49), 10967–10977.
       % https:%doi.org/10.1021/jp0116914.
       
-      particles_{particleIndex}.hf_FermiContact = 31.528e+06; %Hz
-      particles_{particleIndex}.hf_Azz = 90.801e+06; % Hz
+      %particles_{particleIndex}.hf_FermiContact = 31.528e+06; %Hz
+      %particles_{particleIndex}.hf_Tzz = 90.801e+06; % Hz
+      particles_{particleIndex}.hf_FermiContact = 45.176e+07; %Hz
+      particles_{particleIndex}.hf_Tzz = 58.180e+06; % Hz
       
       particles_{particleIndex}.hf_x = 'bonded 1-2'; % C--C
       particles_{particleIndex}.hf_y = 'bonded 0-3'; % N-O bond
@@ -2812,8 +2814,8 @@ for iopt=1:4:Nopt
         particles_{particleIndex}.doRandomIsotopes = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'exchangeable')
         particles_{particleIndex}.exchangeable = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'hf_Azz')
-        particles_{particleIndex}.hf_Azz = particleOptions{iopt+3};
+      elseif strcmp(particleOptions{iopt+2},'hf_Tzz')
+        particles_{particleIndex}.hf_Tzz = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'hf_FermiContact')
         particles_{particleIndex}.hf_FermiContact = particleOptions{iopt+3};
       elseif strcmp(particleOptions{iopt+2},'hf_x')
@@ -2998,7 +3000,7 @@ function setHyperfine()
   
   for itype=1:numberParticleClasses_
     
-    if particles_{itype}.hf_Azz==0 && particles_{itype}.hf_FermiContact == 0
+    if particles_{itype}.hf_Tzz==0 && particles_{itype}.hf_FermiContact == 0
       continue;
     end
     
@@ -3009,10 +3011,10 @@ function setHyperfine()
         particles_{itype}.members(imem));
       
       
-      Azz = particles_{itype}.hf_Azz;
+      Tzz = particles_{itype}.hf_Tzz;
       fc = particles_{itype}.hf_FermiContact;
       
-      Atensor_A = eye(3)*fc + diag(Azz/2*[-1,-1,2]);
+      Atensor_A = eye(3)*fc + diag(Tzz/2*[-1,-1,2]);
       Atensor_L = R_A2L'*Atensor_A*R_A2L;
       
       particles_{itype}.Atensor{imem} = Atensor_L;

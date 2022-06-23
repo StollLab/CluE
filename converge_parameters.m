@@ -49,6 +49,10 @@ if isfile([Data.OutputData,'.mat'])
   end
 end
 if calculate_signal
+  if options.lockDeltaA2b
+    Method.cutoff.DeltaHyperfine = ...
+     options.lockDeltaA2bRatio*Method.cutoff.dipole;
+  end
   [SignalMean, ~, TM_powder_,~,~,uncertainty] = CluE(System,Method,Data);
 end
 Npreload = 16;
@@ -128,7 +132,12 @@ while ~is_converged
     end
   end
   if calculate_signal
-    [SignalMean, experiment_time, TM_powder,~,~,uncertainty] = CluE(System,Method,Data);
+    if options.lockDeltaA2b
+      Method.cutoff.DeltaHyperfine = ...
+       options.lockDeltaA2bRatio*Method.cutoff.dipole;
+    end
+    [SignalMean, experiment_time, TM_powder,~,~,uncertainty] = ...
+     CluE(System,Method,Data);
   end
   
   % Store data.
@@ -138,7 +147,8 @@ while ~is_converged
   if strcmp(nextCutoff,'pseudograd')
     eta = uncertainty.err_norm(Method.order);
   else
-    eta = getErrorMetric(v(ID_Ref,:),v(ID,:),metric,experiment_time,experiment_time,options);
+    eta = getErrorMetric(...
+        v(ID_Ref,:),v(ID,:),metric,experiment_time,experiment_time,options);
   end
   Eta(cutoff.ID) = eta;
   
@@ -318,6 +328,14 @@ if ~isfield(options.limit,'dipole')
   options.limit.dipole = -15; 
 end
 
+if ~isfield(options,'lockDeltaA2b')
+  options.lockDeltaA2b = false;
+end
+
+if options.lockDeltaA2b && ~isfield(options,'lockDeltaA2bRatio')
+  options.lockDeltaA2bRatio = 1;
+end
+
 if ~isfield(options,'usePseudoGrad')
   options.usePseudoGrad = false;
 end
@@ -425,7 +443,13 @@ end
 
 end
 
-function [System, Method, cutoff]= adjustCutoff(direction_str,System0, Method0,cutoff0,nextCutoff,uncertainty)
+function [System, Method, cutoff]= adjustCutoff(...
+    direction_str,...
+    System0, ...
+    Method0,...
+    cutoff0,...
+    nextCutoff,...
+    uncertainty)
 System = System0;
 Method = Method0;
 cutoff = cutoff0;

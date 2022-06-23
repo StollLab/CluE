@@ -129,7 +129,7 @@ num_ = Npdb*numberUnitCells;
 % Nuclei.hyperfine2lab = sparse(3*3,num_);
 Nuclei.Atensor = sparse(num_,9);
 Nuclei.FermiContact = sparse(num_,1);
-Nuclei.Azz = sparse(num_,1);
+ Nuclei.hf_Tzz = sparse(num_,1);
 
 Nuclei.number_1H_exchangeable = 0;
 Nuclei.number_1H_nonExchangeable = 0;
@@ -267,7 +267,7 @@ Nuclei.isSolvent(Nuclei.number+1:end) = [];
 % Nuclei.hyperfine2lab(:,Nuclei.number+1:end) = [];
 Nuclei.Atensor(Nuclei.number+1:end,:) = [];
 Nuclei.FermiContact(Nuclei.number+1:end) = [];
-Nuclei.Azz(Nuclei.number+1:end) = [];
+ Nuclei.hf_Tzz(Nuclei.number+1:end) = [];
 
 
 
@@ -319,7 +319,7 @@ if System.doPruneNuclei
 %     Nuclei.hyperfine2lab = Nuclei.hyperfine2lab(:,keep);
     Nuclei.Atensor = Nuclei.Atensor(keep,:);
     Nuclei.FermiContact = Nuclei.FermiContact(keep);
-    Nuclei.Azz = Nuclei.Azz(keep);
+     Nuclei.hf_Tzz =  Nuclei.hf_Tzz(keep);
 
   % get number of nuclei
   try
@@ -734,8 +734,10 @@ elseif strcmp(type,'N') && System.nitrogen  && ~System.limitToSpinHalf
         % 95-GHz EPR Spectroscopy and DFT Calculations.
         %J. Phys. Chem. A 2001, 105 (49), 10967–10977.
         % https://doi.org/10.1021/jp0116914.
-        Nuclei.FermiContact(iNuc) = 31.528e+06; %Hz
-        Nuclei.Azz(iNuc) = 90.801e+06; % Hz
+        %Nuclei.FermiContact(iNuc) = 31.528e+06; %Hz
+        % Nuclei.hf_Tzz(iNuc) = 90.801e+06; % Hz
+        Nuclei.FermiContact(iNuc) = 45.176e+06; %Hz
+         Nuclei.hf_Tzz(iNuc) = 58.180e+06; % Hz
         
         
         if isempty(Conect)
@@ -759,7 +761,7 @@ elseif strcmp(type,'N') && System.nitrogen  && ~System.limitToSpinHalf
           end
         end
         zQ = cross(xQ,yQ);
-        Atensor_L = setHyperfineTensor(Nuclei.Azz(iNuc),...
+        Atensor_L = setHyperfineTensor( Nuclei.hf_Tzz(iNuc),...
           Nuclei.FermiContact(iNuc),zQ,xQ,iNuc,Nuclei);
         Nuclei.Atensor(iNuc,:) = Atensor_L(:)';
 
