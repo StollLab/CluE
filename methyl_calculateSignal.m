@@ -10,7 +10,6 @@ muB = System.muB;  muN = System.muN;  mu0 = System.mu0; hbar = System.hbar;
 magneticField = System.magneticField;
 nPoints = sum(System.nPoints);
 dt1 = System.dt(1);
-%t0 = System.t0;
 dt2 = System.dt(2);
 N1 = System.N(1);
 maxSize = 6;
