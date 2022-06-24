@@ -4,7 +4,7 @@ function [System, Tensors, Nuclei,Clusters] = setUpSystem(System,Data)
 tic
 Method = [];
 % set defaults base on specified parameters and for unspecified parameters
-[System, Method, Data] = setSystemDefaults(System,Method,Data);
+[System, Method, Data] = setDefaults(System,Method,Data);
 
 if isfield(System,'Alpha')
   Alpha = System.Alpha;

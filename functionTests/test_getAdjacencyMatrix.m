@@ -25,7 +25,7 @@ System.isUnitCell = false;
 
 Method.order = 2;
 
-[System, Method, Data] = setSystemDefaults(System,Method,Data);
+[System, Method, Data] = setDefaults(System,Method,Data);
 pdb = parsePDBfile(Data.InputData, System.angstrom);
 [Nuclei, System] = centralSpinSystem(System,Method,Data,pdb);
 Nuclei.Statistics = getPairwiseStatistics(System, Method, Nuclei);
@@ -102,7 +102,7 @@ System.isUnitCell = false;
 
 Method.order = 2;
 
-[System, Method, Data] = setSystemDefaults(System,Method,Data);
+[System, Method, Data] = setDefaults(System,Method,Data);
 pdb = parsePDBfile(Data.InputData, System.angstrom);
 [Nuclei, System] = centralSpinSystem(System,Method,Data,pdb);
 Nuclei.Statistics = getPairwiseStatistics(System, Method, Nuclei);

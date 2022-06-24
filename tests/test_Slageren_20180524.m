@@ -13,7 +13,7 @@
   System.X = 37; % atom # 37. %[10.511   1.417   7.252]*1e-10-System.Electron.Coordinates; %R_O37 - R_el.
   %System.averaging = 'xy';
   % Method ================================================================
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   Method.r0 = 10e-10; % m.
   Method.order = 2;
   Method.verbose = true;

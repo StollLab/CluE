@@ -11,12 +11,12 @@ muB = System.muB;  muN = System.muN;  mu0 = System.mu0; hbar = System.hbar;
 
 % Extract experimental parameters.
 magneticField = System.magneticField;
-timepoints = System.timepoints;
-dt = System.dt;
-t0 = System.t0;
-dt2 = System.dt2;
-Ndt = System.Ndt;
- 
+nPoints = sum(System.nPoints);
+dt = System.dt(1);
+%t0 = System.t0;
+dt2 = System.dt(2);
+N1 = System.nPoints(1);
+
 B1x =  System.RF.B1x;
 B1y =  System.RF.B1y;
 nuRF = System.RF.nuRF;
@@ -169,7 +169,7 @@ methylMethod1 = System.Methyl.method==0;
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method_order, numberClusters, ...
-  Nuclei.rotationalMatrix,timepoints^dimensionality,methylMethod1,...
+  Nuclei.rotationalMatrix,nPoints^dimensionality,methylMethod1,...
   lockRotors,System.Methyl.methylMethylCoupling,maxSize);
 
 
@@ -529,27 +529,27 @@ for clusterSize = 1:Method_order
       switch clusterSize
         case 1
           Coherences_1(iCluster,:) = Coherences_1(iCluster,:)  +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+            propagate(total_time,nPoints,dt,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
             EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 2
           Coherences_2(iCluster,:) = Coherences_2(iCluster,:)  + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+            propagate(total_time,nPoints,dt,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
             EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 3
           Coherences_3(iCluster,:) = Coherences_3(iCluster,:) +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+            propagate(total_time,nPoints,dt,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
             EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 4
           Coherences_4(iCluster,:) = Coherences_4(iCluster,:) +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+            propagate(total_time,nPoints,dt,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
             EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 5
           Coherences_5(iCluster,:) = Coherences_5(iCluster,:) +   ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+            propagate(total_time,nPoints,dt,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
             EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 6
           Coherences_6(iCluster,:) = Coherences_6(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+            propagate(total_time,nPoints,dt,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
             EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);      
       end
     end 
@@ -598,7 +598,7 @@ if doOffsetCCE
   Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
   SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
   SubclusterIndices_5,SubclusterIndices_6,...
-  timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
+  nPoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
 Signal = Signals(Method_order,:);
 return
 end
@@ -608,7 +608,7 @@ end
   Coherences_3,Coherences_4,Coherences_5,Coherences_6,ClusterArray, ...
   SubclusterIndices_2,SubclusterIndices_3,SubclusterIndices_4,...
   SubclusterIndices_5,SubclusterIndices_6,...
-  timepoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
+  nPoints,dimensionality, Method_order,numberClusters, Nuclei_Abundance);
  
 
 Signal = Signals(Method_order,:);
@@ -648,7 +648,7 @@ end
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,...
+function Signal = propagate(total_time,nPoints,dt,dt2,N1,...
   Hamiltonian_beta,Hamiltonian_alpha,...
   Hamiltonian_beta_TR,Hamiltonian_alpha_TR ,...
   EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
@@ -710,10 +710,10 @@ if EXPERIMENT == CPMG_CONST
 end
 
 % Initialize signal.
-v= ones(1 ,timepoints);
+v= ones(1 ,nPoints);
 
 % Loop over time points.
-for iTime = 1:timepoints
+for iTime = 1:nPoints
   
   % Find the correct experiment
   switch EXPERIMENT
@@ -738,7 +738,7 @@ for iTime = 1:timepoints
       
     case CPMG_CONST
       
-      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > Ndt.
+      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > N1.
       [U_beta, U_beta_2] = propagator_eig(...
         Hamiltonian_beta,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
       [U_alpha, U_alpha_2] = propagator_eig(...
@@ -757,7 +757,7 @@ for iTime = 1:timepoints
       U_alpha_2 = eye(nStates);
       
       % Loop over second experimental dimension.
-      for jTime = 1:iTime %timepoints
+      for jTime = 1:iTime %nPoints
         
         % Generate time dependent detection operator.
         U_ = U_alpha_2'*U_beta_2'  *  ...
@@ -767,7 +767,7 @@ for iTime = 1:timepoints
         v(jTime,iTime) = v(iTime,jTime)';
         
         % Increment propagator.
-        if jTime < Ndt
+        if jTime < N1
           U_beta_2 = dU_beta*U_beta_2;
           U_alpha_2 = dU_alpha*U_alpha_2;
         else
@@ -789,7 +789,7 @@ for iTime = 1:timepoints
   
   
   % Increment propagator.
-  if iTime< Ndt
+  if iTime< N1
     U_beta = dU_beta*U_beta;
     U_alpha = dU_alpha*U_alpha;
   else
@@ -799,7 +799,7 @@ for iTime = 1:timepoints
   
   if doTR
     % Increment propagator.
-    if iTime< Ndt
+    if iTime< N1
       U_beta_TR = dU_beta_TR*U_beta_TR;
       U_alpha_TR = dU_alpha_TR*U_alpha_TR;
     else
@@ -1396,7 +1396,7 @@ function [Coherences_1, SubclusterIndices_2, Coherences_2, ...
   Nuclei_rotationalMatrix,nt,includeMethyls,lockRotor, ...
   Methyl_methylMethylCoupling,maxSize)
 
-% nt = timepoints^dimensionality;
+% nt = nPoints^dimensionality;
 % includeMethyls = System.Methyl.include
 
 Coherences_1 = [];

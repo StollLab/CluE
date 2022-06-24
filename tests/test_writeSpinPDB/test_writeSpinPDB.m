@@ -12,7 +12,7 @@ clear
 HW1 = [26.476   3.014   1.911];
 HW2 = [25.846   3.554   0.651];
 deltaH = HW2-HW1;
-rH = norm(deltaH)
+rH = norm(deltaH);
 
 % -----------------------------------------------------------------
 % 100% Protiation
@@ -73,11 +73,12 @@ Data.InputData = '../TEMPO_Gly_70A.pdb';
 Data.saveMore = true;
 Data.saveLevel = 1;
 Method.getNuclearSpinContributions = false;
+
 %==========================================================================
 % System Settings
 %==========================================================================
 
-% experiment choics: FID, Hahn, CP
+% experiment choices: FID, Hahn, CP
 % The restricted cluster exansions only work for Hahn echo simulations.
 System.experiment = 'Hahn';
 System.spinCenter = 'TEMPO';
@@ -91,7 +92,6 @@ System.averaging = 'powder';
 % 266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702,
 % 3074, 3470, 3890, 4334, 4802, 5294, 5810}.
 
-
 System.randomOrientation = false;
 % radius from the electron spin to the edge of the system, [m]
 rmin = 16e-10; % m.
@@ -104,16 +104,14 @@ System.nitrogen = false;
 % total_time = 250e-6; % s.
 % System.dt = total_time/System.timepoints/2; % s.
 
-pow = 8;
 t_us = 10;
 T_us = 400;
 
-System.timepoints = 2^pow; %1e3 + 1;
-System.Ndt = 2^(pow-1);
-System.dt = t_us/2/System.Ndt*1e-6; % s
-System.dt2 = (T_us - t_us)/2/(System.timepoints-System.Ndt)*1e-6; % s
-
-
+N = 301;
+dt1 = t_us/2/N*1e-6; % µs -> s
+dt2 = (T_us - t_us)/2/N*1e-6; % µs -> s
+System.nPoints = [N N];
+System.dt = [dt1 dt2];
 
 %electron coordinate choices
 % [ n ] coordinates of the nth atom from the pdb file
@@ -379,7 +377,7 @@ for ii = 1:numel(allH_frac)
 
     disp(Data.OutputData);
     tic
-    [System, Method, Data,statistics] = setSystemDefaults(System,Method,Data);
+    [System, Method, Data,statistics] = setDefaults(System,Method,Data);
     pdb = parsePDBfile(Data.InputData,System.angstrom);
     [Nuclei, System]= centralSpinSystem(System,Method,Data,pdb);
     toc

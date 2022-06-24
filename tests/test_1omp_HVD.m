@@ -9,14 +9,14 @@ function test_1omp_HVD()
   System.Electron.Coordinates = (R_N1+R_O15)/2;
   System.radius = 20e-10; % m.
   System.averaging = 'none';
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   Method.r0 = 10e-10; % m.
   Method.order = 2;
   Method.verbose = true;
   % H H
   exp = 'H H';
   InputData = InputData_solvent;  
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   [SignalMean_HH, Signals_HH] = CluE(System,Method,InputData);
   save('data_1omp.mat');
   % H D  
@@ -48,7 +48,7 @@ function test_1omp_HVD()
   % H ~
   exp = 'H ~';
   InputData = '1omp_res287_to_R1_cryH2O_addH.pdb';
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   [SignalMean_Hn, Signals_Hn] = CluE(System,Method,InputData);
   save('data_1omp.mat');
   
@@ -66,7 +66,7 @@ function test_1omp_HVD()
   exp = '~ H';
   System.solventOnly = true;
   InputData = InputData_solvent; 
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   [SignalMean_nH, Signals_nH] = CluE(System,Method,InputData);
   System.solventOnly = false; 
   save('data_1omp.mat');

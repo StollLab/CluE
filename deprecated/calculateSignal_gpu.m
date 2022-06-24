@@ -11,13 +11,13 @@ muB = System.muB;
 muN = System.muN;
 mu0 = System.mu0;
 hbar = System.hbar;
-timepoints = System.timepoints;
-dt = System.dt;
-t0 = System.t0;
-dt2 = System.dt2;
-Ndt = System.Ndt;
-maxSize = 6;     
-     
+timepoints = sum(System.nPoints);
+dt = System.dt(1);
+%t0 = System.t0;
+dt2 = System.dt(2);
+N1 = System.nPoints(1);
+maxSize = 6;
+
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
 
@@ -732,22 +732,22 @@ for clusterSize = 1:Method_order
       switch clusterSize
         case 1
           Coherences_1(iCluster,:) = Coherences_1(iCluster,:)  +  ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            propagate(total_time,timepoints,dt,dt2,N1,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 2
           Coherences_2(iCluster,:) = Coherences_2(iCluster,:)  +...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            propagate(total_time,timepoints,dt,dt2,N1,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 3
           Coherences_3(iCluster,:) = Coherences_3(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            propagate(total_time,timepoints,dt,dt2,N1,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 4
           Coherences_4(iCluster,:) = Coherences_4(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            propagate(total_time,timepoints,dt,dt2,N1,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 5
           Coherences_5(iCluster,:) = Coherences_5(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            propagate(total_time,timepoints,dt,dt2,N1,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
         case 6
           Coherences_6(iCluster,:) = Coherences_6(iCluster,:) + ...
-            propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+            propagate(total_time,timepoints,dt,dt2,N1,Hb,Ha,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
           
       end
     end
@@ -786,7 +786,7 @@ for clusterSize = 1:Method_order
             
          
     % Calculate the coherence.
-    Coherences_E = propagate(total_time,timepoints,dt,dt2,Ndt,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
+    Coherences_E = propagate(total_time,timepoints,dt,dt2,N1,Hb_E,Ha_E,EXPERIMENT,densityMatrix, useThermalEnsemble,betaT);
     
     switch clusterSize
       case 1
@@ -841,7 +841,7 @@ for clusterSize = 1:Method_order
      Ha_EA = PA2*Ha_EA*PA2;
      
      % Calculate the coherence.
-     Coherences_EA = propagate(total_time, timepoints,dt,dt2,Ndt,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
+     Coherences_EA = propagate(total_time, timepoints,dt,dt2,N1,Hb_EA,Ha_EA,EXPERIMENT,densityMatrix, useThermalEnsemble, betaT);
 
      % Add the methyl coherences together, weighting the coherences by
      % a statistical factor.
@@ -933,7 +933,7 @@ end
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
+function Signal = propagate(total_time,timepoints,dt,dt2,N1,Hamiltonian_beta,Hamiltonian_alpha,EXPERIMENT, densityMatrix, useThermalEnsemble, betaT)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5;
@@ -1001,7 +1001,7 @@ for iTime = 1:timepoints
       v(iTime) = vecDensityMatrixT*U_(:);
       
       % Increment propagator.
-%       if iTime<= Ndt
+%       if iTime<= N1
 %         U_beta_2 = dU_beta*U_beta_2;
 %         U_alpha_2 = dU_alpha*U_alpha_2;
 %       else
@@ -1011,7 +1011,7 @@ for iTime = 1:timepoints
       
     case CPMG_CONST
       
-      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > Ndt.
+      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > N1.
       [U_beta, U_beta_2] = propagator_eig(Hamiltonian_beta,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
       [U_alpha, U_alpha_2] = propagator_eig(Hamiltonian_alpha,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
       
@@ -1036,7 +1036,7 @@ for iTime = 1:timepoints
         v(jTime,iTime) = v(iTime,jTime)';
         
         % Increment propagator.
-        if jTime < Ndt
+        if jTime < N1
           U_beta_2 = dU_beta*U_beta_2;
           U_alpha_2 = dU_alpha*U_alpha_2;
         else
@@ -1048,7 +1048,7 @@ for iTime = 1:timepoints
       
   end
   % Increment propagator.
-  if iTime< Ndt
+  if iTime< N1
     U_beta = dU_beta*U_beta;
     U_alpha = dU_alpha*U_alpha;
   else

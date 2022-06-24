@@ -1,82 +1,61 @@
+% Supplements the user-provided System, Method and Data structures with default
+% values of fields that the user did not provide explicitly.
 
-% ========================================================================
-% New Function
-% ========================================================================
+function [System,Method,Data,statistics] = setDefaults(System,Method,Data)
 
-function [System,Method, Data, statistics] = setSystemDefaults(System,Method, Data)
+% Method: define defaults for all fields
+defaultMethod.method = 'CCE';
+defaultMethod.order = 2;
+defaultMethod.errorTolerance = 1e-9;
+defaultMethod.useCentralSpinSystem = false;
+defaultMethod.sparseMemory = false;
+defaultMethod.conserveMemory = false;
+defaultMethod.getNuclearStatistics = false;
+defaultMethod.gpu = false;
+defaultMethod.exportHamiltonian = false;
+defaultMethod.exportClusters = false;
+defaultMethod.propagationDomain='time-domain';
+defaultMethod.partialSave = true;
+defaultMethod.clear_partialSave = true;
+defaultMethod.parallelComputing = false;
+defaultMethod.slurm = false;
+defaultMethod.numberCores = inf;
+defaultMethod.verbose = false;
+defaultMethod.allowHDcoupling = false;
+defaultMethod.clusterization = 'tree-search';
+defaultMethod.combineClusters = false;
+defaultMethod.order_lower_bound = 1;
+defaultMethod.shuffle = true;
+defaultMethod.graphCriterion = 'connected';
+defaultMethod.seed = 42;
+defaultMethod.divisions = 'numSpins';
+defaultMethod.startSpin = 0;
+defaultMethod.endSpin = inf;
+defaultMethod.record_clusters = false;
+defaultMethod.useMultipleBathStates = false;
+defaultMethod.useInterlacedClusters = false;
+defaultMethod.emptyClusterSetsOkay = false;
+defaultMethod.getNuclearContributions = false;
+defaultMethod.getNuclearSpinContributions = false;
+defaultMethod.getClusterContributions = false;
+defaultMethod.getUncertainty = false;
+defaultMethod.extraOrder = Method.order;
+defaultMethod.includeAllSubclusters = false;
+defaultMethod.r_min = 0.1e-10; % m
+defaultMethod.mixed_eState = false;
 
-if ~isfield(Method,'errorTolerance')
-  Method.errorTolerance = 1e-9;
-end
-if ~isfield(Method,'useCentralSpinSystem')
-  Method.useCentralSpinSystem = false;
-end
-
-if ~isfield(Method, 'sparseMemory')
-  Method.sparseMemory = false;
-end
-if ~isfield(Method, 'conserveMemory')
-  Method.conserveMemory = false;
-end
+% Method: Add defaults for fields missing in user-provided structure
+Method = supplementdefaults(Method,defaultMethod);
 
 if Method.conserveMemory
-  % set the Method to Memory conserving mode
-  
   % Auxiliary signals are not saved so getNuclearContributions will fail.
   Method.getNuclearContributions = false;
   Method.getClusterContributions = false;
   Method.getNuclearStatistics = false;
   % The following behaviors are are used regardless of settings,
-  % so the settings are modified to reflect what is done.
-  
+  % so the settings are modified to reflect what is done.  
   Method.precalculateHamiltonian = false;
   
-end
-if ~isfield(Method,'getNuclearStatistics')
-  Method.getNuclearStatistics = false;
-end
-if ~isfield(Method,'gpu')
-  Method.gpu = false;
-end
-
-if ~isfield(Method,'exportHamiltonian')
-  Method.exportHamiltonian = false;
-end
-if ~isfield(Method,'exportClusters')
-  Method.exportClusters = false;
-end
-
-if ~isfield(Method,'propagationDomain')
-  Method.propagationDomain='time-domain'; % fastest method
-end
-% Toggle for saving each orientation,
-if ~isfield(Method,'partialSave')
-  Method.partialSave = true;
-end
-if ~isfield(Method,'clear_partialSave')
-  Method.clear_partialSave = true;
-end
-
-if ~isfield(Method,'parallelComputing')
-  Method.parallelComputing = false;
-end
-if ~isfield(Method,'slurm')
-  Method.slurm = false;
-end
-if ~isfield(Method,'numberCores')
-  Method.numberCores = inf;
-end
-% Set verbosity.
-if ~isfield(Method,'verbose')
-  Method.verbose = false;
-end
-
-% cutoff criteria
-if ~isfield(Method,'order')
-  Method.order = 2;
-end
-if ~isfield(Method,'allowHDcoupling')
-  Method.allowHDcoupling = false;
 end
 if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
   Method.Criteria = {'dipole'};
@@ -89,13 +68,13 @@ for ii = 1:num_criteria
       if ~isfield(Method.cutoff,'methylOnly')
         Method.cutoff.methylOnly = true(1,Method.order);
       end
-      break;
+      break
       
     case 'methyl coupled only'
       if ~isfield(Method.cutoff,'methylCoupledOnly')
         Method.cutoff.methylCoupledOnly = true(1,Method.order);
       end
-      break;
+      break
       
     case 'distance'
       if ~isfield(Method.cutoff,'rMax')
@@ -104,19 +83,16 @@ for ii = 1:num_criteria
       if ~isfield(Method.cutoff,'rMin')
         Method.cutoff.rMin = 0;
       end
-      break;
+      break
   end
 end
 
-
-
-zer = zeros(1,Method.order);
+% Supplement missing cutoff criteria
 if ~isfield(Method,'cutoff') 
+  Method.cutoff = struct;
+end
+%{
   Method.cutoff.modulation = zer;
-  Method.cutoff.dipole = zer;
-  Method.cutoff.dipoleHalf = zer;
-  Method.cutoff.dipoleOne = zer;
-  Method.cutoff.bAmax = zer;
   Method.cutoff.maxAmax = inf;
   Method.cutoff.minAmax = zer;
   Method.cutoff.max_distance = inf + zer;
@@ -125,7 +101,8 @@ if ~isfield(Method,'cutoff')
   Method.cutoff.hyperfine_inf = zer;
   Method.cutoff.methylOnly = false(1,Method.order);
   Method.cutoff.methylCoupledOnly = false(1,Method.order);
-end
+%}
+zer = zeros(1,Method.order);
 if ~isfield(Method.cutoff,'bAmax') 
   Method.cutoff.bAmax = zer;
 end
@@ -227,29 +204,8 @@ end
 System.load_radius = max(System.load_radius, System.radius);
 
 % cluster order max
-if ~isfield(Method,'order')
-  Method.order = 2;
-end
-if ~isfield(Method,'clusterization')
-  Method.clusterization = 'tree-search';
-end
-if ~isfield(Method,'combineClusters')
-  Method.combineClusters = false;
-end
-% cluster order min
-if ~isfield(Method,'order_lower_bound')
-  Method.order_lower_bound = 1;
-end
-if ~isfield(Method,'shuffle')
-  Method.shuffle = true;
-end
-
 Method.order_lower_bound = max(1,floor(Method.order_lower_bound));
 Method.order_lower_bound= min(Method.order,Method.order_lower_bound);
-
-if ~isfield(Method,'graphCriterion')
-  Method.graphCriterion = 'connected';
-end
 
 % Monte Carlo option
 if ~isfield(Method,'MonteCarlo')
@@ -297,7 +253,6 @@ if length(Method.MonteCarlo.Fraction) < Method.order
   Method.MonteCarlo.Fraction = Fraction;
 end
 
-
 if ~isfield(Method.MonteCarlo,'Threshold')
   Method.MonteCarlo.Threshold = ones(1,Method.order)*1e-3;
 end
@@ -312,34 +267,6 @@ if length(Method.MonteCarlo.Threshold) < Method.order
   Method.MonteCarlo.Threshold= Threshold;
 end
 
-if ~isfield(Method,'seed')
-  Method.seed = 42;
-end
-
-if ~isfield(Method,'divisions')
-  Method.divisions = 'numSpins';
-end
-
-if ~isfield(Method,'startSpin')
-  Method.startSpin = 0;
-end
-if ~isfield(Method,'endSpin')
-  Method.endSpin = inf;
-end
-
-if ~isfield(Method,'record_clusters')
-  Method.record_clusters = false;
-end
-if ~isfield(Method,'useMultipleBathStates')
-  Method.useMultipleBathStates = false;
-end
-if ~isfield(Method,'useInterlacedClusters')
-  Method.useInterlacedClusters = false;
-end
-
-if ~isfield(Method,'emptyClusterSetsOkay')
-  Method.emptyClusterSetsOkay = false;
-end
 % if any(Method.useInterlacedClusters(:)) && Method.useMultipleBathStates
 %   error('Method.useInterlacedClusters and Method.useMultipleBathStates are not compatiple.')
 % end
@@ -355,9 +282,6 @@ if (size(Method.useInterlacedClusters,1) ~= size(Method.useInterlacedClusters,2)
     Method.useInterlacedClusters = false(Method.order);
   end
 end
-if ~isfield(Method,'extraOrder')
-  Method.extraOrder = Method.order;
-end
 % number of product states to average over
 if ~isfield(System,'nStates')
   System.nStates = ones(1,Method.order);
@@ -366,11 +290,6 @@ if numel(System.nStates) < Method.order
   System.nStates(end+1:Method.order) = 1;
 end
 
-if~isfield(Method,'includeAllSubclusters')
-  Method.includeAllSubclusters = false;
-end
-
-
 if ~isfield(Method,'precalculateHamiltonian')
   Method.precalculateHamiltonian = false;
   % If there is not enough memory to save the entire Hamiltonian at once
@@ -378,90 +297,61 @@ if ~isfield(Method,'precalculateHamiltonian')
   % proceed.
 end
 
-% allowing for alternate inputs
-if ~isfield(Method,'method')
-  Method.method = 'CCE';
-end
-if strcmp(Method.method,'restrictedCE'),  Method.method = 'rCE';  end
-if strcmp(Method.method,'restrictedCCE'),  Method.method = 'rCCE';  end
-
 % The methods rCE and rCE do not use precomputed Hamiltonians.
 if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
   Method.precalculateHamiltonian = false;
 end
 
-if ~isfield(Method,'getNuclearContributions')
-  Method.getNuclearContributions = false;
-end
-if ~isfield(Method,'getNuclearSpinContributions')
-  Method.getNuclearSpinContributions = false;
-end
-if ~isfield(Method,'getClusterContributions')
-  Method.getClusterContributions = false;
-end
-if ~isfield(Method,'getUncertainty')
-  Method.getUncertainty = false;
-end
 Method.getContributions = Method.getNuclearContributions || ...
   Method.getNuclearSpinContributions || Method.getClusterContributions ...
   || Method.getUncertainty;
-% Base Units
-if ~isfield(System,'joule')
-  System.joule = 1; % J;
-end
-if ~isfield(System,'meter')
-  System.meter = 1; % 1; % m.
-end
-if ~isfield(System,'second')
-  System.second = 1; % 1; % s.
-end
-if ~isfield(System,'tesla')
-  System.tesla = 1; % T.
-end
-if ~isfield(System,'kelvin')
-  System.kelvin = 1; % K.
-end
 
-System.coulomb = System.joule*System.second/System.tesla/System.meter^2;
-System.volt = System.joule/System.coulomb;
-System.kg = System.joule*(System.second /System.meter)^2; 
+% Fundamental constants
+% (see https://physics.nist.gov/cuu/Constants/index.html)
+% (all in SI units)
+defaultSystem.c = 299792458;  % speed of light in vacuum, m/s
+defaultSystem.h = 6.626070040e-34;  % Planck constant, J s
+defaultSystem.hbar = 1.054571800e-34;  % reduced Planck constant, J s
+defaultSystem.muN = 5.050783699e-27;  % nuclear magneton, J/T
+defaultSystem.muB = 927.400e-26;  % Bohr magneton, J/T
+defaultSystem.mu0 = 4*pi*1e-7;  % magnetic constant, J^-1 m^3 T^2
+defaultSystem.epsilon0 = 8.8541878128e-12;  % electric constant
+defaultSystem.kB = 1.38064852e-23; % Boltzmann constant, J/K
+defaultSystem.e = 1.6021766208e-19; % elementary charge, C
+defaultSystem.eV = 1.6021766208e-19; % electron-volt, J
+defaultSystem.barn = 1e-28;  % atomic unit of quadrupole moment, m^2
+defaultSystem.angstrom = 1e-10; % m
+defaultSystem.avogadro = 6.022140857e23;  % Avogadro number
+defaultSystem.ge = 2.00231930436256;  % g value of free electron
+defaultSystem.u = 1.66053906660e-27;  % unified atomic mass unit, kg
+defaultSystem.m1H = 1.007825*defaultSystem.u; % mass of hydrogen atom, kg
 
-% Physical Constants (https://physics.nist.gov/cuu/Constants/index.html)
-% constant = SI value * SI units % SI units
-System.c = 299792458.0*System.meter/System.second; % m/s.
-System.hbar = 1.054571800e-34*System.joule*System.second; % 1.054571800e-34; % J s.
-System.h = 6.626070040e-34*System.joule*System.second; % 6.626070040e-34; % J s.
-System.muN = 5.050783699e-27*System.joule/System.tesla; % J/T.
-System.muB = 927.400e-26*System.joule/System.tesla; % 927.400e-26; % J/T.
-System.mu0 = (4*pi*1e-7)*System.meter^3*System.tesla^2/System.joule; % 1.2566e-06; % J^-1 m^3 T^2. % 1.2566e-06
-System.kB = 1.38064852e-23*System.joule/System.kelvin; % 1.38064852e-23; % J/K.
-System.e = 1.6021766208e-19*System.coulomb;
-System.eV = System.e*System.volt; % joule
-System.barn = 1e-28*System.meter^2;
-% Other Constants
-System.angstrom = System.meter*1e-10; % m.
-System.wavenumber = System.h*(100*System.c); % J*cm;
-System.avogadro= 6.022140857e23;
-System.ge = 2.00231930436256;% https://physics.nist.gov/cgi-bin/cuu/Value?gem 2020-02-08
-System.m1H = 1.007825/System.avogadro*System.kg/1000; % J. Emsley, The Elements, Oxford Chemistry Guides (Oxford Univ. Press, New York, NY, 1995).
-System.epsilon0 = (8.8541878128e-12)*System.coulomb^2/System.volt/System.meter;
-% System Constants
+defaultSystem.spinCenter = 'unknown';
+defaultSystem.magneticField = 1.2;  % T
+defaultSystem.inner_radius = 0;  % m
+defaultSystem.temperature = 20 ;  % K
+defaultSystem.dt = [];
+defaultSystem.nPoints = [];
+defaultSystem.t0 = 0;
+defaultSystem.solventOnly = false;
+defaultSystem.D2O = false;
+defaultSystem.spinHalfOnly = false;
+defaultSystem.limitToSpinHalf = Method.reparseNuclei && System.spinHalfOnly;
+defaultSystem.deuterateProtein = false;
+defaultSystem.defaultExchangability = true;
+defaultSystem.pdbTranslation = [];
+defaultSystem.pdbRotate = false;
+defaultSystem.randomOrientation = false;
+defaultSystem.TMguess = (5+45*System.D2O)*1e-6;  % s, very rough
+defaultSystem.doPruneNuclei = false;
+defaultSystem.HydrogenExchange = 'OH';
+defaultSystem.isUnitCell = true;
+defaultSystem.g = 2.0023*[1,1,1];
+defaultSystem.deuteriumFraction = 1;
 
-% Set magnetic field.
-if ~isfield(System,'magneticField')
-  System.magneticField = 1.2*System.tesla;
-end
-
-if ~isfield(System,'inner_radius')
-  System.inner_radius = 0;
-end
-% Set temperature.
-if ~isfield(System,'temperature')
-  System.temperature = 20 ; % K
-end
+System = supplementdefaults(System,defaultSystem);
 
 System.kT = System.temperature*System.kB;
-
 
 if ~isfield(System,'Methyl')
   System.Methyl = struct;
@@ -486,7 +376,7 @@ if ~isfield(Method.cutoff,'methylCoupledOnlyNumber')
   end
 end
 if ~isfield(System.Methyl,'moment_of_inertia')
-  System.Methyl.moment_of_inertia =  (5.3373e-47)*System.joule*System.second^2; % kg m^2.;
+  System.Methyl.moment_of_inertia = 5.3373e-47; % kg m^2
 end
 if ~isfield(System.Methyl,'V3') && ~isfield(System.Methyl,'tunnel_splitting')
   System.Methyl.V3 = 86*1e-3*System.eV;
@@ -514,17 +404,14 @@ if ~isfield(System.Methyl,'temperature')
 end
 System.Methyl.kT = System.Methyl.temperature*System.kB;
 
-% Set electronic spin.
+% Set electronic spin
 if ~isfield(System.Electron,'spin')
   System.Electron.spin = 1/2;
 end
 
-% Set g matrix.
+% Set g matrix
 if ~isfield(System.Electron,'g')
   System.Electron.g = 2.0023;
-end
-if ~isfield(System,'g')
-  System.g = 2.0023*[1,1,1];
 end
 System.gMatrix_gFrame = diag(System.g);
 
@@ -532,63 +419,60 @@ System.omega_Larmor = System.Electron.spin*System.muB*max(max(abs(System.gMatrix
 
 System.Electron.partition_function = 0;
 for ii = 0:(2*System.Electron.spin)
-System.Electron.partition_function = System.Electron.partition_function + exp((-System.Electron.spin+ii)*System.omega_Larmor*System.hbar/System.kT);
+  System.Electron.partition_function = System.Electron.partition_function + exp((-System.Electron.spin+ii)*System.omega_Larmor*System.hbar/System.kT);
 end
 
 System.Electron.State = zeros(1,2*System.Electron.spin+1);
 for ii = 1:(2*System.Electron.spin+1)
-System.Electron.State(ii) = exp((-System.Electron.spin+ii-1)*System.omega_Larmor*System.hbar/System.kT)/System.Electron.partition_function;
+  System.Electron.State(ii) = exp((-System.Electron.spin+ii-1)*System.omega_Larmor*System.hbar/System.kT)/System.Electron.partition_function;
 end
 
-if ~isfield(System,'spinCenter')
-  System.spinCenter = 'unknown';
+if isempty(System.dt)
+  error('Provide a time step in System.dt.');
 end
+if numel(System.dt)<2
+  System.dt(2) = 0;
+end
+if isempty(System.nPoints)
+  error('Provide the number of time points in System.nPoints.');
+end
+if numel(System.nPoints)<2
+  System.nPoints(2) = 0;
+end
+if System.t0~=0
+  error('Use of t0 is not recommended.');
+end
+
+% Set up time grid
+if isfield(System,'nPoints') && isfield(System,'dt')
+  N = sum(System.nPoints);
+  if System.t0 > 0
+    System.Time = zeros(1,N);
+    System.Time(2:end) = System.t0 + (0:N-2)*System.dt;
+  else
+    System.Time(1:System.nPoints(1)) = (0:System.nPoints(1)-1)*System.dt(1);
+    if numel(System.nPoints)>1
+      System.Time(System.nPoints(1)+1:N) = System.Time(System.nPoints(1)) + (1:N - System.nPoints(1))*System.dt(2);
+    end
+  end
+elseif isfield(System,'Time')
+  System.nPoints = length(System.Time);
+  System.dt = abs(System.Time(2) - System.Time(1));
+  System.Time = (0:System.nPoints-1)*System.dt;
+  warning('System.Time is not recommended. System.nPoints and System.dt are recommeded instead.');
+end
+
 % Set pulse sequence.
 if ~isfield(System,'experiment')
   System.experiment = 'Hahn';
 end
-if ~isfield(System,'nPulses') 
-  
-  if strcmp(System.experiment,'CP_N') || strcmp(System.experiment,'Uhrig_N')
-    error(['Please specify the number of pi pulses via "System.nPulses".']) ;
+if strcmp(System.experiment,'CP_N') || strcmp(System.experiment,'Uhrig_N')
+  if ~isfield(System,'nPulses') 
+    error('Please specify the number of pi pulses via "System.nPulses".');
   end
-  System.nPulses = "parameter not needed";
- 
-end
-
-
-if ~isfield(System,'t0')
-  System.t0 = 0;
-end
-if ~isfield(System,'dt2')
-  System.dt2 = 0;
-end
-if ~isfield(System,'Ndt') || System.Ndt > System.timepoints
-  System.Ndt = System.timepoints;
-end
-% Set up time grid
-if System.t0  ~=0
-  error('Use of t0 is not recomended.');
-end
-if isfield(System,'timepoints') && isfield(System,'dt')
-  if System.t0 > 0
-    System.Time = zeros(1,System.timepoints);
-    System.Time(2:end) = ...
-      System.t0 + (0:System.dt:(System.timepoints - 2)*System.dt);
-  else
-    System.Time(1:System.Ndt) = 0:System.dt:(System.Ndt - 1)*System.dt;
-    System.Time(System.Ndt+1:System.timepoints) = System.Time(System.Ndt) + (System.dt2:System.dt2:(System.timepoints - System.Ndt)*System.dt2);
-  end
-
-elseif isfield(System,'Time')
-  System.timepoints = length(System.Time);
-  System.dt = abs(System.Time(2) - System.Time(1));
-  System.Time = 0:System.dt:(System.timepoints - 1)*System.dt;
-  warning('System.Time is not recommended. System.timepoints and System.dt are recommeded instead.');
 else
-  error('System.timepoints and System.dt are required.');
+  System.nPulses = [];
 end
-
 switch System.experiment
   case 'FID'
     System.dimensionality = 1;
@@ -599,7 +483,7 @@ switch System.experiment
     if ~isfield(System,'dt_')
       System.dt_ = System.dt;
     end
-    System.Time_ = 0:System.dt_:(System.timepoints - 1)*System.dt_;
+    System.Time_ = 0:System.dt_:(System.nPoints - 1)*System.dt_;
   case 'CPMG-const'
     System.dimensionality = 1;
   case 'CPMG-2D'
@@ -620,15 +504,8 @@ end
 if ~isfield(System,'gridSize') || isempty(System.gridSize)
   System.gridSize = 1;
 end
-if ~isfield(System,'randomOrientation')
-  System.randomOrientation = false;
-end
-if ~isfield(Method,'r_min')
-  Method.r_min = 0.1*System.meter*1e-10; % m.
-end
 
-
-% Define theory.
+% Define theory
 if isfield(System,'Theory')
   System.theory = any(System.Theory);
 end
@@ -694,8 +571,7 @@ else
   end
 end
 
-
-% Define cluster size specific theories.
+% Define cluster size specific theories
 if ~isfield(System,'Theory')
   System.Theory = ones(Method.order,length(System.theory)).*System.theory;  
 elseif size(System.Theory ,1) < Method.order
@@ -714,41 +590,17 @@ if Method.useMultipleBathStates && System.useThermalEnsemble
   error('The setting of Method.useMultipleBathStates= useThermalEnsemble = true is not supported.');
 end
 
-
-if ~isfield(System,'solventOnly')
-  System.solventOnly = false;
-end
-
-if ~isfield(System,'D2O')
-  System.D2O = false;
-end
-
-if ~isfield(System,'spinHalfOnly')
-  System.spinHalfOnly = false;
-end
-% System limiting options
-if ~isfield(System,'limitToSpinHalf')
-  System.limitToSpinHalf = Method.reparseNuclei && System.spinHalfOnly;
-end
-if ~isfield(System,'deuterateProtein')
-  System.deuterateProtein = false;
-end
-
 if isfield(System,'deuterateAll') && islogical(System.deuterateAll) && System.deuterateAll
   System.deuterateProtein = true;
   System.D2O = true;
 end
 
-if ~isfield(System,'defaultExchangability')
-  System.defaultExchangability = true;
+% Random ensemble
+if ~isfield(System,'RandomEnsemble')
+  System.RandomEnsemble = struct;
 end
-if ~isfield(System,'TMguess')
-  % very rough
-  System.TMguess = (5+45*System.D2O)*1e-6;
-end
-
-if ~isfield(System,'RandomEnsemble') || ~isfield(System.RandomEnsemble,'include')
-System.RandomEnsemble.include = false;
+if ~isfield(System.RandomEnsemble,'include')
+  System.RandomEnsemble.include = false;
 end 
 if System.RandomEnsemble.include && ~isfield(System.RandomEnsemble,'concentration')
   error('Please specify System.RandomEnsemble.concentration [=] mol/L.');
@@ -763,7 +615,7 @@ if ~isfield(System.RandomEnsemble,'Type')
   System.RandomEnsemble.Type = 'H';
 end
 if ~isfield(System.RandomEnsemble,'sphereRadius')
-  System.RandomEnsemble.sphereRadius = getVanDerWaalsRadius(System.RandomEnsemble.Type)*System.meter;
+  System.RandomEnsemble.sphereRadius = getVanDerWaalsRadius(System.RandomEnsemble.Type);
 end
 if ~isfield(System.RandomEnsemble,'Exchangeable')
   System.RandomEnsemble.Exchangeable = true;
@@ -775,8 +627,8 @@ if ~isfield(System.RandomEnsemble,'isWater')
   System.RandomEnsemble.isWater = false;
 end
 
-% The methods rCE and rCE do not use precomputed Hamiltonians.
-if strcmp(Method.method,'rCE')||strcmp(Method.method,'rCCE')
+% The methods rCE and rCE do not use precomputed Hamiltonians
+if strcmp(Method.method,'rCE') || strcmp(Method.method,'rCCE')
   System.limitToSpinHalf = true;
 end
 
@@ -784,8 +636,7 @@ if System.limitToSpinHalf
   disp('Based on the input options, the simulation will only include spin-1/2 nuclei.');
 end
 
-
-if isfield(Method,'mixed_eState') && Method.mixed_eState
+if Method.mixed_eState
   
   if ~isfield(System,'Detection_Operator')
     System.Detection_Operator = spinRaise(System.Electron.spin)/System.Electron.spin^2;
@@ -812,7 +663,6 @@ else
   Method.mixed_eState = false;
 end
 
-
 if ~isfield(System,'RF')
   System.RF.B1x = 0;
   System.RF.B1y = 0;
@@ -835,13 +685,6 @@ if System.RF.use && any(any( System.Theory(:,7:8)))
   error('Only coherence order 0 dipole-dipole coupling is allowed with RF.');
 end
 
-if ~isfield(System,'pdbTranslation')
-    System.pdbTranslation = [];
-end
-if ~isfield(System,'pdbRotate')
-    System.pdbRotate = false;
-end
-
 if System.pdbRotate && ~isfield(System,'pdbOrigin')
     System.pdbOrigin = [0,0,0];
 end
@@ -855,46 +698,28 @@ if System.pdbRotate && ~isfield(System,'pdbGamma')
     System.pdbGamma = 0;
 end
 
-% save options
-Data.path2CluE  = mfilename('fullpath');
-Data.path2CluE = Data.path2CluE(1:end-17);
-if ~strcmp(Data.path2CluE(end-5:end),[filesep 'CluE' filesep])
-  error('Could not establish path to CluE.')
-end  
-if ~isfield(Data,'OutputData')
-  Data.OutputData = '';
-end
-if ~isfield(Data,'writeSpinPDB')
-  Data.writeSpinPDB = true;
-end
-if ~isfield(Data,'saveLevel')
-  Data.saveLevel = 0;
-end 
-if ~isfield(Data,'ClusterData')
-  Data.ClusterData = '';
-  Data.exitOnFailedLoad = false;
-else
-  Data.exitOnFailedLoad = true;
-end
-if ~isfield(Data,'outPDBoptions')
-  Data.outPDBoptions.Honly = false;
-end
+% Save options
+%-------------------------------------------------------------------------------
+Data.path2CluE = fileparts(which(mfilename));
+defaultData.OutputData = '';
+defaultData.writeSpinPDB = true;
+defaultData.saveLevel = 0;
+defaultData.outPDBoptions.Honly = false;
+defaultData.ClusterData = '';
+Data = supplementdefaults(Data,defaultData);
+
+Data.exitOnFailedLoad = ~isempty(Data.ClusterData);
 
 if strcmp(Method.method,'HD-CCE')
   if isempty(Data.ClusterData)
     error('Please supply a set of clusters.')
   end
   Data.exitOnFailedLoad = true;
-  
   if Method.order > 2
     error('HD-CCE is only implemented to 2-clusters.')
   end
-  
 end
 
-if ~isfield(System,'deuteriumFraction')
-  System.deuteriumFraction = 1;
-end
 if ~isfield(System,'deuteriumFraction_nonExchangeable')
   System.deuteriumFraction_nonExchangeable = System.deuteriumFraction;
 end
@@ -905,20 +730,23 @@ if ~isfield(System,'newIsotopologuePerOrientation')
     System.newIsotopologuePerOrientation = true;
   end
 end
-if ~isfield(System,'doPruneNuclei')
-  System.doPruneNuclei = false;
-end
 
-if ~isfield(System,'HydrogenExchange')
-  System.HydrogenExchange = 'OH';
-end  
-
-if ~isfield(System,'isUnitCell')
-  System.isUnitCell = true;
-end
-
+% Set statistics structure
 statistics.parameters.radius = System.radius;
 statistics.parameters.neighborCutoffCriteria = Method.Criteria;
 statistics.parameters.neighborCutoff = Method.cutoff;
 statistics.parameters.gridSize = System.gridSize;
+
+end  % end of main function
+%===============================================================================
+
+function out = supplementdefaults(user,defaults)
+% Supplements the provided user structure with fields and values from
+% the structure defaults and returns the result in out.
+out = defaults;
+fields = fieldnames(user);
+for f = 1:numel(fields)
+  Name = fields{f};
+  out.(Name) = user.(Name);
+end
 end

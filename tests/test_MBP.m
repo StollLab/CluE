@@ -13,7 +13,7 @@
   %System.g = [2,2,2];
   System.averaging = 'none';
   
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   Method.r0 = 10e-10; % m.
   Method.order = 2;
   Method.verbose = true;

@@ -36,18 +36,11 @@ System.nitrogen = true;
 System.carbon = false;
 System.isUnitCell = false;
 
-% total number of time points 
-System.timepoints = 2^6;
+% number of timepoints
+System.nPoints = [2^6 0];
 
-% number of timepoints for th first dt
-System.Ndt = 2^6;
-
-% time step size for the first Ndt time points, 
-System.dt = 0.1905/2*1e-6; % s
-
-% time step size for time points after the first Ndt  
-System.dt2 = 2.25e-6; % s
-
+% Time steps sizes
+System.dt = [0.1905/2*1e-6 2.25e-6]; % s
 
 % electron coordinate choices
 % { n } coordinates of the nth atom from the pdb file
@@ -101,7 +94,7 @@ Method.partialSave = true;
 %% Make System
 %==========================================================================
 
-[System, Method, Data,statistics] = setSystemDefaults(System,Method,Data);
+[System, Method, Data,statistics] = setDefaults(System,Method,Data);
 System.pdb = parsePDBfile(Data.InputData, System.angstrom);
 [Nuclei, System] = centralSpinSystem(System,Method,Data,System.pdb);
 

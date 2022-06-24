@@ -22,7 +22,7 @@ Method.getNuclearContributions = true;
 Method.getNuclearStatistics = true;
 
 Method.Ori_cutoffs = true;
-[System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
+[System,Method, Data, ~] = setDefaults(System,Method, Data);
 
 pdb0 = parsePDB(Data.InputData,System);
 % System0 = System;

@@ -3,13 +3,12 @@
 %==========================================================================
 % General Setting
 %==========================================================================
-% clear;
-clc;
-clear;
+clc
+clear
 % Data.ClusterData = "Clusters.mat";
 oldpath = path;
 path('../',oldpath);
- 
+
 Data.InputData = 'TEMPO_GLY_100K_1001.pdb';
 % Data.InputData = 'TEMPO_100K_dt100ps_01.pdb'
 Data.overwriteLevel = 2;
@@ -21,25 +20,16 @@ System.experiment = 'Hahn';
 System.spinCenter = 'TEMPO';
 System.gridSize = 1;
 
-% radius from the electron spin to the edge of the system, [m]
-System.radius = 12e-10; % m;
+% radius from the electron spin to the edge of the system
+System.radius = 12e-10; % m
 
-% Do not include nitrogen in the Hamiltonian.
+% Whether to include nitrogen or carbon in the Hamiltonian.
 System.nitrogen = true;
 System.carbon = false;
 
-% total number of time points 
-System.timepoints = 2^6;
-
-% number of timepoints for th first dt
-System.Ndt = 2^6;
-
-% time step size for the first Ndt time points, 
-System.dt = 0.1905/2*1e-6; % s
-
-% time step size for time points after the first Ndt  
-System.dt2 = 2.25e-6; % s
-
+% Time steps and number of points
+System.dt = [0.1905/2, 2.25]*1e-6; % time steps, s
+System.nPoints = [64 0]; % number of points
 
 % electron coordinate choices
 % { n } coordinates of the nth atom from the pdb file
@@ -50,12 +40,11 @@ System.X = {28, 29};
 System.Y = {1,19};
 
 % electron g value
-System.g = [2.0097, 2.0064,2.0025];
+System.g = [2.0097,2.0064,2.0025];
 
 % applied magnetic field
 System.magneticField  =1.2; % T.
 % System.temperature = 20; % K
-
 
 % deuterate non-solvents?
 System.deuterateProtein = false;
@@ -80,7 +69,7 @@ System.Theory = [ true, true, true, true, true, true, true, true, true, false;  
 % Method Settings
 %==========================================================================
 
-% cluster mehod choices CE, CCE, restrictedCE, restrictedCCE
+% cluster method choices CE, CCE, rCE, rCCE
 Method.method = 'CCE';
 
 % maximum cluster size
@@ -100,22 +89,19 @@ Method.verbose = true;
 % parallel computing?
 Method.parallelComputing = false;
 
-% save each orientation in temporary files until the simm completes?
+% save each orientation in temporary files until the sim completes
 Method.partialSave = true;
 
 %==========================================================================
 %% Run simulation
 %==========================================================================
 
-% [SignalMean, twotau, TM_powder,order_n_signals,Nuclei, uncertainty] = CluE(System,Method,Data);
-
 [SignalMean, twotau,~,Order_n_SignalMean] = CluE(System,Method,Data);
 Data.InputData = 'TEMPO_TIP4P_connect.pdb';
 SignalMean0 = CluE(System,Method,Data);
 
-
 %--------------------------------------------------------------------------
-%% Plot.
+%% Plot
 %--------------------------------------------------------------------------
 clf
 fontsize = 24; 

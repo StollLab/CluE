@@ -1,25 +1,41 @@
+% calculateSignal Calculates the echo signal
+%
+%  [Signal,AuxSignals,Signals] = calculateSignal(System,Method,Nuclei,Clusters)
+%
+% Input:
+%   System   system structure
+%   Method   method structure
+%   Nuclei   nuclei structure
+%   Clusters information about clusters
+%
+% Output:
+%   Signal
+%   AuxSignals
+%   Signals
+
 % Clusters = Clusters(cluster index , 1:size ,order)
 % Clusters(cluster index , size > order ,order) = 0.
 
-function [Signal, AuxiliarySignals, Signals] ... 
-       = calculateSignal(System, Method, Nuclei,Clusters)
+function [Signal,AuxiliarySignals,Signals] ... 
+       = calculateSignal(System,Method,Nuclei,Clusters)
 
 % Extract physical constants.     
-ge=System.ge; geff=System.gMatrix(3,3); 
-muB = System.muB;  muN = System.muN;  mu0 = System.mu0; hbar = System.hbar;
+ge = System.ge;
+geff = System.gMatrix(3,3); 
+muB = System.muB;
+muN = System.muN;
+mu0 = System.mu0;
+hbar = System.hbar;
 
 % Extract experimental parameters.
 magneticField = System.magneticField;
-timepoints = System.timepoints;
-dt = System.dt;
-
-dt2 = System.dt2;
-Ndt = System.Ndt;
- 
+dt1 = System.dt(1);
+dt2 = System.dt(2);
+N1 = System.nPoints(1);
+N2 = System.nPoints(2);
+Npoints = N1+N2;
 
 B1y =  System.RF.B1y;
-
-doTR = false;
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; %HAHN_TR = 6;
@@ -38,7 +54,6 @@ else
   Nuclear_Dipole_x_iy_Z = [];
 end
 
-
 if Theory(Method.order,10)
   Method_extraOrder = Method.extraOrder;
   maxSuperclusterSize = Method_extraOrder;
@@ -49,57 +64,53 @@ end
 
 % Convert variable to gpu compatible forms
 dimensionality = 1;
-if strcmp(System.experiment,'FID')
-  EXPERIMENT = FID;
-  total_time = System.Time(end);
-elseif strcmp(System.experiment,'Hahn')
-  EXPERIMENT = HAHN;
-  total_time = 2*System.Time(end);
-elseif strcmp(System.experiment,'CPMG')
-  EXPERIMENT = CPMG;
-  total_time = 4*System.Time(end);
-elseif strcmp(System.experiment,'CPMG-const')
-  EXPERIMENT = CPMG_CONST;
-  total_time = 4*System.Time(end);
-elseif strcmp(System.experiment,'CPMG-2D')
-  EXPERIMENT = CPMG_2D;
-  total_time = 4*System.Time(end);
-  dimensionality = 2;
-elseif strcmp(System.experiment,'Hahn-TR')
-  EXPERIMENT = HAHN;
-  total_time = 2*System.Time(end);
-  doTR = true;
-  B1y =  System.RF.B1y(1);
-  B1x2 =  System.RF.B1x(2);
-  B1y2 =  System.RF.B1y(2);
-  nuRF2 = System.RF.nuRF(2);
-elseif strcmp(System.experiment,'CP_N')
-  EXPERIMENT = CP_N;
-  total_time = 2*System.nPulses*System.Time(end);
-elseif strcmp(System.experiment,'Uhrig_N')
-  EXPERIMENT = UHRIG_N;
-  total_time = 2*System.nPulses*System.Time(end);
-else
-  error('The experiment ''%s'' is not supported.',System.experiment);
+doTR = false;
+switch System.experiment
+  case 'FID'
+    EXPERIMENT = FID;
+    total_time = System.Time(end);
+  case 'Hahn'
+    EXPERIMENT = HAHN;
+    total_time = 2*System.Time(end);
+  case 'CPMG'
+    EXPERIMENT = CPMG;
+    total_time = 4*System.Time(end);
+  case 'CPMG-const'
+    EXPERIMENT = CPMG_CONST;
+    total_time = 4*System.Time(end);
+  case 'CPMG-2D'
+    EXPERIMENT = CPMG_2D;
+    total_time = 4*System.Time(end);
+    dimensionality = 2;
+  case 'Hahn-TR'
+    EXPERIMENT = HAHN;
+    total_time = 2*System.Time(end);
+    doTR = true;
+    B1y =  System.RF.B1y(1);
+    B1x2 =  System.RF.B1x(2);
+    B1y2 =  System.RF.B1y(2);
+    nuRF2 = System.RF.nuRF(2);
+  case 'CP_N'
+    EXPERIMENT = CP_N;
+    total_time = 2*System.nPulses*System.Time(end);
+  case 'Uhrig_N'
+    EXPERIMENT = UHRIG_N;
+    total_time = 2*System.nPulses*System.Time(end);
+  otherwise
+    error('The experiment ''%s'' is not supported.',System.experiment);
 end
-
 
 B1x =  System.RF.B1x;
 nuRF = System.RF.nuRF;
 
-
-
-betaT = 2*pi*System.hbar /System.kT; % 1/Hz.
-
+betaT = 2*pi*System.hbar/System.kT; % 1/Hz.
 
 % Unpack spin operators.
 Op = Nuclei.SpinOperators;
 SpinXiXjOps = Nuclei.SpinXiXjOperators;
 
-
 numberClusters = Nuclei.numberClusters(1:maxSuperclusterSize);
 maxNumberClusters = max(numberClusters(1:maxSuperclusterSize));
-
 
 % CluserArray(iCluster,:,clusterSize) = nuclear indices.
 ClusterArray = zeros(maxNumberClusters,Method.order,Method.order);
@@ -119,7 +130,7 @@ methylMethod1 = System.Methyl.method==0;
   rotationalMatrix_c2_m1, rotationalMatrix_c2_m2, ...
   rotationalMatrix_d2_m1, rotationalMatrix_d2_m2] ...
   = initializeCoherences(Method, numberClusters, ...
-  Nuclei.rotationalMatrix,timepoints^dimensionality,methylMethod1,...
+  Nuclei.rotationalMatrix,(N1+N2)^dimensionality,methylMethod1,...
   lockRotors,System.Methyl.methylMethylCoupling);
 
 
@@ -127,9 +138,8 @@ methylMethod1 = System.Methyl.method==0;
 isMethylCarbon = strcmp(Nuclei.Type,'CH3');
 isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
 
+[Nuclei.ZeemanStates,Nuclei.ZeemanSpinStates] = setRandomZeemanState(Nuclei);
 
-[Nuclei.ZeemanStates,Nuclei.ZeemanSpinStates] = ...
-  setRandomZeemanState(Nuclei);
 for clusterSize = 1:Method.order
  
   % Find coherences
@@ -154,10 +164,10 @@ for clusterSize = 1:Method.order
     % Check if iCluster is valid.
     if Cluster(1,1) == 0, continue; end
     
-    % Determin the number of spins in the cluster.
+    % Determin the number of spins in the cluster
     thisClusterSize = clusterSize + 2*sum(isMethylCarbon(Cluster));
     
-    % Initialize cluster.
+    % Initialize cluster
     thisCluster = zeros(1,thisClusterSize);
     
     % Initialize counters.
@@ -204,8 +214,7 @@ for clusterSize = 1:Method.order
         'A methyl carbon is misplaced.']);
     end
     
-    
-    % Generate methyl permutations.
+    % Generate methyl permutations
     cyclicPermutation = thisCluster;
     if lockRotors || ~methylMethod1
       nPerm = 1;
@@ -216,13 +225,11 @@ for clusterSize = 1:Method.order
     end
     
     % Decide if the cluster should be skipped:
-    % check if all spin have the same I,
-    % and that if I >= 1 is enabled. 
+    % check if all spin have the same I, and that if I >= 1 is enabled. 
     skipCluster =  (System.spinHalfOnly && Nuclei.StateMultiplicity(thisCluster(1)) > 2);
     skipCluster = skipCluster || (~all(Nuclei.StateMultiplicity(thisCluster) ...
       == Nuclei.StateMultiplicity(thisCluster(1))));
-   
-    
+       
     if skipCluster
       Coherences{clusterSize}(iCluster,:) = ones(size(Coherences{clusterSize}(iCluster,:) ));
     end
@@ -241,8 +248,7 @@ for clusterSize = 1:Method.order
     end
     H_alphaMF = 0;
     H_betaMF = 0;
-    
-    
+     
     % density matrix size
     SpinSpaceDim = prod(Nuclei.StateMultiplicity(thisCluster));
     HilbertSpaceDim = SpinSpaceDim*nPerm;
@@ -250,7 +256,6 @@ for clusterSize = 1:Method.order
     switch nPerm
       case 1 % 0 rotors
         Hb = zeros(HilbertSpaceDim);
-    
       case 3 % 1 rotor
         switch SpinSpaceDim
           case 8 % CH3
@@ -266,14 +271,13 @@ for clusterSize = 1:Method.order
         switch SpinSpaceDim
           case 64 % CH3, CH3 
             Hb = rotationalMatrix_c2_m2;
-          case 729 % CH3, CH3
+          case 729 % CD3, CD3
             Hb = rotationalMatrix_d2_m2;
         end
       otherwise
         Hb = zeros(HilbertSpaceDim);
     end
     Ha = Hb;
-    
     
     for iave = 1:System.nStates(clusterSize)
       if useMeanFields
@@ -295,8 +299,7 @@ for clusterSize = 1:Method.order
         mean_Dipole_x_iy_Z = [];
       end
     
-      
-    % Loop over cyclic permutations.
+      % Loop over cyclic permutations.
       for iPerm = 1:nPerm
         
         % Permute rotor spins.
@@ -304,8 +307,8 @@ for clusterSize = 1:Method.order
         
         % Get interaction tensors.
         [tensors,~] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
-          Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField, ge,geff,...
-          muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
+          Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField,ge,geff,...
+          muB,muN,mu0,hbar,theory,B1x,B1y,nuRF, ...
           mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
 
         if ~System.limitToSpinHalf
@@ -316,7 +319,7 @@ for clusterSize = 1:Method.order
         
         if doTR
           [tensors_TR,~] = pairwisetensors_gpu(Nuclei.Nuclear_g, ...
-            Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField, ge,geff,...
+            Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField,ge,geff,...
             muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2,...
             mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
           if ~System.limitToSpinHalf
@@ -368,9 +371,7 @@ for clusterSize = 1:Method.order
           densityMatrix = getDensityMatrix(ZeemanStates(thisCluster),...
             Nuclei.StateMultiplicity(thisCluster),thisCluster);
         end
-        
-        
-        
+            
         % Add mean field term to the Hamiltonian.
         Halpha = H_alpha + H_alphaMF;
         Hbeta = H_beta + H_betaMF;
@@ -394,7 +395,7 @@ for clusterSize = 1:Method.order
  
       % Calculate cluster coherence.
       Coherences{clusterSize}(iCluster,:) = Coherences{clusterSize}(iCluster,:)  +  ...
-        propagate(total_time,timepoints,dt,dt2,Ndt,Hb,Ha,Hb_TR,Ha_TR, ...
+        propagate(total_time,N1+N2,dt1,dt2,N1,Hb,Ha,Hb_TR,Ha_TR, ...
         EXPERIMENT,densityMatrix, System.useThermalEnsemble, betaT, ...
         System.nPulses);
       
@@ -416,9 +417,8 @@ end
 %-------------------------------------------------------------------------------
 [Signals, AuxiliarySignals] = doClusterCorrelationExpansion(...
   Coherences,ClusterArray,SubclusterIndices,...
-  timepoints,dimensionality, Method.order,numberClusters);
+  Npoints,dimensionality, Method.order,numberClusters);
  
-
 Signal = Signals(Method.order,:);
 %-------------------------------------------------------------------------------
 end
@@ -442,27 +442,26 @@ densityMatrix = zeros(offset_factor);
 densityMatrix(prod_state,prod_state) = 1;
 
 end
+
 % ========================================================================
 % Propagate Function
 % ========================================================================
-function Signal = propagate(total_time,timepoints,dt,dt2,Ndt,...
-  Hamiltonian_beta,Hamiltonian_alpha,...
-  Hamiltonian_beta_TR,Hamiltonian_alpha_TR ,...
+function Signal = propagate(total_time,Npoints,dt,dt2,N1,...
+  Ham_beta,Ham_alpha,...
+  Ham_beta_TR,Ham_alpha_TR ,...
   EXPERIMENT, densityMatrix, useThermalEnsemble, betaT, nPulses)
 
 % ENUM
 FID = 1; HAHN = 2; CPMG = 3; CPMG_CONST = 4; CPMG_2D = 5; HAHN_TR = 6;
 CP_N = 7; UHRIG_N = 8;
 
-
-% Ensure subHamiltinians are Hermitian.
-Hamiltonian_beta =(Hamiltonian_beta+Hamiltonian_beta')/2; 
-Hamiltonian_alpha =(Hamiltonian_alpha+Hamiltonian_alpha')/2;
+% Ensure sub-Hamiltonians are Hermitian.
+Ham_beta = (Ham_beta+Ham_beta')/2; 
+Ham_alpha = (Ham_alpha+Ham_alpha')/2;
  
 % Get density matrix.
 if useThermalEnsemble
-  DensityMatrix = propagator_eig(...
-    (Hamiltonian_alpha+Hamiltonian_beta)/2,-1i*betaT,0);
+  DensityMatrix = propagator_eig((Ham_alpha+Ham_beta)/2,-1i*betaT,0);
 else
   DensityMatrix = densityMatrix;
 end
@@ -470,95 +469,82 @@ end
 % Vectorize density matrix.
 vecDensityMatrixT = reshape(DensityMatrix.',1,[])/trace(DensityMatrix);
 
-
-
 t_Uhrig = 0;
 
+% Generate propagators for time steps dt and dt2
+[dU_beta,dU_beta2] = propagator_eig(Ham_beta,dt,dt2);
+[dU_alpha,dU_alpha2] = propagator_eig(Ham_alpha,dt,dt2);
 
-% Generate propagators for time element dt.
-[dU_beta, dU_beta2] = propagator_eig(Hamiltonian_beta,dt,dt2);
-[dU_alpha, dU_alpha2] = propagator_eig(Hamiltonian_alpha,dt, dt2);
+doTR = ~isempty(Ham_beta_TR);
+if doTR  
+  % Ensure subHamiltonians are Hermitian
+  Ham_beta_TR = (Ham_beta_TR+Ham_beta_TR')/2;
+  Ham_alpha_TR = (Ham_alpha_TR+Ham_alpha_TR')/2;
+  % Generate propagators for time steps dt and dt2
+  [dU_beta_TR, dU_beta2_TR] = propagator_eig(Ham_beta_TR,dt,dt2);
+  [dU_alpha_TR, dU_alpha2_TR] = propagator_eig(Ham_alpha_TR,dt, dt2);
+end
 
-% Find the dimensionality of the Hilbert space.
-nStates = length(Hamiltonian_beta);
-
+% Initialize propagators
+nStates = length(Ham_beta);
 U_beta = eye(nStates);
 U_alpha = eye(nStates);
 
-
-
-doTR = ~isempty(Hamiltonian_beta_TR);
-if doTR
-  
-  % Ensure subHamiltinians are Hermitian.
-  Hamiltonian_beta_TR =(Hamiltonian_beta_TR+Hamiltonian_beta_TR')/2;
-  Hamiltonian_alpha_TR =(Hamiltonian_alpha_TR+Hamiltonian_alpha_TR')/2;
-  
-  % Generate propagators for time element dt.
-  [dU_beta_TR, dU_beta2_TR] = propagator_eig(Hamiltonian_beta_TR,dt,dt2);
-  [dU_alpha_TR, dU_alpha2_TR] = propagator_eig(Hamiltonian_alpha_TR,dt, dt2);
+% Initialize signal
+if EXPERIMENT==CPMG_2D
+  v = ones(Npoints,Npoints);
+else
+  v = ones(1,Npoints);
 end
 
-
-% Initialize signal.
-v= ones(1 ,timepoints);
-
-% Loop over time points.
-for iTime = 1:timepoints
-  
-  % Find the correct experiment
+% Loop over time points
+for iTime = 1:Npoints
   switch EXPERIMENT
     
     case FID
-      % Generate time dependent detection operator.
-      U_ = U_beta'*U_alpha;
-      v(iTime) = vecDensityMatrixT*U_(:);
+      U = U_beta'*U_alpha;
+      v(iTime) = vecDensityMatrixT*U(:);
       
     case HAHN
-      % Generate time dependent detection operator.
-      U_ = U_beta'*U_alpha'*U_beta*U_alpha;
-      v(iTime) = vecDensityMatrixT*U_(:);
+      U = U_beta'*U_alpha'*U_beta*U_alpha;
+      v(iTime) = vecDensityMatrixT*U(:);
       
     case CPMG
-      % Generate time dependent detection operator.
       
-      U_ = U_alpha'*U_beta'  * ...
+      U = U_alpha'*U_beta'  * ...
         (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha*U_beta;
-      v(iTime) = vecDensityMatrixT*U_(:);
-      
-      
+      v(iTime) = vecDensityMatrixT*U(:);
+          
     case CPMG_CONST
       
-      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > Ndt.
+      % THIS NEEDS TO BE UPDATED TO USE dt2 WHEN iTime > N1.
       [U_beta, U_beta_2] = propagator_eig(...
-        Hamiltonian_beta,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
+        Ham_beta,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
       [U_alpha, U_alpha_2] = propagator_eig(...
-        Hamiltonian_alpha,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
+        Ham_alpha,(iTime-1)*dt, total_time/4-(iTime-1)*dt);
       
-      % Generate time dependent detection operator.
-      U_ = U_alpha_2'*U_beta_2'  *  ...
+      U = U_alpha_2'*U_beta_2'  *  ...
         (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
       
-      v(iTime) = vecDensityMatrixT*U_(:);
-      
-      
+      v(iTime) = vecDensityMatrixT*U(:);
+       
     case CPMG_2D
       
       U_beta_2 = eye(nStates);
       U_alpha_2 = eye(nStates);
       
       % Loop over second experimental dimension.
-      for jTime = 1:iTime %timepoints
+      for jTime = 1:iTime
         
         % Generate time dependent detection operator.
-        U_ = U_alpha_2'*U_beta_2'  *  ...
+        U = U_alpha_2'*U_beta_2'  *  ...
           (U_beta'*U_alpha' * U_beta*U_alpha)  * U_alpha_2*U_beta_2;
         
-        v(iTime,jTime) = vecDensityMatrixT*U_(:);
+        v(iTime,jTime) = vecDensityMatrixT*U(:);
         v(jTime,iTime) = v(iTime,jTime)';
         
         % Increment propagator.
-        if jTime < Ndt
+        if jTime < N1
           U_beta_2 = dU_beta*U_beta_2;
           U_alpha_2 = dU_alpha*U_alpha_2;
         else
@@ -569,69 +555,64 @@ for iTime = 1:timepoints
       end
     
     case HAHN_TR
-      % Generate time dependent detection operator.
-      U_ = U_beta'*U_beta_TR'*U_alpha'*U_alpha_TR' ...
-        * U_beta_TR*U_beta*U_alpha_TR*U_alpha;
+      U = U_beta'*U_beta_TR'*U_alpha'*U_alpha_TR' ...
+         * U_beta_TR*U_beta*U_alpha_TR*U_alpha;
       
-      v(iTime) = vecDensityMatrixT*U_(:);
+      v(iTime) = vecDensityMatrixT*U(:);
     
     case CP_N
-      % Generate time dependent detection operator.
       U_aa = U_alpha*U_alpha;
       U_bb = U_beta*U_beta;
 
       exponent = fix((nPulses-1)/2);
-      AABB = (U_aa*U_bb)^( exponent );
-      BBAA = (U_bb*U_aa)^( exponent );
+      AABB = (U_aa*U_bb)^exponent;
+      BBAA = (U_bb*U_aa)^exponent;
       if mod(nPulses,2)==0
-        U_ = ( U_alpha*BBAA*U_bb*U_alpha )' ...
+        U = ( U_alpha*BBAA*U_bb*U_alpha )' ...
                *( U_beta*AABB*U_aa*U_beta  );
       else
-        U_ = (  U_beta*AABB*U_alpha )' ...
+        U = (  U_beta*AABB*U_alpha )' ...
             *( U_alpha*BBAA*U_beta  );
         
       end
 
-      v(iTime) = vecDensityMatrixT*U_(:); 
+      v(iTime) = vecDensityMatrixT*U(:); 
 
     case UHRIG_N
       % t_i = (2*tau)*sin^2[ (pi*i)/(2*(N+1)) ].
 
-      if iTime< Ndt
+      if iTime< N1
         t_Uhrig = t_Uhrig + dt*2*nPulses;
       else 
         t_Uhrig = t_Uhrig + dt2*2*nPulses;
       end
         
-      v(iTime) = getUhrigN(t_Uhrig, Hamiltonian_beta,Hamiltonian_alpha,...
+      v(iTime) = getUhrigN(t_Uhrig, Ham_beta,Ham_alpha,...
       vecDensityMatrixT, nPulses);
 
   end
   
-  
-  % Increment propagator.
-  if iTime< Ndt
+  % Increment propagators
+  if iTime < N1
     U_beta = dU_beta*U_beta;
     U_alpha = dU_alpha*U_alpha;
   else
     U_beta = dU_beta2*U_beta;
     U_alpha = dU_alpha2*U_alpha;
   end
-  
   if doTR
-    % Increment propagator.
-    if iTime< Ndt
+    if iTime < N1
       U_beta_TR = dU_beta_TR*U_beta_TR;
       U_alpha_TR = dU_alpha_TR*U_alpha_TR;
     else
       U_beta_TR = dU_beta2_TR*U_beta_TR;
       U_alpha_TR = dU_alpha2_TR*U_alpha_TR;
     end
-    
   end
+
 end
 
-% Return signal as a vector.
+% Return signal as a vector
 if EXPERIMENT == CPMG_2D
     Signal = reshape(v.',1,[]);
 else
@@ -640,8 +621,11 @@ end
 
 if any(abs(v) - 1 > 1e-9)
   error('Coherence error: coherence cannot be larger than 1.');
-end 
 end
+
+end
+
+
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function v_iTime = getUhrigN(total_time, Hamiltonian_beta,Hamiltonian_alpha,...
       vecDensityMatrixT, nPulses)
@@ -801,14 +785,13 @@ end
 % Calculate propagator using diagonalization
 % ========================================================================
 
-function [U1,U2] = propagator_eig(Ham,t1,t2)
-%Ham = (Ham+Ham')/2; % "hermitianize" Hamiltonian
-[EigenVectors, EigenValues] = eig(Ham);
-Udiag1 = exp(-2i*pi*diag(EigenValues)*t1);
-
+function [U1,U2] = propagator_eig(Ham,dt1,dt2)
+[EigenVectors,EigenValues] = eig(Ham);
+Udiag1 = exp(-2i*pi*diag(EigenValues)*dt1);
 U1 = EigenVectors*diag(Udiag1)*EigenVectors';
-if nargin>2
-  Udiag2 = exp(-2i*pi*diag(EigenValues)*t2);
+
+if nargin>2 && dt2>0
+  Udiag2 = exp(-2i*pi*diag(EigenValues)*dt2);
   U2 = EigenVectors*diag(Udiag2)*EigenVectors';
 else
   U2 = 1;
@@ -888,13 +871,13 @@ if numberRotors == 0
   return;
 end
 
-% 1-Clusters
-if N ==1
+% 1-clusters
+if N == 1
   cycPerm = [1,2,3;2,3,1;3,1,2];
   return;
 end
 
-% 2-Clusters
+% 2-clusters
 if N == 2
   if numberRotors == 2
     cycPerm = [1,2,3,4,5,6;...
@@ -914,7 +897,7 @@ if N == 2
   return;
 end
 
-% 3-Clusters
+% 3-clusters
 if N==3
   if numberRotors == 3
     cycPerm = [1,2,3, 4,5,6, 7,8,9;...
@@ -982,13 +965,12 @@ end
 
 error('Cannot calculate cyclic permutations.');
 
-
 end
 
 
 
 % ========================================================================
-% Initialize Coherences
+% Initialize coherences
 % ========================================================================
 
 function [Coherences, SubclusterIndices , ...
@@ -999,7 +981,6 @@ function [Coherences, SubclusterIndices , ...
   Nuclei_rotationalMatrix, nt,  includeMethyls,lockRotor, ...
   Methyl_methylMethylCoupling)
 
-% nt = timepoints^dimensionality;
 % includeMethyls = System.Methyl.include
 SubclusterIndices = cell(1,Method.order);
 
@@ -1055,7 +1036,3 @@ for iclusterSize = 1:Method.order
 end
 
 end
-
-
-
-

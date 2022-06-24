@@ -35,7 +35,7 @@ Method.Criteria = {'dipole'};
 Method.cutoff.dipole = 10^3; % Hz
 Method.getNuclearContributions = true;
 
-[System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
+[System,Method, Data, ~] = setDefaults(System,Method, Data);
 
 numTrial = 1000;
 N0 = zeros(numTrial,1);

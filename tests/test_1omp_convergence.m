@@ -8,7 +8,7 @@ function test_1omp_convergence()
   R_N1 = [-0.020  16.336 -18.471]*1e-10; % m.
   System.Electron.Coordinates = (R_N1+R_O15)/2;
   System.averaging = 'none';
-  Method.method = 'restrictedCE';
+  Method.method = 'rCE';
   Method.r0 = 10e-10; % m.
   Method.order = 2;
   Method.verbose = true;lse;

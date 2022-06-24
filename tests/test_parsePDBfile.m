@@ -13,7 +13,7 @@ Method.Criteria = {'dipole'};
 Method.cutoff.dipole = 10^3; % Hz
 Method.getNuclearContributions = true;
 
-[System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
+[System,Method, Data, ~] = setDefaults(System,Method, Data);
 
 
 pdbData = parsePDBfile(Data.InputData, System.angstrom);

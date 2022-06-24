@@ -22,7 +22,7 @@ Method.getNuclearContributions = true;
 
 Data.writeSpinPDB = false;
 
-[System,Method, Data, ~] = setSystemDefaults(System,Method, Data);
+[System,Method, Data, ~] = setDefaults(System,Method, Data);
 
 
 pdb0 = parsePDB(Data.InputData,System);

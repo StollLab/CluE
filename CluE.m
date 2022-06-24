@@ -14,38 +14,44 @@ function [SignalMean, experiment_time, ...
 
 tic
 
-% Determine the output file.
-
-% set defaults base on specified parameters and for unspecified parameters
-[System, Method, Data,statistics] = setSystemDefaults(System,Method,Data);
+% Set defaults base on specified parameters and for unspecified parameters
+[System, Method, Data,statistics] = setDefaults(System,Method,Data);
 
 [OutputData,doReturn,SignalMean,experiment_time,...
-  TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOuput(Data,Method);
-if doReturn, toc; return; end
+  TM_powder,Order_n_SignalMean,Nuclei,uncertainty] = setOutput(Data,Method);
+if doReturn
+  toc
+  return
+end
 
+% Set verbosity
+verbose = Method.verbose;
+if verbose, fprintf('Setting up...\n');  end
 
 if ~isempty(Method.seed)
-  fprintf('Using rng seed to Method.seed = %d.\n',Method.seed)
+  if verbose
+    fprintf('Using rng seed to Method.seed = %d.\n',Method.seed);
+  end
   rng(Method.seed);
 end
 
-% time axis
-if strcmp(System.experiment,'FID')
-  experiment_time = System.Time;
-elseif strcmp(System.experiment,'Hahn')
-  experiment_time = 2*System.Time;
-elseif strcmp(System.experiment,'CPMG') || strcmp(System.experiment,'CPMG-2D')
-  experiment_time = 4*System.Time;% + 2*System.Time_;
-elseif strcmp(System.experiment,'CPMG-const')
+% Time axis
+switch System.experiment
+  case 'FID'
+    experiment_time = System.Time;
+  case 'Hahn'
     experiment_time = 2*System.Time;
-elseif strcmp(System.experiment,'CP_N')
-  experiment_time = 2*System.nPulses*System.Time;
-elseif strcmp(System.experiment,'Uhrig_N')
-  experiment_time = 2*System.nPulses*System.Time;
+  case {'CPMG','CPMG-2D'}
+    experiment_time = 4*System.Time;% + 2*System.Time_;
+  case 'CPMG-const'
+    experiment_time = 2*System.Time;
+  case 'CP_N'
+    experiment_time = 2*System.nPulses*System.Time;
+  case 'Uhrig_N'
+    experiment_time = 2*System.nPulses*System.Time;
 end
 
-% save input data
-
+% Save input data
 if ~isfield(Data,'InputData') || ~ischar(Data.InputData)
   error('Data.InputData is not a valid file identifier.');
 end
@@ -58,14 +64,12 @@ if ~isfile(InputData)
   end
 end
 
-
-
-% Initiate progress tracking.
+% Initiate progress tracking
 Progress.started = true;
 Progress.complete = false;
 Progress.Completed_Orders = zeros(1,Method.order);
 
-% Save if filename is provided.
+% Save if filename is provided
 if ~isempty(OutputData) && Data.saveLevel>=0
   Input.System = System;
   Input.Method = Method;
@@ -73,12 +77,7 @@ if ~isempty(OutputData) && Data.saveLevel>=0
   save(OutputData,'Input','experiment_time','Progress');
 end
 
-% Set verbosity.
-verbose = Method.verbose;
-
-if verbose, fprintf('Setting up...\n');  end
-
-if strcmp( InputData(end-3:end), '.mat') % check to see if InputData is a saved file.
+if strcmp(InputData(end-3:end),'.mat') % check to see if InputData is a saved file.
   newMethod = Method.method;
   load(InputData);
   Method.method = newMethod;
@@ -109,24 +108,23 @@ elseif min( (InputData(end-3:end)) == '.pdb') || strcmp(InputData,'user') ...
     fprintf(2,'\n There are too few spins in the system for spin decoherence.\n')
     fprintf(2,' Try relaxing one or more cutoffs.\n')
     toc
-    return;
+    return
   end
   
-  
 else
-  error('Input data not recognized')
+  error('Input data in Data.InputData not recognized.')
 end
 
 Progress.DataLoaded = true;
 
-if verbose, fprintf('Setup initialized %i nuclei.\n', Nuclei.number); end
+if verbose, fprintf('Setup initialized system with %i nuclei.\n', Nuclei.number); end
 
 if Nuclei.number < Method.order
   fprintf('Reducing the maximum cluster size to the system size of %d.\n',Nuclei.number)
   Method.order = double(Nuclei.number);
 end
 
-% only possible for very small systems
+% Only possible for very small systems
 if strcmp(Method.method,'full')
   Method.order = Nuclei.number;
 end
@@ -148,8 +146,7 @@ if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
     try
       load(Data.ClusterData,'Clusters');      
     catch
-      disp('Could not load clusters.')
-      
+      disp('Could not load clusters.')      
       if Data.exitOnFailedLoad
         error('Could not load clusters.')
       end
@@ -176,13 +173,13 @@ if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
 end
 
 
-
 % Loop over cluster sizes, start at the largest (most time consuming) size
 if doFindClusters
   
   if strcmp(Method.clusterization,'tree-search')
-    if verbose, fprintf('Finding clusters of up to size %d.\n', ...
-        Method.extraOrder); end
+    if verbose
+      fprintf('Finding clusters of up to size %d.\n',Method.extraOrder);
+    end
 
     if Method.combineClusters
       Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,{});
@@ -245,14 +242,12 @@ end
 % Save Memory.
 Nuclei.Adjacency = [];
 
-
+% Save clusters and exit without calculation if requested
 if strcmp(Method.method,'count clusters')
   SignalMean = Nuclei.numberClusters;
   experiment_time = 1:length(SignalMean);
   TM_powder = [];
   Order_n_SignalMean = [];
-  
-  
   if Method.exportClusters
     if ~isempty(OutputData)
       clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];
@@ -260,13 +255,10 @@ if strcmp(Method.method,'count clusters')
       clusterSaveFile = 'Clusters.mat';
     end
     save(clusterSaveFile,'Clusters');
-  end
-  
-  
+  end    
   toc
   return
 end
-
 
 
 % ========================================================================
@@ -371,17 +363,17 @@ elseif strcmp(System.averaging,'xy')
   Beta = ones(1,gridSize)*pi/2;
   gridWeight = ones(gridSize,1)/gridSize;
   
-elseif strcmp(System.averaging,'custom') 
+elseif strcmp(System.averaging,'custom')
+
   if isstruct(System.Grid)
     Alpha = System.Grid.Alpha;
     Beta = System.Grid.Beta;
-    gridWeight = System.Grid.gridWeight;
-    
-  
+    gridWeight = System.Grid.gridWeight;  
     gridSize = length(Alpha);
-    
   end
+
 elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
+
   GridSizes = [6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
          266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702,...
          3074, 3470, 3890, 4334, 4802, 5294, 5810];
@@ -392,9 +384,7 @@ elseif strcmp(System.averaging,'Nitroxide_Wband_Weights')
   Beta = Grids{gridIndex}.Beta;
   gridWeight = Grids{gridIndex}.Weight;
 
-  
   gridSize = length(Alpha);
-  
   
   GridInfo.gridSize   = gridSize;
   GridInfo.gridWeight = gridWeight;
@@ -405,12 +395,16 @@ elseif strcmp(System.averaging,'random')
   
   % Generate random Euler angles.
   Alpha = rand(1,gridSize)*2*pi;
-  Beta = acos( 2*rand(1,gridSize) - 1);
+  Beta = acos(2*rand(1,gridSize)-1);
   gridWeight = ones(gridSize,1)/gridSize;
 
 end
-
 nOrientations = gridSize;
+if verbose
+  fprintf("Calculating signal for %d orientations.\n",nOrientations);
+end
+
+nTimePoints = sum(System.nPoints);
 
 % initialize result variables
 Signals{nOrientations} = [];
@@ -423,16 +417,16 @@ Ori_Clusters = cell(nOrientations,1);
 Progress.Order_n_Mean = 'pending';
 Order_n_Signals{nOrientations} = [];
 if strcmp(Method.method,'HD-CCE')
-  SignalMean = zeros(1,System.timepoints^System.dimensionality,length(System.deuteriumFraction));
+  SignalMean = zeros(1,nTimePoints^System.dimensionality,length(System.deuteriumFraction));
 else
-SignalMean = zeros(1,System.timepoints^System.dimensionality);
+SignalMean = zeros(1,nTimePoints^System.dimensionality);
 end
 % initialize
 for iorder = Method.order:-1:1
   if strcmp(System.experiment,'CPMG-2D')
-  Order_n_SignalMean{iorder} = zeros(1,System.timepoints^2);
+  Order_n_SignalMean{iorder} = zeros(1,nTimePoints^2);
   else
-    Order_n_SignalMean{iorder} = zeros(1,System.timepoints);
+    Order_n_SignalMean{iorder} = zeros(1,nTimePoints);
   end
 end
 
@@ -569,6 +563,7 @@ if ~Method.sparseMemory
   
   clear('TempSignals');
 end
+
 if ~isempty(pool)
   delete(pool);
 end
@@ -674,15 +669,14 @@ end
 % update progress
 if Progress.Order_n_Mean, Progress.Order_n_Mean = true; end
 
-if System.dimensionality ==2 && min(size(SignalMean))==1
-  SignalMean = reshape(SignalMean',System.timepoints,System.timepoints)';
-  
+if System.dimensionality==2 && min(size(SignalMean))==1
+  SignalMean = reshape(SignalMean',nTimePoints,nTimePoints)';
   for iorder = 1:Method.order
-    Order_n_SignalMean{iorder} = reshape(Order_n_SignalMean{iorder}',System.timepoints,System.timepoints)';
+    Order_n_SignalMean{iorder} = reshape(Order_n_SignalMean{iorder}',nTimePoints,nTimePoints)';
   end
 end
 
-
+% Save clusters if requested
 if Method.exportClusters
   if ~isempty(OutputData)
     clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];
@@ -698,9 +692,9 @@ if strcmp(Method.method,'count clusters')
   experiment_time = 1:Method.order;
   SignalMean = SignalMean/SignalMean(1)*double(Nuclei.number);
 end
-%SignalMean = SignalMean/max(SignalMean);
 TM_powder = getTM(experiment_time,abs(SignalMean));
 Progress.complete = true;
+
 if verbose
   fprintf('Processing\n');
 end
@@ -734,23 +728,23 @@ if ~isempty(OutputData)
   end
 end
 
-% delete temporary files
-for ii = 1:nOrientations
-  temp_file = ['temp_', OutputData, '_sig_', num2str(ii), '.mat'] ;
+% Delete temporary files
+for iOri = 1:nOrientations
+  temp_file = ['temp_', OutputData, '_sig_', num2str(iOri), '.mat'] ;
   if isfile(temp_file)
     delete(temp_file);
   end
 end
 
-% calculate the contributions from each spin
+% Calculate the contributions from each spin
 % placed after the save since getSpinContributions() is still buggy
 %NuclearContribution.findContributions = Method.getNuclearContributions;
 
 if Method.getUncertainty
-uncertainty = getClusterError([], ...
-  Nuclei, System, nOrientations, Clusters, AuxiliarySignal,Method, gridWeight, Order_n_SignalMean, Order_n_Signals); 
-
-save(OutputData,'uncertainty','-append');
+  uncertainty = getClusterError([], ...
+    Nuclei, System, nOrientations, Clusters, AuxiliarySignal,Method, ...
+    gridWeight, Order_n_SignalMean, Order_n_Signals); 
+  save(OutputData,'uncertainty','-append');
 end
 if Method.getNuclearSpinContributions
   getNuclearSpinContributions([OutputData,'SpinContribution.mat'], ...
@@ -788,7 +782,7 @@ end
 
 if verbose
   fprintf('\nCompleted Nuclear Spin Diffusion\n');
-  fprintf('\nNuclear spin decoherence time = %d s. \n',TM_powder);
+  fprintf('\nNuclear spin decoherence time = %f µs. \n',TM_powder/1e-6);
 end
 
 if Method.conserveMemory
@@ -1144,17 +1138,17 @@ elseif strcmp(Method.method,'LCE')
   if verbose
     fprintf('\nComplete.\n')
   end
-  return;
+  return
 end
 
-timepoints = size(System.Time,2);
+timepoints = numel(System.Time);
 dt = System.dt;
 linearTimeAxis = true; % Code should be changed to enforce this.
 
 % Calculate signal
 if Method.mixed_eState
-  [Signal, Order_n_Signal,~] = calculateSignal_pulse(System, Method, ...
-    Nuclei,Clusters, timepoints,dt, linearTimeAxis,verbose);
+  [Signal,Order_n_Signal,~] = calculateSignal_pulse(System,Method, ...
+    Nuclei,Clusters,timepoints,dt,linearTimeAxis,verbose);
 else
   % Calculate signal and save extra parameters (RAM intensive)
   
@@ -1240,7 +1234,7 @@ else
           Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, ...
           fractions, ClusterArray, ...
           SubclusterIndices_2H,SubclusterIndices_2D,...
-          System.timepoints,dimensionality, Method.order,...
+          timepoints,dimensionality, Method.order,...
           Nuclei.numberClusters,Nuclei.Exchangeable,Nuclei.MoleculeID);
         
         System.deuteriumFraction = fractions;
@@ -1299,7 +1293,7 @@ end
 % Set Output Data
 %==========================================================================
 function [OutputData,doReturn,SignalMean,experiment_time,...
-  TM_powder,Order_n_SignalMean,Nuclei,statistics] = setOuput(Data,Method)
+  TM_powder,Order_n_SignalMean,Nuclei,statistics] = setOutput(Data,Method)
 doReturn = false;
 SignalMean  = [];
 experiment_time = [];

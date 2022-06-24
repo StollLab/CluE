@@ -36,7 +36,7 @@ System.dt = 0.05*1e-6; % s.
 Method.Criteria = {'dipole'};
 Method.cutoff.dipole = 0;
 
-[System, Method, Data] = setSystemDefaults(System,Method,Data);
+[System, Method, Data] = setDefaults(System,Method,Data);
 pdb = parsePDBfile(Data.InputData, System.angstrom);
 [Nuclei, System] = centralSpinSystem(System,Method,Data,pdb);
 
@@ -120,7 +120,7 @@ System.dt = 0.05*1e-6; % s.
 Method.Criteria = {'dipole'};
 Method.cutoff.dipole = 0;
 
-[System, Method, Data] = setSystemDefaults(System,Method,Data);
+[System, Method, Data] = setDefaults(System,Method,Data);
 pdb = parsePDBfile(Data.InputData, System.angstrom);
 [Nuclei, System] = centralSpinSystem(System,Method,Data,pdb);
 

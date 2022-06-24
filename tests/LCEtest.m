@@ -28,19 +28,11 @@ System.radius = 14e-10; % m;
 System.nitrogen = false;
 System.carbon = false;
 
-% total number of time points 
-System.timepoints = 2^7;
+% Number of time points 
+System.nPoints = [2^7 0];
 
-% number of timepoints for th first dt
-System.Ndt = System.timepoints;
-
-% time step size for the first Ndt time points, 
-% System.dt = 0.1905/2*1e-6; % s
-System.dt = 5/System.timepoints*1e-6; % s
-
-% time step size for time points after the first Ndt  
-System.dt2 = 2.25e-6; % s
-
+% Time step sizes
+System.dt = [5/sum(System.nPoints)*1e-6 2.25e-6]; % s
 
 % electron coordinate choices
 % { n } coordinates of the nth atom from the pdb file
