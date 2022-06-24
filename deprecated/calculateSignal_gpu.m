@@ -13,7 +13,6 @@ mu0 = System.mu0;
 hbar = System.hbar;
 timepoints = sum(System.nPoints);
 dt = System.dt(1);
-%t0 = System.t0;
 dt2 = System.dt(2);
 N1 = System.nPoints(1);
 maxSize = 6;

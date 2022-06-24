@@ -332,7 +332,6 @@ defaultSystem.inner_radius = 0;  % m
 defaultSystem.temperature = 20 ;  % K
 defaultSystem.dt = [];
 defaultSystem.nPoints = [];
-defaultSystem.t0 = 0;
 defaultSystem.solventOnly = false;
 defaultSystem.D2O = false;
 defaultSystem.spinHalfOnly = false;
@@ -439,21 +438,13 @@ end
 if numel(System.nPoints)<2
   System.nPoints(2) = 0;
 end
-if System.t0~=0
-  error('Use of t0 is not recommended.');
-end
 
 % Set up time grid
 if isfield(System,'nPoints') && isfield(System,'dt')
   N = sum(System.nPoints);
-  if System.t0 > 0
-    System.Time = zeros(1,N);
-    System.Time(2:end) = System.t0 + (0:N-2)*System.dt;
-  else
-    System.Time(1:System.nPoints(1)) = (0:System.nPoints(1)-1)*System.dt(1);
-    if numel(System.nPoints)>1
-      System.Time(System.nPoints(1)+1:N) = System.Time(System.nPoints(1)) + (1:N - System.nPoints(1))*System.dt(2);
-    end
+  System.Time(1:System.nPoints(1)) = (0:System.nPoints(1)-1)*System.dt(1);
+  if numel(System.nPoints)>1
+    System.Time(System.nPoints(1)+1:N) = System.Time(System.nPoints(1)) + (1:N - System.nPoints(1))*System.dt(2);
   end
 elseif isfield(System,'Time')
   System.nPoints = length(System.Time);
