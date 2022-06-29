@@ -74,7 +74,7 @@ Method.order_lower_bound = 1;
 % Method.Criteria = {'neighbor','modulation','dipole','minimum-frequency'};
 Method.Criteria = {'dipole'};
 Method.Ori_cutoffs = false;
-Method.cutoff.dipole = 10^3; % Hz
+Method.neighborCutoff.dipole = 10^3; % Hz
 
 Method.propagationDomain = 'time-domain';
 

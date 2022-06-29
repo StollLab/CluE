@@ -18,7 +18,7 @@ for isize = 2
     
     thisCluster = Clusters{isize}(icluster,:);
     
-    [tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, Nuclei.Coordinates,...
+    [tensors,zeroIndex] = pairwisetensors(Nuclei.Nuclear_g, Nuclei.Coordinates,...
       thisCluster,Nuclei.Atensor, System.magneticField, System.ge, System.gMatrix(3,3), System.muB, System.muN, System.mu0, System.hbar,System.theory,MethylID);
     
     b = -2*pi*tensors(3,3,2,3)/4; % rad/s.

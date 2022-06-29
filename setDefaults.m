@@ -1,6 +1,8 @@
 % Supplements the user-provided System, Method and Data structures with default
 % values of fields that the user did not provide explicitly.
 
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function [System,Method,Data,statistics] = setDefaults(System,Method,Data)
 
 % Method: define defaults for all fields
@@ -11,7 +13,6 @@ defaultMethod.useCentralSpinSystem = false;
 defaultMethod.sparseMemory = false;
 defaultMethod.conserveMemory = false;
 defaultMethod.getNuclearStatistics = false;
-defaultMethod.gpu = false;
 defaultMethod.exportHamiltonian = false;
 defaultMethod.exportClusters = false;
 defaultMethod.propagationDomain='time-domain';
@@ -57,144 +58,15 @@ if Method.conserveMemory
   Method.precalculateHamiltonian = false;
   
 end
-if ~isfield(Method,'Criteria') || isempty(Method.Criteria)
-  Method.Criteria = {'dipole'};
+
+Method = setNeighborCutoffs(Method);
+
+if ~isfield(Method,'vertexCutoff')
+  Method.vertexCutoff = struct();
 end
 
-num_criteria = numel(Method.Criteria);
-for ii = 1:num_criteria
-  switch Method.Criteria{ii}
-    case 'methyl only'
-      if ~isfield(Method.cutoff,'methylOnly')
-        Method.cutoff.methylOnly = true(1,Method.order);
-      end
-      break
-      
-    case 'methyl coupled only'
-      if ~isfield(Method.cutoff,'methylCoupledOnly')
-        Method.cutoff.methylCoupledOnly = true(1,Method.order);
-      end
-      break
-      
-    case 'distance'
-      if ~isfield(Method.cutoff,'rMax')
-        Method.cutoff.rMax = inf;
-      end
-      if ~isfield(Method.cutoff,'rMin')
-        Method.cutoff.rMin = 0;
-      end
-      break
-  end
-end
-
-% Supplement missing cutoff criteria
-if ~isfield(Method,'cutoff') 
-  Method.cutoff = struct;
-end
-%{
-  Method.cutoff.modulation = zer;
-  Method.cutoff.maxAmax = inf;
-  Method.cutoff.minAmax = zer;
-  Method.cutoff.max_distance = inf + zer;
-  Method.cutoff.min_distance = zer;
-  Method.cutoff.hyperfine_sup = inf + zer;
-  Method.cutoff.hyperfine_inf = zer;
-  Method.cutoff.methylOnly = false(1,Method.order);
-  Method.cutoff.methylCoupledOnly = false(1,Method.order);
-%}
-zer = zeros(1,Method.order);
-if ~isfield(Method.cutoff,'bAmax') 
-  Method.cutoff.bAmax = zer;
-end
-if ~isfield(Method.cutoff,'dipole') 
-  Method.cutoff.dipole = zer;
-end
-if ~isfield(Method.cutoff,'dipoleHalf') 
-  Method.cutoff.dipoleHalf = zer;
-end
-if ~isfield(Method.cutoff,'dipoleOne') 
-  Method.cutoff.dipoleOne = zer;
-end
-if ~isfield(System,'radius_nonSpinHalf')
-  System.radius_nonSpinHalf = System.radius;
-end
-if ~isfield(Method.cutoff,'radius_nonSpinHalf') 
-  Method.cutoff.radius_nonSpinHalf = System.radius_nonSpinHalf;
-else
-  System.radius_nonSpinHalf = Method.cutoff.radius_nonSpinHalf;
-end
-
-if ~isfield(Method,'lock_bAmax')
-  Method.lock_bAmax = false;
-end
-if ~isfield(Method,'Ori_cutoffs')
-  Method.Ori_cutoffs = false;
-end
-if ~isfield(Method,'reparseNuclei')
-  Method.reparseNuclei = false;
-end
-if ~isfield(Method.cutoff,'methylOnly')
-  Method.cutoff.methylOnly = false(1,Method.order);
-end
-if numel(Method.cutoff.methylOnly) < Method.order
-  n_ = numel(Method.cutoff.methylOnly);
-  Method.cutoff.methylOnly(n_:Method.order) = Method.cutoff.methylOnly(n_);
-end
-
-if ~isfield(Method.cutoff,'methylCoupledOnly')
-  Method.cutoff.methylCoupledOnly = false(1,Method.order);
-end
-if numel(Method.cutoff.methylCoupledOnly) < Method.order
-  n_ = numel(Method.cutoff.methylCoupledOnly);
-  Method.cutoff.methylCoupledOnly(n_:Method.order) = Method.cutoff.methylCoupledOnly(n_);
-end
-if numel(Method.cutoff.dipole) < Method.order
-  n_ = numel(Method.cutoff.dipole);
-  Method.cutoff.dipole(n_:Method.order) = Method.cutoff.dipole(n_);
-end
-if numel(Method.cutoff.dipoleHalf) < Method.order
-  n_ = numel(Method.cutoff.dipoleHalf);
-  Method.cutoff.dipoleHalf(n_:Method.order) = Method.cutoff.dipoleHalf(n_);
-end
-if numel(Method.cutoff.dipoleOne) < Method.order
-  n_ = numel(Method.cutoff.dipoleOne);
-  Method.cutoff.dipoleOne(n_:Method.order) = Method.cutoff.dipoleOne(n_);
-end
-if isfield(Method.cutoff, 'maxAmax') && numel(Method.cutoff.maxAmax) < Method.order
-  n_ = numel(Method.cutoff.maxAmax);
-  Method.cutoff.maxAmax(n_:Method.order) = Method.cutoff.maxAmax(n_);
-end
-if isfield(Method.cutoff, 'minAmax') && numel(Method.cutoff.minAmax) < Method.order
-  n_ = numel(Method.cutoff.minAmax);
-  Method.cutoff.minAmax(n_:Method.order) = Method.cutoff.minAmax(n_);
-end
-if isfield(Method.cutoff, 'minimum_frequency') ...
- && numel(Method.cutoff.minimum_frequency) < Method.order
-  n_ = numel(Method.cutoff.minimum_frequency);
-  Method.cutoff.minimum_frequency(n_:Method.order) ...
-  = Method.cutoff.minimum_frequency(n_);
-end
-if isfield(Method.cutoff, 'modulation') ...
- && numel(Method.cutoff.modulation) < Method.order
-  n_ = numel(Method.cutoff.modulation);
-  Method.cutoff.modulation(n_:Method.order) = Method.cutoff.modulation(n_);
-end
-if isfield(Method.cutoff, 'DeltaHyperfine') ...
- && numel(Method.cutoff.DeltaHyperfine) < Method.order
-  n_ = numel(Method.cutoff.DeltaHyperfine);
-  Method.cutoff.DeltaHyperfine(n_:Method.order) ...
-   = Method.cutoff.DeltaHyperfine(n_);
-end
-
-if numel(Method.cutoff.bAmax) < Method.order
-  n_ = numel(Method.cutoff.bAmax);
-  Method.cutoff.bAmax(n_:Method.order) = Method.cutoff.bAmax(n_);
-end
-
-if norm(Method.cutoff.dipole-Method.cutoff.dipole(1)) > 0
-  Method.cutoff.sizeDependent = true;
-else
-  Method.cutoff.sizeDependent = false;
+if ~isfield(Method.vertexCutoff,'radius_nonSpinHalf') 
+  Method.vertexCutoff.radius_nonSpinHalf = System.radius;
 end
 
 % Radius to load nuclei in to.
@@ -216,9 +88,12 @@ if ~isfield(Method.MonteCarlo,'Cluster_Limit')
   Method.MonteCarlo.Cluster_Limit = inf*(1:Method.order); 
 elseif length(Method.MonteCarlo.Cluster_Limit) < Method.order
   Cluster_Limit = inf*(1:Method.order);
-  Cluster_Limit(1:length(Method.MonteCarlo.Cluster_Limit)) = Method.MonteCarlo.Cluster_Limit;
+  Cluster_Limit(1:length(Method.MonteCarlo.Cluster_Limit)) ...
+   = Method.MonteCarlo.Cluster_Limit;
+
   for ii = length(Method.MonteCarlo.Cluster_Limit):Method.order
-    Cluster_Limit(ii) = Method.MonteCarlo.Cluster_Limit(length(Method.MonteCarlo.Cluster_Limit));
+    Cluster_Limit(ii) ...
+     = Method.MonteCarlo.Cluster_Limit(length(Method.MonteCarlo.Cluster_Limit));
   end
   Method.MonteCarlo.Cluster_Limit = Cluster_Limit;
 end
@@ -232,9 +107,11 @@ if length(Method.MonteCarlo.Increment)==1
 end
 if length(Method.MonteCarlo.Increment) < Method.order
   Increment = 1000*(1:Method.order);
-  Increment(1:length(Method.MonteCarlo.Increment)) = length(Method.MonteCarlo.Increment);
+  Increment(1:length(Method.MonteCarlo.Increment)) ...
+   = length(Method.MonteCarlo.Increment);
   for ii = length(Method.MonteCarlo.Increment):Method.order
-    Increment(ii) = Method.MonteCarlo.Increment(length(Method.MonteCarlo.Increment));
+    Increment(ii) = ...
+     Method.MonteCarlo.Increment(length(Method.MonteCarlo.Increment));
   end
   Method.MonteCarlo.Increment = Increment;
 end
@@ -267,10 +144,9 @@ if length(Method.MonteCarlo.Threshold) < Method.order
   Method.MonteCarlo.Threshold= Threshold;
 end
 
-% if any(Method.useInterlacedClusters(:)) && Method.useMultipleBathStates
-%   error('Method.useInterlacedClusters and Method.useMultipleBathStates are not compatiple.')
-% end
-if (size(Method.useInterlacedClusters,1) ~= size(Method.useInterlacedClusters,2)) || (size(Method.useInterlacedClusters,1) < Method.order)
+if (size(Method.useInterlacedClusters,1) ~=...
+    size(Method.useInterlacedClusters,2)) ...
+    || (size(Method.useInterlacedClusters,1) < Method.order)
 
   if any(Method.useInterlacedClusters(:))
   M_ = eye(Method.order)>0;
@@ -341,7 +217,7 @@ defaultSystem.defaultExchangability = true;
 defaultSystem.pdbTranslation = [];
 defaultSystem.pdbRotate = false;
 defaultSystem.randomOrientation = false;
-defaultSystem.TMguess = (5+45*System.D2O)*1e-6;  % s, very rough
+defaultSystem.TMguess = (5+45)*1e-6;  % s, very rough
 defaultSystem.doPruneNuclei = false;
 defaultSystem.HydrogenExchange = 'OH';
 defaultSystem.isUnitCell = true;
@@ -367,11 +243,11 @@ end
 if ~isfield(System.Methyl,'numberExtraProtons')
   System.Methyl.numberExtraProtons = 0;
 end
-if ~isfield(Method.cutoff,'methylCoupledOnlyNumber')
+if ~isfield(Method.neighborCutoff,'methylCoupledOnlyNumber')
   if System.Methyl.method==1
-    Method.cutoff.methylCoupledOnlyNumber = 1;
+    Method.neighborCutoff.methylCoupledOnlyNumber = 1;
   else
-    Method.cutoff.methylCoupledOnlyNumber = 3;
+    Method.neighborCutoff.methylCoupledOnlyNumber = 3;
   end
 end
 if ~isfield(System.Methyl,'moment_of_inertia')
@@ -498,7 +374,7 @@ end
 
 % Define theory
 if isfield(System,'Theory')
-  System.theory = any(System.Theory);
+  System.theory = any(System.Theory,1);
 end
 
 if ~isfield(System,'theory')
@@ -725,12 +601,14 @@ end
 % Set statistics structure
 statistics.parameters.radius = System.radius;
 statistics.parameters.neighborCutoffCriteria = Method.Criteria;
-statistics.parameters.neighborCutoff = Method.cutoff;
+statistics.parameters.neighborCutoff = Method.neighborCutoff;
 statistics.parameters.gridSize = System.gridSize;
 
 end  % end of main function
-%===============================================================================
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function out = supplementdefaults(user,defaults)
 % Supplements the provided user structure with fields and values from
 % the structure defaults and returns the result in out.
@@ -741,3 +619,132 @@ for f = 1:numel(fields)
   out.(Name) = user.(Name);
 end
 end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function Method = setNeighborCutoffs(Method)
+
+if isfield(Method,'Criteria')
+  error(['Error in setMethodCutoffs(): ',...
+      'Method.Criteria is deprecated as an external variable.']);
+end
+Method.Criteria = cell(0);
+
+% Supplement missing cutoff criteria
+if ~isfield(Method,'neighborCutoff') 
+  Method.neighborCutoff = struct;
+end
+
+zer = zeros(1,Method.order);
+
+if ~isfield(Method.neighborCutoff,'bAmax') 
+  Method.neighborCutoff.bAmax = zer;
+else
+   Method.Criteria{end+1} = 'bAmax';
+end
+
+if ~isfield(Method.neighborCutoff,'dipole') 
+  Method.neighborCutoff.dipole = zer;
+else
+   Method.Criteria{end+1} = 'dipole';
+end
+
+if ~isfield(Method.neighborCutoff,'dipoleHalf') 
+  Method.neighborCutoff.dipoleHalf = zer;
+else
+   Method.Criteria{end+1} = 'dipoleHalf';
+end
+
+if ~isfield(Method.neighborCutoff,'dipoleOne') 
+  Method.neighborCutoff.dipoleOne = zer;
+else
+   Method.Criteria{end+1} = 'dipoleOne';
+end
+
+if ~isfield(Method.neighborCutoff,'distance') 
+  Method.neighborCutoff.rMax = inf*ones(1,Method.order);
+  Method.neighborCutoff.rMin = zer;
+else
+   Method.Criteria{end+1} = 'distance';
+end
+
+if ~isfield(Method.neighborCutoff,'methylCoupledOnly')
+  Method.neighborCutoff.methylCoupledOnly = false(1,Method.order);
+else
+   Method.Criteria{end+1} = 'methyl coupled only';
+end
+
+if ~isfield(Method.neighborCutoff,'methylOnly')
+  Method.neighborCutoff.methylOnly = false(1,Method.order);
+else
+   Method.Criteria{end+1} = 'methyl only';
+end
+
+if ~isfield(Method,'Ori_cutoffs')
+  Method.Ori_cutoffs = false;
+end
+if ~isfield(Method,'reparseNuclei')
+  Method.reparseNuclei = false;
+end
+
+if numel(Method.neighborCutoff.methylOnly) < Method.order
+  n_ = numel(Method.neighborCutoff.methylOnly);
+  Method.neighborCutoff.methylOnly(n_:Method.order) = Method.neighborCutoff.methylOnly(n_);
+end
+
+if numel(Method.neighborCutoff.methylCoupledOnly) < Method.order
+  n_ = numel(Method.neighborCutoff.methylCoupledOnly);
+  Method.neighborCutoff.methylCoupledOnly(n_:Method.order) = Method.neighborCutoff.methylCoupledOnly(n_);
+end
+if numel(Method.neighborCutoff.dipole) < Method.order
+  n_ = numel(Method.neighborCutoff.dipole);
+  Method.neighborCutoff.dipole(n_:Method.order) = Method.neighborCutoff.dipole(n_);
+end
+if numel(Method.neighborCutoff.dipoleHalf) < Method.order
+  n_ = numel(Method.neighborCutoff.dipoleHalf);
+  Method.neighborCutoff.dipoleHalf(n_:Method.order) = Method.neighborCutoff.dipoleHalf(n_);
+end
+if numel(Method.neighborCutoff.dipoleOne) < Method.order
+  n_ = numel(Method.neighborCutoff.dipoleOne);
+  Method.neighborCutoff.dipoleOne(n_:Method.order) = Method.neighborCutoff.dipoleOne(n_);
+end
+if isfield(Method.neighborCutoff, 'maxAmax') && numel(Method.neighborCutoff.maxAmax) < Method.order
+  n_ = numel(Method.neighborCutoff.maxAmax);
+  Method.neighborCutoff.maxAmax(n_:Method.order) = Method.neighborCutoff.maxAmax(n_);
+end
+if isfield(Method.neighborCutoff, 'minAmax') && numel(Method.neighborCutoff.minAmax) < Method.order
+  n_ = numel(Method.neighborCutoff.minAmax);
+  Method.neighborCutoff.minAmax(n_:Method.order) = Method.neighborCutoff.minAmax(n_);
+end
+if isfield(Method.neighborCutoff, 'minimum_frequency') ...
+ && numel(Method.neighborCutoff.minimum_frequency) < Method.order
+  n_ = numel(Method.neighborCutoff.minimum_frequency);
+  Method.neighborCutoff.minimum_frequency(n_:Method.order) ...
+  = Method.neighborCutoff.minimum_frequency(n_);
+end
+if isfield(Method.neighborCutoff, 'modulation') ...
+ && numel(Method.neighborCutoff.modulation) < Method.order
+  n_ = numel(Method.neighborCutoff.modulation);
+  Method.neighborCutoff.modulation(n_:Method.order) = Method.neighborCutoff.modulation(n_);
+end
+if isfield(Method.neighborCutoff, 'DeltaHyperfine') ...
+ && numel(Method.neighborCutoff.DeltaHyperfine) < Method.order
+  n_ = numel(Method.neighborCutoff.DeltaHyperfine);
+  Method.neighborCutoff.DeltaHyperfine(n_:Method.order) ...
+   = Method.neighborCutoff.DeltaHyperfine(n_);
+end
+
+if numel(Method.neighborCutoff.bAmax) < Method.order
+  n_ = numel(Method.neighborCutoff.bAmax);
+  Method.neighborCutoff.bAmax(n_:Method.order) = Method.neighborCutoff.bAmax(n_);
+end
+
+if norm(Method.neighborCutoff.dipole-Method.neighborCutoff.dipole(1)) > 0
+  Method.neighborCutoff.sizeDependent = true;
+else
+  Method.neighborCutoff.sizeDependent = false;
+end
+end % of function
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+

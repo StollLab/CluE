@@ -75,7 +75,7 @@ System.gMatrix = R_pdb2lab*System.gMatrix_gFrame*R_pdb2lab';
 
 geff=System.gMatrix(3,3);
 
-Tensors = pairwisetensors_gpu(Nuclei.Nuclear_g, Nuclei.Coordinates,...
+Tensors = pairwisetensors(Nuclei.Nuclear_g, Nuclei.Coordinates,...
   [1:Nuclei.number],Nuclei.Atensor, System.magneticField, System.ge, geff, System.muB, System.muN, System.mu0, System.hbar,System.theory,[]); 
 % ========================================================================
 % Compile list of connected clusters

@@ -22,7 +22,8 @@ inOrder = numel(inClusters);
 
 % Get adjacency matrix and convert to logical
 if (inOrder < order) && (inOrder>=2)
-  Adjacency = clusters2Adjacency(inClusters{2},N) | logical(Nuclei.Adjacency(:,:,1));
+  Adjacency ...
+  = clusters2Adjacency(inClusters{2},N) | logical(Nuclei.Adjacency(:,:,1));
 else
   Adjacency = logical(Nuclei.Adjacency(:,:,adjacencyOrder));
   AntiAdjacency = Nuclei.AntiAdjacency(:,:,adjacencyOrder);
@@ -155,10 +156,11 @@ for clusterSize = 2:order
 end
 
 
-methylCoupledOnly = any(strcmp(Method.Criteria,'methyl coupled only'));
+%doMethylCoupledOnly = any(strcmp(Method.Criteria,'methyl coupled only'));
+doMethylCoupledOnly = any(Method.neighborCutoff.methylCoupledOnly);
 
 
-if methylCoupledOnly
+if doMethylCoupledOnly
   
   % Methyl Groups
   isMethylCarbon = strcmp(Nuclei.Type,'CH3');
@@ -166,13 +168,13 @@ if methylCoupledOnly
   isMethyl = isMethylCarbon | isMethylHydron;
 
   for clusterSize = 3:order
-    if ~Method.cutoff.methylCoupledOnly(clusterSize)
+    if ~Method.neighborCutoff.methylCoupledOnly(clusterSize)
       continue;
     end
     
     C = Clusters{clusterSize};
     
-    keep  = sum(isMethyl(C),2) >= Method.cutoff.methylCoupledOnlyNumber;
+    keep  = sum(isMethyl(C),2) >= Method.neighborCutoff.methylCoupledOnlyNumber;
     for ii=1:length(keep)
       if ~keep(ii), continue; end
       cluster = C(ii,:);

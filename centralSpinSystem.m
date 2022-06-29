@@ -71,7 +71,7 @@ residueList_             = cell(0,0);
 uniqueResidueList_       = {}; 
 zeroIndex_               = {};
 r0_                      = System.load_radius;
-r0_nonHalf_               = Method.cutoff.radius_nonSpinHalf(1);
+r0_nonHalf_               = Method.vertexCutoff.radius_nonSpinHalf(1);
 
 buildSystem();
 
@@ -1054,7 +1054,7 @@ if System.doPruneNuclei
     System.newIsotopologuePerOrientation = false;
   end
   keep = Nuclei.Spin == 1/2 | ...
-    vecnorm(Nuclei.Coordinates') <= Method.cutoff.radius_nonSpinHalf(1);
+    vecnorm(Nuclei.Coordinates') <= Method.vertexCutoff.radius_nonSpinHalf(1);
   
   
   
@@ -3292,7 +3292,7 @@ Nuclei.SpinOperators{multiplicity} = 1;
 for multiplicity = 2:3
   S = (multiplicity-1)/2;
   Nuclei.SpinOperators{multiplicity} ...
-    = generateSpinOperators(S,maxClusterSize(multiplicity),Method.gpu);
+    = generateSpinOperators(S,maxClusterSize(multiplicity));
 %   rot = generateRotationMatrices(spinDim,numberMethyl)
 end
 if Method.allowHDcoupling % allowMixedSpins
@@ -3343,20 +3343,6 @@ if any(vecnorm(Nuclei.Coordinates,2,2) > System.radius*System.scale)
   end
 end
 
-
-if Method.lock_bAmax
-  Nuclei.bAmax_lim = lock_bAmax(Nuclei.Statistics, Method);
-  Method.cutoff.bAmax(:) = Nuclei.bAmax_lim;
-  doAddCriterion = true;
-  for icriterion = Method.Criteria
-    if strcmp(icriterion,'bAmax')
-      doAddCriterion = false;
-    end
-  end
-  if doAddCriterion
-    Method.Criteria{end+1} = 'bAmax';
-  end
-end
 % Get the highest spin value. 
 Nuclei.maxSpin = max(Nuclei.Spin);
 
@@ -3609,7 +3595,7 @@ if ~isfield(System,'include_29Si')
   System.include_29Si = true;
 end
     
-defaultValue = ~any(strcmp(Method.Criteria,'methyl only'));
+defaultValue = ~any(Method.neighborCutoff.methylOnly);
 if ~isfield(System,'protium')
   System.protium = defaultValue;
 end

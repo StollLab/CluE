@@ -81,7 +81,7 @@ Method.order = 2;
 % System.useThermalEnsemble = true;
 % maximum nucleus-nucleus coupling distance;
 Method.Criteria = {'dipole'};
-Method.cutoff.dipole = [10^3,10^3,10^3]; % Hz
+Method.neighborCutoff.dipole = [10^3,10^3,10^3]; % Hz
 
 % verbosity option: true, false
 Method.verbose = true;

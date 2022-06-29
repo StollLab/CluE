@@ -195,7 +195,7 @@ if doFindClusters
         Clusters{clusterSize} = C(keep,:);
       end
     else
-      if ~Method.cutoff.sizeDependent
+      if ~Method.neighborCutoff.sizeDependent
       Clusters = findClusters_treeSearch(Nuclei,Method.extraOrder,1,...
         inClusters, Method);
       else
@@ -1011,13 +1011,13 @@ if Method.Ori_cutoffs
   Statistics.isotopologueStatistics = isotopologueStatistics;
   Nuclei.Statistics = Statistics;
   
-  if ~Method.cutoff.sizeDependent
+  if ~Method.neighborCutoff.sizeDependent
     Ori_Clusters = findClusters_treeSearch(Nuclei,Method.order,...
       Method.extraOrder,{}, Method);
   end
 
   for clusterSize = 1:Method.order
-    if Method.cutoff.sizeDependent
+    if Method.neighborCutoff.sizeDependent
       Ori_Clusters = findClusters_treeSearch(Nuclei,clusterSize,...
         clusterSize,{}, Method);
     end
@@ -1093,7 +1093,7 @@ if isfield(Method,'exportHamiltonian') && Method.exportHamiltonian
   
   geff=System.gMatrix(3,3);
   
-  [Tensors,zeroIndex] = pairwisetensors_gpu(Nuclei.Nuclear_g, Nuclei.Coordinates,...
+  [Tensors,zeroIndex] = pairwisetensors(Nuclei.Nuclear_g, Nuclei.Coordinates,...
     1:Nuclei.number,Nuclei.Atensor, System.magneticField, System.ge, geff, System.muB, System.muN, System.mu0, System.hbar,System.theory,[]);
   
   % set file name
@@ -1156,26 +1156,13 @@ else
   if all(all(System.Theory)==any(System.Theory)) && ...
       ~strcmp(Method.method,'HD-CCE')
     
-    if Method.gpu
-      [Signal, AuxiliarySignal_1,AuxiliarySignal_2,...
-        AuxiliarySignal_3,AuxiliarySignal_4,Signals] ...
-        = calculateSignal_gpu(System, Method, Nuclei,Clusters);
-      
-      AuxiliarySignal = {AuxiliarySignal_1,AuxiliarySignal_2,...
-        AuxiliarySignal_3,AuxiliarySignal_4};
-      
-      Order_n_Signal = {Signals(1,:),Signals(2,:),Signals(3,:),...
-        Signals(4,:),Signals(5,:),Signals(6,:)};
-    else
-      
-      [Signal, AuxiliarySignal, Signals] ...
-        = calculateSignal(System, Method, Nuclei,Clusters);
-      
-      Order_n_Signal = cell(1,Method.order);
-      
-      for ii = 1:Method.order
-        Order_n_Signal{ii} = Signals(1,ii);
-      end
+    [Signal, AuxiliarySignal, Signals] ...
+      = calculateSignal(System, Method, Nuclei,Clusters);
+    
+    Order_n_Signal = cell(1,Method.order);
+    
+    for ii = 1:Method.order
+      Order_n_Signal{ii} = Signals(1,ii);
     end
   else
     Order_n_Signal = cell(1,Method.order);
@@ -1216,7 +1203,7 @@ else
         % Get proton auxiliary signals.
         [ClusterArray, Coherences_1H,Coherences_2H,...
           SubclusterIndices_2H,dimensionality,~] ...
-          = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+          = calculateSignal_forHDCCE(System, Method, Nuclei,Clusters);
         
         % Change all hydrons to deuteron.
         System.deuteriumFraction = 1;
@@ -1225,7 +1212,7 @@ else
         % Get deuteron auxiliary signals.
 
         [~, Coherences_1D,Coherences_2D,SubclusterIndices_2D,~,~] ...
-          = calculateSignal_gpu(System, Method, Nuclei,Clusters);
+          = calculateSignal_forHDCCE(System, Method, Nuclei,Clusters);
         
         
         [~, ...
@@ -1241,34 +1228,15 @@ else
 
       else
         
-        if Method.gpu
-          [~, AuxiliarySignal_1,AuxiliarySignal_2,...
-            AuxiliarySignal_3,AuxiliarySignal_4,~] ...
-            = calculateSignal_gpu(System, Method, Nuclei,Clusters);
-        else
           
-          [~, AuxiliarySignal_ofOrder, ~] ...
-            = calculateSignal(System, Method, Nuclei,Clusters);
+        [~, AuxiliarySignal_ofOrder, ~] ...
+          = calculateSignal(System, Method, Nuclei,Clusters);
           
-        end
       end
       % Record the appropraite signals.
       for record_order = iorder:new_order
         
-        if Method.gpu
-        switch record_order
-          case 1
-            AuxiliarySignal{record_order} = AuxiliarySignal_1;
-          case 2
-            AuxiliarySignal{record_order} = AuxiliarySignal_2;
-          case 3
-            AuxiliarySignal{record_order} = AuxiliarySignal_3;
-          case 4
-            AuxiliarySignal{record_order} = AuxiliarySignal_4;
-        end
-        else
-          AuxiliarySignal{record_order} = AuxiliarySignal_ofOrder{record_order};
-        end
+        AuxiliarySignal{record_order} = AuxiliarySignal_ofOrder{record_order};
        
           Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
           if record_order > 1

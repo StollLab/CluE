@@ -4,11 +4,11 @@ fileID = fopen('convergence_log.txt','w');
 % ENUM
 RADIUS  =1;  %DIPOLE = 2; BAMAX = 3; POWDER = 4;
 
-if ~isfield(Method.cutoff,'dipole')
-  Method.cutoff.dipole = -inf;
+if ~isfield(Method.neighborCutoff,'dipole')
+  Method.neighborCutoff.dipole = -inf;
 end
-if ~isfield(Method.cutoff,'bAmax')
-  Method.cutoff.bAmax = -inf;
+if ~isfield(Method.neighborCutoff,'bAmax')
+  Method.neighborCutoff.bAmax = -inf;
 end
 
 options = setDefaults(options);
@@ -50,8 +50,8 @@ if isfile([Data.OutputData,'.mat'])
 end
 if calculate_signal
   if options.lockDeltaA2b
-    Method.cutoff.DeltaHyperfine = ...
-     options.lockDeltaA2bRatio*Method.cutoff.dipole;
+    Method.neighborCutoff.DeltaHyperfine = ...
+     options.lockDeltaA2bRatio*Method.neighborCutoff.dipole;
   end
   [SignalMean, ~, TM_powder_,~,~,uncertainty] = CluE(System,Method,Data);
 end
@@ -102,7 +102,7 @@ while ~is_converged
   % Print info. 
   logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
   logPrint(fileID, 'r = %d A. b = %d Hz. bAmax = %d. nOri = %d. \n',System.radius,...
-    Method.cutoff.dipole(1),Method.cutoff.bAmax(1), System.gridSize);
+    Method.neighborCutoff.dipole(1),Method.neighborCutoff.bAmax(1), System.gridSize);
   
   % Check for out of bounds parameters.
   if false %cutoff.value < cutoff.Min(cutoff.ID) || cutoff.value > cutoff.Max(cutoff.ID)
@@ -133,8 +133,8 @@ while ~is_converged
   end
   if calculate_signal
     if options.lockDeltaA2b
-      Method.cutoff.DeltaHyperfine = ...
-       options.lockDeltaA2bRatio*Method.cutoff.dipole;
+      Method.neighborCutoff.DeltaHyperfine = ...
+       options.lockDeltaA2bRatio*Method.neighborCutoff.dipole;
     end
     [SignalMean, experiment_time, TM_powder,~,~,uncertainty] = ...
      CluE(System,Method,Data);
@@ -262,10 +262,10 @@ end
 
 parameters.radius = System.radius;
 if options.converge.dipole || options.usePseudoGrad
-parameters.dipole = Method.cutoff.dipole;
+parameters.dipole = Method.neighborCutoff.dipole;
 end
 if options.converge.bAmax || options.usePseudoGrad
-parameters.bAmax = Method.cutoff.bAmax;
+parameters.bAmax = Method.neighborCutoff.bAmax;
 end
 
 parameters.gridSize = System.gridSize;
@@ -415,14 +415,14 @@ NameLog_out = NameLog;
 
 % Update parameter log.
 if isempty(ParameterLog)
-  ParameterLog_out = [System.radius, Method.cutoff.dipole, Method.cutoff.bAmax, System.gridSize];
+  ParameterLog_out = [System.radius, Method.neighborCutoff.dipole, Method.neighborCutoff.bAmax, System.gridSize];
   OutputData = OutputData0;
   NameLog_out{1} = OutputData;
   ID_out = ID;
   return;
 end
 
-ParameterLog_out(ID+1, :) = [System.radius, Method.cutoff.dipole, Method.cutoff.bAmax, System.gridSize];
+ParameterLog_out(ID+1, :) = [System.radius, Method.neighborCutoff.dipole, Method.neighborCutoff.bAmax, System.gridSize];
 
 % Look for previous landings on these parameters.
 doParametersExist = all(ParameterLog_out == ParameterLog_out(ID+1, :),2);
@@ -476,16 +476,16 @@ switch cutoff.name
     cutoff.units = 'A';
   case 'dipole'
     cutoff.ID = DIPOLE;
-    Method.cutoff.dipole = Method.cutoff.dipole*10^(reltig*cutoff.delta(cutoff.ID));
-    cutoff.value = Method.cutoff.dipole(1);
+    Method.neighborCutoff.dipole = Method.neighborCutoff.dipole*10^(reltig*cutoff.delta(cutoff.ID));
+    cutoff.value = Method.neighborCutoff.dipole(1);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'b';
     cutoff.units = 'Hz';
     
   case 'bAmax'
     cutoff.ID = BAMAX;
-    Method.cutoff.bAmax = Method.cutoff.bAmax*10^(reltig*cutoff.delta(cutoff.ID) );
-    cutoff.value = Method.cutoff.bAmax(1);
+    Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax*10^(reltig*cutoff.delta(cutoff.ID) );
+    cutoff.value = Method.neighborCutoff.bAmax(1);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'bAmax';
     cutoff.units = 'Hz';
@@ -498,8 +498,8 @@ switch cutoff.name
     switch Method.pseudogradType
       case 'lin_pgrad'
       % linear pseudorad steps
-      Method.cutoff.dipole = Method.cutoff.dipole + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1);
-      Method.cutoff.bAmax = Method.cutoff.bAmax + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2);
+      Method.neighborCutoff.dipole = Method.neighborCutoff.dipole + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1);
+      Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2);
       
       case 'log_off_pgrad'
         cutoff.ID = DIPOLE_BAMAX;
@@ -507,8 +507,8 @@ switch cutoff.name
         cutoff.units = 'Hz';
         
         % log off-pseudorad steps
-        Method.cutoff.dipole = Method.cutoff.dipole*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1));
-        Method.cutoff.bAmax = Method.cutoff.bAmax*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2));
+        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1));
+        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2));
         
       case 'log_pgrad'
         cutoff.ID = DIPOLE_BAMAX;
@@ -516,8 +516,8 @@ switch cutoff.name
         cutoff.units = 'Hz';
         
         % log pseudorad steps
-        Method.cutoff.dipole = Method.cutoff.dipole*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.cutoff.dipole * uncertainty.err_max{order}(1)));
-        Method.cutoff.bAmax = Method.cutoff.bAmax*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.cutoff.bAmax * uncertainty.err_max{order}(2)));
+        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.neighborCutoff.dipole * uncertainty.err_max{order}(1)));
+        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.neighborCutoff.bAmax * uncertainty.err_max{order}(2)));
         
       case 'lin_varStep'
         
@@ -533,10 +533,10 @@ switch cutoff.name
         if abs(c) <= 0.1
           c = sign(c)*0.1;
         end
-        c = c*min(Method.cutoff.dipole/uncertainty.err_unitPseudoGrad{order}(1),Method.cutoff.bAmax/uncertainty.err_unitPseudoGrad{order}(2));
+        c = c*min(Method.neighborCutoff.dipole/uncertainty.err_unitPseudoGrad{order}(1),Method.neighborCutoff.bAmax/uncertainty.err_unitPseudoGrad{order}(2));
         
-        Method.cutoff.dipole = Method.cutoff.dipole + c*uncertainty.err_unitPseudoGrad{order}(1);
-        Method.cutoff.bAmax = Method.cutoff.bAmax + c*uncertainty.err_unitPseudoGrad{order}(2);
+        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole + c*uncertainty.err_unitPseudoGrad{order}(1);
+        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax + c*uncertainty.err_unitPseudoGrad{order}(2);
         
         cutoff.value = abs(c);
         cutoff.value_str = num2str(round(c,0));
