@@ -644,6 +644,12 @@ else
    Method.Criteria{end+1} = 'bAmax';
 end
 
+if ~isfield(Method.neighborCutoff,'DeltaHyperfine') 
+  Method.neighborCutoff.DeltaHyperfine = zer;
+else
+   Method.Criteria{end+1} = 'delta hyperfine';
+end
+
 if ~isfield(Method.neighborCutoff,'dipole') 
   Method.neighborCutoff.dipole = zer;
 else

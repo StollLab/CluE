@@ -71,7 +71,8 @@ residueList_             = cell(0,0);
 uniqueResidueList_       = {}; 
 zeroIndex_               = {};
 r0_                      = System.load_radius;
-r0_nonHalf_               = Method.vertexCutoff.radius_nonSpinHalf(1);
+r0_nonHalf_              = Method.vertexCutoff.radius_nonSpinHalf(1);
+verbose_                 = Method.verbose;
 
 buildSystem();
 
@@ -660,8 +661,10 @@ cellShifts_ = getCellShifts()';
 generateUniqueResidueList();
 
 % Print matrix.
-disp("cells shifts (meter) = ");
-disp(cellShifts_);
+if verbose_
+  disp("cells shifts (meter) = ");
+  disp(cellShifts_);
+end
 
 % Copy pdbID before erasing.
 pdbID = pdbID_;
@@ -2234,6 +2237,9 @@ end
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function printParticleInfo( particle )
+
+if ~verbose_, return; end
+
 str = [ getParticleString(particle.particleEnum),', ', particle.resName,': '];
 
 if particle.active  

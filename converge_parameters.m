@@ -1,11 +1,25 @@
-function [parameters,System,Method,Data]  = converge_parameters(System,Method,Data, options)
+function [parameters,System,Method,Data]  = converge_parameters(...
+    System,...
+    Method,...
+    Data, ...
+    options)
 fileID = fopen('convergence_log.txt','w');
 
 % ENUM
-RADIUS  =1;  %DIPOLE = 2; BAMAX = 3; POWDER = 4;
+ienum = 1;
+CUT_RADIUS = ienum; ienum = ienum +1;
+CUT_DIPOLE = ienum; ienum = ienum +1;
+CUT_DELTAHYPERFINE = ienum; ienum = ienum +1;
+CUT_BAMAX = ienum; ienum = ienum +1;
+CUT_POWDER = ienum; ienum = ienum +1;
+%CUT_DIPOLE_BAMAX = ienum; ienum = ienum +1;
+CUT_NUM_ENUM = ienum - 1;
 
 if ~isfield(Method.neighborCutoff,'dipole')
   Method.neighborCutoff.dipole = -inf;
+end
+if ~isfield(Method.neighborCutoff,'DeltaHyperfine')
+  Method.neighborCutoff.DeltaHyperfine = -inf;
 end
 if ~isfield(Method.neighborCutoff,'bAmax')
   Method.neighborCutoff.bAmax = -inf;
@@ -20,9 +34,11 @@ if options.pruneClusters
   Method.getClusterContributions = true;
 end
 
+%{
 if options.usePseudoGrad
   Method.getUncertainty = true;
 end
+%}
 
 if System.gridSize > 1
   Method.parallelComputing = options.parpow;
@@ -40,7 +56,8 @@ calculate_signal = true;
 
 if isfile([Data.OutputData,'.mat'])
   try
-    load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress','uncertainty');
+    load([Data.OutputData,'.mat'],'SignalMean','experiment_time',...
+        'TM_powder','Progress','uncertainty');
     if Progress.complete
       calculate_signal = false;
       TM_powder_ = TM_powder;
@@ -49,10 +66,12 @@ if isfile([Data.OutputData,'.mat'])
   end
 end
 if calculate_signal
+  %{
   if options.lockDeltaA2b
     Method.neighborCutoff.DeltaHyperfine = ...
      options.lockDeltaA2bRatio*Method.neighborCutoff.dipole;
   end
+  %}  
   [SignalMean, ~, TM_powder_,~,~,uncertainty] = CluE(System,Method,Data);
 end
 Npreload = 16;
@@ -63,7 +82,7 @@ logPrint(fileID,hline);
  
 
 % Initialize error vector.
-Eta = inf(1,4);
+Eta = inf(1,CUT_NUM_ENUM);
 
 % Set error on unused cutoffs to -inf, so they will not be looked at.
 Eta(~options.useCutoffs) = -inf;
@@ -84,8 +103,6 @@ is_singleOri_converged = false;
 is_powder_converged = false;
 is_converged = false;
 cutoff.delta = options.Delta; 
-cutoff.Max = options.Max; 
-cutoff.Min = options.Min; 
 nextCutoff = options.firstCutoff;
 
 use_radiusfirst = true;
@@ -97,16 +114,19 @@ radiusfirst = use_radiusfirst;
 while ~is_converged
   
   % Perturb cutoff. 
-  [System,Method, cutoff]= adjustCutoff('relax',System, Method,cutoff,nextCutoff,uncertainty);
+  [System,Method, cutoff] = ...
+    adjustCutoff('relax',System, Method,cutoff,nextCutoff,uncertainty);
   
   % Print info. 
   logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
-  logPrint(fileID, 'r = %d A. b = %d Hz. bAmax = %d. nOri = %d. \n',System.radius,...
-    Method.neighborCutoff.dipole(1),Method.neighborCutoff.bAmax(1), System.gridSize);
+  logPrint(fileID, 'r = %d A. b = %d Hz. DeltaA = %d. nOri = %d. \n',...
+      System.radius,Method.neighborCutoff.dipole(1),...
+      Method.neighborCutoff.DeltaHyperfine(1), System.gridSize);
   
   % Check for out of bounds parameters.
-  if false %cutoff.value < cutoff.Min(cutoff.ID) || cutoff.value > cutoff.Max(cutoff.ID)
-    [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty);
+  if false 
+    [System, Method, cutoff] = ...
+      adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty);
     logPrint(fileID,[cutoff.name, ' did not converge within set bounds.\n']);
     Eta(cutoff.ID) = -inf;
     if useCutoffs(cutoff.ID)
@@ -116,7 +136,8 @@ while ~is_converged
   end
   
   % Remember parameter sets for data rerieval.
-  [ParameterLog, ID , OutputData, NameLog] = updateParameterLog(ParameterLog, NameLog ,System,Method, Data0.OutputData ,cutoff,ID);
+  [ParameterLog, ID , OutputData, NameLog] = updateParameterLog(ParameterLog,...
+      NameLog ,System,Method, Data0.OutputData ,cutoff,ID);
   Data.OutputData = OutputData;
   
   % Either load or calculate the appropriate simulation. 
@@ -124,7 +145,8 @@ while ~is_converged
   uncertainty_ = uncertainty;
   if isfile([Data.OutputData,'.mat'])
     try
-      load([Data.OutputData,'.mat'],'SignalMean','experiment_time','TM_powder','Progress','uncertainty');
+      load([Data.OutputData,'.mat'],'SignalMean','experiment_time',...
+          'TM_powder','Progress','uncertainty');
       if Progress.complete
         calculate_signal = false;
       end
@@ -132,10 +154,12 @@ while ~is_converged
     end
   end
   if calculate_signal
+    %{
     if options.lockDeltaA2b
       Method.neighborCutoff.DeltaHyperfine = ...
        options.lockDeltaA2bRatio*Method.neighborCutoff.dipole;
     end
+    %}  
     [SignalMean, experiment_time, TM_powder,~,~,uncertainty] = ...
      CluE(System,Method,Data);
   end
@@ -169,13 +193,15 @@ while ~is_converged
   if is_singleOri_converged
     
     % Check if the powder average converged.
-    is_powder_converged = strcmp(nextCutoff,'powder') && eta < options.Threshold(cutoff.ID);
+    is_powder_converged = strcmp(nextCutoff,'powder') ...
+      && eta < options.Threshold(cutoff.ID);
     
     % Update ID.
     ID_Ref = ~is_powder_converged*ID + is_powder_converged*ID_Ref;
     
     if is_powder_converged
-      [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
+      [System, Method, cutoff] = ...
+        adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
     end
   else
     
@@ -185,8 +211,9 @@ while ~is_converged
     
     if isThisCutoffConverged(cutoff.ID)
       % Revert to the previous state.
-      [System, Method, cutoff]= adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
-      if cutoff.ID == RADIUS
+      [System, Method, cutoff] = ...
+        adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
+      if cutoff.ID == CUT_RADIUS
         radiusfirst = false;
       end
       
@@ -204,13 +231,14 @@ while ~is_converged
       
       % Update cutoff convegence statuses. 
       isThisCutoffConverged(:) = false;
-      if cutoff.ID == RADIUS
+      if cutoff.ID == CUT_RADIUS
         radiusfirst = use_radiusfirst;
       end        
     end
   
     % Check if the single orientation system is converged.
-    is_singleOri_converged =  all(Eta(useCutoffs) < options.Threshold(useCutoffs))...
+    is_singleOri_converged = ...
+      all(Eta(useCutoffs) < options.Threshold(useCutoffs))...
       &&  all( isThisCutoffConverged( useCutoffs(1:end-1) ) );
   end
   
@@ -242,7 +270,8 @@ while ~is_converged
     end
     
     % Error check.
-    if isempty(Eta(useCutoffs & ~isThisCutoffConverged)) && ~is_singleOri_converged
+    if isempty(Eta(useCutoffs & ~isThisCutoffConverged)) ...
+      && ~is_singleOri_converged
       error('Single orientation is both converged and not converged.');
     end
     
@@ -261,10 +290,15 @@ end
 
 
 parameters.radius = System.radius;
-if options.converge.dipole || options.usePseudoGrad
+if options.converge.dipole %|| options.usePseudoGrad
 parameters.dipole = Method.neighborCutoff.dipole;
 end
-if options.converge.bAmax || options.usePseudoGrad
+
+if options.converge.DeltaHyperfine
+  parameters.DeltaHyperfine = Method.neighborCutoff.DeltaHyperfine;
+end  
+  
+if options.converge.bAmax %|| options.usePseudoGrad
 parameters.bAmax = Method.neighborCutoff.bAmax;
 end
 
@@ -288,17 +322,29 @@ if ~isfield(options,'verbose')
   options.verbose = false;
 end
 
-options.cutoffNames = {'radius','dipole','bAmax','powder'};
 % ENUM
-RADIUS  =1;  DIPOLE = 2; BAMAX = 3; POWDER = 4; 
+ienum = 1;
+CUT_RADIUS = ienum; ienum = ienum +1;
+CUT_DIPOLE = ienum; ienum = ienum +1;
+CUT_DELTAHYPERFINE = ienum; ienum = ienum +1;
+CUT_BAMAX = ienum; ienum = ienum +1;
+CUT_POWDER = ienum; ienum = ienum +1;
+%CUT_DIPOLE_BAMAX = ienum; ienum = ienum +1;
+CUT_NUM_ENUM = ienum - 1;
 
-options.useCutoffs = false(1,POWDER-1);
+options.cutoffNames = cell(CUT_NUM_ENUM,1);
+options.cutoffNames{CUT_RADIUS} = 'radius';
+options.cutoffNames{CUT_DIPOLE} = 'dipole';
+options.cutoffNames{CUT_DELTAHYPERFINE} = 'DeltaHyperfine';
+options.cutoffNames{CUT_BAMAX} = 'bAmax';
+options.cutoffNames{CUT_POWDER} = 'powder';
+options.useCutoffs = false(1,CUT_NUM_ENUM);
 
 % system radius
 if ~isfield(options.converge,'radius')
   options.converge.radius = true;
 end
-options.useCutoffs(RADIUS) = options.converge.radius;
+options.useCutoffs(CUT_RADIUS) = options.converge.radius;
 
 if ~isfield(options.threshold,'radius')
   options.threshold.radius = 1e-3;
@@ -316,7 +362,7 @@ end
 if ~isfield(options.converge,'dipole')
   options.converge.dipole = false;
 end
-options.useCutoffs(DIPOLE) = options.converge.dipole;
+options.useCutoffs(CUT_DIPOLE) = options.converge.dipole;
 
 if ~isfield(options.threshold,'dipole')
   options.threshold.dipole = 1e-3;
@@ -328,6 +374,7 @@ if ~isfield(options.limit,'dipole')
   options.limit.dipole = -15; 
 end
 
+%{
 if ~isfield(options,'lockDeltaA2b')
   options.lockDeltaA2b = false;
 end
@@ -348,7 +395,6 @@ end
 if ~isfield(options.limit,'pgrad')
   options.limit.pgrad = -15; 
 end
-
 if options.usePseudoGrad
   options.cutoffNames = {'radius','pseudograd','NA','powder'};
   options.converge.bAmax = false;
@@ -356,11 +402,28 @@ if options.usePseudoGrad
   options.delta.dipole = options.delta.pgrad;
   options.limit.dipole = options.limit.pgrad;
 end
+%}
+
+% DeltaHyperfine
+if ~isfield(options.converge,'DeltaHyperfine')
+  options.converge.DeltaHyperfine = false;
+end
+options.useCutoffs(CUT_DELTAHYPERFINE) = options.converge.DeltaHyperfine;
+if ~isfield(options.threshold,'DeltaHyperfine')
+  options.threshold.DeltaHyperfine = 1e-3;
+end
+if ~isfield(options.delta,'DeltaHyperfine')
+  options.delta.DeltaHyperfine = -0.2; 
+end
+if ~isfield(options.limit,'DeltaHyperfine')
+  options.limit.DeltaHyperfine = -15; 
+end
+
 % bAmax
 if ~isfield(options.converge,'bAmax')
   options.converge.bAmax = false;
 end
-options.useCutoffs(BAMAX) = options.converge.bAmax;
+options.useCutoffs(CUT_BAMAX) = options.converge.bAmax;
 if ~isfield(options.threshold,'bAmax')
   options.threshold.bAmax = 1e-3;
 end
@@ -376,7 +439,7 @@ end
 if ~isfield(options.converge,'powder')
   options.converge.powder = true;
 end
-options.useCutoffs(POWDER) = options.converge.powder;
+options.useCutoffs(CUT_POWDER) = options.converge.powder;
 
 if ~isfield(options.threshold,'powder')
   options.threshold.powder = 1e-2;
@@ -387,14 +450,28 @@ end
 if ~isfield(options,'parpow')
   options.parpow = true;
 end
-options.Threshold = [options.threshold.radius, options.threshold.dipole, options.threshold.bAmax,options.threshold.powder];
-options.Delta = [options.delta.radius, options.delta.dipole, options.delta.bAmax,1];
+options.Threshold = [...
+  options.threshold.radius, ...
+  options.threshold.dipole, ...
+  options.threshold.DeltaHyperfine, ...
+  options.threshold.bAmax,...
+  options.threshold.powder];
+
+options.Delta = [...
+  options.delta.radius,...
+  options.delta.dipole, ...
+  options.delta.DeltaHyperfine,...
+  options.delta.bAmax,...
+  1];
 options.Min = [0, 10^options.limit.dipole, 10^options.limit.bAmax,1];
 options.Max = [options.limit.radius, inf, inf,options.limit.grid_points];
+
 if options.converge.radius 
   options.firstCutoff = 'radius';
 elseif options.converge.dipole
   options.firstCutoff = 'dipole';
+elseif options.converge.dipole
+  options.firstCutoff = 'DeltaHyperfine';
 elseif options.converge.bAmax
   options.firstCutoff = 'bAmax';
 else
@@ -407,7 +484,15 @@ if ~isfield(options,'doPlot')
 end
 end
 
-function [ParameterLog_out, ID_out , OutputData, NameLog_out] = updateParameterLog(ParameterLog, NameLog ,System,Method, OutputData0 ,cutoff,ID)
+function [ParameterLog_out, ID_out , OutputData, NameLog_out] ...
+  = updateParameterLog(...
+      ParameterLog,...
+      NameLog,...
+      System,...
+      Method,...
+      OutputData0,...
+      cutoff,...
+      ID)
 
 % Initialize log variables.
 ParameterLog_out = ParameterLog;
@@ -415,14 +500,23 @@ NameLog_out = NameLog;
 
 % Update parameter log.
 if isempty(ParameterLog)
-  ParameterLog_out = [System.radius, Method.neighborCutoff.dipole, Method.neighborCutoff.bAmax, System.gridSize];
+  ParameterLog_out = [System.radius,...
+    Method.neighborCutoff.dipole,...
+    Method.neighborCutoff.DeltaHyperfine,...
+    Method.neighborCutoff.bAmax,...
+    System.gridSize];
   OutputData = OutputData0;
   NameLog_out{1} = OutputData;
   ID_out = ID;
   return;
 end
 
-ParameterLog_out(ID+1, :) = [System.radius, Method.neighborCutoff.dipole, Method.neighborCutoff.bAmax, System.gridSize];
+ParameterLog_out(ID+1, :) = [...
+  System.radius, ...
+  Method.neighborCutoff.dipole,...
+  Method.neighborCutoff.DeltaHyperfine,...
+  Method.neighborCutoff.bAmax, ...
+  System.gridSize];
 
 % Look for previous landings on these parameters.
 doParametersExist = all(ParameterLog_out == ParameterLog_out(ID+1, :),2);
@@ -437,7 +531,8 @@ if sum(doParametersExist) > 1
   ParameterLog_out = ParameterLog;
   OutputData = NameLog{ID_ref};
 else
-  OutputData = [OutputData0,'_ID_',num2str(ID), '_',cutoff.shortname,'_',cutoff.value_str, cutoff.units];
+  OutputData = [OutputData0,'_ID_',num2str(ID), '_',cutoff.shortname,...
+    '_',cutoff.value_str, cutoff.units];
   NameLog_out{ID_out} = OutputData;
 end
 
@@ -450,13 +545,22 @@ function [System, Method, cutoff]= adjustCutoff(...
     cutoff0,...
     nextCutoff,...
     uncertainty)
+
 System = System0;
 Method = Method0;
 cutoff = cutoff0;
 order = Method.order;
+
 % ENUM
-RADIUS  =1;  DIPOLE = 2; BAMAX = 3; POWDER = 4; 
-             DIPOLE_BAMAX = 2;
+ienum = 1;
+CUT_RADIUS = ienum; ienum = ienum +1;
+CUT_DIPOLE = ienum; ienum = ienum +1;
+CUT_DELTAHYPERFINE = ienum; ienum = ienum +1;
+CUT_BAMAX = ienum; ienum = ienum +1;
+CUT_POWDER = ienum; ienum = ienum +1;
+%CUT_DIPOLE_BAMAX = ienum; ienum = ienum +1;
+CUT_NUM_ENUM = ienum - 1;
+
 switch direction_str  
   case 'relax'
     reltig = 1;
@@ -468,81 +572,110 @@ cutoff.name = nextCutoff;
 
 switch cutoff.name
   case 'radius'
-    cutoff.ID = RADIUS;
+    cutoff.ID = CUT_RADIUS;
     System.radius = System.radius + reltig*cutoff.delta(cutoff.ID);
     cutoff.value = System.radius;
     cutoff.value_str = num2str(cutoff.value*1e10);
     cutoff.shortname = 'r';
     cutoff.units = 'A';
   case 'dipole'
-    cutoff.ID = DIPOLE;
-    Method.neighborCutoff.dipole = Method.neighborCutoff.dipole*10^(reltig*cutoff.delta(cutoff.ID));
+    cutoff.ID = CUT_DIPOLE;
+    Method.neighborCutoff.dipole ...
+      = Method.neighborCutoff.dipole*10^(reltig*cutoff.delta(cutoff.ID));
     cutoff.value = Method.neighborCutoff.dipole(1);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'b';
     cutoff.units = 'Hz';
     
+  case 'DeltaHyperfine'
+    cutoff.ID = CUT_DELTAHYPERFINE;
+    Method.neighborCutoff.DeltaHyperfine ...
+      = Method.neighborCutoff.DeltaHyperfine...
+      *10^(reltig*cutoff.delta(cutoff.ID));
+    cutoff.value = Method.neighborCutoff.DeltaHyperfine(1);
+    cutoff.value_str = num2str(round(cutoff.value,0));
+    cutoff.shortname = 'DeltaA';
+    cutoff.units = 'Hz';
+    
   case 'bAmax'
-    cutoff.ID = BAMAX;
-    Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax*10^(reltig*cutoff.delta(cutoff.ID) );
+    cutoff.ID = CUT_BAMAX;
+    Method.neighborCutoff.bAmax ...
+      = Method.neighborCutoff.bAmax*10^(reltig*cutoff.delta(cutoff.ID) );
     cutoff.value = Method.neighborCutoff.bAmax(1);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'bAmax';
     cutoff.units = 'Hz';
-    
+  
+  %{  
   case 'pseudograd'
-    cutoff.ID = DIPOLE_BAMAX;
+    cutoff.ID = CUT_DIPOLE_BAMAX;
     cutoff.shortname = 'pgrad';
     cutoff.units = 'Hz';
     
     switch Method.pseudogradType
       case 'lin_pgrad'
       % linear pseudorad steps
-      Method.neighborCutoff.dipole = Method.neighborCutoff.dipole + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1);
-      Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2);
+      Method.neighborCutoff.dipole = Method.neighborCutoff.dipole ...
+        + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1);
+      Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax ...
+        + reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2);
       
       case 'log_off_pgrad'
-        cutoff.ID = DIPOLE_BAMAX;
+        cutoff.ID = CUT_DIPOLE_BAMAX;
         cutoff.shortname = 'pgrad';
         cutoff.units = 'Hz';
         
         % log off-pseudorad steps
-        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(1));
-        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax*10^(log(10)*reltig*cutoff.delta(cutoff.ID)*uncertainty.err_max{order}(2));
+        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole...
+          *10^(log(10)*reltig*cutoff.delta(cutoff.ID)...
+              *uncertainty.err_max{order}(1));
+        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax...
+          *10^(log(10)*reltig*cutoff.delta(cutoff.ID)...
+              *uncertainty.err_max{order}(2));
         
       case 'log_pgrad'
-        cutoff.ID = DIPOLE_BAMAX;
+        cutoff.ID = CUT_DIPOLE_BAMAX;
         cutoff.shortname = 'pgrad';
         cutoff.units = 'Hz';
         
         % log pseudorad steps
-        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.neighborCutoff.dipole * uncertainty.err_max{order}(1)));
-        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax*10^(reltig*(1 + cutoff.delta(cutoff.ID)/Method.neighborCutoff.bAmax * uncertainty.err_max{order}(2)));
+        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole...
+          *10^(reltig*(1 + cutoff.delta(cutoff.ID)...
+                /Method.neighborCutoff.dipole * uncertainty.err_max{order}(1)));
+        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax...
+          *10^(reltig*(1 + cutoff.delta(cutoff.ID)...
+                /Method.neighborCutoff.bAmax * uncertainty.err_max{order}(2)));
         
       case 'lin_varStep'
         
-        cutoff.ID = DIPOLE_BAMAX;
+        cutoff.ID = CUT_DIPOLE_BAMAX;
         cutoff.shortname = 'pgrad';
         cutoff.units = 'Hz';
         
         % linear pseudorad with variable steps
-        c = reltig*cutoff.delta(cutoff.ID); % *uncertainty.err_norm(order)/min(uncertainty.err_unitPseudoGrad{order});
+        c = reltig*cutoff.delta(cutoff.ID); 
         if abs(c) >= 0.9
           c = sign(c)*0.9;
         end
         if abs(c) <= 0.1
           c = sign(c)*0.1;
         end
-        c = c*min(Method.neighborCutoff.dipole/uncertainty.err_unitPseudoGrad{order}(1),Method.neighborCutoff.bAmax/uncertainty.err_unitPseudoGrad{order}(2));
+        c = c*min(Method.neighborCutoff.dipole...
+            /uncertainty.err_unitPseudoGrad{order}(1),...
+            Method.neighborCutoff.bAmax...
+            /uncertainty.err_unitPseudoGrad{order}(2));
         
-        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole + c*uncertainty.err_unitPseudoGrad{order}(1);
-        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax + c*uncertainty.err_unitPseudoGrad{order}(2);
+        Method.neighborCutoff.dipole = Method.neighborCutoff.dipole ...
+          + c*uncertainty.err_unitPseudoGrad{order}(1);
+        Method.neighborCutoff.bAmax = Method.neighborCutoff.bAmax ...
+          + c*uncertainty.err_unitPseudoGrad{order}(2);
         
         cutoff.value = abs(c);
         cutoff.value_str = num2str(round(c,0));
     end
+  %}  
   case 'powder'
-    cutoff.ID = POWDER;
+    cutoff.ID = CUT_POWDER;
     grid_options = [1,6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230, ...
       266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702, ...
       3074, 3470, 3890, 4334, 4802, 5294, 5810];
