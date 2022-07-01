@@ -160,13 +160,19 @@ for iSpin = 1:clusterSize
     end
     
     if useMethyl && isMethyl(iSpin) && isMethyl(jSpin) ...
-        && methylID(iSpin) == methylID(jSpin) ...
-      && sum(methylID==methylID(iSpin))==3
+        && methylID(iSpin) == methylID(jSpin) %&& sum(methylID==methylID(iSpin))==3
       IzJz = SpinOp(:,:,zz);
       IpJm = SpinOp(:,:,rl);
       ImJp = SpinOp(:,:,lr);
       Jmethyl = -2/3*full( methylTunnelingSplitting(iSpin,jSpin) );
-      H_methyl = Jmethyl*(IzJz + 0.5*IpJm + 0.5*ImJp);
+      H_methyl = 0;
+      %H_methyl = Jmethyl*(IzJz + 0.5*IpJm + 0.5*ImJp);
+      if useNucA
+        H_methyl = Jmethyl*IzJz;
+      end
+      if useNucB
+        H_methyl = Jmethyl*(0.5*IpJm + 0.5*ImJp);
+      end
     else
       H_methyl = 0;
     end
