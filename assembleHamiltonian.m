@@ -168,10 +168,10 @@ for iSpin = 1:clusterSize
       H_methyl = 0;
       %H_methyl = Jmethyl*(IzJz + 0.5*IpJm + 0.5*ImJp);
       if useNucA
-        H_methyl = Jmethyl*IzJz;
+        H_methyl = H_methyl + Jmethyl*IzJz;
       end
       if useNucB
-        H_methyl = Jmethyl*(0.5*IpJm + 0.5*ImJp);
+        H_methyl = H_methyl + Jmethyl*(0.5*IpJm + 0.5*ImJp);
       end
     else
       H_methyl = 0;
