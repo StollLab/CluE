@@ -3,7 +3,6 @@ function [parameters,System,Method,Data]  = converge_parameters(...
     Method,...
     Data, ...
     options)
-fileID = fopen('convergence_log.txt','w');
 
 % ENUM
 ienum = 1;
@@ -18,14 +17,29 @@ CUT_NUM_ENUM = ienum - 1;
 if ~isfield(Method.neighborCutoff,'dipole')
   Method.neighborCutoff.dipole = -inf;
 end
+if numel(Method.neighborCutoff.dipole) < Method.order
+  Method.neighborCutoff.dipole(end+1:Method.order) ...
+    = Method.neighborCutoff.dipole(end);
+end
+
 if ~isfield(Method.neighborCutoff,'DeltaHyperfine')
   Method.neighborCutoff.DeltaHyperfine = -inf;
+end
+if numel(Method.neighborCutoff.DeltaHyperfine) < Method.order
+  Method.neighborCutoff.DeltaHyperfine(end+1:Method.order) ...
+    = Method.neighborCutoff.DeltaHyperfine(end);
 end
 if ~isfield(Method.neighborCutoff,'bAmax')
   Method.neighborCutoff.bAmax = -inf;
 end
+if numel(Method.neighborCutoff.bAmax) < Method.order
+  Method.neighborCutoff.bAmax(end+1:Method.order) ...
+    = Method.neighborCutoff.bAmax(end);
+end
 
-options = setDefaults(options);
+options = setDefaults(options,Method);
+fileID = fopen([options.logFile,'.txt'],'w');
+
 metric = options.metric;
 % verbose = options.verbose;
 
@@ -108,25 +122,27 @@ nextCutoff = options.firstCutoff;
 use_radiusfirst = true;
 radiusfirst = use_radiusfirst;
 
-[ParameterLog, ~ , ~, NameLog] = updateParameterLog([], [],System,Method, Data0.OutputData ,cutoff,ID);
+[ParameterLog, ~ , ~, NameLog] ...
+ = updateParameterLog([], [],System,Method, Data0.OutputData ,cutoff,ID);
 
 % Run until all cutoffs are converged.
 while ~is_converged
   
   % Perturb cutoff. 
   [System,Method, cutoff] = ...
-    adjustCutoff('relax',System, Method,cutoff,nextCutoff,uncertainty);
+    adjustCutoff('relax',System, Method,cutoff,nextCutoff,uncertainty,options);
   
   % Print info. 
   logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
   logPrint(fileID, 'r = %d A. b = %d Hz. DeltaA = %d. nOri = %d. \n',...
-      System.radius,Method.neighborCutoff.dipole(1),...
-      Method.neighborCutoff.DeltaHyperfine(1), System.gridSize);
+      System.radius,Method.neighborCutoff.dipole(Method.order),...
+      Method.neighborCutoff.DeltaHyperfine(Method.order), System.gridSize);
   
   % Check for out of bounds parameters.
   if false 
     [System, Method, cutoff] = ...
-      adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty);
+      adjustCutoff('tighten',System,...
+          Method,cutoff,nextCutoff,uncertainty,options);
     logPrint(fileID,[cutoff.name, ' did not converge within set bounds.\n']);
     Eta(cutoff.ID) = -inf;
     if useCutoffs(cutoff.ID)
@@ -201,7 +217,8 @@ while ~is_converged
     
     if is_powder_converged
       [System, Method, cutoff] = ...
-        adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
+        adjustCutoff('tighten',System, ...
+            Method,cutoff,nextCutoff,uncertainty_,options);
     end
   else
     
@@ -212,7 +229,8 @@ while ~is_converged
     if isThisCutoffConverged(cutoff.ID)
       % Revert to the previous state.
       [System, Method, cutoff] = ...
-        adjustCutoff('tighten',System, Method,cutoff,nextCutoff,uncertainty_);
+        adjustCutoff('tighten',System, Method,cutoff,nextCutoff,...
+            uncertainty_,options);
       if cutoff.ID == CUT_RADIUS
         radiusfirst = false;
       end
@@ -307,7 +325,7 @@ parameters.gridSize = System.gridSize;
 fclose(fileID);
 end
 
-function options = setDefaults(options)
+function options = setDefaults(options,Method)
 
 if ~isfield(options,'metric')
   options.metric = 'rms';
@@ -320,6 +338,17 @@ if ~isfield(options,'vmin')
 end
 if ~isfield(options,'verbose')
   options.verbose = false;
+end
+
+if ~isfield(options,'order_lower')
+    options.order_lower = 1;
+end
+if ~isfield(options,'order_upper')
+    options.order_upper = Method.order;
+end
+
+if ~isfield(options,'logFile')
+  options.logFile = 'convergence_log';
 end
 
 % ENUM
@@ -501,9 +530,9 @@ NameLog_out = NameLog;
 % Update parameter log.
 if isempty(ParameterLog)
   ParameterLog_out = [System.radius,...
-    Method.neighborCutoff.dipole,...
-    Method.neighborCutoff.DeltaHyperfine,...
-    Method.neighborCutoff.bAmax,...
+    Method.neighborCutoff.dipole(end),...
+    Method.neighborCutoff.DeltaHyperfine(end),...
+    Method.neighborCutoff.bAmax(end),...
     System.gridSize];
   OutputData = OutputData0;
   NameLog_out{1} = OutputData;
@@ -513,9 +542,9 @@ end
 
 ParameterLog_out(ID+1, :) = [...
   System.radius, ...
-  Method.neighborCutoff.dipole,...
-  Method.neighborCutoff.DeltaHyperfine,...
-  Method.neighborCutoff.bAmax, ...
+  Method.neighborCutoff.dipole(end),...
+  Method.neighborCutoff.DeltaHyperfine(end),...
+  Method.neighborCutoff.bAmax(end), ...
   System.gridSize];
 
 % Look for previous landings on these parameters.
@@ -544,7 +573,8 @@ function [System, Method, cutoff]= adjustCutoff(...
     Method0,...
     cutoff0,...
     nextCutoff,...
-    uncertainty)
+    uncertainty,...
+    options)
 
 System = System0;
 Method = Method0;
@@ -570,6 +600,10 @@ end
 
 cutoff.name = nextCutoff;
 
+n0 = options.order_lower;
+n1 = options.order_upper;
+
+
 switch cutoff.name
   case 'radius'
     cutoff.ID = CUT_RADIUS;
@@ -580,28 +614,28 @@ switch cutoff.name
     cutoff.units = 'A';
   case 'dipole'
     cutoff.ID = CUT_DIPOLE;
-    Method.neighborCutoff.dipole ...
-      = Method.neighborCutoff.dipole*10^(reltig*cutoff.delta(cutoff.ID));
-    cutoff.value = Method.neighborCutoff.dipole(1);
+    Method.neighborCutoff.dipole(n0:n1) ...
+      = Method.neighborCutoff.dipole(n0:n1)*10^(reltig*cutoff.delta(cutoff.ID));
+    cutoff.value = Method.neighborCutoff.dipole(Method.order);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'b';
     cutoff.units = 'Hz';
     
   case 'DeltaHyperfine'
     cutoff.ID = CUT_DELTAHYPERFINE;
-    Method.neighborCutoff.DeltaHyperfine ...
-      = Method.neighborCutoff.DeltaHyperfine...
+    Method.neighborCutoff.DeltaHyperfine(n0:n1) ...
+      = Method.neighborCutoff.DeltaHyperfine(n0:n1)...
       *10^(reltig*cutoff.delta(cutoff.ID));
-    cutoff.value = Method.neighborCutoff.DeltaHyperfine(1);
+    cutoff.value = Method.neighborCutoff.DeltaHyperfine(Method.order);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'DeltaA';
     cutoff.units = 'Hz';
     
   case 'bAmax'
     cutoff.ID = CUT_BAMAX;
-    Method.neighborCutoff.bAmax ...
-      = Method.neighborCutoff.bAmax*10^(reltig*cutoff.delta(cutoff.ID) );
-    cutoff.value = Method.neighborCutoff.bAmax(1);
+    Method.neighborCutoff.bAmax(n0:n1) ...
+      = Method.neighborCutoff.bAmax(n0:n1)*10^(reltig*cutoff.delta(cutoff.ID) );
+    cutoff.value = Method.neighborCutoff.bAmax(Method.order);
     cutoff.value_str = num2str(round(cutoff.value,0));
     cutoff.shortname = 'bAmax';
     cutoff.units = 'Hz';

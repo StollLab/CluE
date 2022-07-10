@@ -212,9 +212,8 @@ if doFindClusters
     for clusterSize = 1:Method.extraOrder
       Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
       
-      if verbose
-        fprintf('  Found %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
-      end
+      fprintf('  Found %d clusters of size %d.\n', ...
+          Nuclei.numberClusters(clusterSize),clusterSize);
     end
     
   else
@@ -231,9 +230,8 @@ if doFindClusters
       % save the number of clusters of each size for export to the user
       Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1);
       
-      if verbose
-        fprintf('  Found %d clusters of size %d.\n', Nuclei.numberClusters(clusterSize),clusterSize);
-      end
+        fprintf('  Found %d clusters of size %d.\n', ...
+            Nuclei.numberClusters(clusterSize),clusterSize);
       
     end
   end
@@ -1042,10 +1040,8 @@ if Method.Ori_cutoffs
     Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1); 
   
   
-    if Method.verbose
-      fprintf('Found %d orientation clusters of size %d.\n', ...
-        size(Clusters{clusterSize},1),clusterSize);
-    end
+    fprintf('Found %d orientation clusters of size %d.\n', ...
+      size(Clusters{clusterSize},1),clusterSize);
   end
 end
 

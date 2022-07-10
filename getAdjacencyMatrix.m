@@ -18,15 +18,23 @@ for isize = 1:Method.extraOrder
   % Loop over all criteria used to determine an edge.
   num_criteria = numel(Method.Criteria);
   for ii = 1:num_criteria
+    idx = -1;
     switch Method.Criteria{ii}
-      case 'distance'
-        Max_R_ = pwstat.DistanceMatrix <= Method.neighborCutoff.rMax;
-        Min_R_ = pwstat.DistanceMatrix > Method.neighborCutoff.rMin;
-        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Max_R_.*Min_R_;
+      case 'rMax'
+        idx = min(isize, numel(  Method.neighborCutoff.rMax ));
+        Max_R_ = pwstat.DistanceMatrix <= Method.neighborCutoff.rMax(idx);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Max_R_;
+        
+      case 'rMin'
+        idx = min(isize, numel(  Method.neighborCutoff.rMin ));
+        Min_R_ = pwstat.DistanceMatrix > Method.neighborCutoff.rMin(idx);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_R_;
         
       case 'modulation'
+        idx = min(isize, numel( Method.neighborCutoff.modulation ));
         if Ori_cutoffs
-          Min_Mod_ = pwstat.Modulation_Depth >= Method.neighborCutoff.modulation(isize);
+          Min_Mod_ ...
+           = pwstat.Modulation_Depth >= Method.neighborCutoff.modulation(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Mod_;
         else
           Min_Mod_ = pwstat.Modulation_Depth_p ...
@@ -35,107 +43,121 @@ for isize = 1:Method.extraOrder
         end
         
       case 'dipole'
-          J = 2/3*Nuclei.methylTunnelingSplitting;
-          if Ori_cutoffs
-          Min_dipole_ = abs(pwstat.Nuclear_Dipole + 2*J) ...
+        idx = min(isize, numel(  Method.neighborCutoff.dipole ));
+        J = 2/3*Nuclei.methylTunnelingSplitting;
+        if Ori_cutoffs
+        Min_dipole_ = abs(pwstat.Nuclear_Dipole + 2*J) ...
+          >= Method.neighborCutoff.dipole(isize);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
+        else
+          Min_dipole_ = abs(pwstat.Nuclear_Dipole_perpendicular + 2*J) ...
             >= Method.neighborCutoff.dipole(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
-          else
-            Min_dipole_ = abs(pwstat.Nuclear_Dipole_perpendicular + 2*J) ...
-              >= Method.neighborCutoff.dipole(isize);
-            Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
-          end
+        end
           
       case 'dipoleHalf'
+        idx = min(isize, numel(  Method.neighborCutoff.dipoleHalf ));
         Min_dipole_ = Nuclei.Spin == 1/2;
         Min_dipole_ = Min_dipole_ & Min_dipole_';
         if Ori_cutoffs
           
           Min_dipole_ = ~Min_dipole_ ...
             | (Min_dipole_ & abs(pwstat.Nuclear_Dipole) ...
-            >= Method.neighborCutoff.dipoleHalf(isize));
+            >= Method.neighborCutoff.dipoleHalf(idx));
           
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         else
           Min_dipole_ = ~Min_dipole_ ...
             | (Min_dipole_ & abs(pwstat.Nuclear_Dipole_perpendicular) ...
-            >= Method.neighborCutoff.dipoleHalf(isize));
+            >= Method.neighborCutoff.dipoleHalf(idx));
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         end
           
       case 'dipoleOne'
+        idx = min(isize, numel(  Method.neighborCutoff.dipoleOne ));
         Min_dipole_ = Nuclei.Spin == 1;
         Min_dipole_ = Min_dipole_ & Min_dipole_';
         if Ori_cutoffs
           Min_dipole_ = ~Min_dipole_ | (Min_dipole_ ...
-            & abs(pwstat.Nuclear_Dipole) >= Method.neighborCutoff.dipoleOne(isize));
+            & abs(pwstat.Nuclear_Dipole)...
+               >= Method.neighborCutoff.dipoleOne(idx));
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         else
           Min_dipole_ = ~Min_dipole_ | (Min_dipole_ ...
             & abs(pwstat.Nuclear_Dipole_perpendicular) ...
-            >= Method.neighborCutoff.dipoleOne(isize));
+            >= Method.neighborCutoff.dipoleOne(idx));
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         end
         
       case 'bAmax'
-        Min_bAmax_ = abs(pwstat.bAmax) >= Method.neighborCutoff.bAmax(isize);
+        idx = min(isize, numel(  Method.neighborCutoff.bAmax ));
+        Min_bAmax_ = abs(pwstat.bAmax) >= Method.neighborCutoff.bAmax(idx);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_bAmax_;
 
       case 'minAmax'
-        Min_Amax_ = abs(pwstat.Amax) >= Method.neighborCutoff.minAmax(isize);
+        idx = min(isize, numel(  Method.neighborCutoff.minAmax ));
+        Min_Amax_ = abs(pwstat.Amax) >= Method.neighborCutoff.minAmax(idx);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Amax_;  
 
       case 'maxAmax'
-        Max_Amax_ = abs(pwstat.Amax) <= Method.neighborCutoff.maxAmax(isize);
+        idx = min(isize, numel(  Method.neighborCutoff.maxAmax ));
+        Max_Amax_ = abs(pwstat.Amax) <= Method.neighborCutoff.maxAmax(idx);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Max_Amax_;  
         
       case 'minimum-frequency'
+        idx = min(isize, numel(  Method.neighborCutoff.minimum_frequency ));
         if Ori_cutoffs
           Min_Freq_ = abs(pwstat.Frequency_Pair) ...
-            > Method.neighborCutoff.minimum_frequency(isize);
+            > Method.neighborCutoff.minimum_frequency(idx);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Freq_;
         else
           Min_Freq_ = abs(pwstat.Frequency_Pair_p) ...
-            > Method.neighborCutoff.minimum_frequency(isize);
+            > Method.neighborCutoff.minimum_frequency(idx);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Freq_;
         end
         
       case 'delta hyperfine'
+        idx = min(isize, numel(  Method.neighborCutoff.DeltaHyperfine ));
         if Ori_cutoffs
           DeltaHyperfine = pwstat.Hyperfine - pwstat.Hyperfine';
           Min_DeltaA_ = abs(DeltaHyperfine) ...
-            > Method.neighborCutoff.DeltaHyperfine(isize);
+            > Method.neighborCutoff.DeltaHyperfine(idx);
           %Max_DeltaA_ = abs(DeltaHyperfine) ...
-          %  < Method.neighborCutoff.hyperfine_sup(isize);
+          %  < Method.neighborCutoff.hyperfine_sup(idx);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_;%.*Max_DeltaA_;
           clear('DeltaHyperfine');
         else
           DeltaHyperfine_perpendicular = pwstat.Hyperfine_perpendicular ...
             - pwstat.Hyperfine_perpendicular';
           Min_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
-            > Method.neighborCutoff.hyperfine_inf(isize);
-          Max_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
-            < Method.neighborCutoff.hyperfine_sup(isize);
-          Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_.*Max_DeltaA_;
+            > Method.neighborCutoff.hyperfine_inf(idx);
+          %Max_DeltaA_ = abs(DeltaHyperfine_perpendicular) ...
+          %  < Method.neighborCutoff.hyperfine_sup(idx);
+          Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_DeltaA_;%.*Max_DeltaA_;
 
           clear('DeltaHyperfine_perpendicular');
         end
         
       case 'Gaussian RMSD'
+        idx = min(isize, numel(  Method.neighborCutoff.gaussianRMSD ));
         if Ori_cutoffs
-          Min_gRMSD = pwstat.GaussianRMSD > Method.neighborCutoff.gaussianRMSD;
+          Min_gRMSD = pwstat.GaussianRMSD ...
+            > Method.neighborCutoff.gaussianRMSD(idx);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_gRMSD;
         else
-          Min_gRMSD = pwstat.GaussianRMSD_p > Method.neighborCutoff.gaussianRMSD;
+          Min_gRMSD = pwstat.GaussianRMSD_p ...
+            > Method.neighborCutoff.gaussianRMSD(idx);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_gRMSD;
         end
       
       case 'radius_nonSpinHalf'
+        idx = min(isize, numel(  Method.vertexCutoff.radius_nonSpinHalf ));
         maxDistance = vecnorm(Nuclei.Coordinates,2,2);
         maxDistance = max(maxDistance,maxDistance');
         MaxR_ = Nuclei.Spin == 1/2;
         MaxR_ = MaxR_ & MaxR_';
-        MaxR_ = MaxR_ | maxDistance <= Method.vertexCutoff.radius_nonSpinHalf;
+        MaxR_ = MaxR_ | maxDistance ...
+          <= Method.vertexCutoff.radius_nonSpinHalf(idx);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*MaxR_;
         clear('maxDistance');
 

@@ -668,11 +668,16 @@ else
    Method.Criteria{end+1} = 'dipoleOne';
 end
 
-if ~isfield(Method.neighborCutoff,'distance') 
+if ~isfield(Method.neighborCutoff,'rMax') 
   Method.neighborCutoff.rMax = inf*ones(1,Method.order);
+else
+   Method.Criteria{end+1} = 'rMax';
+end
+
+if ~isfield(Method.neighborCutoff,'rMin') 
   Method.neighborCutoff.rMin = zer;
 else
-   Method.Criteria{end+1} = 'distance';
+   Method.Criteria{end+1} = 'rMin';
 end
 
 if ~isfield(Method.neighborCutoff,'methylCoupledOnly')
