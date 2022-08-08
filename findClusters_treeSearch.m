@@ -11,6 +11,7 @@
 %   Clusters     ... Mxorder array of clusters of size order, one
 %                    cluster per row
 
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function Clusters = findClusters_treeSearch(Nuclei,order,adjacencyOrder,...
   inClusters, Method)
 
@@ -212,10 +213,30 @@ if Method.includeAllSubclusters
   end
 end
 
+
+if Method.useMethylPseudoParticles
+
+  for icluster = 1:order
+    % Initialize keep seletor.
+    keep = true( size(Clusters{icluster},1),1 );
+
+    % Select all clusters with at least one methyl hydron.
+    sele = any(Nuclei.MethylID(Clusters{icluster}) > 0,2);
+
+    % Remove clusters that do not contain all 3 hydron of a methyl 
+    keep(sele) = remove_incomplete_methyls(...
+      Nuclei.MethylID(Clusters{icluster}(sele,:)));
+
+    % Finalize removal.
+    Clusters{icluster} = Clusters{icluster}(keep,:);
+  end
 end
 
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function Adjacency = clusters2Adjacency(C2,N1)
 
 Adjacency = zeros(N1);
@@ -229,5 +250,34 @@ for ii =1:N2
 end
 
 end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function keep = remove_incomplete_methyls(methylIDs)
+
+% Get the number of cluster.
+n_clusters = size(methylIDs,1);
+
+% 1 and 2-clusters cannot hold a full methyl group.
+if size(methylIDs,2)<3
+  keep = false(n_clusters,1);
+  return;
+end
+
+% Initialize selector.
+keep = true(n_clusters,1);
+
+% Loop through clusters.
+for icluster = 1:n_clusters
+  % Find unique ids.
+  unique_ids = unique( methylIDs(icluster,:) );
+
+  % Remove clusters that do not contain all or none of the protons from every 
+  % methyl group.
+  keep(icluster) = all( ...
+    sum(methylIDs(icluster,:) == unique_ids',2)==3 ...
+    | unique_ids' ==0);
+end
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 

@@ -116,7 +116,10 @@ for ii =1:length(Cluster)
   
   % Find the index in Clusters that cooresponds to inucleus 
   % and store it in Indices. 
-  Indices(ii,1) = find(Clusters(:,1,1)'==inucleus);
+  foundIndices = find(Clusters(:,1,1)'==inucleus);
+  if ~isempty(foundIndices)
+    Indices(ii,1) = foundIndices;
+  end
 end
 
 % Check if all subcluster sizes were accounted for.

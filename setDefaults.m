@@ -44,6 +44,7 @@ defaultMethod.extraOrder = Method.order;
 defaultMethod.includeAllSubclusters = false;
 defaultMethod.r_min = 0.1e-10; % m
 defaultMethod.mixed_eState = false;
+defaultMethod.useMethylPseudoParticles = false;
 
 % Method: Add defaults for fields missing in user-provided structure
 Method = supplementdefaults(Method,defaultMethod);

@@ -134,7 +134,7 @@ while ~is_converged
   
   % Print info. 
   logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
-  logPrint(fileID, 'r = %d A. b = %d Hz. DeltaA = %d. nOri = %d. \n',...
+  logPrint(fileID, 'r = %d m. b = %d Hz. DeltaA = %d. nOri = %d. \n',...
       System.radius,Method.neighborCutoff.dipole(Method.order),...
       Method.neighborCutoff.DeltaHyperfine(Method.order), System.gridSize);
   
@@ -719,6 +719,7 @@ switch cutoff.name
     cutoff.value = System.gridSize;
     cutoff.value_str = num2str(cutoff.value);
     cutoff.units = '';
+    cutoff.shortname = 'n_ori';
     
     
 end

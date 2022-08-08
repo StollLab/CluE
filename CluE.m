@@ -117,10 +117,13 @@ end
 
 Progress.DataLoaded = true;
 
-if verbose, fprintf('Setup initialized system with %i nuclei.\n', Nuclei.number); end
+if verbose
+  fprintf('Setup initialized system with %i nuclei.\n', Nuclei.number); 
+end
 
 if Nuclei.number < Method.order
-  fprintf('Reducing the maximum cluster size to the system size of %d.\n',Nuclei.number)
+  fprintf('Reducing the maximum cluster size to the system size of %d.\n',...
+    Nuclei.number)
   Method.order = double(Nuclei.number);
 end
 
@@ -276,7 +279,7 @@ if Method.parallelComputing
   pc = parcluster('local');
 
   if isfield(Method,'JobStorageLocation')
-    pc.JobStorageLocation = options.JobStorageLocation;
+    pc.JobStorageLocation = Method.JobStorageLocation;
   elseif Method.slurm
     pc.JobStorageLocation = ...
       strcat(getenv('SCRATCH'),'/', getenv('SLURM_JOB_ID'));
@@ -293,7 +296,7 @@ end
 % Powder average settings
 gridSize = System.gridSize;
 GridInfo = [];
-if gridSize==1
+if gridSize==1 && ~strcmp(System.averaging,'custom')
   System.averaging = 'none';
 end
 
@@ -719,7 +722,7 @@ if ~isempty(OutputData)
       else
         save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
           'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty',...
-          'GridInfo','-append');
+          'GridInfo','AuxiliarySignal','-append');
       end
     case 2
       save(OutputData,'-v7.3');
