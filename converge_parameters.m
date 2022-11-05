@@ -86,7 +86,7 @@ if calculate_signal
      options.lockDeltaA2bRatio*Method.neighborCutoff.dipole;
   end
   %}  
-  [SignalMean, ~, TM_powder_,~,~,uncertainty] = CluE(System,Method,Data);
+  [SignalMean, ~, TM_powder_,~,~,uncertainty] = CluE_core(System,Method,Data);
 end
 Npreload = 16;
 v = zeros(Npreload,size(SignalMean,2)); 
@@ -177,7 +177,7 @@ while ~is_converged
     end
     %}  
     [SignalMean, experiment_time, TM_powder,~,~,uncertainty] = ...
-     CluE(System,Method,Data);
+     CluE_core(System,Method,Data);
   end
   
   % Store data.

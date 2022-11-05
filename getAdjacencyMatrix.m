@@ -44,13 +44,13 @@ for isize = 1:Method.extraOrder
         
       case 'dipole'
         idx = min(isize, numel(  Method.neighborCutoff.dipole ));
-        J = 2/3*Nuclei.methylTunnelingSplitting;
+        J = -2/3*Nuclei.methylTunnelingSplitting;
         if Ori_cutoffs
-        Min_dipole_ = abs(pwstat.Nuclear_Dipole + 2*J) ...
+        Min_dipole_ = abs(pwstat.Nuclear_Dipole - 2*J) ...
           >= Method.neighborCutoff.dipole(isize);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         else
-          Min_dipole_ = abs(pwstat.Nuclear_Dipole_perpendicular + 2*J) ...
+          Min_dipole_ = abs(pwstat.Nuclear_Dipole_perpendicular - 2*J) ...
             >= Method.neighborCutoff.dipole(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_dipole_;
         end
@@ -177,15 +177,17 @@ for isize = 1:Method.extraOrder
     Adjacency(isMethylHydron,:,isize) = false;
     Adjacency(:,isMethylHydron,isize) = false;
   elseif System.Methyl.method == 2
-    % Protons within a methyl group should always be connected to each
-    % other.
-    %isMethylHydron = Nuclei.MethylID > 0;
-    %isMethylHydron = (isMethylHydron + isMethylHydron')>0;
-    %isSameMethyl = (Nuclei.MethylID==Nuclei.MethylID');
 
-    %Sele_ = isMethylHydron.*isSameMethyl;
-    %Adjacency(:,:,isize) = (Adjacency(:,:,isize) + Sele_) > 0;
+    if Method.fullyConnectedMethyls
+      % Protons within a methyl group should always be connected to each
+      % other.
+      isMethylHydron = Nuclei.MethylID > 0;
+      isMethylHydron = (isMethylHydron + isMethylHydron')>0;
+      isSameMethyl = (Nuclei.MethylID==Nuclei.MethylID');
 
+      Sele_ = isMethylHydron.*isSameMethyl;
+      Adjacency(:,:,isize) = (Adjacency(:,:,isize) + Sele_) > 0;
+    end
     
     isMethylCarbon = strcmp(Nuclei.Type,'CH3');
     Adjacency(isMethylCarbon,:,isize) = false;

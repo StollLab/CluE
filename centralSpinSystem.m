@@ -473,7 +473,8 @@ for iparticle = 2:number_
     for iasso =associatedWithMethyl'
 
 
-      if particles_{particleClassID_(iasso)}.particleEnum ~=PARTICLE_1H_METHYL
+      if particles_{particleClassID_(iasso)}.particleEnum ~=PARTICLE_1H_METHYL...
+          && particles_{particleClassID_(iasso)}.particleEnum ~=PARTICLE_2H_METHYL
         continue;
       end
       hydronCounter = hydronCounter + 1;
@@ -978,6 +979,7 @@ function checkSystem()
 n = 0;
 nCmethyl = 0;
 nHmethyl = 0;
+nDmethyl = 0;
 
 allMembers = zeros(number_,1) - 1;
 
@@ -1000,6 +1002,8 @@ for itype=1:numberParticleClasses_
 
   if particles_{itype}.particleEnum == PARTICLE_1H_METHYL
     nHmethyl = nHmethyl + particles_{itype}.number;
+  elseif particles_{itype}.particleEnum == PARTICLE_2H_METHYL
+    nDmethyl = nDmethyl + particles_{itype}.number;
   elseif particles_{itype}.particleEnum == PARTICLE_C_METHYL
     nCmethyl = nCmethyl + particles_{itype}.number; 
   end 
@@ -1013,7 +1017,7 @@ if n ~= number_
       ])  ;
 end
 
-if 3*nCmethyl ~= nHmethyl
+if 3*nCmethyl ~= (nHmethyl + nDmethyl)
   error(['Error in checkSystem(): ', 'there ', num2str(nCmethyl), ...
     'methyl carbons, but ', num2str(nHmethyl), ' methy hydrodrons.']);  
 end
@@ -1577,7 +1581,9 @@ elseif strcmp(particleStr, '1H_nonExchangeable')
 elseif strcmp(particleStr, '1H_METHYL')
   particleEnum = PARTICLE_1H_METHYL;
   
-elseif strcmp(particleStr, '2H') || strcmp(particleStr, 'deuterium')
+elseif strcmp(particleStr, '2H') ...
+  || strcmp(particleStr, 'D') ...
+  || strcmp(particleStr, 'deuterium')
   particleEnum = PARTICLE_DEUTERIUM;
   
 elseif strcmp(particleStr, '2H_exchangeable')
@@ -1750,6 +1756,9 @@ switch particleEnum
   case {PARTICLE_DEUTERIUM, ...
       PARTICLE_2H_EXCHANGEABLE,PARTICLE_2H_NONEXCHANGEABLE}
     nameStr = '2H';
+
+  case PARTICLE_2H_METHYL
+    nameStr = 'CH3_2H';
 
   case PARTICLE_CARBON
     nameStr = '13C';
@@ -2789,69 +2798,74 @@ particleStr = getParticleString(particleEnum);
 atomStr = getParticleString(atomEnum);
 
 Nopt = length(particleOptions);
+% Loop over option names.
 for iopt=1:4:Nopt
-  if strcmp(particleOptions{iopt}, particleStr) || ...
-      strcmp(particleOptions{iopt}, atomStr)
+ 
+  opt_particle = particleOptions{iopt};
+  opt_res =  particleOptions{iopt+1};
+  opt_param = particleOptions{iopt+2};
+  opt_value = particleOptions{iopt+3};
 
-    resBool = ~strcmp(particleOptions{iopt+1}(1),'!');
-    if resBool
-      optRes = particleOptions{iopt+1};
-    else
+  if strcmp(opt_particle, particleStr) || ...
+      strcmp(opt_particle, atomStr)
+
+    resBool = ~strcmp(opt_res(1),'!');
+    if ~resBool
       % Remove '!' from start.
-      optRes = particleOptions{iopt+1}(2:end);
+      opt_res = opt_res(2:end);
     end
 
     % Try to set option if resName is specified in particleOptions{iopt+1},
     % if resName not specified as avoided using '!', 
     % or if particleOptions{iopt+1}=='all'.
-    if (strcmp(optRes, resName) == resBool) || ...
-        (strcmp(optRes, 'all') && resBool)
+    if (strcmp(opt_res, resName) == resBool) || ...
+        (strcmp(opt_res, 'all') && resBool)
       
-      if strcmp(particleOptions{iopt+2},'abundance')
-        particles_{particleIndex}.abundance = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'active')
-        particles_{particleIndex}.active = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'associatedParticlesCollection')
+      if strcmp(opt_param,'abundance')
+        particles_{particleIndex}.abundance = opt_value;
+      elseif strcmp(opt_param,'active')
+        particles_{particleIndex}.active = opt_value;
+      elseif strcmp(opt_param,'associatedParticlesCollection')
         particles_{particleIndex}.associatedParticesCollection = ...
-          particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'barrierPotential')
-        particles_{particleIndex}.barrierPotential = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'doRandomIsotopes')
-        particles_{particleIndex}.doRandomIsotopes = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'exchangeable')
-        particles_{particleIndex}.exchangeable = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'hf_Tzz')
-        particles_{particleIndex}.hf_Tzz = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'hf_FermiContact')
-        particles_{particleIndex}.hf_FermiContact = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'hf_x')
-        particles_{particleIndex}.hf_x = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'hf_y')
-        particles_{particleIndex}.hf_y = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'hf_z')
-        particles_{particleIndex}.hf_z = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'isNucleus')
-        particles_{particleIndex}.isNucleus = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'NQ_e2qQh')
-        particles_{particleIndex}.NQ_e2qQh = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'NQ_eta')
-        particles_{particleIndex}.NQ_eta = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'NQ_x')
-        particles_{particleIndex}.NQ_x = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'NQ_y')
-        particles_{particleIndex}.NQ_y = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'NQ_z')
-        particles_{particleIndex}.NQ_z = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'spinMultiplicity')
-        particles_{particleIndex}.spinMultiplicity = particleOptions{iopt+3};
-      elseif strcmp(particleOptions{iopt+2},'switchParticle')
+          opt_value;
+      elseif strcmp(opt_param,'barrierPotential')
+        particles_{particleIndex}.barrierPotential = opt_value;
+      elseif strcmp(opt_param,'doRandomIsotopes')
+        particles_{particleIndex}.doRandomIsotopes = opt_value;
+      elseif strcmp(opt_param,'exchangeable')
+        particles_{particleIndex}.exchangeable = opt_value;
+      elseif strcmp(opt_param,'hf_Tzz')
+        particles_{particleIndex}.hf_Tzz = opt_value;
+      elseif strcmp(opt_param,'hf_FermiContact')
+        particles_{particleIndex}.hf_FermiContact = opt_value;
+      elseif strcmp(opt_param,'hf_x')
+        particles_{particleIndex}.hf_x = opt_value;
+      elseif strcmp(opt_param,'hf_y')
+        particles_{particleIndex}.hf_y = opt_value;
+      elseif strcmp(opt_param,'hf_z')
+        particles_{particleIndex}.hf_z = opt_value;
+      elseif strcmp(opt_param,'isNucleus')
+        particles_{particleIndex}.isNucleus = opt_value;
+      elseif strcmp(opt_param,'NQ_e2qQh')
+        particles_{particleIndex}.NQ_e2qQh = opt_value;
+      elseif strcmp(opt_param,'NQ_eta')
+        particles_{particleIndex}.NQ_eta = opt_value;
+      elseif strcmp(opt_param,'NQ_x')
+        particles_{particleIndex}.NQ_x = opt_value;
+      elseif strcmp(opt_param,'NQ_y')
+        particles_{particleIndex}.NQ_y = opt_value;
+      elseif strcmp(opt_param,'NQ_z')
+        particles_{particleIndex}.NQ_z = opt_value;
+      elseif strcmp(opt_param,'spinMultiplicity')
+        particles_{particleIndex}.spinMultiplicity = opt_value;
+      elseif strcmp(opt_param,'switchParticle')
         particles_{particleIndex}.switchParticle = ...
-          getParticleClass(particleOptions{iopt+3});
-      elseif strcmp(particleOptions{iopt+2},'extraCellSwitchParticle')
+          getParticleClass(opt_value);
+      elseif strcmp(opt_param,'extraCellSwitchParticle')
         particles_{particleIndex}.extraCellSwitchParticle = ...
-          getParticleClass(particleOptions{iopt+3});
-      elseif strcmp(particleOptions{iopt+2},'tunnelSplitting')
-        particles_{particleIndex}.tunnelSplitting = particleOptions{iopt+3};
+          getParticleClass(opt_value);
+      elseif strcmp(opt_param,'tunnelSplitting')
+        particles_{particleIndex}.tunnelSplitting = opt_value;
       end
       
     end
@@ -3125,25 +3139,16 @@ for itype = 1:numberParticleClasses_
   
   % Determine if methyl hydrons are unique.
   isUnique = true;
-  % !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  %
-  % ISSUE NOTES (DELETE THIS COMMENT ONCE ADDRESSED)
-  %
-  % DOUBLE CHECK THIS CODE ON A SYSTEM WITH MULTIPLE METHYL GROUPS,
-  % AND WHEN THIS FUNCTION IS CALLED MORE THAN ONCE PER SESSION.
-  % 
-  % THERE SHOULD BE A WAY TO SIMPLIFY THIS SECTION: REPLACE THE isUnique
-  % SECTIONS WITH A CALL TO A MORE GENERAL FUNCTION LIKE addParticle(),
-  % OR A NEW FUNCTION FOR THAT PURPOSE.
-  %
-  % !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   for jtype=1:numberParticleClasses_
      
     if itype==jtype, continue; end
 
-    isUnique = isUnique && ...
-      ~(particles_{jtype}.particleEnum == PARTICLE_1H_METHYL && ...
-         strcmp(particles_{itype}.resName, particles_{jtype}.resName) ...
+    isUnique = ...
+      ~(...
+         (particles_{jtype}.particleEnum == PARTICLE_1H_METHYL...
+           || particles_{jtype}.particleEnum == PARTICLE_2H_METHYL) ... 
+         && strcmp(particles_{itype}.resName, particles_{jtype}.resName) ...
        );
        
     if ~isUnique
@@ -3199,7 +3204,9 @@ for itype = 1:numberParticleClasses_
       if particleH==PARTICLE_1H_NONEXCHANGEABLE ...
           || particleH == PARTICLE_1H_METHYL
         methylEnum = PARTICLE_1H_METHYL;
-      elseif particleH == PARTICLE_2H_NONEXCHANGEABLE
+
+      elseif particleH == PARTICLE_2H_NONEXCHANGEABLE ...
+          || particleH == PARTICLE_2H_METHYL
         disp(['There is a 2H on methyl group ', num2str(methylCID), ...
           '.  Methyl tunneling will be ignored.']);
         particles_{itype}.active = false;
@@ -3211,7 +3218,7 @@ for itype = 1:numberParticleClasses_
         error(['Error in setMethyls(): methyl hydron, ', ...
           num2str(hydronAddress), ' catagorized as ',  ...
           particles_{hydronAddress}.resName, ' ',...
-          getParticleString(hydronAddress), '.']);
+          getParticleString(particles_{hydronAddress}.particleEnum), '.']);
       end
 
 

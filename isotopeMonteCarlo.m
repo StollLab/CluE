@@ -137,7 +137,7 @@ if ~progress(INITIAL_TRIALS)
         fprintf('Running initial trial %d/%d.\n', indices(ii),N);
         [temp_signals(ii,:),temp_twotau(ii,:),...
             temp_TM(ii),~,~,temp_statistics{ii}] ...
-            = CluE(System,Method_,Data_);
+            = CluE_core(System,Method_,Data_);
         
       end
       
@@ -167,7 +167,7 @@ if ~progress(INITIAL_TRIALS)
         
         fprintf('Running initial trial %d/%d.\n', ii,N);
         [signals(ii,:),twotau,TM(ii),~,~,statistics{ii}] ...
-         = CluE(System,Method,Data_);
+         = CluE_core(System,Method,Data_);
         
         saveCounter = saveCounter + 1;
         
@@ -235,7 +235,7 @@ if ~progress(CONVERGENCE_TRIALS)
           fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
 
           [temp_signals(ii,:),~,~,~,~,temp_statistics{ii}] ...
-          = CluE(System,Method_,Data_);
+          = CluE_core(System,Method_,Data_);
           
         end
         
@@ -263,7 +263,7 @@ if ~progress(CONVERGENCE_TRIALS)
           
           fprintf('Running convergene trial %d: %d/%d.\n',conNum, ii,N+dN);
           [signals(ii,:),~,~,~,~,statistics{ii}] ...
-            = CluE(System,Method,Data_);
+            = CluE_core(System,Method,Data_);
           
           saveCounter = saveCounter + 1;
           

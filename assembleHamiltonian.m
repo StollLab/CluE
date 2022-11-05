@@ -1,3 +1,4 @@
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function [H_alpha,H_beta] = assembleHamiltonian(state_multiplicity,...
   tensors,SpinOp,Qtensors,SpinXiXjOp,...
   theory,isMethyl,methylMethod, methylTunnelingSplitting, methylID)
@@ -827,3 +828,11 @@ for iSpin = 1:clusterSize
   end
 end
 end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function C = commutator(A,B)
+  C = A*B - B*A;
+end
+%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
