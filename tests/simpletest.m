@@ -69,7 +69,7 @@ SignalMean0 = CluE(Options);
 %--------------------------------------------------------------------------
 clf
 fontsize = 24; 
-subplot(2,1,1)
+% subplot(2,1,1)
 
 hold on
 
@@ -84,18 +84,18 @@ grid on;  zoom on;
 
 set(gca,'fontsize',fontsize);
 
-subplot(2,1,2)
-dt = twotau(2)-twotau(1);
-nt = size(twotau,2);
-nu  = linspace(0,1/dt,nt);
-F = fft(SignalMean);
-
-semilogx(nu*1e-6,abs(F),'-','linewidth',3,'color',[0,0,0]);
-hold on;
-semilogx(nu*1e-6,real(F),'-','linewidth',1.5,'color',[0,0,1]);
-semilogx(nu*1e-6,imag(F),'-','linewidth',1.5,'color',[1,0,0]);
-legend('Abs','Re','Im')
-xlabel('\nu (MHz)');
-grid on;  zoom on; 
-set(gca,'fontsize',fontsize);
-hold on;
+% subplot(2,1,2)
+% dt = twotau(2)-twotau(1);
+% nt = size(twotau,2);
+% nu  = linspace(0,1/dt,nt);
+% F = fft(SignalMean);
+% 
+% semilogx(nu*1e-6,abs(F),'-','linewidth',3,'color',[0,0,0]);
+% hold on;
+% semilogx(nu*1e-6,real(F),'-','linewidth',1.5,'color',[0,0,1]);
+% semilogx(nu*1e-6,imag(F),'-','linewidth',1.5,'color',[1,0,0]);
+% legend('Abs','Re','Im')
+% xlabel('\nu (MHz)');
+% grid on;  zoom on; 
+% set(gca,'fontsize',fontsize);
+% hold on;

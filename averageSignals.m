@@ -504,10 +504,10 @@ else
   % Check if the theroy is the same for every cluster size.
   if all(all(System.Theory)==any(System.Theory)) && ...
       ~strcmp(Method.method,'HD-CCE')
-    
+
     [Signal, AuxiliarySignal, Signals] ...
-      = calculateSignal(System, Method, Nuclei,Clusters);
-    
+      = calculate_signal(System, Method, Nuclei,Clusters);
+
     Order_n_Signal = cell(1,Method.order);
     
     for ii = 1:Method.order
@@ -576,11 +576,10 @@ else
         System.deuteriumFraction = fractions;
 
       else
-        
-          
+
         [~, AuxiliarySignal_ofOrder, ~] ...
-          = calculateSignal(System, Method, Nuclei,Clusters);
-          
+          = calculate_signal(System, Method, Nuclei,Clusters);
+     
       end
       % Record the appropraite signals.
       for record_order = iorder:new_order
@@ -790,19 +789,20 @@ if ~isempty(OutputData)
   T = array2table([experiment_time',SignalMean']);
   T.Properties.VariableNames(1:2) = {'time','signal'};
   writetable(T,[OutputData(1:end-4) , '.csv']);
+  if Data.save_mat_file
+    switch Data.saveLevel
+      case 0
+        save(OutputData,'SignalMean','Signals','TM','TM_powder',...
+          'Progress','uncertainty','GridInfo','-append');
 
-  switch Data.saveLevel
-    case 0
-      save(OutputData,'SignalMean','Signals','TM','TM_powder',...
-        'Progress','uncertainty','GridInfo','-append');
+      case 1
+        save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
+          'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty',...
+          'GridInfo','AuxiliarySignal','-append');
 
-    case 1
-      save(OutputData,'SignalMean','Signals','TM','TM_powder','Progress',...
-        'Nuclei','Order_n_SignalMean','Order_n_Signals','uncertainty',...
-        'GridInfo','AuxiliarySignal','-append');
-
-    case 2
-      save(OutputData,'-v7.3');
+      case 2
+        save(OutputData,'-v7.3');
+    end
   end
 end
 

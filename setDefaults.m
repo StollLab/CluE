@@ -18,6 +18,7 @@ defaultMethod.propagationDomain='time-domain';
 defaultMethod.partialSave = true;
 defaultMethod.clear_partialSave = true;
 defaultMethod.parallelComputing = false;
+defaultMethod.parfor_over_clusters = false;
 defaultMethod.numberCores = inf;
 defaultMethod.verbose = false;
 defaultMethod.allowHDcoupling = false;
@@ -42,6 +43,7 @@ defaultMethod.r_min = 0.1e-10; % m
 defaultMethod.mixed_eState = false;
 defaultMethod.useMethylPseudoParticles = false;
 defaultMethod.fullyConnectedMethyls = false;
+
 
 % Method: Add defaults for fields missing in user-provided structure
 Method = supplementdefaults(Method,defaultMethod);
@@ -221,6 +223,7 @@ defaultSystem.HydrogenExchange = 'OH';
 defaultSystem.isUnitCell = true;
 defaultSystem.g = 2.0023*[1,1,1];
 defaultSystem.deuteriumFraction = 1;
+defaultSystem.CPMG_const_time = 0;
 
 System = supplementdefaults(System,defaultSystem);
 
@@ -567,10 +570,11 @@ end
 %-------------------------------------------------------------------------------
 Data.path2CluE = fileparts(which(mfilename));
 defaultData.OutputData = '';
-defaultData.writeSpinPDB = true;
+defaultData.writeSpinPDB = false;
 defaultData.saveLevel = 0;
 defaultData.outPDBoptions.Honly = false;
 defaultData.ClusterData = '';
+defaultData.save_mat_file = false;
 Data = supplementdefaults(Data,defaultData);
 
 Data.exitOnFailedLoad = ~isempty(Data.ClusterData);

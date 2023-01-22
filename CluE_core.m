@@ -221,7 +221,7 @@ Progress.complete = false;
 Progress.Completed_Orders = zeros(1,Method.order);
 
 % Save if filename is provided
-if ~isempty(OutputData) && Data.saveLevel>=0
+if Data.save_mat_file && ~isempty(OutputData) && Data.saveLevel>=0
   Input.System = System;
   Input.Method = Method;
   Input.Data = Data;
@@ -254,8 +254,6 @@ elseif min( (Data.InputData(end-3:end)) == '.pdb') || strcmp(Data.InputData,'use
   [Nuclei, System] = parseNuclei(System, Method, Data, Data.InputData);
   
   if Nuclei.number < 1
-    Signals{1} = ones(size(System.Time));
-    SignalMean = Signals{1};
     fprintf(2,'\n There are too few spins in the system for spin decoherence.\n')
     fprintf(2,' Try relaxing one or more cutoffs.\n')
     toc
