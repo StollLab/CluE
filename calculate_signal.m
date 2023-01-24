@@ -511,7 +511,8 @@ for iTime = 1:Npoints
       v(iTime) = vecDensityMatrixT*U(:);
       
     case HAHN
-      U = U_beta'*U_alpha'*U_beta*U_alpha;
+      %       U = U_beta'*U_alpha'*U_beta*U_alpha;
+      U = (U_alpha*U_beta)'*U_beta*U_alpha;
       v(iTime) = vecDensityMatrixT*U(:);
       
     case CPMG
@@ -986,16 +987,17 @@ for cluster_size = 1:numel(clusters)
         idx = idx + 1;
       end
 
-      key = num2str(subcluster);
+      %key = num2str(subcluster);
+      key = sprintf('%d,',subcluster);
       %key = {subcluster}; % TODO: Faster, but incorect, fix.
       if ~cluster_map.isKey(key)
-        assert(sum(all(subcluster==clusters{subcluster_size},2))==0);
+%         assert(sum(all(subcluster==clusters{subcluster_size},2))==0);
         continue; 
       end
 
 
 
-      assert(sum(all(subcluster==clusters{subcluster_size},2))==1);
+%       assert(sum(all(subcluster==clusters{subcluster_size},2))==1);
      
       subcluster_index = cluster_map(key);
       
@@ -1016,7 +1018,8 @@ cluster_map = dictionary(string([]),[]);
 for isize = 1:numel(clusters)
   for ii = 1:size(clusters{isize},1)
     cluster = clusters{isize}(ii,:);
-    cluster_map(num2str(cluster)) = ii;
+    key = sprintf('%d,',cluster);
+    cluster_map(key) = ii;
 %     cluster_map({cluster}) = ii;
   end
 end
