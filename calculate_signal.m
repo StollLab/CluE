@@ -606,6 +606,8 @@ for iTime = 1:Npoints
     U_beta = dU_beta2*U_beta;
     U_alpha = dU_alpha2*U_alpha;
   end
+
+
   if doTR
     if iTime < N1
       U_beta_TR = dU_beta_TR*U_beta_TR;

@@ -11,7 +11,7 @@ CUT_DIPOLE = ienum; ienum = ienum +1;
 CUT_DELTAHYPERFINE = ienum; ienum = ienum +1;
 CUT_BAMAX = ienum; ienum = ienum +1;
 CUT_POWDER = ienum; ienum = ienum +1;
-%CUT_DIPOLE_BAMAX = ienum; ienum = ienum +1;
+CUT_DIPOLE_BAMAX = ienum; ienum = ienum +1;
 CUT_NUM_ENUM = ienum - 1;
 
 if ~isfield(Method.neighborCutoff,'dipole')
@@ -119,7 +119,7 @@ is_converged = false;
 cutoff.delta = options.Delta; 
 nextCutoff = options.firstCutoff;
 
-use_radiusfirst = true;
+use_radiusfirst = options.converge.radius ;
 radiusfirst = use_radiusfirst;
 
 [ParameterLog, ~ , ~, NameLog] ...
@@ -130,7 +130,7 @@ while ~is_converged
   
   % Perturb cutoff. 
   [System,Method, cutoff] = ...
-    adjustCutoff('relax',System, Method,cutoff,nextCutoff,uncertainty,options);
+    adjustCutoff('relax',System, Method,cutoff,nextCutoff,options);
   
   % Print info. 
   logPrint(fileID,[cutoff.name, ' = %d ',cutoff.units,'.\n'],cutoff.value);
@@ -138,18 +138,7 @@ while ~is_converged
       System.radius,Method.neighborCutoff.dipole(Method.order),...
       Method.neighborCutoff.DeltaHyperfine(Method.order), System.gridSize);
   
-  % Check for out of bounds parameters.
-  if false 
-    [System, Method, cutoff] = ...
-      adjustCutoff('tighten',System,...
-          Method,cutoff,nextCutoff,uncertainty,options);
-    logPrint(fileID,[cutoff.name, ' did not converge within set bounds.\n']);
-    Eta(cutoff.ID) = -inf;
-    if useCutoffs(cutoff.ID)
-      continue;
-    end
-    error('An unused parameter is being tested.');
-  end
+
   
   % Remember parameter sets for data rerieval.
   [ParameterLog, ID , OutputData, NameLog] = updateParameterLog(ParameterLog,...
@@ -158,7 +147,7 @@ while ~is_converged
   
   % Either load or calculate the appropriate simulation. 
   calculate_signal = true;
-  uncertainty_ = uncertainty;
+%   uncertainty_ = uncertainty;
   if isfile([Data.OutputData,'.mat'])
     try
       load([Data.OutputData,'.mat'],'SignalMean','experiment_time',...
@@ -218,7 +207,7 @@ while ~is_converged
     if is_powder_converged
       [System, Method, cutoff] = ...
         adjustCutoff('tighten',System, ...
-            Method,cutoff,nextCutoff,uncertainty_,options);
+            Method,cutoff,nextCutoff,options);
     end
   else
     
@@ -230,7 +219,7 @@ while ~is_converged
       % Revert to the previous state.
       [System, Method, cutoff] = ...
         adjustCutoff('tighten',System, Method,cutoff,nextCutoff,...
-            uncertainty_,options);
+            options);
       if cutoff.ID == CUT_RADIUS
         radiusfirst = false;
       end
@@ -499,7 +488,7 @@ if options.converge.radius
   options.firstCutoff = 'radius';
 elseif options.converge.dipole
   options.firstCutoff = 'dipole';
-elseif options.converge.dipole
+elseif options.converge.DeltaHyperfine
   options.firstCutoff = 'DeltaHyperfine';
 elseif options.converge.bAmax
   options.firstCutoff = 'bAmax';
@@ -573,13 +562,12 @@ function [System, Method, cutoff]= adjustCutoff(...
     Method0,...
     cutoff0,...
     nextCutoff,...
-    uncertainty,...
     options)
 
 System = System0;
 Method = Method0;
 cutoff = cutoff0;
-order = Method.order;
+% order = Method.order;
 
 % ENUM
 ienum = 1;
@@ -587,9 +575,9 @@ CUT_RADIUS = ienum; ienum = ienum +1;
 CUT_DIPOLE = ienum; ienum = ienum +1;
 CUT_DELTAHYPERFINE = ienum; ienum = ienum +1;
 CUT_BAMAX = ienum; ienum = ienum +1;
-CUT_POWDER = ienum; ienum = ienum +1;
+CUT_POWDER = ienum; %ienum = ienum +1;
 %CUT_DIPOLE_BAMAX = ienum; ienum = ienum +1;
-CUT_NUM_ENUM = ienum - 1;
+% CUT_NUM_ENUM = ienum - 1;
 
 switch direction_str  
   case 'relax'

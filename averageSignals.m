@@ -331,6 +331,7 @@ R_pdb2lab = rotateZYZ(Alpha,Beta,0);
 Nuclei.Coordinates = Nuclei.Coordinates*R_pdb2lab';
 Statistics = Nuclei.Statistics;
 Ori_Clusters = [];
+fprintf('\nOrientation: α = %d°; β = %d°.\n', Alpha*180/pi, Beta*180/pi);
 if Method.Ori_cutoffs
 
   isotopologueStatistics = [];
@@ -387,9 +388,19 @@ if Method.Ori_cutoffs
     Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1); 
   
   
-    fprintf('Found %d orientation clusters of size %d.\n', ...
+
+
+    fprintf('Found %i clusters of size %i.\n', ...
       size(Clusters{clusterSize},1),clusterSize);
+
+
   end
+  filename = [OutputData(1:end-4),...
+    '_alpha_', num2str(Alpha),'_beta_', num2str(Beta),...
+    '_cluster_statistics'];
+  r_max = write_cluster_statistics(Clusters,Nuclei,filename);
+
+  fprintf('Most distal spin: %d angstroms.\n', r_max*1e10);
 end
 
 % Rotate bath spin tensors.
