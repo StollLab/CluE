@@ -137,7 +137,25 @@ for isize = 1:Method.extraOrder
 
           clear('DeltaHyperfine_perpendicular');
         end
-        
+      
+      case 'Hahn: k*omega^4'
+        if ~Ori_cutoffs
+          error("Please set Ori_cutoffs = true.");
+        end
+        idx = min(isize, numel(  Method.neighborCutoff.modDepthFreq4 ));
+        kom4 = pwstat.Modulation_Depth.*(2*pi*pwstat.Frequency_Pair).^4;
+        selection = kom4 >= Method.neighborCutoff.modDepthFreq4(idx);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*selection;
+
+      case 'Hahn: k*sin^4(omega*1us)'
+        if ~Ori_cutoffs
+          error("Please set Ori_cutoffs = true.");
+        end
+        idx = min(isize, numel(  Method.neighborCutoff.Hahn_1us));
+        ks4 = pwstat.ModulationDepth.*sin(2*pi*pwstat.Frequency_Pair*1e-6).^4;
+        selection = ks4 >= Method.neighborCutoff.Hahn_1us(idx);
+        Adjacency(:,:,isize) = Adjacency(:,:,isize).*selection;
+    
       case 'Gaussian RMSD'
         idx = min(isize, numel(  Method.neighborCutoff.gaussianRMSD ));
         if Ori_cutoffs

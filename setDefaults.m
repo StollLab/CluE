@@ -670,6 +670,18 @@ else
    Method.Criteria{end+1} = 'dipoleOne';
 end
 
+if ~isfield(Method.neighborCutoff,'modDepthFreq4') 
+  Method.neighborCutoff.modDepthFreq4 = zer;
+else
+   Method.Criteria{end+1} = 'Hahn: k*omega^4';
+end
+
+if ~isfield(Method.neighborCutoff,'Hahn_1us') 
+  Method.neighborCutoff.Hahn_1us = zer;
+else
+   Method.Criteria{end+1} = 'Hahn: k*sin^4(omega*1us)';
+end
+
 if ~isfield(Method.neighborCutoff,'rMax') 
   Method.neighborCutoff.rMax = inf*ones(1,Method.order);
 else
@@ -746,6 +758,19 @@ if isfield(Method.neighborCutoff, 'DeltaHyperfine') ...
   n_ = numel(Method.neighborCutoff.DeltaHyperfine);
   Method.neighborCutoff.DeltaHyperfine(n_:Method.order) ...
    = Method.neighborCutoff.DeltaHyperfine(n_);
+end
+
+if isfield(Method.neighborCutoff, 'modDepthFreq4') ...
+ && numel(Method.neighborCutoff.modDepthFreq4) < Method.order
+  n_ = numel(Method.neighborCutoff.modDepthFreq4);
+  Method.neighborCutoff.modDepthFreq4(n_:Method.order) ...
+   = Method.neighborCutoff.modDepthFreq4(n_);
+end
+if isfield(Method.neighborCutoff, 'Hahn_1us') ...
+ && numel(Method.neighborCutoff.Hahn_1us) < Method.order
+  n_ = numel(Method.neighborCutoff.Hahn_1us);
+  Method.neighborCutoff.Hahn_1us(n_:Method.order) ...
+   = Method.neighborCutoff.Hahn_1us(n_);
 end
 
 if numel(Method.neighborCutoff.bAmax) < Method.order

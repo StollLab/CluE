@@ -7,6 +7,10 @@ end
 
 inClusters = {};
 doFindClusters = ~Method.Ori_cutoffs;
+if strcmp(Method.method,'count clusters')
+  doFindClusters = true;
+end
+
 if ~isempty(Data.ClusterData)  || isfield(Method,'Clusters')
   Clusters = {};
   if ~isempty(Data.ClusterData)

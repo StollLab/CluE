@@ -37,18 +37,21 @@ Nuclei.Adjacency = [];
 
 % Save clusters and exit without calculation if requested
 if strcmp(Method.method,'count clusters')
-  SignalMean = Nuclei.numberClusters;
+  SignalMean = zeros(1,Method.order);
+  for ii = 1:Method.order
+    SignalMean(ii) = size(Clusters{ii},1);
+  end
   experiment_time = 1:length(SignalMean);
   TM_powder = [];
   Order_n_SignalMean = [];
-  if Method.exportClusters
-    if ~isempty(OutputData)
-      clusterSaveFile = [OutputData(1:end-4),'Clusters.mat'];
-    else
-      clusterSaveFile = 'Clusters.mat';
-    end
-    save(clusterSaveFile,'Clusters');
-  end    
+  if ~isempty(OutputData)
+    clusterSaveFile = [OutputData(1:end-4),'_Clusters.csv'];
+    T = array2table([experiment_time;SignalMean]');
+    T.Properties.VariableNames(1:2) = {'cluster_size','n_clusters'};
+    writetable(T,clusterSaveFile)
+
+  end
+
   toc
   return
 end
