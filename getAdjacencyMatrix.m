@@ -34,7 +34,7 @@ for isize = 1:Method.extraOrder
         idx = min(isize, numel( Method.neighborCutoff.modulation ));
         if Ori_cutoffs
           Min_Mod_ ...
-           = pwstat.Modulation_Depth >= Method.neighborCutoff.modulation(isize);
+           = pwstat.Modulation_Depth_methyl >= Method.neighborCutoff.modulation(isize);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Mod_;
         else
           Min_Mod_ = pwstat.Modulation_Depth_p ...
@@ -107,7 +107,7 @@ for isize = 1:Method.extraOrder
       case 'minimum-frequency'
         idx = min(isize, numel(  Method.neighborCutoff.minimum_frequency ));
         if Ori_cutoffs
-          Min_Freq_ = abs(pwstat.Frequency_Pair) ...
+          Min_Freq_ = abs(pwstat.Frequency_Pair_methyl) ...
             > Method.neighborCutoff.minimum_frequency(idx);
           Adjacency(:,:,isize) = Adjacency(:,:,isize).*Min_Freq_;
         else
@@ -143,7 +143,7 @@ for isize = 1:Method.extraOrder
           error("Please set Ori_cutoffs = true.");
         end
         idx = min(isize, numel(  Method.neighborCutoff.modDepthFreq4 ));
-        kom4 = pwstat.Modulation_Depth.*(2*pi*pwstat.Frequency_Pair).^4;
+        kom4 = pwstat.Modulation_Depth_methyl.*(2*pi*pwstat.Frequency_Pair_methyl).^4;
         selection = kom4 >= Method.neighborCutoff.modDepthFreq4(idx);
         Adjacency(:,:,isize) = Adjacency(:,:,isize).*selection;
 

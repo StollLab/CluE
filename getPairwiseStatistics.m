@@ -150,6 +150,8 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
 
 
   pwstat.Nuclear_Dipole = 4*b; % Hz.
+  J = -2/3*Nuclei.methylTunnelingSplitting;
+  pwstat.Nuclear_Dipole_methyl = pwstat.Nuclear_Dipole - 2*J;
 
   pwstat.Nuclear_Dipole_x_iy_Z = zeroDiag(...
     4*b_fliflopPerp.* ...
@@ -197,9 +199,16 @@ if stat_bools(STAT_NUCLEAR_DIPOLE)
     pwstat.Modulation_Depth_p = modDepth_p;
     pwstat.Modulation_Depth = modDepth;
 
+    bCH3 = pwstat.Nuclear_Dipole_methyl;
+    dACH3 = pwstat.DeltaHyperfine;
+
+    pwstat.Modulation_Depth_methyl = (2.*bCH3.*dACH3./(bCH3.^2 + dACH3.^2)).^2;
+
+
     % modulation frequency
     pwstat.Frequency_Pair_p =  b_fliflopPerp.*sqrt(1+cp.^2); % Hz
     pwstat.Frequency_Pair   =  b.*sqrt(1+c.^2); % Hz
+    pwstat.Frequency_Pair_methyl = 1/8*sqrt(bCH3.^2 + dACH3.^2); 
     
     TM = System.TMguess;
     

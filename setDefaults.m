@@ -670,6 +670,12 @@ else
    Method.Criteria{end+1} = 'dipoleOne';
 end
 
+if ~isfield(Method.neighborCutoff,'modulation') 
+  Method.neighborCutoff.modulation = zer;
+else
+   Method.Criteria{end+1} = 'modulation';
+end
+
 if ~isfield(Method.neighborCutoff,'modDepthFreq4') 
   Method.neighborCutoff.modDepthFreq4 = zer;
 else
