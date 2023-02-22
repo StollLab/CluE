@@ -43,6 +43,7 @@ defaultMethod.r_min = 0.1e-10; % m
 defaultMethod.mixed_eState = false;
 defaultMethod.useMethylPseudoParticles = false;
 defaultMethod.fullyConnectedMethyls = false;
+defaultMethod.writeClusterStatistics = true;
 
 
 % Method: Add defaults for fields missing in user-provided structure

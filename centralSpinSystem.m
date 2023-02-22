@@ -493,6 +493,7 @@ for iparticle = 2:number_
       for jh = ih+1:3 
         jH = hydrons(jh);
         Nuclei.methylTunnelingSplitting(iH,jH) = nuT;
+        Nuclei.methylTunnelingSplitting(jH,iH) = nuT;
       end
     end
 
@@ -575,6 +576,11 @@ if ~Method.getNuclearStatistics
   Statistics = struct();
   Statistics.Nuclear_Dipole = Nuclei.Statistics.Nuclear_Dipole;
   Statistics.Nuclear_Dipole_x_iy_Z = Nuclei.Statistics.Nuclear_Dipole_x_iy_Z; 
+
+  if strcmp(Method.method,'rCCE') ||strcmp(Method.method,'rCE') 
+    Statistics.Modulation_Depth_methyl = Nuclei.Statistics.Modulation_Depth_methyl;
+    Statistics.Frequency_Pair_methyl = Nuclei.Statistics.Frequency_Pair_methyl;
+  end
 
   Nuclei.Statistics = Statistics;
   Nuclei.DistanceMatrix = [];

@@ -395,12 +395,15 @@ if Method.Ori_cutoffs
 
 
   end
-  filename = [OutputData(1:end-4),...
-    '_alpha_', num2str(Alpha),'_beta_', num2str(Beta),...
-    '_cluster_statistics'];
-  r_max = write_cluster_statistics(Clusters,Nuclei,filename);
+  if Method.writeClusterStatistics
+    filename = [OutputData(1:end-4),...
+      '_alpha_', num2str(Alpha),'_beta_', num2str(Beta),...
+      '_cluster_statistics'];
 
-  fprintf('Most distal spin: %d angstroms.\n', r_max*1e10);
+    r_max = write_cluster_statistics(Clusters,Nuclei,filename);
+
+    fprintf('Most distal spin: %d angstroms.\n', r_max*1e10);
+  end
 end
 
 % Rotate bath spin tensors.
@@ -1171,7 +1174,7 @@ for inucleus = 1:numberNuclei
     % skip over I != 1/2
     if Nuclei.Spin(inucleus)~=1/2, continue; end
     
-    if ~Adjacency(inucleus,jnucleus), continue; end
+    if ~Adjacency(inucleus,jnucleus,2), continue; end
     
     
     % calculate dipolar coupling
@@ -1186,11 +1189,10 @@ for inucleus = 1:numberNuclei
     c = ( Hyperfine(inucleus)-Hyperfine(jnucleus) )/(4*b);
     w = b*sqrt(1+c^2);
     %}
-    b = Nuclei.Statistics.Nuclear_Dipole(inucleus,jnucleus)/4*2*pi;
-    modDepth = Nuclei.Statistics.Modulation_Depth(inucleus,jnucleus);
-    w = Nuclei.Statistics.Frequency_Pair(inucleus,jnucleus)*2*pi;
+    modDepth = Nuclei.Statistics.Modulation_Depth_methyl(inucleus,jnucleus);
+    w = Nuclei.Statistics.Frequency_Pair_methyl(inucleus,jnucleus)*2*pi;
    
-    AuxiliarySignal_ = 1 - modDepth * sin(w*System.Time).^4;
+    AuxiliarySignal_ = 1 - modDepth * sin(w*2*System.Time).^4;
     Signal = Signal.*AuxiliarySignal_;
     if ~Method.conserveMemory
       AuxiliarySignal{inucleus} =AuxiliarySignal{inucleus}.*AuxiliarySignal_;

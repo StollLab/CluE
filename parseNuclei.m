@@ -203,6 +203,9 @@ for iNuc = 1:Nuclei.number
     Nuclei.methylTunnelingSplitting(iNuc+1,iNuc+2) = nuT;
     Nuclei.methylTunnelingSplitting(iNuc+1,iNuc+3) = nuT;
     Nuclei.methylTunnelingSplitting(iNuc+2,iNuc+3) = nuT;
+    Nuclei.methylTunnelingSplitting(iNuc+2,iNuc+1) = nuT;
+    Nuclei.methylTunnelingSplitting(iNuc+3,iNuc+1) = nuT;
+    Nuclei.methylTunnelingSplitting(iNuc+3,iNuc+2) = nuT;
   end
 end
 

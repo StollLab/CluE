@@ -238,6 +238,9 @@ stat_bools(STAT_NUCLEAR_DIPOLE) = true;
 if ~Method.Ori_cutoffs
   stat_bools(STAT_PERPENDICULAR) = true;
 end
+if strcmp(Method.method,'rCCE') || strcmp(Method.method,'rCE')
+  stat_bools(STAT_ANALYTIC_HAHN) = true;
+end
 for ii = 1:numel(Method.Criteria)
   switch Method.Criteria{ii}
 
