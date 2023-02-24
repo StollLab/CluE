@@ -19,6 +19,19 @@
 function [total_signal,auxiliary_signals,order_n_signals] ... 
        = calculate_signal(System,Method,Nuclei,clusters)
 
+if Method.use_calculate_signal_ckpt
+  [total_signal,auxiliary_signals,order_n_signals] ...
+    = calculate_signal_ckpt(System,Method,Nuclei,clusters);
+else
+  [total_signal,auxiliary_signals,order_n_signals] ...
+    = calculate_signal_default(System,Method,Nuclei,clusters);
+end
+
+end
+
+function [total_signal,auxiliary_signals,order_n_signals] ... 
+       = calculate_signal_default(System,Method,Nuclei,clusters)
+
 % Extract physical constants.     
 ge = System.ge;
 geff = System.gMatrix(3,3); 

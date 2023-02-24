@@ -44,9 +44,17 @@ defaultMethod.mixed_eState = false;
 defaultMethod.useMethylPseudoParticles = false;
 defaultMethod.fullyConnectedMethyls = false;
 defaultMethod.writeClusterStatistics = true;
+defaultMethod.neighborCutoff.sizeDependent = false;
+defaultMethod.use_calculate_signal_ckpt = false;
+defaultMethod.batch_size = 1e4;
 
 
 % Method: Add defaults for fields missing in user-provided structure
+if isfield(Method,'neighborCutoff')
+  Method.neighborCutoff = supplementdefaults(...
+    Method.neighborCutoff,defaultMethod.neighborCutoff);
+
+end
 Method = supplementdefaults(Method,defaultMethod);
 
 if Method.conserveMemory
@@ -785,11 +793,7 @@ if numel(Method.neighborCutoff.bAmax) < Method.order
   Method.neighborCutoff.bAmax(n_:Method.order) = Method.neighborCutoff.bAmax(n_);
 end
 
-if norm(Method.neighborCutoff.dipole-Method.neighborCutoff.dipole(1)) > 0
-  Method.neighborCutoff.sizeDependent = true;
-else
-  Method.neighborCutoff.sizeDependent = false;
-end
+
 end % of function
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
