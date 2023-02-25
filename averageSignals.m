@@ -92,6 +92,8 @@ if ~isempty(pool)
 end
 
 % Delete temporary files
+temp_file = ['temp_',OutputData(1:end-4),'_batch_*.csv'];
+delete(temp_file);
 for iOri = 1:nOrientations
   temp_file = ['temp_', OutputData, '_sig_', num2str(iOri), '.mat'] ;
   if isfile(temp_file)
@@ -520,7 +522,7 @@ else
       ~strcmp(Method.method,'HD-CCE')
 
     [Signal, AuxiliarySignal, Signals] ...
-      = calculate_signal(System, Method, Nuclei,Clusters);
+      = calculate_signal(System, Method, Nuclei,Clusters,OutputData);
 
     Order_n_Signal = cell(1,Method.order);
     
@@ -592,7 +594,7 @@ else
       else
 
         [~, AuxiliarySignal_ofOrder, ~] ...
-          = calculate_signal(System, Method, Nuclei,Clusters);
+          = calculate_signal(System, Method, Nuclei,Clusters,OutputData);
      
       end
       % Record the appropraite signals.

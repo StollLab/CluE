@@ -17,11 +17,11 @@
 % Clusters(cluster index , size > order ,order) = 0.
 
 function [total_signal,auxiliary_signals,order_n_signals] ... 
-       = calculate_signal(System,Method,Nuclei,clusters)
+       = calculate_signal(System,Method,Nuclei,clusters,OutputData)
 
 if Method.use_calculate_signal_ckpt
   [total_signal,auxiliary_signals,order_n_signals] ...
-    = calculate_signal_ckpt(System,Method,Nuclei,clusters);
+    = calculate_signal_ckpt(System,Method,Nuclei,clusters,OutputData);
 else
   [total_signal,auxiliary_signals,order_n_signals] ...
     = calculate_signal_default(System,Method,Nuclei,clusters);
