@@ -45,7 +45,7 @@ defaultMethod.useMethylPseudoParticles = false;
 defaultMethod.fullyConnectedMethyls = false;
 defaultMethod.writeClusterStatistics = true;
 defaultMethod.neighborCutoff.sizeDependent = false;
-defaultMethod.use_calculate_signal_ckpt = false;
+defaultMethod.use_calculate_signal_ckpt = true;
 defaultMethod.batch_size = 1e4;
 
 

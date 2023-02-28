@@ -43,7 +43,8 @@ for clusterSize = 1:Method.order
   [order_n_signals(:,clusterSize),auxiliary_signals] ...
     = process_clusters(auxiliary_signals,...
     cluster_map,clusterSize,num_time_points,...
-    Op,SpinXiXjOps,clusters,Nuclei,System,Method,OutputData);
+    Op,SpinXiXjOps,clusters,Nuclei,System,Method,OutputData,...
+    clusterSize == Method.order);
 
   unusedClusters = find(  auxiliary_signals{clusterSize}(1,:)==0  )';
   if ~isempty(unusedClusters)
@@ -66,7 +67,7 @@ end
 function [cum_prod_aux_sig, auxiliary_signals] = process_clusters(...
   auxiliary_signals,cluster_map,clusterSize,...
   num_time_points,Op,SpinXiXjOps,clusters,Nuclei,System,Method,...
-  OutputData)
+  OutputData, is_highest_order)
 
 
 batch_size = Method.batch_size;
@@ -74,16 +75,17 @@ batch_size = Method.batch_size;
 numClusters = Nuclei.numberClusters(clusterSize);
 auxiliary_signals{clusterSize} = zeros(num_time_points,numClusters);
 
+if is_highest_order
+  batch_name = ['temp_',OutputData(1:end-4),'_batch_',int2str(clusterSize),...
+    '_',int2str(batch_size), '.csv'];
 
-n_batches = ceil(numClusters/batch_size);
+  [cum_prod_aux_sig,end_cluster] = load_batch_ckpt(batch_name,num_time_points);
+else
+  cum_prod_aux_sig = ones(num_time_points,1);
+  end_cluster = 0;
+end
 
-batch_name = ['temp_',OutputData(1:end-4),'_batch_',int2str(clusterSize),...
-  '_',int2str(batch_size), '.csv'];
-
-[cum_prod_aux_sig,end_cluster] = load_batch_ckpt(batch_name,num_time_points);
-
-
-for ibatch = 1:n_batches
+while end_cluster < numClusters
   start_cluster = end_cluster + 1;
   end_cluster = min(end_cluster + batch_size,numClusters);
 
@@ -98,7 +100,9 @@ for ibatch = 1:n_batches
   cum_prod_aux_sig = cum_prod_aux_sig...
     .*prod(auxiliary_signals{clusterSize}(:,start_cluster:end_cluster),2);
 
-  save_batch_ckpt(batch_name,cum_prod_aux_sig,end_cluster);
+  if is_highest_order
+    save_batch_ckpt(batch_name,cum_prod_aux_sig,end_cluster);
+  end
 end
 
 
