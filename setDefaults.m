@@ -16,6 +16,7 @@ defaultMethod.exportHamiltonian = false;
 defaultMethod.exportClusters = false;
 defaultMethod.propagationDomain='time-domain';
 defaultMethod.partialSave = true;
+defaultMethod.ckptAuxiliarySignals = false;
 defaultMethod.clear_partialSave = true;
 defaultMethod.parallelComputing = false;
 defaultMethod.parfor_over_clusters = false;

@@ -35,16 +35,26 @@ num_time_points = sum(System.nPoints)^dimensionality;
 
 cluster_map = build_cluster_map(clusters);
 
-% cluster_signals = cell(Method.order,1);
-auxiliary_signals = cell(Method.order,1);
 order_n_signals = ones(num_time_points,Method.order);
+
+[auxiliary_signals,loaded] = load_auxiliary_signals(...
+  Nuclei.numberClusters,num_time_points,Method,OutputData);
+
 for clusterSize = 1:Method.order
 
-  [order_n_signals(:,clusterSize),auxiliary_signals] ...
-    = process_clusters(auxiliary_signals,...
-    cluster_map,clusterSize,num_time_points,...
-    Op,SpinXiXjOps,clusters,Nuclei,System,Method,OutputData,...
-    clusterSize == Method.order);
+  if loaded(clusterSize)
+    order_n_signals(:,clusterSize) = prod(auxiliary_signals{clusterSize},2);
+  else
+    [order_n_signals(:,clusterSize),auxiliary_signals] ...
+      = process_clusters(auxiliary_signals,...
+      cluster_map,clusterSize,num_time_points,...
+      Op,SpinXiXjOps,clusters,Nuclei,System,Method,OutputData);
+
+    if Method.ckptAuxiliarySignals
+      save_auxiliary_signals(auxiliary_signals{clusterSize},...
+        clusterSize,OutputData);
+    end
+  end
 
   unusedClusters = find(  auxiliary_signals{clusterSize}(1,:)==0  )';
   if ~isempty(unusedClusters)
@@ -64,10 +74,41 @@ total_signal = order_n_signals(Method.order,:);
 
 end
 %-------------------------------------------------------------------------------
+function [auxiliary_signals,successfully_loaded] ...
+  =  load_auxiliary_signals(...
+  numberClusters,num_time_points,Method,OutputData)
+
+successfully_loaded = false(Method.order,1);
+auxiliary_signals = cell(Method.order,1);
+for clusterSize = 1:Method.order
+
+  aux_file = get_auxiliary_file(clusterSize,OutputData);
+
+  if Method.ckptAuxiliarySignals && isfile(aux_file)
+    auxiliary_signals{clusterSize} = readmatrix(aux_file);    
+    successfully_loaded(clusterSize) = true;
+  else
+    numClusters = numberClusters(clusterSize);
+    auxiliary_signals{clusterSize} = zeros(num_time_points,numClusters);
+  end
+
+end
+end
+%------------------------------------------------------------------------------- 
+function save_auxiliary_signals(auxiliary_signals,clusterSize,OutputData)
+  aux_file = get_auxiliary_file(clusterSize,OutputData);
+  writematrix(auxiliary_signals,aux_file);
+end
+%------------------------------------------------------------------------------- 
+function aux_file = get_auxiliary_file(clusterSize,OutputData)
+aux_file = ['aux_',OutputData(1:end-4),'_clustersize_',...
+  int2str(clusterSize), '.csv'];
+end
+%------------------------------------------------------------------------------- 
 function [cum_prod_aux_sig, auxiliary_signals] = process_clusters(...
   auxiliary_signals,cluster_map,clusterSize,...
   num_time_points,Op,SpinXiXjOps,clusters,Nuclei,System,Method,...
-  OutputData, is_highest_order)
+  OutputData)
 
 
 batch_size = Method.batch_size;
@@ -75,6 +116,7 @@ batch_size = Method.batch_size;
 numClusters = Nuclei.numberClusters(clusterSize);
 auxiliary_signals{clusterSize} = zeros(num_time_points,numClusters);
 
+is_highest_order = clusterSize == Method.order;
 if is_highest_order
   batch_name = ['temp_',OutputData(1:end-4),'_batch_',int2str(clusterSize),...
     '_',int2str(batch_size), '.csv'];
