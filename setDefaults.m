@@ -585,6 +585,7 @@ defaultData.saveLevel = 0;
 defaultData.outPDBoptions.Honly = false;
 defaultData.ClusterData = '';
 defaultData.save_mat_file = false;
+Data.keep_temporary_files = false;
 Data = supplementdefaults(Data,defaultData);
 
 Data.exitOnFailedLoad = ~isempty(Data.ClusterData);

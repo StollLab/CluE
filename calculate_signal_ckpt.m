@@ -101,7 +101,7 @@ function save_auxiliary_signals(auxiliary_signals,clusterSize,OutputData)
 end
 %------------------------------------------------------------------------------- 
 function aux_file = get_auxiliary_file(clusterSize,OutputData)
-aux_file = ['aux_',OutputData(1:end-4),'_clustersize_',...
+aux_file = ['aux_',OutputData,'_clustersize_',...
   int2str(clusterSize), '.csv'];
 end
 %------------------------------------------------------------------------------- 
@@ -118,7 +118,7 @@ auxiliary_signals{clusterSize} = zeros(num_time_points,numClusters);
 
 is_highest_order = clusterSize == Method.order;
 if is_highest_order
-  batch_name = ['temp_',OutputData(1:end-4),'_batch_',int2str(clusterSize),...
+  batch_name = ['temp_',OutputData,'_batch_',int2str(clusterSize),...
     '_',int2str(batch_size), '.csv'];
 
   [cum_prod_aux_sig,end_cluster] = load_batch_ckpt(batch_name,num_time_points);

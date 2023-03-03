@@ -92,12 +92,14 @@ if ~isempty(pool)
 end
 
 % Delete temporary files
-temp_file = ['temp_',OutputData(1:end-4),'_batch_*.csv'];
-delete(temp_file);
-for iOri = 1:nOrientations
-  temp_file = ['temp_', OutputData, '_sig_', num2str(iOri), '.mat'] ;
-  if isfile(temp_file)
-    delete(temp_file);
+if ~Data.keep_temporary_files
+  temp_file = ['temp_',OutputData(1:end-4),'_batch_*.csv'];
+  delete(temp_file);
+  for iOri = 1:nOrientations
+    temp_file = ['temp_', OutputData(1:end-4), '_sig_', num2str(iOri), '.mat'] ;
+    if isfile(temp_file)
+      delete(temp_file);
+    end
   end
 end
 
@@ -176,7 +178,7 @@ Statistics = cell(nOrientations,1);
 for iOri = 1:nOrientations
   
   % temporary file for partial saving
-  temp_file = ['temp_', OutputData, '_sig_', num2str(iOri), '.mat'] ;
+  temp_file = ['temp_', OutputData(1:end-4), '_sig_', num2str(iOri), '.mat'] ;
   
   Calculate_Signal{iOri} = true;
   
@@ -298,7 +300,7 @@ if verbose, fprintf('\nCompleted orientation %d/%d.\n',igrid,iSignal_max); end
 
 % Save to file.
 if Method.partialSave
-  temp_file = ['temp_', OutputData, '_sig_', num2str(igrid), '.mat'] ;
+  temp_file = ['temp_', OutputData(1:end-4), '_sig_', num2str(igrid), '.mat'] ;
   parsavefile = matfile(temp_file,'writable',true);
   parsavefile.signal = TempSignals_;
   parsavefile.order_n = Temp_Order_n_Signals_;
@@ -397,9 +399,12 @@ if Method.Ori_cutoffs
 
 
   end
+
+
+  sig_file = [OutputData(1:end-4),...
+      '_alpha_', num2str(Alpha),'_beta_', num2str(Beta)];
   if Method.writeClusterStatistics
-    filename = [OutputData(1:end-4),...
-      '_alpha_', num2str(Alpha),'_beta_', num2str(Beta),...
+    filename = [sig_file,...
       '_cluster_statistics'];
 
     r_max = write_cluster_statistics(Clusters,Nuclei,filename);
@@ -522,7 +527,7 @@ else
       ~strcmp(Method.method,'HD-CCE')
 
     [Signal, AuxiliarySignal, Signals] ...
-      = calculate_signal(System, Method, Nuclei,Clusters,OutputData);
+      = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
 
     Order_n_Signal = cell(1,Method.order);
     
@@ -594,7 +599,7 @@ else
       else
 
         [~, AuxiliarySignal_ofOrder, ~] ...
-          = calculate_signal(System, Method, Nuclei,Clusters,OutputData);
+          = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
      
       end
       % Record the appropraite signals.
