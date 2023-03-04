@@ -254,6 +254,9 @@ end
 if ~isfield(System.Methyl,'numberExtraProtons')
   System.Methyl.numberExtraProtons = 0;
 end
+if ~isfield(System.Methyl,'max_radius')
+  System.Methyl.max_radius = inf;
+end
 if ~isfield(Method.neighborCutoff,'methylCoupledOnlyNumber')
   if System.Methyl.method==1
     Method.neighborCutoff.methylCoupledOnlyNumber = 1;

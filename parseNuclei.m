@@ -11,8 +11,28 @@ function [Nuclei, System]= parseNuclei(System,Method,Data,pdbFile)
 
 if Method.useCentralSpinSystem
   [Nuclei, System] = centralSpinSystem(System,Method,Data,System.pdb);
-  return;
+else
+  [Nuclei, System] = parseNuclei_defualt(System,Method,Data,pdbFile);
 end
+
+
+if System.Methyl.max_radius < inf
+  n_methyl = max(Nuclei.MethylID);
+  for id = 1:n_methyl
+    methyl_select = Nuclei.MethylID==id;
+    assert(sum(id)==3);
+
+    r_center = mean( Nuclei.Coordinates(methyl_select,:),1);
+
+    if r_center > System.Methyl.max_radius
+      Nuclei.methylTunnelingSplitting(methyl_select) = 0;
+    end
+
+  end
+end
+end
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function [Nuclei, System]= parseNuclei_defualt(System,Method,Data,pdbFile)
 % set values to unspecified fields
 System = setIsotopeDefaults(System,Method);
 spinCenter = System.spinCenter;
