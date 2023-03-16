@@ -4,11 +4,6 @@ function [H_alpha,H_beta] = assembleHamiltonian(state_multiplicity,...
   theory,isMethyl,methylMethod, methylTunnelingSplitting, methylID)
 
 
-
-% debug test
-% test_spinopidx();
-% test_spinopidx2();
-
 useEZ       = theory(1);
 useNZ       = theory(2);
 useHF_SzIz  = theory(3);
@@ -24,23 +19,9 @@ useMethyl = methylMethod>0;
 
 clusterSize = numel(state_multiplicity);
 
-%Cluster = sort(unique(Cluster));
 
-%if methyl_number==0 && abs(double(zeroIndex) + 1 - double(Cluster(1)) )>=1
-%  error('Cluster reference failure.');
-%end
-
-%if clusterSize ~= length(Cluster)
-%  error('Cluster reference failure.');
-%end
-% I0 = SpinOp(:,:,1);
 Hnuc = 0;
 Hhf = 0;
-
-% E = 1; Z = 2; RAISE = 3; SZ = 4;
-Hmf = 0;
-Hmf0 = 0; 
-Hmf0_ = 0;
 
 
 % iSpin is the index of the nuclear spin in the cluster
@@ -178,7 +159,6 @@ for iSpin = 1:clusterSize
     
    
     
-    Hmf0 = Hmf0 + Hmf0_;
     Hnuc = Hnuc + Hnn_A + Hnn_B + Hnn_CD + Hnn_EF + H_methyl;
     
   end
@@ -194,8 +174,8 @@ else
 end
 
 % Calculate total nuclear Hamiltonians for alpha and beta electron manifolds
-H_alpha = +1/2*(HEZ + Hhf + Hmf) + Hnuc + Hmf0;
-H_beta  = -1/2*(HEZ + Hhf + Hmf) + Hnuc + Hmf0;
+H_alpha = +1/2*(HEZ + Hhf) + Hnuc;
+H_beta  = -1/2*(HEZ + Hhf) + Hnuc;
   
 % Check Hermitianity
 threshold = 1e-12;
@@ -225,14 +205,6 @@ if ~isHermA || ~isHermB
   
   [isHerm,nonHermiticity] = isHermitian(H_hyperfine_SzIx,threshold);
   fprintf('  H_hyperfine_SzIx non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-
-    [isHerm,nonHermiticity] = isHermitian(Hmf0,threshold);
-  fprintf('  H_meanField_1 non-Hermiticity = %d.\n',nonHermiticity);
-  fprintf('  pass = %d.\n',isHerm); disp(hline);
-
-    [isHerm,nonHermiticity] = isHermitian(Hmf,threshold);
-  fprintf('  H_meanField_Sz non-Hermiticity = %d.\n',nonHermiticity);
   fprintf('  pass = %d.\n',isHerm); disp(hline);
 
   [isHerm,nonHermiticity] = isHermitian(Hnuc,threshold);

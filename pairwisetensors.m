@@ -21,8 +21,7 @@
 %}
 function [tensors,zeroIndex] = pairwisetensors(...
   Nuclei_g, Nuclei_Coordinates,Cluster,Atensor, magneticField, ge, geff,...
-  muB, muN, mu0, hbar,theory,B1x,B1y,nuRF, ...
-          mean_Dipole_z_Z, mean_Dipole_x_iy_Z)
+  muB, muN, mu0, hbar,theory,B1x,B1y,nuRF)
 
 zeroIndex = min(Cluster) - 1;
 % Indices = fliplr(Cluster);
@@ -65,21 +64,6 @@ for i_index_nucleus = Indices
     % y
     tensors(2,2,1+inucleus,1+inucleus) = constructNuclearZeeman(...
       Nuclei_g,i_index_nucleus,B1y, muN, hbar);
-  end
-
-  
-  % Add mean fields.
-  if ~isempty( mean_Dipole_z_Z)
-    tensors(3,3,1+inucleus,1+inucleus) = tensors(3,3,1+inucleus,1+inucleus)...
-      + mean_Dipole_z_Z(i_index_nucleus);
-  end
-  if ~isempty(mean_Dipole_x_iy_Z)
-    % x
-    tensors(1,1,1+inucleus,1+inucleus) = tensors(1,1,1+inucleus,1+inucleus)...
-      + real(mean_Dipole_x_iy_Z(i_index_nucleus));
-    % y
-    tensors(2,2,1+inucleus,1+inucleus) = tensors(2,2,1+inucleus,1+inucleus)...
-      + imag(mean_Dipole_x_iy_Z(i_index_nucleus));
   end
 
   

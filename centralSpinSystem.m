@@ -3101,6 +3101,9 @@ if sum(containsXYZ)>=2
   % rotate system
   Rotation = alignCoordinates(System.X,System.Z);
   Nuclei.Coordinates = Nuclei.Coordinates*Rotation';
+
+  Rotation = rotateZYZ(System.RotateAlpha,System.RotateBeta,0);
+  Nuclei.Coordinates = Nuclei.Coordinates*Rotation';
   
 
 end

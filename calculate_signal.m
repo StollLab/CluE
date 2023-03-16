@@ -16,15 +16,16 @@
 % Clusters = Clusters(cluster index , 1:size ,order)
 % Clusters(cluster index , size > order ,order) = 0.
 
-function [total_signal,auxiliary_signals,order_n_signals] ... 
+function [total_signal,auxiliary_signals,order_n_signals,batch_name] ... 
        = calculate_signal(System,Method,Nuclei,clusters,OutputData)
 
 if Method.use_calculate_signal_ckpt
-  [total_signal,auxiliary_signals,order_n_signals] ...
+  [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
     = calculate_signal_ckpt(System,Method,Nuclei,clusters,OutputData);
 else
   [total_signal,auxiliary_signals,order_n_signals] ...
     = calculate_signal_default(System,Method,Nuclei,clusters);
+  batch_name = [];
 end
 
 end
@@ -58,14 +59,6 @@ CP_N = 7; UHRIG_N = 8;
 Theory = System.Theory;
 theory = Theory(Method.order,:);
 
-useMeanFields = theory(10);
-if useMeanFields
-  Nuclear_Dipole_z_Z = zeroDiag(Nuclei.Statistics.Nuclear_Dipole);
-  Nuclear_Dipole_x_iy_Z = zeroDiag(Nuclei.Statistics.Nuclear_Dipole_x_iy_Z);
-else
-  Nuclear_Dipole_z_Z = [];
-  Nuclear_Dipole_x_iy_Z = [];
-end
 
 if Theory(Method.order,10)
   Method_extraOrder = Method.extraOrder;
@@ -291,24 +284,7 @@ for clusterSize = 1:Method.order
     Ha = Hb;
     
     for iave = 1:System.nStates(clusterSize)
-      if useMeanFields
-        
-        ZeemanStates = Nuclei.ZeemanStates(iave,:);
-        spinState = Nuclei.ZeemanSpinStates(iave,:);
-        spinState(thisCluster) = 0;
-        if(size(spinState,2)>1)
-          spinState = spinState';
-        end
-        
-        mean_Dipole_z_Z = Nuclear_Dipole_z_Z*spinState;
-        mean_Dipole_x_iy_Z = Nuclear_Dipole_x_iy_Z*spinState;
-        
-        %       mean_Dipole_z_Z = mean_Dipole_z_Z;
-        %       mean_Dipole_x_iy_Z = mean_Dipole_x_iy_Z;
-      else
-        mean_Dipole_z_Z = [];
-        mean_Dipole_x_iy_Z = [];
-      end
+    
     
       % Loop over cyclic permutations.
       for iPerm = 1:nPerm
@@ -319,8 +295,7 @@ for clusterSize = 1:Method.order
         % Get interaction tensors.
         [tensors,~] = pairwisetensors(Nuclei.Nuclear_g, ...
           Nuclei.Coordinates,thisCluster,Nuclei.Atensor,magneticField,ge,geff,...
-          muB,muN,mu0,hbar,theory,B1x,B1y,nuRF, ...
-          mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
+          muB,muN,mu0,hbar,theory,B1x,B1y,nuRF);
 
         if ~System.limitToSpinHalf
           qtensors = Nuclei.Qtensor(:,:,thisCluster);
@@ -331,8 +306,7 @@ for clusterSize = 1:Method.order
         if doTR
           [tensors_TR,~] = pairwisetensors(Nuclei.Nuclear_g, ...
             Nuclei.Coordinates,thisCluster,Nuclei.Atensors,magneticField,ge,geff,...
-            muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2,...
-            mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
+            muB, muN, mu0, hbar,theory,B1x2,B1y2,nuRF2);
           if ~System.limitToSpinHalf
             qtensors = Nuclei.Qtensors(:,:,thisCluster);
           else

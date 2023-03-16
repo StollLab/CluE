@@ -12,7 +12,6 @@ defaultMethod.errorTolerance = 1e-9;
 defaultMethod.useCentralSpinSystem = false;
 defaultMethod.conserveMemory = false;
 defaultMethod.getNuclearStatistics = false;
-defaultMethod.exportHamiltonian = false;
 defaultMethod.exportClusters = false;
 defaultMethod.propagationDomain='time-domain';
 defaultMethod.partialSave = true;
@@ -41,13 +40,13 @@ defaultMethod.getUncertainty = false;
 defaultMethod.extraOrder = Method.order;
 defaultMethod.includeAllSubclusters = false;
 defaultMethod.r_min = 0.1e-10; % m
-defaultMethod.mixed_eState = false;
 defaultMethod.useMethylPseudoParticles = false;
 defaultMethod.fullyConnectedMethyls = false;
 defaultMethod.writeClusterStatistics = true;
 defaultMethod.neighborCutoff.sizeDependent = false;
 defaultMethod.use_calculate_signal_ckpt = true;
 defaultMethod.batch_size = 1e4;
+defaultMethod.save_orientation_signals = false;
 
 
 % Method: Add defaults for fields missing in user-provided structure
@@ -234,6 +233,8 @@ defaultSystem.isUnitCell = true;
 defaultSystem.g = 2.0023*[1,1,1];
 defaultSystem.deuteriumFraction = 1;
 defaultSystem.CPMG_const_time = 0;
+defaultSystem.RotateAlpha = 0;
+defaultSystem.RotateBeta = 0;
 
 System = supplementdefaults(System,defaultSystem);
 
@@ -421,17 +422,14 @@ if ~isfield(System,'theory')
   if ~isfield(System,'nuclear_quadrupole_filter')
     System.nuclear_quadrupole_filter = ones(3);
   end
-  if ~isfield(System,'useMeanField')
-    System.useMeanField = false;
-  end
+
 
   System.theory = [System.electron_Zeeman,...
     System.nuclear_Zeeman,...
     System.hyperfine(1), System.hyperfine(2), ...
     System.nuclear_dipole(1), System.nuclear_dipole(2), ...
     System.nuclear_dipole(3), System.nuclear_dipole(4), ...
-    System.nuclear_quadrupole, ...
-    System.useMeanField];
+    System.nuclear_quadrupole];
 else
   
   System.electron_Zeeman    = System.theory(1);
@@ -439,7 +437,6 @@ else
   System.hyperfine          = System.theory(3:4);
   System.nuclear_dipole     = System.theory(5:8);
   System.nuclear_quadrupole = System.theory(9);
-  System.useMeanField       = System.theory(10);
   
   if ~isfield(System,'nuclear_quadrupole_scale_e2qQh')
     System.nuclear_quadrupole_scale_e2qQh = 1;
@@ -517,32 +514,6 @@ if System.limitToSpinHalf
   disp('Based on the input options, the simulation will only include spin-1/2 nuclei.');
 end
 
-if Method.mixed_eState
-  
-  if ~isfield(System,'Detection_Operator')
-    System.Detection_Operator = spinRaise(System.Electron.spin)/System.Electron.spin^2;
-  end
-  
-  if ~isfield(System,'Pulse')
-    System.Pulse = cos(pi/4)*eye(2*System.Electron.spin + 1) + 1i*sin(pi/4)*spinX(System.Electron.spin)/System.Electron.spin;
-    System.Pulse(:,:,2) =cos(pi/2)*eye(2*System.Electron.spin + 1) + 1i*sin(pi/2)*spinX(System.Electron.spin)/System.Electron.spin;
-  end
-  
-  if isfield(System,'Flip_Angles')
-    ii=1;
-    System.Pulse = cos(System.Flip_Angles(ii)/2)*eye(2*System.Electron.spin + 1) + 1i*sin(System.Flip_Angles(ii)/2)*spinX(System.Electron.spin)/System.Electron.spin;
-    for ii = 1:length(System.Flip_Angles)
-      System.Pulse(:,:,ii) = cos(System.Flip_Angles(ii)/2)*eye(2*System.Electron.spin + 1) + 1i*sin(System.Flip_Angles(ii)/2)*spinX(System.Electron.spin)/System.Electron.spin;
-    end
-  end
-  
-  if ~isfield(System,'full_Hyperfine_Tensor')
-    System.full_Hyperfine_Tensor = false;
-  end
-  
-else
-  Method.mixed_eState = false;
-end
 
 if ~isfield(System,'RF')
   System.RF.B1x = 0;

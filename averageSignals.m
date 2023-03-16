@@ -1,7 +1,8 @@
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function [SignalMean, experiment_time, ...
   TM_powder,Order_n_SignalMean,Nuclei,statistics] ...
-  = averageSignals( ...
+  = ...
+  averageSignals( ...
   System,Method,Data,OutputData,...
   experiment_time, Nuclei,Clusters,...
   Alpha,Beta,gridWeight,GridInfo,...
@@ -93,8 +94,7 @@ end
 
 % Delete temporary files
 if ~Data.keep_temporary_files
-  temp_file = ['temp_',OutputData(1:end-4),'_batch_*.csv'];
-  delete(temp_file);
+
   for iOri = 1:nOrientations
     temp_file = ['temp_', OutputData(1:end-4), '_sig_', num2str(iOri), '.mat'] ;
     if isfile(temp_file)
@@ -140,7 +140,8 @@ end
 function [SignalsToCalculate,SignalMean,Order_n_SignalMean,...
   TempSignals,Temp_Order_n_Signals,graphs,...
   Signals,Order_n_Signals,Statistics,TM,AuxiliarySignal,...
-  Calculate_Signal,Ori_Clusters,Progress,saveAll,numberOfSignals] = ...
+  Calculate_Signal,Ori_Clusters,Progress,saveAll,numberOfSignals] ...
+  = ...
   initializeSignals(System, Method, Data, OutputData,...
   nOrientations,Progress,nTimePoints)
 
@@ -240,7 +241,8 @@ end
 % ========================================================================
 function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
   Statistics_isignal,graphs_isignal,iOri_Clusters] ...
-    = getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,...
+    =...
+    getOrientationSignals(System,Method,Nuclei,inClusters, Alpha,Beta,...
     isignal,verbose,OutputData,Data,InputData,SignalsToCalculate,...
     gridWeight,iSignal_max)
      
@@ -266,35 +268,60 @@ function [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,...
   end
   igrid = SignalsToCalculate(isignal);
 
-if isempty(Clusters{1})
-%   error(['Error in getOrientationSignals(): ',...
-%     'empty cluster set.']);
-end
 
-% calculate coherence signal
-[TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,...
-  graphs_isignal,iOri_Clusters] = ...
-  beginCalculateSignal(System,Method,Nuclei,Clusters,...
-  Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData,isignal);
 
-if System.newIsotopologuePerOrientation  && ~Method.reparseNuclei
-  Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
-end
+sig_file = ['Ori_',OutputData(1:end-4),...
+  '_alpha_', num2str(Alpha(igrid)),'_beta_', num2str(Beta(igrid)),'.csv'];
 
-normalizing_factor = TempSignals_(1);
-TempSignals_ = gridWeight(igrid)*TempSignals_/normalizing_factor;
-if strcmp(Method.method,'full')
-  return
-end
+batch_name = [];
+if Method.save_orientation_signals && isfile(sig_file)
+  TempSignals_ = readmatrix(sig_file).';
+  AuxiliarySignal_ = [];
+  Temp_Order_n_Signals_ = [];
+  Statistics_isignal = [];
+  graphs_isignal = [];
+  iOri_Clusters = [];
+
+else
+  % calculate coherence signal
+  [TempSignals_, AuxiliarySignal_,Temp_Order_n_Signals_,Statistics_isignal,...
+    graphs_isignal,iOri_Clusters,batch_name] ...
+    = beginCalculateSignal(System,Method,Nuclei,Clusters,...
+    Alpha(igrid),Beta(igrid),verbose,OutputData,Data,InputData,isignal);
+
+  if System.newIsotopologuePerOrientation  && ~Method.reparseNuclei
+    Statistics_isignal.Isotopologue = Nuclei.Isotopologue;
+  end
+
 
 % Order n signals
 if ~ischar(Temp_Order_n_Signals_)
   for iorder = 1:Method.order
     % set the max amplitude to the weight
     Temp_Order_n_Signals_{iorder} ...
-      = gridWeight(igrid)*Temp_Order_n_Signals_{iorder}/normalizing_factor;
+      = gridWeight(igrid)*Temp_Order_n_Signals_{iorder};
   end
 end
+
+end
+if Method.save_orientation_signals
+  T = array2table(TempSignals_.');
+  T.Properties.VariableNames(1) = {'signal'};
+  writetable(T,sig_file);
+
+  TempSignals_ = readmatrix(sig_file);
+  AuxiliarySignal_ = [];
+  Temp_Order_n_Signals_ = [];
+  Statistics_isignal = [];
+  graphs_isignal = [];
+  iOri_Clusters = [];
+end
+
+TempSignals_ = gridWeight(igrid)*TempSignals_;
+if strcmp(Method.method,'full')
+  return
+end
+
 
 if verbose, fprintf('\nCompleted orientation %d/%d.\n',igrid,iSignal_max); end
 
@@ -312,6 +339,10 @@ if Method.partialSave
   end
 end
 
+if ischar(batch_name) && isfile(batch_name)
+  delete(batch_name)
+end
+
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -321,12 +352,10 @@ end
 % Calculate signal for one orientation
 % ========================================================================
 function [Signal, AuxiliarySignal,Order_n_Signal,Statistics,graphs,...
-  Ori_Clusters] = ...
+  Ori_Clusters,batch_name] = ...
   beginCalculateSignal(System,Method,Nuclei,Clusters,Alpha,Beta,verbose,...
   OutputData,Data,InputData,isignal)
 
-% Assign temporary value to AuxiliarySignal
-AuxiliarySignal = 'pending';
 
 % Get rotation matrix from PDB frame to lab frame, via Euler angles
 R_pdb2lab = rotateZYZ(Alpha,Beta,0);
@@ -391,13 +420,8 @@ if Method.Ori_cutoffs
     end
     Nuclei.numberClusters(clusterSize) = size(Clusters{clusterSize},1); 
   
-  
-
-
     fprintf('Found %i clusters of size %i.\n', ...
       size(Clusters{clusterSize},1),clusterSize);
-
-
   end
 
 
@@ -447,35 +471,6 @@ System.Electron.g = System.gMatrix(3,3);
 
 graphs = Nuclei.Adjacency; 
 
-if Method.useMultipleBathStates
-  [Nuclei.MeanFieldCoefficients, Nuclei.MeanFieldTotal] ...
-    = getMeanFieldCoefficients(Nuclei,System);
-else
-  Nuclei.MeanFieldCoefficients = [];
-  Nuclei.MeanFieldTotal = [];
-end
-
-
-if isfield(Method,'exportHamiltonian') && Method.exportHamiltonian
-  
-  % Generate Cartesian spin-spin coupling Hamiltonian.
-  
-  geff=System.gMatrix(3,3);
-  
-  [Tensors,zeroIndex] = pairwisetensors(Nuclei.Nuclear_g, Nuclei.Coordinates,...
-    1:Nuclei.number,Nuclei.Atensor, System.magneticField, System.ge, ...
-    geff, System.muB, System.muN, System.mu0, System.hbar,System.theory,[]);
-  
-  % set file name
-  H_file = [OutputData(1:end-4), '_Hamiltonian.mat'];
-  
-  % save Hamiltonian
-  if ~isempty(Hamiltonian)
-    save(H_file,'Tensors','zeroIndex');
-    clear Hamiltonian;
-  end
-  
-end
 
 % calculate restricted signal directly
 if strcmp(Method.method,'rCE')
@@ -504,7 +499,7 @@ elseif strcmp(Method.method,'LCE')
     fprintf('\nCalculating Linked Cluster Expansion.\n')
   end
   [Signal,AuxiliarySignal,Order_n_Signal] = ...
-    doLCE(System,Method, Nuclei,Clusters, verbose);
+    doLCE(System,Method, Nuclei,Clusters);
   if verbose
     fprintf('\nComplete.\n')
   end
@@ -512,117 +507,111 @@ elseif strcmp(Method.method,'LCE')
 end
 
 timepoints = numel(System.Time);
-dt = System.dt;
-linearTimeAxis = true; % Code should be changed to enforce this.
 
-% Calculate signal
-if Method.mixed_eState
-  [Signal,Order_n_Signal,~] = calculateSignal_pulse(System,Method, ...
-    Nuclei,Clusters,timepoints,dt,linearTimeAxis,verbose);
-else
-  % Calculate signal and save extra parameters (RAM intensive)
-  
-  % Check if the theroy is the same for every cluster size.
-  if all(all(System.Theory)==any(System.Theory)) && ...
-      ~strcmp(Method.method,'HD-CCE')
 
-    [Signal, AuxiliarySignal, Signals] ...
-      = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
+% Calculate signal and save extra parameters (RAM intensive)
 
-    Order_n_Signal = cell(1,Method.order);
-    
-    for ii = 1:Method.order
-      Order_n_Signal{ii} = Signals(1,ii);
-    end
-  else
-    Order_n_Signal = cell(1,Method.order);
-    AuxiliarySignal = cell(1,Method.order);
-    
-    % Remember Method.order.
-    MethodOrder = Method.order;
-    
-    new_order = 1;
-    
-    % Loop over orders.
-    for iorder = 1:MethodOrder
-      if iorder < new_order
-        continue;
-      end
-      
-      % Check for orders with the same theory.
-      for jorder = iorder:MethodOrder
-        if ~all(   all(  System.Theory(iorder:jorder,:),1  )  ...
-            == any(System.Theory(iorder:jorder,:),1 ) )
-          break;
-        end
-        new_order = jorder;
-      end
-      
-      % Set new order to the highest order with the same theory as iorder.
-      Method.order = new_order;
-      
-      % Calculate signals.
-      if strcmp(Method.method,'HD-CCE')
-        
-        fractions = System.deuteriumFraction;
-        
-        % Change all hydrons to protons.
-        System.deuteriumFraction = 0;
-        Nuclei = newHydronIsotopologue(Nuclei,System);
-        
-        % Get proton auxiliary signals.
-        [ClusterArray, Coherences_1H,Coherences_2H,...
-          SubclusterIndices_2H,dimensionality,~] ...
-          = calculateSignal_forHDCCE(System, Method, Nuclei,Clusters);
-        
-        % Change all hydrons to deuteron.
-        System.deuteriumFraction = 1;
-        Nuclei = newHydronIsotopologue(Nuclei,System);
+% Check if the theroy is the same for every cluster size.
+if all(all(System.Theory)==any(System.Theory)) && ...
+    ~strcmp(Method.method,'HD-CCE')
 
-        % Get deuteron auxiliary signals.
+  [Signal, AuxiliarySignal, Signals,batch_name] ...
+    = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
 
-        [~, Coherences_1D,Coherences_2D,SubclusterIndices_2D,~,~] ...
-          = calculateSignal_forHDCCE(System, Method, Nuclei,Clusters);
-        
-        
-        [~, ...
-          ~,~] = ...
-          doHydrogenIsotopologueCCE(...
-          Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, ...
-          fractions, ClusterArray, ...
-          SubclusterIndices_2H,SubclusterIndices_2D,...
-          timepoints,dimensionality, Method.order,...
-          Nuclei.numberClusters,Nuclei.Exchangeable,Nuclei.MoleculeID);
-        
-        System.deuteriumFraction = fractions;
+  Order_n_Signal = cell(1,Method.order);
 
-      else
-
-        [~, AuxiliarySignal_ofOrder, ~] ...
-          = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
-     
-      end
-      % Record the appropraite signals.
-      for record_order = iorder:new_order
-        
-        AuxiliarySignal{record_order} = AuxiliarySignal_ofOrder{record_order};
-       
-          Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
-          if record_order > 1
-            Order_n_Signal{record_order} = ...
-              Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
-          end
-        
-      
-      end
-      
-    end
-    Signal = Order_n_Signal{MethodOrder};
-    
-    
+  for ii = 1:Method.order
+    Order_n_Signal{ii} = Signals(1,ii);
   end
+else
+  Order_n_Signal = cell(1,Method.order);
+  AuxiliarySignal = cell(1,Method.order);
+
+  % Remember Method.order.
+  MethodOrder = Method.order;
+
+  new_order = 1;
+
+  % Loop over orders.
+  for iorder = 1:MethodOrder
+    if iorder < new_order
+      continue;
+    end
+
+    % Check for orders with the same theory.
+    for jorder = iorder:MethodOrder
+      if ~all(   all(  System.Theory(iorder:jorder,:),1  )  ...
+          == any(System.Theory(iorder:jorder,:),1 ) )
+        break;
+      end
+      new_order = jorder;
+    end
+
+    % Set new order to the highest order with the same theory as iorder.
+    Method.order = new_order;
+
+    % Calculate signals.
+    if strcmp(Method.method,'HD-CCE')
+
+      fractions = System.deuteriumFraction;
+
+      % Change all hydrons to protons.
+      System.deuteriumFraction = 0;
+      Nuclei = newHydronIsotopologue(Nuclei,System);
+
+      % Get proton auxiliary signals.
+      [ClusterArray, Coherences_1H,Coherences_2H,...
+        SubclusterIndices_2H,dimensionality,~] ...
+        = calculateSignal_forHDCCE(System, Method, Nuclei,Clusters);
+
+      % Change all hydrons to deuteron.
+      System.deuteriumFraction = 1;
+      Nuclei = newHydronIsotopologue(Nuclei,System);
+
+      % Get deuteron auxiliary signals.
+
+      [~, Coherences_1D,Coherences_2D,SubclusterIndices_2D,~,~] ...
+        = calculateSignal_forHDCCE(System, Method, Nuclei,Clusters);
+
+
+      [~, ...
+        ~,~] = ...
+        doHydrogenIsotopologueCCE(...
+        Coherences_1H,Coherences_2H,Coherences_1D,Coherences_2D, ...
+        fractions, ClusterArray, ...
+        SubclusterIndices_2H,SubclusterIndices_2D,...
+        timepoints,dimensionality, Method.order,...
+        Nuclei.numberClusters,Nuclei.Exchangeable,Nuclei.MoleculeID);
+
+      System.deuteriumFraction = fractions;
+
+    else
+
+      [~, AuxiliarySignal_ofOrder, ~,batch_name] ...
+        = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
+
+    end
+    % Record the appropraite signals.
+    for record_order = iorder:new_order
+
+      AuxiliarySignal{record_order} = AuxiliarySignal_ofOrder{record_order};
+
+      Order_n_Signal{record_order} = prod(AuxiliarySignal{record_order},1);
+      if record_order > 1
+        Order_n_Signal{record_order} = ...
+          Order_n_Signal{record_order}.*Order_n_Signal{record_order-1};
+      end
+
+
+    end
+
+  end
+  Signal = Order_n_Signal{MethodOrder};
+
 
 end
+
+
 
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -634,7 +623,8 @@ end
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function [SignalMean, experiment_time, ...
   TM_powder,Order_n_SignalMean,Nuclei,statistics] ...
-= saveSignalResults(Nuclei, Clusters,System, Method, Data,...
+=...
+saveSignalResults(Nuclei, Clusters,System, Method, Data,...
 SignalMean,Order_n_SignalMean,...
   experiment_time,OutputData,uncertainty,GridInfo,...
   TempSignals,Temp_Order_n_Signals,graphs,...
@@ -899,13 +889,12 @@ end
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function [Signal,AuxiliarySignal,Order_n_Signal] = ...
-  doLCE(System,Method, Nuclei, Clusters, verbose)
+  doLCE(System,Method, Nuclei, Clusters)
 
 MethylID = [];
 
 Signal = zeros(size(System.Time));
-V2 = Signal;
-Order_n_Signal{1} = Signal;
+Order_n_Signal = {ones(size(System.Time)),Signal};
 tau1 = System.Time;
 tau2 = System.Time';
 
@@ -913,224 +902,43 @@ if Method.conserveMemory
   AuxiliarySignal = 'The auxiliary signals are not saved in memory conservation mode.';
 end
 
-for isize = 2
-  for icluster = 1:Nuclei.numberClusters(isize)
-    
-    thisCluster = Clusters{isize}(icluster,:);
-    
-    [tensors,zeroIndex] = pairwisetensors(Nuclei.Nuclear_g, Nuclei.Coordinates,...
-      thisCluster,Nuclei.Atensor, System.magneticField, System.ge, System.gMatrix(3,3), System.muB, System.muN, System.mu0, System.hbar,System.theory,MethylID);
-    
-    b = -2*pi*tensors(3,3,2,3)/4; % rad/s.
-    omega = 2*pi*(tensors(3,3,1,2) -  tensors(3,3,1,3))/2; % rad/s.
-    
-    
-    switch System.experiment
-      case 'Hahn'
-      case 'CPMG-2D'
-        V2 = - 4*(b/omega*(cos(omega.*tau1) - cos(omega.*tau2)  )).^2;
-        AuxiliarySignal_  = V2;
-        Signal = Signal + AuxiliarySignal_;
-    end
-    % initialize the nth auxiliary signal
-    if ~Method.conserveMemory
-      AuxiliarySignal{icluster} = AuxiliarySignal_;
-    end
-  end
-  
+cluster_size = 2;
+for icluster = 1:Nuclei.numberClusters(cluster_size)
 
-  
-  Signal = exp(Signal);
-  if System.dimensionality ==2
-    Signal = reshape(Signal.',1,[]);
+  thisCluster = Clusters{cluster_size}(icluster,:);
+
+  [tensors,~] = pairwisetensors(Nuclei.Nuclear_g, Nuclei.Coordinates,...
+    thisCluster,Nuclei.Atensor, System.magneticField, System.ge, System.gMatrix(3,3), System.muB, System.muN, System.mu0, System.hbar,System.theory,MethylID);
+
+  b = -2*pi*tensors(3,3,2,3)/4; % rad/s.
+  omega = 2*pi*(tensors(3,3,1,2) -  tensors(3,3,1,3))/2; % rad/s.
+
+
+  switch System.experiment
+    case 'Hahn'
+    case 'CPMG-2D'
+      V2 = - 4*(b/omega*(cos(omega.*tau1) - cos(omega.*tau2)  )).^2;
+      AuxiliarySignal_  = V2;
+      Signal = Signal + AuxiliarySignal_;
   end
-  Order_n_Signal{1} = Signal;
-  Order_n_Signal{isize} = Signal;
-  
-  
+  % initialize the nth auxiliary signal
+  if ~Method.conserveMemory
+    AuxiliarySignal{icluster} = AuxiliarySignal_;
+  end
 end
+
+
+
+Signal = exp(Signal);
+if System.dimensionality ==2
+  Signal = reshape(Signal.',1,[]);
 end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-% Calculate < psi | H | psi > for a given | psi >,
-% where  | psi > = Kron_{n} |n>.
-function [h,hTr] = getMeanFieldCoefficients(Nuclei,System)
-
-% Only operators proportional Iz are needed.
-theory = System.theory;
-% useEZ       = theory(1);
-useNZ       = false; %  theory(2);
-useHF_SzIz  = false; %  theory(3);
-% useHF_SzIxy = theory(4);
-useNucA     = theory(5);
-% useNucB     = theory(6);
-useNucCD    = true; % theory(7);
-% useNucEF    = theory(8);
-useNQ       = false; %  theory(9);
-
-nStates = max(Nuclei.nStates);
-h_ = zeros(Nuclei.number,Nuclei.number,4);
-h = zeros(Nuclei.number,Nuclei.number,4,nStates);
-hTr = zeros(1,nStates);
-% ENUM
-E = 1; Z = 2; RAISE = 3; SZ = 4;
-
-
-% Constants
-km = System.mu0/(4*pi);
-muB = System.muB;
-muN = System.muN;
-hbar = System.hbar;
-ge = System.Electron.g;
-
-% Loop through bath states.
-for istate = 1:nStates
+Order_n_Signal{cluster_size} = Signal;
   
-  % Loop through spin states.
-  for iSpin = 1:Nuclei.number
-    
-    % Get the ith soin state.
-    psi_i = Nuclei.ZeemanStates(istate, iSpin);
-    
-    % Get the ith spin.
-    I = Nuclei.Spin(iSpin);
-    
-    % Determine the z-projection.
-    MI = psi_i - I - 1;
-    
-    % Nuclear Zeeman
-    if useNZ
-      
-      NuclearZeeman = MI*Nuclei.Nuclear_g(iSpin)*System.magneticField*System.muN; % J.
-      NuclearZeeman = NuclearZeeman/(2*pi*hbar);
-      h_(iSpin,iSpin,E) = h_(iSpin,iSpin,E) + NuclearZeeman;
-      
-    end
-    
-    % Hyperfine
-    if useHF_SzIz
-      
-      
-      if strcmp(Nuclei.Type{iSpin},'e')
-        muN = -muB;
-      end
-      
-      gni = Nuclei.Nuclear_g(iSpin);
-      r = Nuclei.Coordinates(iSpin,:);
-      if size(r,2)==3
-        r=r';
-      end
-      
-      n = r/norm(r);
-      nnt = n*n';
-      r3 = norm(r)^3;
-      dd = km*ge*muB*gni*muN/r3*(eye(3)-3*nnt);
-      Hyperfine = -dd/(2*pi*hbar); % Hz.
-      
-      h_(iSpin,iSpin,SZ) = h_(iSpin,iSpin,SZ) + Hyperfine(3,3)*MI;
-      
-    end
-    
-    % Quadrupole
-    
-    if useNQ && Nuclei.StateMultiplicity(iSpin) > 2
-      Q_ = Nuclei.Qtensor(:,:,iSpin);
-      H_nuclear_quadrupole = MI*Q_(3,3)*MI ...
-        + (Q_(1,1) + Q_(2,2))*(I*(I + 1)  -1/2*MI^2);
-      
-      h_(iSpin,iSpin,E) = h_(iSpin,iSpin,E) ...
-        + H_nuclear_quadrupole;
-      
-    end
-    
-    % Loop through other bath spins.
-    for jSpin = 1:iSpin-1
-      
-      % Get jth spin state.
-      psi_j = Nuclei.ZeemanStates(jSpin);
-      
-      % Get the jth spin.
-      J = Nuclei.Spin(jSpin);
-      
-      % Determine the z-projection.
-      MJ = psi_j - J -1;
-      
-      if useNucA || useNucCD
-        
-        % Get classical dipole moment.
-        muNi = System.muN;
-        
-        % Check if the spin is an electron/
-        if strcmp(Nuclei.Type{iSpin},'e')
-          % Adjust to Bohr magneton.
-          muNi = -muB;
-        end
-        
-        % Get classical dipole moment.
-        muNj = System.muN;
-        
-        % Check if the spin is an electron/
-        if strcmp(Nuclei.Type{jSpin},'e')
-          % Adjust to Bohr magneton.
-          muNj = -muB;
-        end
-        
-        % Get spin g-factors.
-        gni = Nuclei.Nuclear_g(iSpin);
-        gnj = Nuclei.Nuclear_g(jSpin);
-        
-        % Get inter-spin veparation vector.
-        r = Nuclei.Coordinates(iSpin,:)-Nuclei.Coordinates(jSpin,:);
-        
-        % Set r to be a column vector.
-        if size(r,2)==3
-          r=r';
-        end
-        
-        % Get direction of r.
-        n = r/norm(r);
-        nnt = n*n';
-        r3 = norm(r)^3;
-        dd = -km*gni*gnj*muNi*muNj/r3*(eye(3)-3*nnt);
-        dd = dd/(2*pi*hbar); % Hz.
-        
-        % nucleus-nucleus secular (A term)
-        if useNucA
-          
-          h_(iSpin,jSpin,E) = h_(iSpin,jSpin,E) + MI*dd(3,3)*MJ;
-          h_(jSpin,iSpin,E) = h_(iSpin,jSpin,E); % + MJ*dd(3,3)*MI;
-          
-          h_(iSpin,jSpin,Z) = h_(iSpin,jSpin,Z) + MI*dd(3,3);
-          h_(jSpin,iSpin,Z) = h_(iSpin,jSpin,Z);% + MJ*dd(3,3);
-        end
-        
-        % nucleus-nucleus dipolar C and D terms
-        if useNucCD
-          
-          cd = 1/2*(dd(1,3) - 1i*dd(2,3));
-          
-          h_(iSpin,jSpin,RAISE) = h_(iSpin,jSpin,RAISE) + MI*cd;
-          h_(jSpin,iSpin,RAISE) = h_(jSpin,iSpin,RAISE) + MJ*cd;
-          
-        end
-      end
-    end
-  end
   
-  for iSpin = 1:Nuclei.number
-    h_(iSpin,iSpin,Z) = sum( h_(:,iSpin,Z));
-    h_(iSpin,iSpin,RAISE) = sum( h_(:,iSpin,RAISE));
-  end
-  hTr(istate) = trace(h_(:,:,E));
-  
-h(:,:,:,istate) = h_;
-end
- 
+
 end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 function [Signal,AuxiliarySignal,Order_n_Signal] = doRestrictedCCE(System, Method, Nuclei,verbose)

@@ -18,7 +18,7 @@
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function [total_signal,auxiliary_signals,order_n_signals] ...
+function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_ckpt(System,Method,Nuclei,clusters,OutputData)
 
 % Unpack spin operators.
@@ -40,25 +40,21 @@ order_n_signals = ones(num_time_points,Method.order);
 [auxiliary_signals,loaded] = load_auxiliary_signals(...
   Nuclei.numberClusters,num_time_points,Method,OutputData);
 
+batch_name = [];
 for clusterSize = 1:Method.order
 
   if loaded(clusterSize)
     order_n_signals(:,clusterSize) = prod(auxiliary_signals{clusterSize},2);
   else
-    [order_n_signals(:,clusterSize),auxiliary_signals] ...
+    [order_n_signals(:,clusterSize),auxiliary_signals,batch_name] ...
       = process_clusters(auxiliary_signals,...
       cluster_map,clusterSize,num_time_points,...
       Op,SpinXiXjOps,clusters,Nuclei,System,Method,OutputData);
 
     if Method.ckptAuxiliarySignals
       save_auxiliary_signals(auxiliary_signals{clusterSize},...
-        clusterSize,OutputData);
+        clusterSize,clusters,OutputData);
     end
-  end
-
-  unusedClusters = find(  auxiliary_signals{clusterSize}(1,:)==0  )';
-  if ~isempty(unusedClusters)
-    error('Some cluster signals could not be found.');
   end
 
   if clusterSize > 1
@@ -95,9 +91,21 @@ for clusterSize = 1:Method.order
 end
 end
 %------------------------------------------------------------------------------- 
-function save_auxiliary_signals(auxiliary_signals,clusterSize,OutputData)
-  aux_file = get_auxiliary_file(clusterSize,OutputData);
-  writematrix(auxiliary_signals,aux_file);
+function save_auxiliary_signals(...
+  auxiliary_signals,cluster_size,clusters,OutputData)
+  aux_file = get_auxiliary_file(cluster_size,OutputData);
+  % writematrix(auxiliary_signals,aux_file);
+
+  
+  T = array2table(auxiliary_signals);
+
+  num_clusters = size(clusters{cluster_size},1);
+  for icluster = 1: num_clusters
+    cluster = clusters{cluster_size}(icluster,:);
+    var_name = ['clu_',sprintf('%d_',cluster)];
+    T.Properties.VariableNames(icluster) = {var_name};
+  end
+  writetable(T,aux_file);
 end
 %------------------------------------------------------------------------------- 
 function aux_file = get_auxiliary_file(clusterSize,OutputData)
@@ -105,7 +113,7 @@ aux_file = ['aux_',OutputData,'_clustersize_',...
   int2str(clusterSize), '.csv'];
 end
 %------------------------------------------------------------------------------- 
-function [cum_prod_aux_sig, auxiliary_signals] = process_clusters(...
+function [cum_prod_aux_sig, auxiliary_signals,batch_name] = process_clusters(...
   auxiliary_signals,cluster_map,clusterSize,...
   num_time_points,Op,SpinXiXjOps,clusters,Nuclei,System,Method,...
   OutputData)
@@ -117,6 +125,7 @@ numClusters = Nuclei.numberClusters(clusterSize);
 auxiliary_signals{clusterSize} = zeros(num_time_points,numClusters);
 
 is_highest_order = clusterSize == Method.order;
+batch_name = [];
 if is_highest_order
   batch_name = ['temp_',OutputData,'_batch_',int2str(clusterSize),...
     '_',int2str(batch_size), '.csv'];
@@ -259,38 +268,13 @@ isMethylHydron = strcmp(Nuclei.Type,'CH3_1H');
 
 theory = System.Theory(Method.order,:);
 
-useMeanFields = theory(10);
-if useMeanFields
-  Nuclear_Dipole_z_Z = zeroDiag(Nuclei.Statistics.Nuclear_Dipole);
-  Nuclear_Dipole_x_iy_Z = zeroDiag(Nuclei.Statistics.Nuclear_Dipole_x_iy_Z);
-else
-  Nuclear_Dipole_z_Z = [];
-  Nuclear_Dipole_x_iy_Z = [];
-end
-
-if useMeanFields
-
-  spinState = Nuclei.ZeemanSpinStates(iave,:);
-  spinState(thisCluster) = 0;
-  if(size(spinState,2)>1)
-    spinState = spinState';
-  end
-
-  mean_Dipole_z_Z = Nuclear_Dipole_z_Z*spinState;
-  mean_Dipole_x_iy_Z = Nuclear_Dipole_x_iy_Z*spinState;
-
-else
-  mean_Dipole_z_Z = [];
-  mean_Dipole_x_iy_Z = [];
-end
 
 % Get interaction tensors.
 [tensors,~] = pairwisetensors(Nuclei.Nuclear_g, ...
   Nuclei.Coordinates,thisCluster,Nuclei.Atensor,...
   System.magneticField,System.ge,System.gMatrix(3,3),...
   System.muB,System.muN,System.mu0,System.hbar,theory,...
-  B1x,B1y,nuRF, ...
-  mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
+  B1x,B1y,nuRF);
 
 
 qtensors = Nuclei.Qtensor(:,:,thisCluster);
@@ -317,8 +301,7 @@ if strcmp(System.experiment,'Hahn-TR')
     Nuclei.Coordinates,thisCluster,Nuclei.Atensors,...
     System.magneticField,System.ge,System.gMatrix(3,3),...
     System.muB,System.muN,System.mu0,System.hbar,theory,...
-    B1x2,B1y2,nuRF2,...
-    mean_Dipole_z_Z, mean_Dipole_x_iy_Z);
+    B1x2,B1y2,nuRF2);
 
   [Ha_TR,Hb_TR] = ...
     assembleHamiltonian(Nuclei.StateMultiplicity(thisCluster),...
