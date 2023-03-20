@@ -294,29 +294,28 @@ else
   end
 
 
-% Order n signals
-if ~ischar(Temp_Order_n_Signals_)
-  for iorder = 1:Method.order
-    % set the max amplitude to the weight
-    Temp_Order_n_Signals_{iorder} ...
-      = gridWeight(igrid)*Temp_Order_n_Signals_{iorder};
+  % Order n signals
+  if ~ischar(Temp_Order_n_Signals_)
+    for iorder = 1:Method.order
+      % set the max amplitude to the weight
+      Temp_Order_n_Signals_{iorder} ...
+        = gridWeight(igrid)*Temp_Order_n_Signals_{iorder};
+    end
   end
-end
+
+  if Method.save_orientation_signals
+    T = array2table(TempSignals_.');
+    T.Properties.VariableNames(1) = {'signal'};
+    writetable(T,sig_file);
+
+    AuxiliarySignal_ = [];
+    Temp_Order_n_Signals_ = [];
+    Statistics_isignal = [];
+    graphs_isignal = [];
+    iOri_Clusters = [];
+  end
 
 end
-if Method.save_orientation_signals
-  T = array2table(TempSignals_.');
-  T.Properties.VariableNames(1) = {'signal'};
-  writetable(T,sig_file);
-
-  TempSignals_ = readmatrix(sig_file);
-  AuxiliarySignal_ = [];
-  Temp_Order_n_Signals_ = [];
-  Statistics_isignal = [];
-  graphs_isignal = [];
-  iOri_Clusters = [];
-end
-
 TempSignals_ = gridWeight(igrid)*TempSignals_;
 if strcmp(Method.method,'full')
   return
