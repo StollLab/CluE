@@ -20,7 +20,7 @@ if System.Methyl.max_radius < inf
   n_methyl = max(Nuclei.MethylID);
   for id = 1:n_methyl
     methyl_select = Nuclei.MethylID==id;
-    assert(sum(id)==3);
+    assert(sum(methyl_select)==3);
 
     r_center = mean( Nuclei.Coordinates(methyl_select,:),1);
 
