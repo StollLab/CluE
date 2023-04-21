@@ -216,19 +216,30 @@ end
 
 if Method.useMethylPseudoParticles
 
-  for icluster = 1:order
+  for cluster_size = 1:order
     % Initialize keep seletor.
-    keep = true( size(Clusters{icluster},1),1 );
+    keep = true( size(Clusters{cluster_size},1),1 );
 
     % Select all clusters with at least one methyl hydron.
-    sele = any(Nuclei.MethylID(Clusters{icluster}) > 0,2);
+    sele = any(Nuclei.MethylID(Clusters{cluster_size}) > 0,2);
 
     % Remove clusters that do not contain all 3 hydron of a methyl 
     keep(sele) = remove_incomplete_methyls(...
-      Nuclei.MethylID(Clusters{icluster}(sele,:)));
+      Nuclei.MethylID(Clusters{cluster_size}(sele,:)));
 
     % Finalize removal.
-    Clusters{icluster} = Clusters{icluster}(keep,:);
+    Clusters{cluster_size} = Clusters{cluster_size}(keep,:);
+  end
+end
+
+
+if Method.randomize_cluster_ordering
+  for cluster_size = 1:order
+
+    n_cluster = size(Clusters{cluster_size},1);
+    new_ordering = randperm(n_cluster);
+    Clusters{cluster_size} = Clusters{cluster_size}(new_ordering,:);
+
   end
 end
 

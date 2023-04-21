@@ -1637,6 +1637,9 @@ elseif strcmp(particleStr, 'void')
 elseif strcmp(particleStr, 'M')
   particleEnum = PARTICLE_VOID;
 
+elseif strcmp(particleStr, 'Mw')
+  particleEnum = PARTICLE_VOID;
+
 elseif strcmp(particleStr, 'S')
   particleEnum = PARTICLE_VOID;
 

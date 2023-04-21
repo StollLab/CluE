@@ -153,6 +153,16 @@ while end_cluster < numClusters
 
   if is_highest_order
     save_batch_ckpt(batch_name,cum_prod_aux_sig,end_cluster);
+
+    if Method.save_partial_cce_product
+      partial_name = ['partial_',OutputData,'_nClu_',int2str(end_cluster),...
+        '.csv'];
+      T = array2table(cum_prod_aux_sig);
+      part_var = ['partial_sig_',int2str(end_cluster)];
+      T.Properties.VariableNames(1) = {part_var};
+      writetable(T,partial_name);
+
+    end
   end
 end
 

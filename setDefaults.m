@@ -47,7 +47,9 @@ defaultMethod.neighborCutoff.sizeDependent = false;
 defaultMethod.use_calculate_signal_ckpt = true;
 defaultMethod.batch_size = 1e4;
 defaultMethod.save_orientation_signals = false;
-
+defaultMethod.cluster_grouping = 'none';
+defaultMethod.randomize_cluster_ordering = false;
+defaultMethod.save_partial_cce_product = false;
 
 % Method: Add defaults for fields missing in user-provided structure
 if isfield(Method,'neighborCutoff')
@@ -236,6 +238,7 @@ defaultSystem.CPMG_const_time = 0;
 defaultSystem.RotateAlpha = 0;
 defaultSystem.RotateBeta = 0;
 
+
 System = supplementdefaults(System,defaultSystem);
 
 System.kT = System.temperature*System.kB;
@@ -257,6 +260,9 @@ if ~isfield(System.Methyl,'numberExtraProtons')
 end
 if ~isfield(System.Methyl,'max_radius')
   System.Methyl.max_radius = inf;
+end
+if ~isfield(System.Methyl,'turn_groups_off')
+  Method.Methyl.turn_groups_off = false;
 end
 if ~isfield(Method.neighborCutoff,'methylCoupledOnlyNumber')
   if System.Methyl.method==1

@@ -22,10 +22,10 @@ if System.Methyl.max_radius < inf
     methyl_select = Nuclei.MethylID==id;
     assert(sum(methyl_select)==3);
 
-    r_center = mean( Nuclei.Coordinates(methyl_select,:),1);
+    r_center = vecnorm(mean( Nuclei.Coordinates(methyl_select,:),1));
 
     if r_center > System.Methyl.max_radius
-      Nuclei.methylTunnelingSplitting(methyl_select) = 0;
+      Nuclei.methylTunnelingSplitting(methyl_select,methyl_select) = 0;
     end
 
   end
