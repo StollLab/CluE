@@ -121,7 +121,7 @@ function [cum_prod_aux_sig, auxiliary_signals,batch_name] = process_clusters(...
 
 batch_size = Method.batch_size;
 
-numClusters = Nuclei.numberClusters(clusterSize);
+numClusters = size(clusters{clusterSize},1);
 auxiliary_signals{clusterSize} = zeros(num_time_points,numClusters);
 
 is_highest_order = clusterSize == Method.order;

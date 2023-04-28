@@ -221,11 +221,15 @@ if Method.useMethylPseudoParticles
     keep = true( size(Clusters{cluster_size},1),1 );
 
     % Select all clusters with at least one methyl hydron.
-    sele = any(Nuclei.MethylID(Clusters{cluster_size}) > 0,2);
-
-    % Remove clusters that do not contain all 3 hydron of a methyl 
-    keep(sele) = remove_incomplete_methyls(...
-      Nuclei.MethylID(Clusters{cluster_size}(sele,:)));
+    if cluster_size == 1
+      sele = Nuclei.MethylID(Clusters{cluster_size})' > 0;
+      keep(sele) = false;
+    else
+      sele = any(Nuclei.MethylID(Clusters{cluster_size}) > 0,2);
+      % Remove clusters that do not contain all 3 hydron of a methyl
+      keep(sele) = remove_incomplete_methyls(...
+        Nuclei.MethylID(Clusters{cluster_size}(sele,:)));
+    end
 
     % Finalize removal.
     Clusters{cluster_size} = Clusters{cluster_size}(keep,:);
@@ -264,6 +268,8 @@ end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+% cluster_methylIDs is an array of methyl ids, where each row is mapped
+% from a cluster to the methyl ids of the corresponding atom.
 function keep = remove_incomplete_methyls(methylIDs)
 
 % Get the number of cluster.

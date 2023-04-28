@@ -50,6 +50,7 @@ defaultMethod.save_orientation_signals = false;
 defaultMethod.cluster_grouping = 'none';
 defaultMethod.randomize_cluster_ordering = false;
 defaultMethod.save_partial_cce_product = false;
+defaultMethod.use_calculate_signal_cluster_groups = false;
 
 % Method: Add defaults for fields missing in user-provided structure
 if isfield(Method,'neighborCutoff')
@@ -597,11 +598,20 @@ statistics.parameters.neighborCutoffCriteria = Method.Criteria;
 statistics.parameters.neighborCutoff = Method.neighborCutoff;
 statistics.parameters.gridSize = System.gridSize;
 
+
+validate_options(Method);
+
 end  % end of main function
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+function validate_options(Method)
+  if Method.use_calculate_signal_cluster_groups
+    assert(Method.use_calculate_signal_ckpt);
+  end
+end
+%-------------------------------------------------------------------------------
 function out = supplementdefaults(user,defaults)
 % Supplements the provided user structure with fields and values from
 % the structure defaults and returns the result in out.
@@ -612,10 +622,7 @@ for f = 1:numel(fields)
   out.(Name) = user.(Name);
 end
 end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+%-------------------------------------------------------------------------------
 function Method = setNeighborCutoffs(Method)
 
 if isfield(Method,'Criteria')

@@ -3404,58 +3404,6 @@ end
 end
 
 
-
-%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function R = alignCoordinates(MolecularX,MolecularZ)
-
-NormZ = MolecularZ(:)/norm(MolecularZ);
-NormX = MolecularX(:)/norm(MolecularX);
-if abs(NormX'*NormZ) > 1e-12
-  projectionXonZ = NormX'*NormZ;
-  NormX = NormX - projectionXonZ*NormZ;
-  NormX = NormX/norm(NormX);
-end
-Z = NormZ;
-alpha = acos( Z(1)/sqrt( Z(1)^2 + Z(2)^2 ) );
-if Z(2) < 0
-  alpha = -alpha;
-end
-Rz1 = rotateZ(-alpha);
-Z = Rz1*Z;
-
-theta = acos(Z(3));
-Ry2 = rotateY(-theta);
-
-X = Ry2*Rz1*NormX;
-phi = acos(X(1)/sqrt( X(1)^2 + X(2)^2 ) );
-if X(2) < 0
-  phi = -phi;
-end
-
-Rz3 = rotateZ(-phi);
-
-R = Rz3*Ry2*Rz1;
-Z = R*NormZ;
-Z = Z/norm(Z);
-X = R*NormX;
-X = X/norm(X);
-X = X - (X'*Z)*Z;
-X = X/norm(X);
-Z = abs(Z - [0;0;1]);
-X = abs(X - [1;0;0]);
-if (sum(X) + sum(Z)) > 1e-12
-  disp(sum(X) + sum(Z));
-  warning('Coordinates not aligned.');
-  
-  if (sum(X) + sum(Z)) > 1e-9
-    disp(sum(X) + sum(Z));
-    error('Coordinates not aligned.');
-  end
-end
-end
-%>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 % Sets the initial bath state with a Boltzmann distribution.
 % Both output variables contain the same information, but are formated

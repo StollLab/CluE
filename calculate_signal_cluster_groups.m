@@ -2,16 +2,18 @@ function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_cluster_groups(System,Method,Nuclei,clusters,OutputData)
 
 
-cluster_groups = form_cluster_groups(System,Method,Nuclei,clusters);
+cluster_groups = form_methyl_cluster_groups(System,Method,Nuclei,clusters);
 total_signal = 1;
 
 
-methylTunnelingSplitting = Nuclei.methylTunnelingSplitting;
+%methylTunnelingSplitting = Nuclei.methylTunnelingSplitting;
 for igroup = 1:numel(cluster_groups)
 
   group_of_clusters = cluster_groups{igroup};
 
-  if isfile(group_name)
+  group_name = ['partial_',OutputData,'_group_',int2str(igroup),'.csv'];
+
+  if ~isfile(group_name) || ~Method.partialSave
     [group_signal,auxiliary_signals,order_n_signals,batch_name] ...
       = calculate_signal_ckpt(System,Method,Nuclei,group_of_clusters,...
       OutputData);
@@ -21,7 +23,7 @@ for igroup = 1:numel(cluster_groups)
     group_signal = readmatrix(group_name);
   end
 
-
+  %{
   if strcmp(Method.cluster_grouping,'methyl') && Method.Methyl.turn_groups_off
     Nuclei.methylTunnelingSplitting = 0*Nuclei.methylTunnelingSplitting;
 
@@ -35,6 +37,7 @@ for igroup = 1:numel(cluster_groups)
 
     Nuclei.methylTunnelingSplitting = methylTunnelingSplitting;
   end
+  %}
 
   total_signal = total_signal.*group_signal;
 
@@ -42,22 +45,21 @@ end
 end
 
 %-------------------------------------------------------------------------------
+%{
 function cluster_groups = form_cluster_groups(System,Method,Nuclei,clusters)
 
 switch Method.cluster_grouping
   case 'methyl'
     cluster_groups = form_methyl_cluster_groups(...
       System,Method,Nuclei,clusters);
-    %case 'particle'
   otherwise
     error('Unrecognized cluster grouping "%s".',Method.cluster_grouping);
 end
 end
+%}
 %-------------------------------------------------------------------------------
 function cluster_groups = form_methyl_cluster_groups(...
   System,Method,Nuclei,clusters)
-
-
 
 if ~Method.useMethylPseudoParticles || Method.order >= 6
   error('Grouping by methyl group assumes that each cluster contain only one methyl.');
@@ -67,11 +69,12 @@ max_size = numel(clusters);
 group_ids = cell(max_size,1);
 n_groups = 0;
 
+group_dictionary = dictionary(string([]),[]);
+
 % Identify cluster groups.
 for cluster_size = 1:max_size
-  n_clusters = size(clusters,1);
+  n_clusters = size(clusters{cluster_size},1);
   group_ids{cluster_size} = zeros(n_clusters,1);
-  group_dictionary = dictionary(string([]),[]);
   for icluster = 1:n_clusters
 
     cluster = clusters{cluster_size}(icluster,:);
@@ -102,6 +105,14 @@ for igroup = 1:n_groups
   end
 end
 
+for cluster_size = 1:max_size
+  n_clusters = 0;
+  for igroup = 1:n_groups
+    n_clusters = n_clusters + size(cluster_groups{igroup}{cluster_size},1);
+  end
+  assert(n_clusters==size(clusters{cluster_size},1));
+end
 %TODO save clusters
+% save_clusters(filename,clusters)
 
 end
