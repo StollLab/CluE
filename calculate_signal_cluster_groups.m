@@ -1,65 +1,57 @@
 function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_cluster_groups(System,Method,Nuclei,clusters,OutputData)
 
+methyl_file_name = [OutputData,'_methyls.csv'];
+analyze_methyls(Nuclei,methyl_file_name)
 
-cluster_groups = form_methyl_cluster_groups(System,Method,Nuclei,clusters);
+cluster_groups = form_methyl_cluster_groups(Method,Nuclei,clusters);
 total_signal = 1;
 
 
-%methylTunnelingSplitting = Nuclei.methylTunnelingSplitting;
 for igroup = 1:numel(cluster_groups)
 
   group_of_clusters = cluster_groups{igroup};
 
-  group_name = ['partial_',OutputData,'_group_',int2str(igroup),'.csv'];
+  group_name = [OutputData,'_group_',int2str(igroup),'.csv'];
 
   if ~isfile(group_name) || ~Method.partialSave
     [group_signal,auxiliary_signals,order_n_signals,batch_name] ...
       = calculate_signal_ckpt(System,Method,Nuclei,group_of_clusters,...
       OutputData);
 
-    movefile(batch_name,group_name)
+    save_group_signal(group_name,group_signal,igroup,group_of_clusters);
+    if isfile(batch_name)
+      delete(batch_name)
+    end
   else
     group_signal = readmatrix(group_name);
   end
 
-  %{
-  if strcmp(Method.cluster_grouping,'methyl') && Method.Methyl.turn_groups_off
-    Nuclei.methylTunnelingSplitting = 0*Nuclei.methylTunnelingSplitting;
-
-    no_tunneling_group_name = ['no_tunneling_',group_name];
-
-    [group_signal,~,~,batch_name] ...
-      = calculate_signal_ckpt(System,Method,Nuclei,group_of_clusters,...
-      OutputData);
-
-    movefile(batch_name,no_tunneling_group_name);
-
-    Nuclei.methylTunnelingSplitting = methylTunnelingSplitting;
-  end
-  %}
 
   total_signal = total_signal.*group_signal;
 
 end
 end
+%-------------------------------------------------------------------------------
+function save_group_signal(group_name,grp_sig,grp_idx,group_of_clusters)
+  if ~isempty(group_of_clusters{1}) ...
+      || numel(group_of_clusters)<3 || numel(group_of_clusters{3}) ~= 3
+    grp_var = ['group_',int2str(grp_idx)];
+
+  else
+    cluster = group_of_clusters{3};
+    grp_var = ['methyl_', sprintf('%d_',cluster)];
+  end
+  if size(grp_sig,1) == 1
+    grp_sig = grp_sig.';
+  end
+  T = array2table(grp_sig);
+  T.Properties.VariableNames(1) = {grp_var};
+  writetable(T,group_name);
+end
 
 %-------------------------------------------------------------------------------
-%{
-function cluster_groups = form_cluster_groups(System,Method,Nuclei,clusters)
-
-switch Method.cluster_grouping
-  case 'methyl'
-    cluster_groups = form_methyl_cluster_groups(...
-      System,Method,Nuclei,clusters);
-  otherwise
-    error('Unrecognized cluster grouping "%s".',Method.cluster_grouping);
-end
-end
-%}
-%-------------------------------------------------------------------------------
-function cluster_groups = form_methyl_cluster_groups(...
-  System,Method,Nuclei,clusters)
+function cluster_groups = form_methyl_cluster_groups(Method,Nuclei,clusters)
 
 if ~Method.useMethylPseudoParticles || Method.order >= 6
   error('Grouping by methyl group assumes that each cluster contain only one methyl.');
