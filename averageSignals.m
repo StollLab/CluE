@@ -518,9 +518,10 @@ if all(all(System.Theory)==any(System.Theory)) && ...
     = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
 
   Order_n_Signal = cell(1,Method.order);
-
-  for ii = 1:Method.order
-    Order_n_Signal{ii} = Signals(1,ii);
+  if ~isempty(Signals)
+      for ii = 1:Method.order
+          Order_n_Signal{ii} = Signals(1,ii);
+      end
   end
 else
   Order_n_Signal = cell(1,Method.order);
@@ -698,53 +699,9 @@ for iOri = 1:nOrientations
 
       fprintf('Error in Order %d mean at signal number %d.\n',iorder,iOri);
       disp('Could not evaluate');
-      disp(['Order_n_SignalMean{iorder} = ',...
-        'Order_n_SignalMean{iorder} + Order_n_Signals{isignal}{iorder};']);
-      fprintf(['Order_n_SignalMean{%d} = ',...
-        'Order_n_SignalMean{%d} + Order_n_Signals{%d}{%d};\n'], ...
-        iorder,iorder,iOri,iorder);
-      if exist('Order_n_Signals','var')
-        if iscell(Order_n_Signals) && length(Order_n_Signals)>=iOri
-
-          if iscell(Order_n_Signals{iOri}) ...
-              && length(Order_n_Signals{iOri}) >= iorder
-            fprintf('Length of Order_n_Signals{%d}{%d} is %d.\n',...
-              iOri,iorder, length(Order_n_Signals{iOri}{iorder}));
-
-            fprintf('Length of Order_n_SignalMean{%d} is %d.\n',...
-              iorder, length(Order_n_SignalMean{iorder})  );
-
-          else
-            fprintf('Order_n_Signals{%d}{%d} does not exist.\n',...
-              iOri,iorder);
-          end
-
-        else
-          fprintf('Order_n_Signals{%d} does not exist.\n',iOri);
-        end
-      else
-        fprintf('Order_n_Signals does not exist.\n');
-      end
-
-      disp('Attempting to recover data...')
-
-
-
-      if iorder == 1
-
-        Order_n_Signals{iOri}{iorder} ...
-          = gridWeight(iOri)*ones(size(experiment_time));
-
-        disp('Recovered.');
-
-      elseif iorder == Method.order
-        Order_n_Signals{iOri}{iorder} = Signals{iOri};
-        disp('Recovered.');
-      else
-        Progress.Order_n_Mean = false;
-        disp('Failed.');
-        Order_n_Signals{iOri}{iorder} = nan(size(experiment_time));
-      end
+     
+      Order_n_Signals{iOri}{iorder} = nan(size(experiment_time));
+     
 
       Order_n_SignalMean{iorder} ...
         = Order_n_SignalMean{iorder} + Order_n_Signals{iOri}{iorder};

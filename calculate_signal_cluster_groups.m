@@ -15,7 +15,7 @@ for igroup = 1:numel(cluster_groups)
   group_name = [OutputData,'_group_',int2str(igroup),'.csv'];
 
   if ~isfile(group_name) || ~Method.partialSave
-    [group_signal,auxiliary_signals,order_n_signals,batch_name] ...
+    [group_signal,~,~,batch_name] ...
       = calculate_signal_ckpt(System,Method,Nuclei,group_of_clusters,...
       OutputData);
 
@@ -31,6 +31,9 @@ for igroup = 1:numel(cluster_groups)
   total_signal = total_signal.*group_signal;
 
 end
+auxiliary_signals =[];
+order_n_signals = [];
+batch_name = [];
 end
 %-------------------------------------------------------------------------------
 function save_group_signal(group_name,grp_sig,grp_idx,group_of_clusters)
