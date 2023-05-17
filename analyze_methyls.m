@@ -16,7 +16,10 @@ for id = methyl_ids
 
   hydrogens = Nuclei.MethylID==-id;
   cluster = Nuclei.Index(hydrogens);
+  assert(numel(cluster)==3);
   methyl_name = ['methyl_', sprintf('%d_',cluster)];
+  methyl_name = methyl_name(1:end-1);
+  
   r_hydrogens = Nuclei.Coordinates(hydrogens,:);
 
   center = mean(r_hydrogens,1);

@@ -10,7 +10,8 @@ assert(Method.ckptAuxiliarySignals);
 methyl_file_name = [OutputData,'_methyls.csv'];
 analyze_methyls(Nuclei,methyl_file_name)
 
-[groups_ids,n_groups] = form_methyl_cluster_groups(Method,Nuclei,clusters);
+[groups_ids,n_groups,group_names] ...
+  = form_methyl_cluster_groups(Method,Nuclei,clusters);
 
 partition_signals = ones(numel(total_signal),n_groups);
 for cluster_size = 1:Method.order
@@ -22,29 +23,21 @@ for cluster_size = 1:Method.order
   end
 end
 
+save_name = [OutputData,'_methyl_partitions.csv'];
+save_partition_signals(save_name,partition_signals,group_names);
+
 total_signal_grps = prod(partition_signals,2).';
 assert( max(max(abs(total_signal_grps-total_signal))) <1e-12 );
 end
 %-------------------------------------------------------------------------------
-function save_group_signal(group_name,grp_sig,grp_idx,group_of_clusters)
-  if ~isempty(group_of_clusters{1}) ...
-      || numel(group_of_clusters)<3 || numel(group_of_clusters{3}) ~= 3
-    grp_var = ['group_',int2str(grp_idx)];
-
-  else
-    cluster = group_of_clusters{3};
-    grp_var = ['methyl_', sprintf('%d_',cluster)];
-  end
-  if size(grp_sig,1) == 1
-    grp_sig = grp_sig.';
-  end
-  T = array2table(grp_sig);
-  T.Properties.VariableNames(1) = {grp_var};
-  writetable(T,group_name);
+function save_partition_signals(save_name,partition_signals,group_names)
+  T = array2table(partition_signals);
+  T.Properties.VariableNames = group_names;
+  writetable(T,save_name);
 end
 
 %-------------------------------------------------------------------------------
-function [group_ids,n_groups] ...
+function [group_ids,n_groups,group_names] ...
     = form_methyl_cluster_groups(Method,Nuclei,clusters)
 
 if ~Method.useMethylPseudoParticles || Method.order >= 6
@@ -54,6 +47,7 @@ end
 
 max_size = numel(clusters);
 group_ids = cell(max_size,1);
+group_names = cell(max_size,1); 
 n_groups = 0;
 
 group_dictionary = dictionary(string([]),[]);
@@ -66,6 +60,7 @@ for cluster_size = 1:max_size
 
     cluster = clusters{cluster_size}(icluster,:);
     methyl_ids = unique(Nuclei.MethylID(cluster));
+    methyl_ids = methyl_ids(methyl_ids > 0);
     key = sprintf('%d,',methyl_ids);
 
     if group_dictionary.isKey(key)
@@ -73,6 +68,7 @@ for cluster_size = 1:max_size
     else
       n_groups  = n_groups + 1;
       id = n_groups;
+      group_names{id} = get_partition_name(methyl_ids,Nuclei);
       group_dictionary(key) = id;
     end
 
@@ -81,4 +77,28 @@ for cluster_size = 1:max_size
   assert(~any(group_ids{cluster_size}==0));
 end
 
+end
+%-------------------------------------------------------------------------------
+function name = get_partition_name(methyl_ids,Nuclei)
+
+  if isempty(methyl_ids) || all(methyl_ids == 0)
+    name = 'bath';
+    return;
+  end
+
+  
+  name = '';
+  for id = methyl_ids
+     if id==0, continue; end
+
+     hydrogens = find(Nuclei.MethylID == id);
+     assert(numel(hydrogens)==3);
+     methyl_str = sprintf('methyl_%i_%i_%i',...
+       hydrogens(1),hydrogens(2),hydrogens(3));
+     if isempty(name)
+       name = methyl_str;
+     else
+       name = [name,'_',methyl_str];
+     end
+  end
 end

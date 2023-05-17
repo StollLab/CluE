@@ -674,7 +674,6 @@ for ii = 2:n_subclusters-1
 end
 end
 %-------------------------------------------------------------------------------
-% This function is not thread safe.  Do not use it inside parfor loops.
 function auxiliary_signals = update_auxiliary_signals(auxiliary_signals,...
   start_cluster,end_cluster,...
   start_cluster_size,end_cluster_size,cluster_map, clusters)

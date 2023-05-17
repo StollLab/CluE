@@ -122,10 +122,10 @@ max_err = max(abs_delta_signal);
 assert(max_err<1e-12);
  
 Method.use_calculate_signal_cluster_groups = true;
+Method.ckptAuxiliarySignals = true;
 [signal,~] = CluE(System,Method,Data);
 
-abs_delta_signal = abs(signal - signal_ref);
-max_err = max(abs_delta_signal); 
+max_err = max( abs(signal - signal_ref)); 
 assert(max_err<1e-12);
 
 end
