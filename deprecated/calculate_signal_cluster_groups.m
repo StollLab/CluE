@@ -1,29 +1,39 @@
 function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_cluster_groups(System,Method,Nuclei,clusters,OutputData)
 
-
-[total_signal,auxiliary_signals,order_n_signals,batch_name] ...
-    = calculate_signal_ckpt(System,Method,Nuclei,clusters,OutputData);
-
-assert(Method.ckptAuxiliarySignals);
-
 methyl_file_name = [OutputData,'_methyls.csv'];
 analyze_methyls(Nuclei,methyl_file_name)
 
-[groups_ids,n_groups] = form_methyl_cluster_groups(Method,Nuclei,clusters);
+cluster_groups = form_methyl_cluster_groups(Method,Nuclei,clusters);
+total_signal = 1;
 
-partition_signals = ones(numel(total_signal),n_groups);
-for cluster_size = 1:Method.order
-  for ii = 1:numel(groups_ids{cluster_size})
-    assert(abs(auxiliary_signals{cluster_size}(1,ii)-1)<1e-12);
-    id = groups_ids{cluster_size}(ii);
-    partition_signals(:,id) = partition_signals(:,id)...
-      .*auxiliary_signals{cluster_size}(:,ii);
+
+for igroup = 1:numel(cluster_groups)
+
+  group_of_clusters = cluster_groups{igroup};
+
+  group_name = [OutputData,'_group_',int2str(igroup),'.csv'];
+
+  if ~isfile(group_name) || ~Method.partialSave
+    [group_signal,~,~,batch_name] ...
+      = calculate_signal_ckpt(System,Method,Nuclei,group_of_clusters,...
+      OutputData);
+
+    save_group_signal(group_name,group_signal,igroup,group_of_clusters);
+    if isfile(batch_name)
+      delete(batch_name)
+    end
+  else
+    group_signal = readmatrix(group_name);
   end
-end
 
-total_signal_grps = prod(partition_signals,2).';
-assert( max(max(abs(total_signal_grps-total_signal))) <1e-12 );
+
+  total_signal = total_signal.*group_signal;
+
+end
+auxiliary_signals =[];
+order_n_signals = [];
+batch_name = [];
 end
 %-------------------------------------------------------------------------------
 function save_group_signal(group_name,grp_sig,grp_idx,group_of_clusters)
@@ -44,12 +54,10 @@ function save_group_signal(group_name,grp_sig,grp_idx,group_of_clusters)
 end
 
 %-------------------------------------------------------------------------------
-function [group_ids,n_groups] ...
-    = form_methyl_cluster_groups(Method,Nuclei,clusters)
+function cluster_groups = form_methyl_cluster_groups(Method,Nuclei,clusters)
 
 if ~Method.useMethylPseudoParticles || Method.order >= 6
-  error(['Grouping by methyl group assumes that each cluster contains ',...
-      'at most only one methyl.']);
+  error('Grouping by methyl group assumes that each cluster contain only one methyl.');
 end
 
 max_size = numel(clusters);
@@ -80,5 +88,26 @@ for cluster_size = 1:max_size
   end
   assert(~any(group_ids{cluster_size}==0));
 end
+
+
+% Group clusters.
+cluster_groups  = cell(n_groups,1);
+for igroup = 1:n_groups
+  cluster_groups{igroup} = cell(max_size,1);
+  for cluster_size = 1:max_size
+    sele = group_ids{cluster_size} == igroup;
+    cluster_groups{igroup}{cluster_size} = clusters{cluster_size}(sele,:);
+  end
+end
+
+for cluster_size = 1:max_size
+  n_clusters = 0;
+  for igroup = 1:n_groups
+    n_clusters = n_clusters + size(cluster_groups{igroup}{cluster_size},1);
+  end
+  assert(n_clusters==size(clusters{cluster_size},1));
+end
+%TODO save clusters
+% save_clusters(filename,clusters)
 
 end

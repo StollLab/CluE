@@ -17,6 +17,10 @@ Data.overwriteLevel = 2;
 %==========================================================================
 System.experiment = 'Hahn';
 System.spinCenter = 'TEMPO';
+
+% The gridSize must be in {6, 14, 26, 38, 50, 74, 86, 110, 146, 170, 194, 230,
+% 266, 302, 350, 434, 590, 770, 974, 1202, 1454, 1730, 2030, 2354, 2702,
+% 3074, 3470, 3890, 4334, 4802, 5294, 5810}.
 System.gridSize = 1;
 
 % radius from the electron spin to the edge of the system
@@ -55,14 +59,13 @@ Method.neighborCutoff.dipole = [10^3,10^3,10^3]; % Hz
 % verbosity option: true, false
 Method.verbose = true;
 
+System.Theory = [ true, true, true, true, true, true, true, true, true, false];
 
 %==========================================================================
 %% Run simulation
 %==========================================================================
 Options = struct('System',System,'Method',Method,'Data',Data);
 [SignalMean, twotau] = CluE(System,Method,Data);
-Options.Data.InputData = 'TEMPO_TIP4P_connect.pdb';
-SignalMean0 = CluE(Options);
 
 %--------------------------------------------------------------------------
 %% Plot
@@ -74,7 +77,6 @@ fontsize = 24;
 hold on
 
 plot(twotau*1e6,abs(SignalMean),'-','linewidth',3,'color','red');
-plot(twotau*1e6,abs(SignalMean0),'-','linewidth',3,'color','blue');
 
 
 xlabel('2\tau (\mus)');

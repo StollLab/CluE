@@ -514,6 +514,9 @@ timepoints = numel(System.Time);
 if all(all(System.Theory)==any(System.Theory)) && ...
     ~strcmp(Method.method,'HD-CCE')
 
+  sig_file = [OutputData(1:end-4),...
+    '_alpha_', num2str(Alpha),'_beta_', num2str(Beta)];
+
   [Signal, AuxiliarySignal, Signals,batch_name] ...
     = calculate_signal(System, Method, Nuclei,Clusters,sig_file);
 

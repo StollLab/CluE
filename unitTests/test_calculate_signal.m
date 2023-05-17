@@ -5,7 +5,7 @@ end
 %>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 %<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-function test_2cce(testCase)
+function test_4cce(testCase)
 Method.Ori_cutoffs = true;
 
 System.experiment = 'Hahn';
@@ -83,22 +83,22 @@ Method.parfor_over_clusters = false;
 Data.overwriteLevel = 2;
 Method.partialSave = false;
 
-Method.order = 3;
+Method.order = 4;
 
 System.Methyl.include = true;
 Method.useMethylPseudoParticles = true;
   
-System.radius = 6e-10; %14e-10;
+System.radius = 8e-10; %14e-10;
 Method.neighborCutoff.dipole =         10^3.2;
 Method.neighborCutoff.DeltaHyperfine = 10^4.4;
 
 
-nuT = 0*1e3; % Hz
+nuT = 60*1e3; % Hz
 
-System.Methyl.tunnel_splitting = nuT;
+%System.Methyl.tunnel_splitting = nuT;
 System.particleOptions = {...
   'methyl','TEM', 'tunnelSplitting', 80e3, ...
-  'methyl','!TEM', 'tunnelSplitting', System.Methyl.tunnel_splitting, ...
+  'methyl','!TEM', 'tunnelSplitting', 60*1e3, ...
   'nitrogen','all', 'active', true...
   };
 
@@ -120,7 +120,7 @@ assert(t(2) == 2*System.dt(1));
 abs_delta_signal = abs(signal - signal_ref);
 max_err = max(abs_delta_signal); 
 assert(max_err<1e-12);
-
+ 
 Method.use_calculate_signal_cluster_groups = true;
 [signal,~] = CluE(System,Method,Data);
 
