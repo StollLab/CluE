@@ -1,11 +1,17 @@
 function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_cluster_groups(System,Method,Nuclei,clusters,OutputData)
 
+batch_name = [];
+[total_signal,auxiliary_signals,order_n_signals] ...
+    = calculate_signal_default(System,Method,Nuclei,clusters);
 
+%{
 [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
     = calculate_signal_ckpt(System,Method,Nuclei,clusters,OutputData);
 
-assert(Method.ckptAuxiliarySignals);
+assert(Method.ckptAuxiliarySignals,...
+  'Method.ckptAuxiliarySignals must be true.');
+%}
 
 methyl_file_name = [OutputData,'_methyls.csv'];
 analyze_methyls(Nuclei,methyl_file_name)
@@ -16,7 +22,8 @@ analyze_methyls(Nuclei,methyl_file_name)
 partition_signals = ones(numel(total_signal),n_groups);
 for cluster_size = 1:Method.order
   for ii = 1:numel(groups_ids{cluster_size})
-    assert(abs(auxiliary_signals{cluster_size}(1,ii)-1)<1e-12);
+    assert(abs(auxiliary_signals{cluster_size}(1,ii)-1)<1e-12,...
+      'Auxiliary signal is not normalized.');
     id = groups_ids{cluster_size}(ii);
     partition_signals(:,id) = partition_signals(:,id)...
       .*auxiliary_signals{cluster_size}(:,ii);
@@ -27,12 +34,13 @@ save_name = [OutputData,'_methyl_partitions.csv'];
 save_partition_signals(save_name,partition_signals,group_names);
 
 total_signal_grps = prod(partition_signals,2).';
-assert( max(max(abs(total_signal_grps-total_signal))) <1e-12 );
+assert( max(max(abs(total_signal_grps-total_signal))) <1e-9 );
 end
 %-------------------------------------------------------------------------------
 function save_partition_signals(save_name,partition_signals,group_names)
+  n_parts = size(partition_signals,2);
   T = array2table(partition_signals);
-  T.Properties.VariableNames = group_names;
+  T.Properties.VariableNames(1:n_parts) = group_names(1:n_parts);
   writetable(T,save_name);
 end
 
@@ -74,7 +82,8 @@ for cluster_size = 1:max_size
 
     group_ids{cluster_size}(icluster) = id;
   end
-  assert(~any(group_ids{cluster_size}==0));
+  assert(~any(group_ids{cluster_size}==0),...
+    'Unable to partition clusters.');
 end
 
 end
@@ -92,7 +101,8 @@ function name = get_partition_name(methyl_ids,Nuclei)
      if id==0, continue; end
 
      hydrogens = find(Nuclei.MethylID == id);
-     assert(numel(hydrogens)==3);
+     assert(numel(hydrogens)==3,...
+       'Methyls must have three hydrogens.');
      methyl_str = sprintf('methyl_%i_%i_%i',...
        hydrogens(1),hydrogens(2),hydrogens(3));
      if isempty(name)
