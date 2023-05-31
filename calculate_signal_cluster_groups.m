@@ -1,9 +1,7 @@
 function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_cluster_groups(System,Method,Nuclei,clusters,OutputData)
 
-batch_name = [];
-[total_signal,auxiliary_signals,order_n_signals] ...
-    = calculate_signal_default(System,Method,Nuclei,clusters);
+
 
 %{
 [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
@@ -16,8 +14,25 @@ assert(Method.ckptAuxiliarySignals,...
 methyl_file_name = [OutputData,'_methyls.csv'];
 analyze_methyls(Nuclei,methyl_file_name)
 
+partition_file_name = [OutputData,'_partition_clusters.txt'];
 [groups_ids,n_groups,group_names] ...
-  = form_methyl_cluster_groups(Method,Nuclei,clusters);
+  = form_methyl_cluster_groups(Method,Nuclei,clusters,partition_file_name);
+
+batch_name = [];
+
+if Method.use_calculate_signal_cluster_groups_statistics_only
+  total_signal = [];
+  auxiliary_signals = [];
+  order_n_signals = [];
+  return;
+end
+
+if Method.use_calculate_signal_cluster_groups_zero_tunnel_splitting
+  Nuclei.methylTunnelingSplitting = 0*Nuclei.methylTunnelingSplitting;
+end
+
+[total_signal,auxiliary_signals,order_n_signals] ...
+    = calculate_signal_default(System,Method,Nuclei,clusters);
 
 partition_signals = ones(numel(total_signal),n_groups);
 for cluster_size = 1:Method.order
@@ -46,7 +61,7 @@ end
 
 %-------------------------------------------------------------------------------
 function [group_ids,n_groups,group_names] ...
-    = form_methyl_cluster_groups(Method,Nuclei,clusters)
+    = form_methyl_cluster_groups(Method,Nuclei,clusters,file_name)
 
 if ~Method.useMethylPseudoParticles || Method.order >= 6
   error(['Grouping by methyl group assumes that each cluster contains ',...
@@ -85,6 +100,30 @@ for cluster_size = 1:max_size
   assert(~any(group_ids{cluster_size}==0),...
     'Unable to partition clusters.');
 end
+
+% Save statistics.
+fileID = fopen(file_name,'w');
+for igroup = 1:n_groups
+  num_clusters = 0;
+  for cluster_size = 1:max_size
+    num_clusters = num_clusters + sum(group_ids{cluster_size}==igroup);
+  end
+  name = group_names{igroup};
+  fprintf(fileID,'#[%s, n = %i]\n',name,num_clusters);
+  for cluster_size = 1:max_size
+    n_clusters = size(clusters{cluster_size},1);
+    for icluster = 1:n_clusters
+      cluster = clusters{cluster_size}(icluster,:);
+      line = [ '[', sprintf('%d,',cluster) ,';'];
+      line(end-1) = ']';
+      fprintf(fileID,'%s\n',line);
+    end
+  end
+  fprintf(fileID,'\n');
+end
+
+fclose(fileID);
+
 
 end
 %-------------------------------------------------------------------------------

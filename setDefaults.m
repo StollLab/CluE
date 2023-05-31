@@ -51,7 +51,8 @@ defaultMethod.cluster_grouping = 'none';
 defaultMethod.randomize_cluster_ordering = false;
 defaultMethod.save_partial_cce_product = false;
 defaultMethod.use_calculate_signal_cluster_groups = false;
-
+defaultMethod.use_calculate_signal_cluster_groups_statistics_only = false;
+defaultMethod.use_calculate_signal_cluster_groups_zero_tunnel_splitting = false;
 % Method: Add defaults for fields missing in user-provided structure
 if isfield(Method,'neighborCutoff')
   Method.neighborCutoff = supplementdefaults(...

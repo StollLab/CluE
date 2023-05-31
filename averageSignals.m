@@ -643,7 +643,7 @@ for iOri = 1:nOrientations
     Signals{iOri} = TempSignals{tempSignalIndex};
     Order_n_Signals{iOri} = Temp_Order_n_Signals{tempSignalIndex};
   end
-  if ~strcmp(Method.method,'HD-CCE')
+  if ~strcmp(Method.method,'HD-CCE') && ~isempty(Signals{iOri})
     TM(iOri) = getTM(experiment_time,Signals{iOri});
   end
 end
@@ -685,7 +685,9 @@ for iOri = 1:nOrientations
   if Method.Ori_cutoffs
     Clusters =  combineClusters(Clusters,Ori_Clusters{iOri});
   end
-  SignalMean = SignalMean + Signals{iOri};
+  if ~isempty(Signals{iOri})
+    SignalMean = SignalMean + Signals{iOri};
+  end
   %Signals{isignal} = abs(Signals{isignal});
   for iorder = 1:Method.order
     if min( numel(Order_n_Signals),numel(Order_n_SignalMean)) < iorder...
