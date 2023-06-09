@@ -2,15 +2,6 @@ function [total_signal,auxiliary_signals,order_n_signals,batch_name] ...
   = calculate_signal_cluster_groups(System,Method,Nuclei,clusters,OutputData)
 
 
-
-%{
-[total_signal,auxiliary_signals,order_n_signals,batch_name] ...
-    = calculate_signal_ckpt(System,Method,Nuclei,clusters,OutputData);
-
-assert(Method.ckptAuxiliarySignals,...
-  'Method.ckptAuxiliarySignals must be true.');
-%}
-
 methyl_file_name = [OutputData,'_methyls.csv'];
 analyze_methyls(Nuclei,methyl_file_name)
 
@@ -27,9 +18,28 @@ if Method.use_calculate_signal_cluster_groups_statistics_only
   return;
 end
 
+[total_signal,auxiliary_signals,order_n_signals] =...
+  calculate_partitioned_signal(System,Method,Nuclei,clusters,OutputData,...
+  groups_ids,n_groups,group_names);
+
 if Method.use_calculate_signal_cluster_groups_zero_tunnel_splitting
   Nuclei.methylTunnelingSplitting = 0*Nuclei.methylTunnelingSplitting;
+
+  OutputData0 = [OutputData,'_Hamiltonian_no_tunneling'];
+  no_nut_sig = calculate_partitioned_signal(...
+    System,Method,Nuclei,clusters,OutputData0,...
+    groups_ids,n_groups,group_names);
+
+  T = array2table(no_nut_sig.');
+  T.Properties.VariableNames(1) = {'signal'};
+  writetable(T,[OutputData0, '.csv']);
 end
+
+end
+%-------------------------------------------------------------------------------
+function [total_signal,auxiliary_signals,order_n_signals] =...
+  calculate_partitioned_signal(System,Method,Nuclei,clusters,OutputData,...
+  groups_ids,n_groups,group_names)
 
 [total_signal,auxiliary_signals,order_n_signals] ...
     = calculate_signal_default(System,Method,Nuclei,clusters);
