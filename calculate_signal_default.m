@@ -321,8 +321,9 @@ for clusterSize = 1:Method.order
         if System.useThermalEnsemble
           densityMatrix = [];
         else
-          densityMatrix = getDensityMatrix(ZeemanStates(thisCluster),...
-            Nuclei.StateMultiplicity(thisCluster),thisCluster);
+          densityMatrix = eye(size(H_beta));
+          % densityMatrix = getDensityMatrix(ZeemanStates(thisCluster),...
+          %   Nuclei.StateMultiplicity(thisCluster),thisCluster);
         end
             
         % Add mean field term to the Hamiltonian.

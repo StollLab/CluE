@@ -486,6 +486,7 @@ elseif strcmp(Method.method,'rCCE')
   if verbose
     fprintf('\nCalculating restricted Cluster Correlation Expansion.\n')
   end
+  batch_name = 'rCCE';
   [Signal,AuxiliarySignal,Order_n_Signal] = ...
     doRestrictedCCE(System,Method, Nuclei, verbose);
   if verbose

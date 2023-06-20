@@ -3044,7 +3044,7 @@ function setHyperfine()
       fc = particles_{itype}.hf_FermiContact;
       
       Atensor_A = eye(3)*fc + diag(Tzz/2*[-1,-1,2]);
-      Atensor_L = R_A2L'*Atensor_A*R_A2L;
+      Atensor_L = R_A2L*Atensor_A*R_A2L';
       
       particles_{itype}.Atensor{imem} = Atensor_L;
     end
@@ -3282,7 +3282,7 @@ function setQuadrupoles()
       eta = particles_{itype}.NQ_eta*System.nuclear_quadrupole_scale_eta;
       
       Qtensor_Q = e2qQh/4/I/(2*I-1)  *  diag([-1+eta, -1-eta, 2]);
-      Qtensor_L = R_Q2L'*Qtensor_Q*R_Q2L;
+      Qtensor_L = R_Q2L*Qtensor_Q*R_Q2L';
       
       particles_{itype}.Qtensor{imem} = Qtensor_L;
     end

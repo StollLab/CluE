@@ -27,6 +27,7 @@ end
 [System,Method,Data,Nuclei,Progress,experiment_time] =...
   parseInput(System,Method,Data,OutputData);
 
+
 % ========================================================================
 % Compile list of connected clusters
 % ========================================================================
@@ -56,6 +57,10 @@ if strcmp(Method.method,'count clusters')
   return
 end
 
+
+if Method.exportTensors
+  save_tensors(Nuclei,System,Method,Data);
+end
 
 
 %===============================================================================

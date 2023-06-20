@@ -13,6 +13,7 @@ defaultMethod.useCentralSpinSystem = false;
 defaultMethod.conserveMemory = false;
 defaultMethod.getNuclearStatistics = false;
 defaultMethod.exportClusters = false;
+defaultMethod.exportTensors = false;
 defaultMethod.propagationDomain='time-domain';
 defaultMethod.partialSave = true;
 defaultMethod.ckptAuxiliarySignals = false;
