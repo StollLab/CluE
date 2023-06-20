@@ -749,22 +749,9 @@ elseif strcmp(type,'N') && System.nitrogen  && ~System.limitToSpinHalf
   switch spinCenter
     case 'TEMPO'
       if norm(NuclearCoordinates) < System.angstrom
-        % Aurich, H. G.; Hahn, K.; Stork, K.; Weiss, W. Aminyloxide
-        % (nitroxide)—XXIV.
-        %Tetrahedron 1977, 33 (9), 969–975.
-        % https://doi.org/10.1016/0040-4020(77)80210-X.
-        % Nuclei.FermiContact(iNuc) = 42.7*1e6; % Hz
-        
-        % Owenius, R.; Engström, M.; Lindgren, M.; Huber, M.
-        % Influence of Solvent Polarity and Hydrogen Bonding on the EPR
-        % Parameters of a Nitroxide Spin Label Studied by 9-GHz and
-        % 95-GHz EPR Spectroscopy and DFT Calculations.
-        %J. Phys. Chem. A 2001, 105 (49), 10967–10977.
-        % https://doi.org/10.1021/jp0116914.
-        %Nuclei.FermiContact(iNuc) = 31.528e+06; %Hz
-        % Nuclei.hf_Tzz(iNuc) = 90.801e+06; % Hz
-        Nuclei.FermiContact(iNuc) = 45.176e+06; %Hz
-         Nuclei.hf_Tzz(iNuc) = 58.180e+06; % Hz
+
+        Nuclei.FermiContact(iNuc) = 46.666666666666664*1e6; %Hz
+        Nuclei.hf_Tzz(iNuc) = 53.333333333333336*1e6; % Hz
         
         
         if isempty(Conect)

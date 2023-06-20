@@ -2711,17 +2711,9 @@ switch particleEnum
     particles_{particleIndex}.spinMultiplicity = 3;
     particles_{particleIndex}.switchParticle = PARTICLE_15N;
     if strcmp(resName,'TEM')
-      % Owenius, R.; Engström, M.; Lindgren, M.; Huber, M.
-      % Influence of Solvent Polarity and Hydrogen Bonding on the EPR
-      % Parameters of a Nitroxide Spin Label Studied by 9-GHz and
-      % 95-GHz EPR Spectroscopy and DFT Calculations.
-      %J. Phys. Chem. A 2001, 105 (49), 10967–10977.
-      % https:%doi.org/10.1021/jp0116914.
-      
-      %particles_{particleIndex}.hf_FermiContact = 31.528e+06; %Hz
-      %particles_{particleIndex}.hf_Tzz = 90.801e+06; % Hz
-      particles_{particleIndex}.hf_FermiContact = 45.176e+07; %Hz
-      particles_{particleIndex}.hf_Tzz = 58.180e+06; % Hz
+
+      particles_{particleIndex}.hf_FermiContact = 46.666666666666664*1e6; %Hz
+      particles_{particleIndex}.hf_Tzz = 53.333333333333336*1e6; % Hz
       
       particles_{particleIndex}.hf_x = 'bonded 1-2'; % C--C
       particles_{particleIndex}.hf_y = 'bonded 0-3'; % N-O bond
