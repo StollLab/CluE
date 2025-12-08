@@ -27,7 +27,7 @@ impl PySignal{
   }
   //----------------------------------------------------------------------------
   #[staticmethod]
-  pub fn read_from_csv(filename: String) -> Result<Self,PyCluEError>{
+  pub fn load_from_csv(filename: String) -> Result<Self,PyCluEError>{
 
     let signal = Signal::read_from_csv(&filename)?;
   
@@ -166,7 +166,7 @@ pub struct PySignals{
 #[pymethods]
 impl PySignals{
   #[staticmethod]
-  pub fn read_from_csv(filename: String) -> Result<PySignals,PyCluEError>{
+  pub fn load_from_csv(filename: String) -> Result<PySignals,PyCluEError>{
     let signals = load_csv_to_vec_signals(&filename)?;
 
     Ok(PySignals{signals})
@@ -199,13 +199,3 @@ impl PySignals{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-/*
-#[pyfunction]
-pub fn read_signals_file(filename: String) 
-    -> Result< Vec< Vec::<Complex<f64>> > ,PyCluEError> 
-{
-  let signals = PySignals::read_from_csv(filename)?;
-
-  Ok(signals.get_data())
-}
-*/

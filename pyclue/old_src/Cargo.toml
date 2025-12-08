@@ -1,0 +1,20 @@
+[package]
+name = "pyclue"
+version = "0.1.0-alpha.1"
+edition = "2018"
+
+[lib]
+name = "clue_oxide"
+crate-type = ["cdylib"]
+
+[dependencies.clue_oxide]
+path = "../../clue_oxide"
+
+[dependencies.pyo3]
+version = "0.23.3"
+features = ["extension-module","num-complex"]
+
+[dependencies]
+num-complex = "0.4"
+
+rand_chacha = "0.3.1"

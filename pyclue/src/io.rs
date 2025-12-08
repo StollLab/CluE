@@ -4,7 +4,7 @@ use numpy::PyArray;
 
 use clue_oxide::{
   cluster::read_clusters::read_cluster_file, 
-  io::load_auxiliary_signals,
+//  io::load_auxiliary_signals,
 };
 use clue_oxide::signal::load_csv_to_vec_signals;
 
@@ -19,7 +19,7 @@ use num_complex::Complex;
 
 //------------------------------------------------------------------------------
 #[pyfunction]
-pub fn read_time_axis(filename: String)
+pub fn load_time_axis(filename: String)
     -> Result< Py<PyArray<f64,Ix1>>  ,PyCluEError>
 {
   let s = Array1::from_vec(clue_oxide::io::read_time_axis(&filename)?);
@@ -29,7 +29,7 @@ pub fn read_time_axis(filename: String)
 }
 //------------------------------------------------------------------------------
 #[pyfunction]
-pub fn read_signal(filename: String)
+pub fn load_signal(filename: String)
     -> Result< Py<PyArray<Complex<f64>,Ix1>>  ,PyCluEError>
 {
   let signals = load_csv_to_vec_signals(&filename)?;
@@ -43,7 +43,7 @@ pub fn read_signal(filename: String)
 }
 //------------------------------------------------------------------------------
 #[pyfunction]
-pub fn read_auxiliary_signals(
+pub fn load_auxiliary_signals(
     path_to_files: String, 
     cluster_file: String,
     pystructure: &PyStructure,
@@ -54,7 +54,8 @@ pub fn read_auxiliary_signals(
       &cluster_file, 
       &pystructure.structure)?;
 
-   load_auxiliary_signals(&mut cluster_set, &pyconfig.config, &path_to_files)?;
+  clue_oxide::io::load_auxiliary_signals(
+      &mut cluster_set, &pyconfig.config, &path_to_files)?;
 
    Ok(PyClusterSet{cluster_set})
 }

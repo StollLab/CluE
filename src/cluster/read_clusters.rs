@@ -11,6 +11,25 @@ use substring::Substring;
 pub fn read_cluster_file(filename: &str, structure: &Structure) 
   -> Result<ClusterSet,CluEError>
 {
+  // DEPRECATED PATH
+  if filename.ends_with(".txt"){
+    return read_cluster_txt(filename, structure);
+  }
+
+  let toml_string: String = match std::fs::read_to_string(filename){
+    Ok(lines) => lines,
+    Err(_) => return Err(CluEError::CannotOpenFile(filename.to_string())),
+  };
+
+  let cluster_set = ClusterSet::from_toml_str(&toml_string, Some(structure))?;
+
+  Ok(cluster_set)
+}
+//------------------------------------------------------------------------------
+// DEPRECATED
+fn read_cluster_txt(filename: &str, structure: &Structure) 
+  -> Result<ClusterSet,CluEError>
+{
   // Get number of lines.
   let n_lines = {   
     let Ok(file) = std::fs::File::open(filename) else{

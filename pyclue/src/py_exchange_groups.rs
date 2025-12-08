@@ -34,4 +34,12 @@ impl PyExchangeGroupManager{
         PyArray::from_owned_array(py, centroids).unbind()
     })
   }
+  //----------------------------------------------------------------------------
+  pub fn get_exchange_groups(&self) -> Vec::<String>{
+
+    self.exchange_group_manager.exchange_groups.iter()
+      .map(|ex| ex.to_string())
+      .collect::<Vec::<String>>() 
+
+  }
 }

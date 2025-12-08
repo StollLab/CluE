@@ -48,6 +48,39 @@ pub fn str_hash<T: Debug>(input: &T) -> u64 {
   out.finish()
 }
 //------------------------------------------------------------------------------
+// TODO: pending
+/*
+pub fn vec_vec_transpose<T: Clone>(mat: &Vec::<Vec::<T>>) 
+    -> Result<Vec::<Vec::<T>>,CluEError>
+{
+  if mat.is_empty(){
+    return Ok(mat);
+  }
+
+  let n_col = mat[0].len();
+
+  for v in mat.iter().skip(1){
+    if mat.len() != n_col{
+      return Err(CluEError)
+    }
+  }
+
+  let n_row = mat.len();
+
+  let mut mat_t: Vec::<Vec::<T>> = (0..n_col)
+      .map(|_| Vec::<T>::with_capacity(n_row)).collect();
+
+  for row in 0..n_row{
+    for col in 0..n_col{
+      let value = mat[row][col].clone();
+      mat_t[col].push(value);
+    }
+  }
+
+  Ok(mat_t)
+}
+*/
+//------------------------------------------------------------------------------
 
 
 #[cfg(test)]

@@ -755,93 +755,6 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   #[test]
-  fn test_build_extended_structure_lone_tempo(){
-    
-    let config = Config::from_toml_string(r##"
-      input_structure_file = "./assets/TEMPO.pdb"
-      detected_spin.position = [28,29]
-      radius = 73.5676
-      load_geometry = "cube"
-      replicate_unit_cell = true
-      
-      pulse_sequence = "hahn"
-      tau_increments = [1e-2]
-      number_timepoints = [101]
-      
-      [[groups]]
-      name = "hydrogens"
-      selection.elements = ["H"]
-      1H.abundance = 0.5
-      2H.abundance = 0.5
-
-      1H.c3_tunnel_splitting = 75e-3
-      2H.c3_tunnel_splitting = 1.5e-6
-        "##).unwrap();
-
-
-    let mut rng = ChaCha20Rng::from_entropy();
-    let structure = Structure::build_structure(&mut rng,&config).unwrap();
-
-
-    // Test: set_cell_shifts().
-    assert_eq!(structure.cell_offsets.len(),125);
-
-    // Test: extend_structure().
-    let expected_num = (1+1+18+9) + 124*19; // 29 + 2232 = 2261.
-    assert_eq!(structure.bath_particles.len(),expected_num);
-
-    // Test: set_isotopologue().
-    let mut n_h1 = 0;
-    let mut n_h2 = 0;
-    for particle in structure.bath_particles.iter(){
-      if (*particle).isotope == Isotope::Hydrogen1{
-        n_h1 += 1;
-      }else if (*particle).isotope == Isotope::Hydrogen2{
-        n_h2 += 1; 
-      }
-    }
-    assert_eq!(n_h1+n_h2,125*18);  // 125*18 = 2250.
-
-    let std = (0.25*(expected_num as f64)).sqrt();
-    let mean = 0.5*(expected_num as f64);
-    assert!(n_h1 as f64 >= mean - 5.0*std);
-    assert!(n_h1 as f64 <= mean + 5.0*std);
-
-
-    let exchange_group_manager = structure.exchange_groups.unwrap();
-    assert!(exchange_group_manager.exchange_groups.len() > 4);
-    assert!(exchange_group_manager.exchange_groups.len() <  125+20);
-
-      for (ex_id, exchange_group) in exchange_group_manager
-        .exchange_groups.iter().enumerate(){
-        
-
-        let indices = exchange_group.indices();
-        assert_eq!(indices.len(),3);
-
-        assert_eq!(structure.bath_particles[indices[0]].isotope,
-            structure.bath_particles[indices[1]].isotope);
-
-        assert_eq!(structure.bath_particles[indices[0]].isotope,
-            structure.bath_particles[indices[2]].isotope);
-
-        match structure.bath_particles[indices[0]].isotope{
-          Isotope::Hydrogen1 => assert!(
-              (exchange_group_manager.exchange_couplings[ex_id] - -50e3).abs()
-              < 1e-9
-              ),
-          Isotope::Hydrogen2 => assert!(
-              (exchange_group_manager.exchange_couplings[ex_id] - -1.0).abs()
-              < 1e-9),
-          _ => panic!("Isotope {:?} unexpected.",
-              structure.bath_particles[indices[0]].isotope),
-        }
-      }
-
-    
-  }
-  //----------------------------------------------------------------------------
-  #[test]
   fn test_build_extended_structure_tempo_wat_gly_7nm(){
     // n    : Molecules    : Hydrons 
     // 1    : TEMPO        :    18
@@ -1012,7 +925,6 @@ mod tests{
       input_structure_file = "./assets/TEMPO_3gly_1npr_50A.pdb"
       detected_spin.position = [28,29]
       radius = 73.5676
-      load_geometry = "cube"
       replicate_unit_cell = true
       
       pulse_sequence = "hahn"

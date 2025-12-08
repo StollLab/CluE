@@ -1,5 +1,7 @@
 pub mod analytic_restricted_2cluster;
+pub mod clue_toml;
 pub mod io;
+pub mod lebedev;
 pub mod py_clue_errors;
 pub mod py_cluster;
 pub mod py_config;
@@ -13,7 +15,9 @@ pub mod py_tensors;
 pub mod run_clue;
 
 use analytic_restricted_2cluster::*;
+use clue_toml::*;
 use io::*;
+use lebedev::*;
 use py_cluster::PyCluster;
 use py_config::*;
 use py_exchange_groups::*;
@@ -49,6 +53,7 @@ fn clue_odide(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyConfig>()?;
     m.add_class::<PyElement>()?;
     m.add_class::<PyExchangeGroupManager>()?;
+    m.add_class::<PyIntegrationGrid>()?;
     m.add_class::<PyIsotope>()?;
     m.add_class::<PyParticle>()?;
     m.add_class::<PySignal>()?;
@@ -56,10 +61,11 @@ fn clue_odide(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStructure>()?;
     m.add_class::<PyHamiltonianTensors>()?;
     m.add_function( wrap_pyfunction!(run,m)? )?;
+    m.add_function( wrap_pyfunction!(build_lebedev,m)? )?;
     m.add_function( wrap_pyfunction!(dict_to_toml_string,m)? )?;
-    m.add_function( wrap_pyfunction!(read_time_axis,m)? )?;
-    m.add_function( wrap_pyfunction!(read_signal,m)? )?;
-    m.add_function( wrap_pyfunction!(read_auxiliary_signals,m)? )?;
+    m.add_function( wrap_pyfunction!(load_time_axis,m)? )?;
+    m.add_function( wrap_pyfunction!(load_signal,m)? )?;
+    m.add_function( wrap_pyfunction!(load_auxiliary_signals,m)? )?;
     m.add_function( wrap_pyfunction!(hahn_three_spin_modulation_depth,m)? )?;
     m.add_function( wrap_pyfunction!(hahn_three_spin_modulation_frequency,m)? )?;
     m.add_function( 

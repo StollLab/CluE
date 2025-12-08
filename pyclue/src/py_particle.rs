@@ -20,6 +20,10 @@ impl PyParticle{
     PyElement{element: self.particle.element.clone() }
   }
   //----------------------------------------------------------------------------
+  pub fn get_isotope(&self) -> PyIsotope {
+    PyIsotope{isotope: self.particle.isotope.clone() }
+  }
+  //----------------------------------------------------------------------------
   pub fn get_coordinates(&self) -> [f64;3] {
     self.particle.coordinates.elements.clone()
   }
@@ -98,6 +102,10 @@ impl PyIsotope{
   //----------------------------------------------------------------------------
   fn __repr__(&self) -> String{
     self.isotope.to_string()
+  }
+  //----------------------------------------------------------------------------
+  fn __eq__(&self, other: PyIsotope) -> bool{
+    self.isotope == other.isotope
   }
   //----------------------------------------------------------------------------
   

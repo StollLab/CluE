@@ -5,6 +5,7 @@ use crate::structure::Structure;
 pub mod adjacency;
 pub mod build_adjacency_list;
 pub mod cluster_set;
+pub mod cluster_toml;
 pub mod connected_subgraphs;
 pub mod find_clusters;
 pub mod find_isolated_subgraphs;
@@ -86,6 +87,23 @@ impl Cluster{
     &self.vertices
   } 
   //----------------------------------------------------------------------------
+  pub fn reference_vertices(&self,structure_opt: Option<&Structure>)
+    -> Result<Vec::<usize>,CluEError>
+  {
+
+    let mut vertices = self.vertices.clone();
+    match structure_opt{
+      Some(structure) => {
+        for v in vertices.iter_mut(){
+          *v = structure.get_reference_index_of_nth_active(*v)?;
+        }
+      },
+      None => (),
+    }
+
+    Ok(vertices)
+  }
+  //----------------------------------------------------------------------------
   /// This function generates header for the cluster in csv files.
   pub fn to_header(&self, structure: &Structure) -> Result<String,CluEError> {
     // "clu_1_2_3_4"
@@ -107,6 +125,7 @@ impl Cluster{
 
     Ok(string)
   }
+  //----------------------------------------------------------------------------
 }
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

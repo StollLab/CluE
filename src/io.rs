@@ -4,8 +4,12 @@ use crate::config::Config;
 use crate::math;
 use crate::signal::load_batch_signals;
 
-use std::error::Error;
-use std::path::Path;
+use std::{
+  collections::HashMap,
+  error::Error,
+  path::Path,
+  str::FromStr,
+};
 //------------------------------------------------------------------------------
 pub trait FromTOMLString{
   fn from_toml_string(s: &str) -> Result<Self,CluEError> where Self: Sized;
@@ -60,6 +64,55 @@ pub fn load_auxiliary_signals(cluster_set: &mut ClusterSet,
   }
   Ok(())
 }
+//----------------------------------------------------------------------------
+/// This function tries to read a csv file into an `Ok(Signal)`.
+/// It will return an `Err(CluEError)` if it fails.
+pub fn read_csv<T>(filename: &str)
+  -> Result<HashMap::<String,Vec::<T>>,CluEError>
+  where T: std::str::FromStr, <T as FromStr>::Err: std::error::Error, 
+  <T as FromStr>::Err: 'static
+{
+  match read_csv_to_hashmap(filename){
+    Ok(data) => Ok(data),
+    Err(_) => Err(CluEError::CannotOpenFile(filename.to_string())),
+  }
+
+}
+//----------------------------------------------------------------------------
+// This function tries to read a csv file into an `Ok(Vec::<Complex<f64>>)`.
+// This is the back end to `read_from_csv()`.
+fn read_csv_to_hashmap<T>(filename: &str)
+  -> Result<HashMap::<String,Vec::<T>>,Box<dyn Error>>
+  where T: std::str::FromStr, <T as FromStr>::Err: std::error::Error, 
+  <T as FromStr>::Err: 'static
+{
+  // Count data points.
+  let mut rdr = csv::Reader::from_path(filename)?;
+  let mut num_data = 0;
+  for _result in rdr.records() {
+      num_data += 1;
+  }
+
+  // Load signal.
+  let headers = rdr.headers()?;
+  let mut data = HashMap::<String, Vec::<T>>::with_capacity(headers.len());
+  let mut rdr = csv::Reader::from_path(filename)?;
+  for key in headers.iter(){
+    data.insert(key.to_string(),Vec::<T>::with_capacity(num_data));
+  }
+
+  for result in rdr.records() {
+    let record = result?;
+    for (ii,s) in record.iter().enumerate(){
+      let v = s.parse::<T>()?;
+      let col = data.get_mut(&headers[ii]).ok_or("missing header")?;
+      col.push(v);
+    }
+  }
+  Ok(data)
+}
+//----------------------------------------------------------------------------
+
 //----------------------------------------------------------------------------
 // This function tries to read a csv file into an `Ok(Vec::<Complex<f64>>)`.
 // This is the back end to `read_from_csv()`. 

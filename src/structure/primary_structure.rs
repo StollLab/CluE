@@ -91,7 +91,7 @@ impl Structure{
     self.pdb_origin = Vector3D::from([origin[0],origin[1],origin[2]])
       .scale(-1.0);
 
-    weighted_coordinates.translate(
+    weighted_coordinates.translate_mut(
         &[self.pdb_origin.x(),self.pdb_origin.y(),self.pdb_origin.z() ]); 
 
     for particle in self.bath_particles.iter_mut(){
@@ -559,6 +559,7 @@ mod tests{
     structure.build_primary_structure(&mut rng, &config).unwrap();
 
   
+    println!("DB: {:#?}",structure.connections);
     assert_eq!(structure.molecules.len(),1);
     assert_eq!(structure.molecules[0],vec![0,1,2]);
     assert_eq!(structure.molecule_ids,vec![0,0,0]);

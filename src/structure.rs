@@ -31,9 +31,9 @@ use crate::space_3d::SymmetricTensor3D;
 use rand_chacha::ChaCha20Rng;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::collections::HashMap;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// TODO: move to field in config?
 /// `DetectedSpin` holds the data about the detected spin.
 /// `gamma_matrix` holds the effective gamma matrix.
 /// `isotope` identifies the species of the spin.
@@ -128,6 +128,7 @@ pub struct Structure{
   nth_active_to_reference_index: Vec::<usize>,
   pub active_indices: Vec::<usize>,
   pub bath_indices_to_active_indices: Vec::<Option<usize>>,
+  pub bath_to_serial_indices: HashMap::<(u32,usize),usize>,
 }
 
 impl Structure{
@@ -157,6 +158,7 @@ impl Structure{
       nth_active_to_reference_index: Vec::<usize>::new(),
       active_indices: Vec::<usize>::new(),
       bath_indices_to_active_indices: Vec::<Option<usize>>::new(),
+      bath_to_serial_indices: HashMap::<(u32,usize),usize>::new(),
     }
 
   }
@@ -181,6 +183,8 @@ impl Structure{
     structure.build_extended_structure(rng, config)?;
 
     structure.map_nth_active_to_reference_indices();
+
+    structure.set_serials()?;
 
     Ok(structure)
   }
@@ -255,6 +259,20 @@ impl Structure{
     Ok(bath_index + 1)
   }
   //----------------------------------------------------------------------------
+  /// This function retrieves the bath index of the bath particle with
+  /// reference index `ref_index`.
+  /// The reference index of the the detected spin in zero, and the first
+  /// bath particle has index 1.
+  pub fn get_bath_index_from_reference_index(&self, ref_index: usize) 
+    -> Result<usize,CluEError>
+  {
+    let bath_index = ref_index - 1;
+    if bath_index >= self.bath_particles.len() {
+      return Err(CluEError::CannotFindBathIndexFromRefIndex(bath_index));
+    }
+    Ok(bath_index)
+  }
+  //----------------------------------------------------------------------------
   /// This function retrieves the bath index of `n`th active particle.
   pub fn get_bath_index_of_nth_active(&self, n: usize) 
     -> Result<usize,CluEError>
@@ -263,6 +281,16 @@ impl Structure{
       return Err(CluEError::CannotFindRefIndexFromNthActive(n));
     }
     Ok(self.nth_active_to_reference_index[n] - 1)
+  }
+  //----------------------------------------------------------------------------
+  pub fn get_positions(&self,indices: &[usize]) -> Vec::<Vector3D>{
+    let mut positions = Vec::<Vector3D>::with_capacity(indices.len());
+
+    for &index in indices.iter(){
+      positions.push(self.bath_particles[index].coordinates.clone());
+    }
+
+    positions
   }
   //----------------------------------------------------------------------------
   /// This function retrieves the reference index of `n`th active particle.
@@ -277,6 +305,20 @@ impl Structure{
     }
     Ok(self.nth_active_to_reference_index[n])
 
+  }
+  //----------------------------------------------------------------------------
+  pub fn set_serials(&mut self) -> Result<(),CluEError>{
+  
+    self.bath_to_serial_indices = HashMap::<(u32,usize),usize>::with_capacity(
+        self.bath_particles.len());
+
+    for (bath_idx, particle) in self.bath_particles.iter().enumerate(){
+      let cell_id = self.cell_id(bath_idx)?;
+      if let Some(serial) = particle.serial{
+        self.bath_to_serial_indices.insert((serial,cell_id),bath_idx);
+      }
+    }
+    Ok(())
   }
   //----------------------------------------------------------------------------
   /// This function builds `nth_active_to_reference_index`, which maps

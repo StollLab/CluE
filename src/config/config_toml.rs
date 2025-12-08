@@ -6,6 +6,129 @@ use std::collections::HashMap;
 
 use serde::{Serialize,Deserialize};
 
+const ALLOWED_KEYS: [&str;120] = [
+  "abundance",
+  "active",
+  "auxiliary_signals",
+  "axes",
+  "bath",
+  "bonded_elements",
+  "bonded_indices",
+  "bonded_names",
+  "bonded_residues",
+  "bonded_residue_sequence_numbers",
+  "bonded_serials",
+  "c3_tunnel_splitting",
+  "cell_ids",
+  "cell_type",
+  "cosubstitute",
+  "coupling",
+  "coupling_xx_yy",
+  "clash_distance",
+  "clash_distance_pbc",
+  "cluster_batch_size",
+  "cluster_method",
+  "cluster_source",
+  "clusters",
+  "config",
+  "delta_hyperfine_zz",
+  "detected_spin",
+  "distance",
+  "drop_probability",
+  "electric_quadrupole",
+  "elements",
+  "exchange_coupling",
+  "exchange_groups",
+  "file",
+  "from",
+  "from_bonded_to",
+  "from_same_molecule_as",
+  "g_matrix",
+  "grid",
+  "groups",
+  "hahn_mod_depth",
+  "hahn_taylor_4",
+  "hyperfine",
+  "identity",
+  "indices",
+  "info",
+  "input_structure_file",
+  "isotpes",
+  "lebedev",
+  "magnetic_field",
+  "max_cell_size",
+  "max_cluster_size",
+  "max_spins",
+  "methyl_partitions",
+  "min_cell_size",
+  "name",
+  "names",
+  "not_bonded_elements",
+  "not_bonded_indices",
+  "not_bonded_names",
+  "not_bonded_residues",
+  "not_bonded_residue_sequence_numbers",
+  "not_bonded_serials",
+  "not_cell_ids",
+  "not_elements",
+  "not_indices",
+  "not_isotopes",
+  "not_names",
+  "not_residues",
+  "not_residue_sequence_numbers",
+  "not_serials",
+  "not_within_distance",
+  "number",
+  "number_runs",
+  "number_timepoints",
+  "orientation_grid",
+  "orientations",
+  "orientation_signals",
+  "output",
+  "output_directory",
+  "pair_cutoffs",
+  "partitioning",
+  "partition_table",
+  "pdb_model_index",
+  "point_dipole_perpendicular",
+  "populations",
+  "position",
+  "pulse_sequence",
+  "radius",
+  "random",
+  "replicate_unit_cell",
+  "residues",
+  "residue_sequence_numbers",
+  "rng_seed",
+  "run_name",
+  "sans_spin_signals",
+  "save_dir",
+  "selection",
+  "serials",
+  "singles",
+  "spin_multiplicity",
+  "structure_pdb",
+  "tau_increments",
+  "temperature",
+  "tensors",
+  "thermal",
+  "to",
+  "to_bonded_to",
+  "to_same_molecule_as",
+  "transition",
+  "unit_of_distance",
+  "unit_of_energy",
+  "unit_of_magnetic_field",
+  "unit_of_time",
+  "values",
+  "vector",
+  "vector_grid",
+  "within_distance",
+  "x",
+  "y",
+  "z",
+];
+
 pub const DEFAULT_UNIT_ENERGY: &str = "MHz";
 pub const DEFAULT_UNIT_DISTANCE: &str = "Å";
 pub const DEFAULT_UNIT_MAGNETIC_FIELD: &str = "T";
@@ -21,11 +144,13 @@ pub const KEY_CUTOFF_HAHN_TAYLOR_4: &str = "hahn_taylor_4";
 
 pub const KEY_OUT_AUX_SIGS: &str = "auxiliary_signals";
 pub const KEY_OUT_BATH: &str = "bath";
+pub const KEY_OUT_DET_SPIN: &str = "detected_spin";
 pub const KEY_OUT_CLUSTERS: &str = "clusters";
 pub const KEY_OUT_CONFIG: &str = "config";
 pub const KEY_OUT_INFO: &str = "info";
 pub const KEY_OUT_EXCHANGE_GROUPS: &str = "exchange_groups";
 pub const KEY_OUT_METHYL_PARTITIONS: &str = "methyl_partitions";
+pub const KEY_OUT_ORI_GRID: &str = "orientation_grid";
 pub const KEY_OUT_ORI_SIGS: &str = "orientation_signals";
 pub const KEY_OUT_SANS_SPIN_SIGS: &str = "sans_spin_signals";
 pub const KEY_OUT_STRUC_PDB: &str = "structure_pdb";
@@ -90,7 +215,7 @@ pub const KEY_SELE_NOT_ISOTOPES: &str = "not_isotopes";
 pub const KEY_SELE_BONDED_INDICES: &str = "bonded_indices";
 pub const KEY_SELE_NOT_BONDED_INDICES: &str = "not_bonded_indices";
 
-pub const KEY_SELE_WITHIN_DISTANCE: &str = "within_dintance";
+pub const KEY_SELE_WITHIN_DISTANCE: &str = "within_distance";
 pub const KEY_SELE_NOT_WITHIN_DISTANCE: &str = "not_within_distance";
 
 pub const KEY_SELE_BONDED_ELEMENTS: &str = "bonded_elements";
@@ -105,9 +230,9 @@ pub const KEY_SELE_NOT_BONDED_NAMES: &str = "not_bonded_names";
 pub const KEY_SELE_BONDED_RESIDUES: &str = "bonded_residues";
 pub const KEY_SELE_NOT_BONDED_RESIDUES: &str = "not_bonded_residues";
 
-pub const KEY_SELE_BONDED_RES_SEQ_NUMS: &str = "bonded_residue_squence_numbers";
+pub const KEY_SELE_BONDED_RES_SEQ_NUMS: &str = "bonded_residue_sequence_numbers";
 pub const KEY_SELE_NOT_BONDED_RES_SEQ_NUMS: &str 
-    = "not_bonded_residue_squence_numbers";
+    = "not_bonded_residue_sequence_numbers";
 
 // Isotope Key
 pub const KEY_ISO_ABUNDACE: &str = "abundance";
@@ -182,7 +307,7 @@ pub struct ConfigTOML{
   pub cluster_batch_size: Option<usize>, 
   pub populations: Option<String>, 
   pub cluster_method: Option<String>,
-  pub clusters_file: Option<String>,
+  pub cluster_source: Option<String>,
   pub input_structure_file: Option<String>,
   pub magnetic_field: Option<f64>,
   pub max_cell_size: Option<usize>,
@@ -193,6 +318,7 @@ pub struct ConfigTOML{
   pub number_timepoints: Option<Vec::<usize>>,
   pub replicate_unit_cell: Option<toml::Value>,
   pub partitioning: Option<String>, 
+  pub partition_table: Option<toml::Value>,
   pub pdb_model_index: Option<usize>,
   pub pulse_sequence: Option<String>,  
   pub radius: Option<f64>,
@@ -230,17 +356,48 @@ impl ConfigTOML{
   }
 }
 
+//------------------------------------------------------------------------------
+fn check_toml_str(toml_str: &str) -> Result<(),CluEError>{
+  let config: toml::Table = match toml::from_str(toml_str){
+    Ok(cfg) => cfg,
+    Err(err) => return Err(CluEError::CannotReadTOMLFile( format!("{}",err) )), 
+  };
+
+  check_toml_table(&config, 1)
+}
+//------------------------------------------------------------------------------
+const MAX_DEPTH: usize = 10;
+
+fn check_toml_table(config: &toml::Table, depth: usize) -> Result<(),CluEError>{  
+  assert!(depth <= MAX_DEPTH);
+
+  for (key, value) in config.iter(){
+    if !ALLOWED_KEYS.contains( &&key[..] ){
+      return Err(CluEError::CannotReadTOMLFile(format!("invalid key {}",key))); 
+    }
+
+    if let toml::Value::Table(table) = value{
+      check_toml_table(table,depth +1)?;
+    } 
+  }
+
+  Ok(())
+}
+//------------------------------------------------------------------------------
+
 
 impl FromTOMLString for ConfigTOML{
   fn from_toml_string(toml_str: &str) -> Result<Self,CluEError>{
+    check_toml_str(toml_str)?;
+
     let decoded: Result<ConfigTOML,_> = toml::from_str(toml_str);
     match decoded {
       Ok(mut config) => {
         config.set_default_units();
         Ok(config)
       },
-      //Err(err) => Err(CluEError::CannotReadConfigTOML( format!("{}",err) )), 
-      Err(err) => panic!("TODO: implement error: {}.",err)
+      Err(err) => Err(CluEError::CannotReadTOMLFile( format!("{}",err) )), 
+      //Err(err) => panic!("TODO: implement error: {}.",err)
     }
   }
 }
@@ -273,7 +430,7 @@ mod tests{
         temperature = 20
 
         cluster_method = "CCE"
-        clusters_file = "clusters_file.txt"
+        cluster_source = "clusters_file.toml"
         input_structure_file = "../../assets/TEMPO_wat_gly_70A.pdb"
         magnetic_field = 1.2
         max_cell_size = 2
@@ -406,4 +563,13 @@ mod tests{
     
   }
   //----------------------------------------------------------------------------
+  #[test]
+  fn test_check_toml_str(){
+    let toml_str = r##"
+      this_is_not_a_key = True
+      "##;
+    assert!(check_toml_str(&toml_str).is_err());
+  }
+  //----------------------------------------------------------------------------
+
 }

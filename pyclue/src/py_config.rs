@@ -7,6 +7,7 @@ use ndarray::{Array1,Ix1};
 use num_complex::Complex;
 use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
+use std::collections::HashMap;
 
 use clue_oxide::{
   config::{
@@ -17,6 +18,7 @@ use clue_oxide::{
 };
 use clue_oxide::io::FromTOMLString;
 use crate::py_clue_errors::PyCluEError;
+use crate::dict_to_toml_string;
 
 #[pyclass(name = "Config")]
 #[derive(Debug)]
@@ -52,6 +54,13 @@ impl PyConfig{
         PyArray::from_owned_array(py, signal).unbind()
     });
     Ok( (time_axis, signal) )
+  }
+  //----------------------------------------------------------------------------
+  #[staticmethod]
+  pub fn from_dict(config: HashMap::<String,PyObject>) -> Result<Self,PyCluEError>
+  {
+    let toml_string = dict_to_toml_string(config)?;
+    Self::from_input(toml_string)
   }
   //----------------------------------------------------------------------------
   #[staticmethod]

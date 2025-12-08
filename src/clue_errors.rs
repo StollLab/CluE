@@ -1,8 +1,9 @@
+use serde::Serialize;
 use std::fmt;
 
 /// `CluEError` contains the possible errors.
 // After adding a new error, please update fmt() below as well.
-#[derive(PartialEq,Debug,Clone)]
+#[derive(PartialEq,Debug,Clone,Serialize)]
 pub enum CluEError{
   AllSignalsNotSameLength(String),
   AtomDoesNotSpecifyElement(usize),
@@ -22,6 +23,7 @@ pub enum CluEError{
   CannotFindCellID(usize),
   CannotFindSpinOp(String),
   CannotFindParticleForRefIndex(usize),
+  CannotFindBathIndexFromRefIndex(usize),
   CannotFindRefIndexFromBathIndex(usize),
   CannotFindRefIndexFromNthActive(usize),
   CannotInferEigenvalues(usize),
@@ -44,6 +46,7 @@ pub enum CluEError{
   CannotPruneClustersMisMatchedSizes,
   CannotReadGrid(String),
   CannotReadTOML(String),
+  CannotReadTOMLFile(String),
   CannotSampleBinomialDistribution(usize,f64),
   CannotSetExchangeCoupling(usize),
   CannotSubTokens,
@@ -64,6 +67,11 @@ pub enum CluEError{
   ClusterFileContainsNoHeader(String),
   ClusterHasNoSignal(String),
   ClusterLineFormatError(String),
+  ClusterTOMLCannotRead(String),
+  ClusterTOMLIncorrectNumberOfClusters,
+  ClusterTOMLNoClusters,
+  ClusterTOMLNoNumberClusters,
+  ClusterTOMLWrongClusterSize,  
   ConfigModeNotRecognized(String),
   DeprecatedKeywordReplaced(usize,String,String),
   DetectedSpinDoesNotHaveAnActiveIndex,
@@ -102,6 +110,7 @@ pub enum CluEError{
   IsotopeAbundancesMustBeNonnegative(usize),
   LenghMismatchTimepointsIncrements(usize,usize),
   MismatchedGroupNames(String,String),
+  MissingFieldInCSVFile(String,String),
   MissingFilter(String),
   MissingFilterArgument(usize,String),
   MissingFilterLabel(usize),
@@ -131,6 +140,7 @@ pub enum CluEError{
   NoClusterBatchSize,
   NoClusterMethod,
   NoClustersOfSize(usize),
+  NoClusterSource,
   NoDensityMatrixMethod,
   NoDetectedSpinIdentity,
   NoDetectedSpinMultiplicity,
@@ -178,6 +188,7 @@ pub enum CluEError{
   SaveNameEmpty,
   SaveNameNotSet,
   SecondaryFilterRequiresAnIndex(String),
+  SpinAlreadyPartitioned(usize,i32),
   SpinPropertiesNeedsALabel,
   SpinPropertiesNeedsAnIsotope(String),
   StructurePropertiesNeedsALabel,
@@ -191,6 +202,7 @@ pub enum CluEError{
   TOMLArrayDoesNotSpecifyATensor,
   TOMLArrayDoesNotSpecifyAVector,
   TOMLArrayIsEmpty,
+  TOMLValueDoesNotSpecifyAPartitionTable,
   TOMLValueIsNotABool,
   UnavailableSpinOp(usize,usize),
   UnassignedCosubstitutionGroup(usize),
@@ -260,6 +272,9 @@ impl fmt::Display for CluEError{
           "cannot find spin operator \"{}\"",sop),
 
       CluEError::CannotFindParticleForRefIndex(ref_index) => write!(f,
+          "cannot find bath index for reference index \"{}\"", ref_index),
+
+      CluEError::CannotFindBathIndexFromRefIndex(ref_index) => write!(f,
           "cannot find bath index for reference index \"{}\"", ref_index),
 
       CluEError::CannotFindRefIndexFromBathIndex(bath_index) => write!(f,
@@ -350,6 +365,9 @@ followed by a column for the weights", filename),
       CluEError::CannotReadTOML(string) => write!(f,
           "cannot parse \"{}\" as TOML",string),
 
+      CluEError::CannotReadTOMLFile(msg) => write!(f,
+          "cannot parse TOML file \"{}\"",msg),
+
       CluEError::CannotConvertToFloat(line_number, token) => write!(f,
           "line {}, cannot convert \"{}\" to type float", line_number,token),
 
@@ -367,6 +385,21 @@ size n.", file),
 
       CluEError::ClusterLineFormatError(line) => write!(f,
           "cluster line \"{}\" is not formatted correctly", line),
+
+      CluEError::ClusterTOMLCannotRead(msg) => write!(f,
+          "cannot read cluster toml: \"{}\"", msg),
+
+      CluEError::ClusterTOMLNoClusters => write!(f,
+          "no clusters in clusters.toml"),
+
+      CluEError::ClusterTOMLNoNumberClusters => write!(f,
+          "no number_clusters in clusters.toml"),
+
+      CluEError::ClusterTOMLIncorrectNumberOfClusters=> write!(f,
+          "in clusters.toml, number_clusters is incorrect"),
+
+      CluEError:: ClusterTOMLWrongClusterSize=> write!(f,
+          "in clusters.toml, there is at least one cluster of the wrong size"),
 
       CluEError::CannotWriteFile(file) => write!(f,
           "cannot write to \"{}\"", file),
@@ -539,6 +572,9 @@ and p0,p1 > 0 are abundances",line_number),
       CluEError::MissingFilter(label) => write!(f,
           "no group with label \"{}\"",label),
 
+      CluEError::MissingFieldInCSVFile(field,file_name) => write!(f,
+          "CSV file \"{}\" has no column \"{}\"",file_name,field),
+
       CluEError::MissingFilterArgument(line_number,fn_name) => write!(f,
           "line {}, missing group argument in \"{}()\"",line_number,fn_name),
 
@@ -630,6 +666,9 @@ periodic boundary conditions should be applied"),
       
       CluEError::NoClustersOfSize(size) => write!(f,
           "cannot find any clusters of size {}", size),
+      
+      CluEError::NoClusterSource => write!(f,
+          "no cluster source specified"),
       
       CluEError::NoDensityMatrixMethod=> write!(f,
           "no density matrix method specified"),
@@ -749,7 +788,7 @@ periodic boundary conditions should be applied"),
 
       CluEError::NoSpinOpForClusterSize(cluster_size,max_size) => write!(f,
           "no spin operators for clusters of size {} are built,\
-          only sizes upto {}",cluster_size,max_size),
+          only sizes up to {}",cluster_size,max_size),
 
       CluEError::NoSpinOpWithMultiplicity(spin_multiplicity) => write!(f,
           "no spin-{} operators are built", 
@@ -766,7 +805,7 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
           "particle \"{}\" is not active", ref_index),
 
       CluEError::PartitionIsIncomplette => write!(f,
-          "partition table should contain n cell indexed by [0,n-1]"),
+          "partition table should contain n cells indexed by [0,n-1]"),
 
       CluEError::OptionAlreadySet(line_number,err_token) => write!(f,
           "line {}, \"{}\" has already been set",line_number, err_token),
@@ -786,6 +825,9 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
       CluEError::SecondaryFilterRequiresAnIndex(group) => write!(f,
           "secondary particle group, \"{}\", requires a particle index",
           group),
+
+      CluEError::SpinAlreadyPartitioned(idx,blk) => write!(f,
+          "spin {} already partitioned into block {}", idx,blk),
 
       CluEError::SpinPropertiesNeedsALabel => write!(f,
           "spin_properties requires a label to be set: 
@@ -836,6 +878,10 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
 
       CluEError::TOMLArrayIsEmpty => write!(f,
           "TOML array is empty", 
+          ),
+
+      CluEError::TOMLValueDoesNotSpecifyAPartitionTable => write!(f,
+          "TOML value is not a partition table", 
           ),
 
       CluEError::TOMLValueIsNotABool => write!(f,

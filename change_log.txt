@@ -1,3 +1,12 @@
+--------------------------------------------------------------------------------
+CluE Oxide: 0.2.3-alpha.2
+
+ADDED:
+Now CluE checks the input TOML for keys that do nothing.  
+This turns many typos into errors, rather than silently ignoring them.
+
+CHANGED:
+Clusters are now saved and loaded as TOML files.
 
 --------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.1

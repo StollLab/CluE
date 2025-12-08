@@ -1,6 +1,8 @@
 use crate::space_3d::Vector3D;
 use crate::clue_errors::*;
 use crate::io::FromTOMLString;
+use crate::io::write_data;
+use crate::physical_constants::PI;
 
 use lebedev_laikov;
 use rand_chacha::ChaCha20Rng;
@@ -211,7 +213,7 @@ impl IntegrationGrid{
   /// This function translates all the points in the grid by `vector`.
   /// The function will panic if the vector is of a different dimension than
   /// the grid.
-  pub fn translate(&mut self, vector: &[f64]){
+  pub fn translate_mut(&mut self, vector: &[f64]){
     assert_eq!(vector.len(), self.dim);
 
     for (ii,x) in self.points.iter_mut().enumerate(){
@@ -277,8 +279,77 @@ impl IntegrationGrid{
 
   }
   //----------------------------------------------------------------------------
+  pub fn to_csv(&self,filename: &str) -> Result<(),CluEError>
+  {
+    let mut  headers = Vec::<String>::with_capacity(self.dim+1);
+    for idx in 1..=self.dim{
+      headers.push(format!("x{}",idx)); 
+    }
+    headers.push("w".to_string()); 
+
+    let mut data = Vec::<Vec::<f64>>::with_capacity(self.dim+1);
+    for _ in 0..self.dim+1{
+      data.push(Vec::<f64>::with_capacity(self.len()));
+    }
+
+    for ii in  0..self.len(){
+      for ix in 0..self.dim{
+        data[ix].push(self.points[ii + ix]);
+      }
+      data[self.dim].push(self.weights[ii]);
+    }
+
+    write_data(&data,filename,headers)
+
+  }
+  //----------------------------------------------------------------------------
+  pub fn to_polar_csv(&self,filename: &str) -> Result<(),CluEError>
+  {
+    assert_eq!(self.dim,3);
+
+    let headers = vec![
+      "r".to_string(),
+      "theta".to_string(),
+      "phi".to_string(),
+      "weight".to_string(),
+      "theta_degrees".to_string(),
+      "phi_degrees".to_string(),
+    ];
+      
+
+    let mut data = Vec::<Vec::<f64>>::with_capacity(5);
+    for _ in 0..6{
+      data.push(Vec::<f64>::with_capacity(self.len()));
+    }
+
+    for ii in  0..self.len(){
+      let x = self.x(ii);
+      let y = self.y(ii);
+      let z = self.z(ii);
+      let r = (x*x + y*y + z*z).sqrt();
+
+      let theta = (z/r).acos();
+      let rho = (x*x + y*y).sqrt();
+      let mut phi = (x/rho).acos();
+      if y < 0.0{
+        phi = -phi;
+      }
+
+      data[0].push(r);
+      data[1].push(theta);
+      data[2].push(phi);
+      data[3].push(self.weights[ii]);
+      data[4].push(theta*180.0/PI);
+      data[5].push(phi*180.0/PI);
+    }
+
+    write_data(&data,filename,headers)
+
+  }
+  //----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
   /// This function removes the negative hemisphere of a grid.
-  pub fn remove_3d_hemisphere(self) -> IntegrationGrid{
+  pub fn remove_3d_hemisphere(&self) -> IntegrationGrid{
     assert_eq!(self.dim,3);
 
     let mut points = Vec::<f64>::with_capacity(self.points.len()/2);
@@ -366,18 +437,18 @@ mod tests{
   } 
   //----------------------------------------------------------------------------
   #[test]
-  fn test_translate(){
+  fn test_translate_mut(){
     let mut grid = IntegrationGrid::new(3);
     let w = 1.0/6.0;
-    grid.push(vec![1.0, 2.0, 2.0],w).unwrap();
-    grid.push(vec![3.0, 2.0, 2.0],w).unwrap();
-    grid.push(vec![2.0, 1.0, 2.0],w).unwrap();
-    grid.push(vec![2.0, 3.0, 2.0],w).unwrap();
-    grid.push(vec![2.0, 2.0, 1.0],w).unwrap();
-    grid.push(vec![2.0, 2.0, 3.0],w).unwrap();
-    assert_eq!(grid.mean(), vec![2.0, 2.0, 2.0]);
-    let r = vec![-2.0,-2.0,-2.0];
-    grid.translate(&r);
+    grid.push(vec![1.0, 20.0, 200.0],w).unwrap();
+    grid.push(vec![3.0, 20.0, 200.0],w).unwrap();
+    grid.push(vec![2.0, 10.0, 200.0],w).unwrap();
+    grid.push(vec![2.0, 30.0, 200.0],w).unwrap();
+    grid.push(vec![2.0, 20.0, 100.0],w).unwrap();
+    grid.push(vec![2.0, 20.0, 300.0],w).unwrap();
+    assert_eq!(grid.mean(), vec![2.0, 20.0, 200.0]);
+    let r = vec![-2.0,-20.0,-200.0];
+    grid.translate_mut(&r);
     assert_eq!(grid.mean(), vec![0.0, 0.0, 0.0]);
   }
 }

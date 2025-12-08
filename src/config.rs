@@ -19,7 +19,7 @@ use crate::integration_grid::IntegrationGrid;
 use crate::misc::are_all_same_type;
 
 
-use crate::io::FromTOMLString;
+use crate::io::{FromTOMLString,read_csv};
 
 
 use substring::Substring;
@@ -27,6 +27,7 @@ use substring::Substring;
 use toml::Value;
 use serde::{Serialize,Deserialize};
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::mem;
@@ -41,9 +42,11 @@ pub const SAVE_DIR_AUXILIARY_SIGNALS: &str = "auxiliary_signals";
 pub const SAVE_FILE_BATH: &str = "bath";
 pub const SAVE_FILE_CLUSTERS: &str = "clusters";
 pub const SAVE_DIR_INFO: &str = "info";
+pub const SAVE_FILE_DET_SPIN_COOR: &str = "detected_spin";
 pub const SAVE_FILE_EXCHANGE_GROUPS: &str = "exchange_groups";
 pub const SAVE_FILE_METHYL_PARTITIONS: &str = "methyl_partitions";
 pub const SAVE_DIR_ORIENTATION_SIGNALS: &str = "orientations";
+pub const SAVE_FILE_ORIENTATIONS: &str = "orientation_grid";
 pub const SAVE_FILE_SANS_SPIN_SIGNALS: &str = "sans_spin_signals";
 pub const SAVE_FILE_STRUCTURE_PDB: &str = "structure_pdb";
 pub const SAVE_FILE_TENSORS: &str = "tensors";
@@ -81,13 +84,14 @@ pub struct Config{
 
   // CCE
   pub cluster_batch_size: Option<usize>, 
-  pub clusters_file: Option<String>,
+  pub cluster_source: Option<ClusterSource>,
   pub cluster_method: Option<ClusterMethod>,
   pub min_cell_size: Option<usize>,
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
   pub max_spins: Option<usize>,
   pub partitioning: Option<PartitioningMethod>,
+  pub partition_table: Option<PartitionTableConfig>,
   pub rng_seed: Option<u64>,
   pub unit_of_clustering: Option<UnitOfClustering>,
 
@@ -107,9 +111,11 @@ pub struct Config{
   pub write_bath: Option<bool>,
   pub write_clusters: Option<bool>,
   pub write_config: Option<bool>,
+  pub write_detected_spin: Option<bool>,
   pub write_info: Option<bool>,
   pub write_exchange_groups: Option<bool>,
   pub write_methyl_partitions: Option<bool>,
+  pub write_orientation_grid: Option<bool>,
   pub write_orientation_signals: Option<bool>,
   pub write_sans_spin_signals: Option<bool>,
   pub write_structure_pdb: Option<bool>,
@@ -179,6 +185,10 @@ impl Config{
       self.cluster_batch_size = Some(1000);
     }
 
+    if self.cluster_source.is_none(){
+      self.cluster_source = Some(ClusterSource::Structure);
+    }
+
     if self.partitioning.is_none(){
       self.partitioning = Some(PartitioningMethod::Particles);
     }
@@ -204,9 +214,16 @@ impl Config{
     if self.write_info.is_none(){
       self.write_info = Some(true);
     }
+    if self.write_detected_spin.is_none(){
+      self.write_detected_spin = Some(true);
+    }
 
     if self.write_exchange_groups.is_none(){
       self.write_exchange_groups = Some(true);
+    }
+
+    if self.write_orientation_grid.is_none(){
+      self.write_orientation_grid = Some(true);
     }
 
     if self.write_orientation_signals.is_none(){
@@ -344,13 +361,36 @@ impl Config{
     Ok(time_axis)
   }
   //----------------------------------------------------------------------------
-  /*
-  /// This function writes the simulated experiment's time axis to a file.
-  pub fn write_time_axis(&self,save_path: String) -> Result<(),CluEError>{
-    io::write_data(&[self.time_axis.clone()], 
-        &format!("{}/time_axis.csv",save_path), vec!["time_axis".to_string()])
+  pub fn get_partition_table(&self) 
+      -> Result<Vec::<(usize,usize)>,CluEError>
+  {
+    Ok(match &self.partition_table{
+      Some(PartitionTableConfig::CSV(file_name)) => {
+        let data: HashMap::<String, Vec::<usize>> = read_csv(file_name)?;
+        
+        let Some(indices) = data.get("index") else{
+          return Err(CluEError::MissingFieldInCSVFile(
+                "index".to_string(),file_name.to_string()));
+        };
+
+        let Some(blocks) = data.get("block") else{
+          return Err(CluEError::MissingFieldInCSVFile(
+                "block".to_string(),file_name.to_string()));
+        };
+
+        let mut p_table = Vec::<(usize,usize)>::with_capacity(indices.len());
+
+        for (ii,idx) in indices.iter().enumerate(){
+          p_table.push((*idx,blocks[ii]));
+        }
+
+        p_table
+      },
+      Some(PartitionTableConfig::IndexBlockList(p_table)) => p_table.clone(),
+      None => Vec::<(usize,usize)>::new(),
+    })
+
   }
-  */
   //----------------------------------------------------------------------------
   /// This function finds the `ParticleConfig` that has `label` if it exists.
   pub fn find_particle_config(&self, label: &str) 
@@ -367,16 +407,31 @@ impl Config{
 
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `DensityMatrixMethod` specifies different methods for determining the
-// /density ,atrix.
 #[derive(Debug,Clone,PartialEq)]
 pub enum DensityMatrixMethod{
   ApproxThermal(f64),
   Identity,
   Thermal(f64),
 }
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/// `ClusterSource` specifies where to search for clusters
+#[derive(Debug,Clone,PartialEq)]
+pub enum ClusterSource{
+  Structure,
+  File(String),
+  OrientationsDir(String)
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `DetectedSpinCoordinates` lists options for indicating the coordinates
 /// of the detected spin.
 #[derive(Debug,Clone,PartialEq)]
@@ -461,7 +516,10 @@ impl DetectedSpinCoordinates{
     }
   }
 }
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,PartialEq)]
 pub enum ReplicateUnitCell{
   No,
@@ -502,8 +560,10 @@ impl ReplicateUnitCell{
     }
   }
 }
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `ClusterMethod` list different cluster simulation methods.
 #[derive(Debug,Clone,PartialEq)]
 pub enum ClusterMethod{
@@ -521,7 +581,60 @@ impl ClusterMethod{
     }
   }
 }
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[derive(Debug,Clone,PartialEq)]
+pub enum PartitionTableConfig{
+  CSV(String),
+  IndexBlockList(Vec::<(usize,usize)>),
+}
+impl PartitionTableConfig{
+  pub fn from_toml_value(value: toml::Value) -> Result<Self,CluEError> 
+  {
+    match value{
+      Value::Array(array) => Self::from_toml_array(array),
+      Value::String(s) => Ok(Self::CSV(s.to_string())),
+      _ => Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable),
+    }
+  }
+  //----------------------------------------------------------------------------
+  pub fn from_toml_array(array: Vec::<toml::Value>) -> Result<Self,CluEError>
+  {
+
+    if array.is_empty(){
+      return Err(CluEError::TOMLArrayIsEmpty);
+    }
+    if !are_all_same_type(&array){
+      return Err(CluEError::TOMLArrayContainsMultipleTypes);
+    }
+    match array[0]{
+      Value::Integer(_) => {
+        if array.len() % 2 != 0{
+          return Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable);
+        }
+        let mut p_table = Vec::<(usize,usize)>::with_capacity(array.len()/2);
+        for ii in 0..array.len()/2{
+          let Some(idx) = array[2*ii].as_integer() else{
+            return Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable);
+          };
+          let Some(blk) = array[2*ii + 1].as_integer() else{
+            return Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable);
+          };
+         p_table.push((idx as usize,blk as usize)) 
+        }
+
+        Ok(Self::IndexBlockList(p_table))
+      },
+      _ => Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable),
+    }
+  }
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `PulseSequence` lists the options for pulse sequences to simulate.
 #[derive(Debug,Clone,PartialEq)]
 pub enum PulseSequence{
@@ -544,6 +657,8 @@ impl PulseSequence{
 }
 
 }
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `OrientationAveraging` lists the different orientation averaging options.
@@ -685,8 +800,14 @@ impl Config{
       self.cluster_batch_size = config_toml.cluster_batch_size;
     }
 
-    if config_toml.clusters_file.is_some(){
-      self.clusters_file = config_toml.clusters_file;
+
+    if let Some(clu_src) = config_toml.cluster_source{
+      if clu_src.ends_with(".toml") || clu_src.ends_with(".txt"){
+        self.cluster_source = Some(ClusterSource::File(clu_src.to_string()));
+      }else {
+        self.cluster_source 
+          = Some(ClusterSource::OrientationsDir(clu_src.to_string()));
+      }
     }
 
     if let Some(method_str) = &config_toml.cluster_method{
@@ -824,6 +945,11 @@ impl Config{
       return Err(CluEError::CannotParsePartitioningMethod(0,s.to_string()));  
     }
 
+    if let Some(p_table) = config_toml.partition_table{
+      self.partition_table 
+          = Some(PartitionTableConfig::from_toml_value(p_table)?); 
+    }
+
     if config_toml.pdb_model_index.is_some(){
       self.pdb_model_index = config_toml.pdb_model_index;
     }
@@ -882,6 +1008,9 @@ impl Config{
       if let Some(&b) = output.get(KEY_OUT_BATH){ 
         self.write_bath = Some(b)
       }
+      if let Some(&b) = output.get(KEY_OUT_DET_SPIN){ 
+        self.write_detected_spin = Some(b)
+      }
       if let Some(&b) = output.get(KEY_OUT_CLUSTERS){ 
         self.write_clusters = Some(b)
       }
@@ -896,6 +1025,9 @@ impl Config{
       }
       if let Some(&b) = output.get(KEY_OUT_METHYL_PARTITIONS){ 
         self.write_methyl_partitions = Some(b)
+      }
+      if let Some(&b) = output.get(KEY_OUT_ORI_GRID){ 
+        self.write_orientation_grid = Some(b)
       }
       if let Some(&b) = output.get(KEY_OUT_ORI_SIGS){ 
         self.write_orientation_signals = Some(b)
@@ -1031,7 +1163,7 @@ mod tests{
       cluster_batch_size = 20000
       populations = "thermal"
       cluster_method = "cce"
-      clusters_file = "clusters_file.txt"
+      cluster_source = "clusters_file.toml"
       input_structure_file = "../../assets/TEMPO_wat_gly_70A.pdb"
       magnetic_field = 1.2 # T
       max_cell_size = 2
@@ -1041,6 +1173,12 @@ mod tests{
       number_runs = 2
       replicate_unit_cell = false    
       partitioning = "exchange_groups"
+      partition_table = [
+        1,1,
+        2,1,
+        3,2,
+        4,2,
+      ]
       radius = 80 # Å
       rng_seed = 42
       output_directory = "save_directory"
@@ -1169,8 +1307,8 @@ mod tests{
         Some(DetectedSpinCoordinates::CentroidOverSerials(vec![28,29])));
     assert_eq!(config.input_structure_file,
          Some("../../assets/TEMPO_wat_gly_70A.pdb".to_string()));
-    assert_eq!(config.clusters_file,
-         Some("clusters_file.txt".to_string()));
+    assert_eq!(config.cluster_source,
+         Some(ClusterSource::File("clusters_file.toml".to_string())));
 
     assert_eq!(config.max_cell_size, Some(2));
     assert_eq!(config.magnetic_field, Some(Vector3D::from([0.0,0.0,1.2])));
@@ -1186,6 +1324,9 @@ mod tests{
     assert_eq!(config.number_timepoints, vec![40,60]);
     assert_eq!(config.partitioning, 
         Some(PartitioningMethod::ExchangeGroupsAndParticles));
+    assert_eq!(config.partition_table, 
+        Some(PartitionTableConfig::IndexBlockList(vec![
+        (1,1),(2,1),(3,2),(4,2)])));
     assert_eq!(config.pulse_sequence, Some(PulseSequence::CarrPurcell(1)));
     assert_eq!(config.radius, Some(80.0e-10));
     assert_eq!(config.rng_seed, Some(42));

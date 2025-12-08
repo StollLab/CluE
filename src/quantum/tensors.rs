@@ -767,7 +767,7 @@ mod tests{
         cluster_method = "cce"
         max_cluster_size = 2
         magnetic_field = 1.2
-        periodic_boundadry_conditions = true
+        replicate_unit_cell = true
 
         [detected_spin]
         position = [28,29]

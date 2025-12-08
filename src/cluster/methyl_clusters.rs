@@ -31,15 +31,22 @@ pub fn partition_cluster_set_by_exchange_groups(cluster_set: ClusterSet,
 
   let mut n_cluster_partitions 
     = HashMap::<String,Vec::<usize>>::with_capacity(n_groups);
+
+  // Loop over cluster sizes.
   for clu_size in 0..max_size{
+
+    // Loop over clusters of a given size.
     for cluster in cluster_set.clusters[clu_size].iter(){
+
       let key = get_cluster_partition_key(cluster,
           exchange_group_manager,structure)?;
 
       let mut counts: Vec::<usize> = vec![0;max_size];
+
       if let Some(n) = n_cluster_partitions.get(&key){
         counts = n.clone();
       }
+
       counts[clu_size] += 1;
 
       n_cluster_partitions.insert(key,counts);
@@ -52,8 +59,12 @@ pub fn partition_cluster_set_by_exchange_groups(cluster_set: ClusterSet,
   let mut cluster_partitions 
     = HashMap::<String,Vec::<Vec<Cluster>>>::with_capacity(n_groups);
 
+    // Loop over cluster sizes.
     for clu_size in 0..cluster_set.clusters.len(){
+
+      // Loop over clusters of a given size.
       for cluster in cluster_set.clusters[clu_size].iter(){
+
         let key = get_cluster_partition_key(cluster,
             exchange_group_manager, structure)?;
 
@@ -101,6 +112,7 @@ fn get_cluster_partition_key(cluster: &Cluster,
   for &vertex in cluster.vertices().iter(){
     
     let structure_idx = structure.get_bath_index_of_nth_active(vertex)?;
+
     if let Some(id) = exchange_group_manager.exchange_group_ids[structure_idx]{
       key_ids.push(id);
     } 
@@ -219,8 +231,9 @@ mod tests{
   use crate::elements::Element;
   
   //----------------------------------------------------------------------------
+  // This test checks the basics of partition_cluster_set_by_exchange_groups.
   #[test]
-  fn test_partition_cluster_set_by_exchange_groups(){
+  fn test_partition_cluster_set_by_exchange_groups_1(){
     let exchange_group_manager =  generate_test_exchange_group_manager();
     let structure = get_test_structure();
 
@@ -315,9 +328,114 @@ mod tests{
 
 
     for (ref_key,ref_cluster_set) in ref_partitions.iter(){
+      assert!(cluster_partitions.contains_key(ref_key));
       let cluster_set = &cluster_partitions[ref_key];
       assert_eq!(*cluster_set, *ref_cluster_set);
     }
+    for (clu_key,cluster_set) in cluster_partitions.iter(){
+      assert!(ref_partitions.contains_key(clu_key));
+      let ref_cluster_set = &ref_partitions[clu_key];
+      assert_eq!(*cluster_set, *ref_cluster_set);
+    }
+
+  }
+  //----------------------------------------------------------------------------
+  // This test checks partition_cluster_set_by_exchange_groups when 
+  // methyl-methyl clusters are not included.
+  #[test]
+  fn test_partition_cluster_set_by_exchange_groups_2(){
+    let exchange_group_manager =  generate_test_exchange_group_manager();
+    let structure = get_test_structure();
+
+    // methyl 1: 1,2,3
+    // methyl 2: 4,7,8
+    let clusters = vec![
+      vec![Cluster::from(vec![1]),Cluster::from(vec![5])],
+      vec![Cluster::from(vec![1,2]),Cluster::from(vec![1,5]),
+        Cluster::from(vec![5,9])],
+      vec![Cluster::from(vec![1,2,3]),Cluster::from(vec![4,7,8])],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+    ];
+
+    // ref_idx: 1 2 3 4 5 6 7 8 9
+    // CH3_id#: 0 0 0 1 - - 1 1 - 
+    let mut ref_partitions 
+      = HashMap::<String,ClusterSet>::with_capacity(4);
+
+
+    ref_partitions.insert("bath".to_string(), ClusterSet::from(vec![
+      vec![Cluster::from(vec![5])],
+      vec![Cluster::from(vec![5,9])],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+    ]));
+
+    ref_partitions.insert("methyl_1_2_3".to_string(), ClusterSet::from(vec![
+      vec![Cluster::from(vec![1])],
+      vec![Cluster::from(vec![1,2]),Cluster::from(vec![1,5])],
+      vec![Cluster::from(vec![1,2,3])],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+    ]));
+
+    ref_partitions.insert("methyl_7_4_8".to_string(), ClusterSet::from(vec![
+      vec![],
+      vec![],
+      vec![Cluster::from(vec![4,7,8])],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+      vec![],
+    ]));
+
+    let ref_counts = clusters.iter().map(|v| v.len())
+      .collect::<Vec::<usize>>();
+
+    let cluster_set = ClusterSet::from(clusters);
+
+    let cluster_partitions: HashMap::<String,ClusterSet> = 
+      partition_cluster_set_by_exchange_groups(cluster_set,
+          &exchange_group_manager, &structure).unwrap();
+
+
+    let mut counts = ref_counts.iter().map(|_x| 0)
+      .collect::<Vec::<usize>>();
+
+    for (_key, value_cluster_set) in cluster_partitions.iter(){
+      for (clu_size,clusters) in value_cluster_set.clusters.iter().enumerate(){
+        counts[clu_size] += clusters.len();
+      }
+    }
+    assert_eq!(counts,ref_counts);
+
+
+    for (ref_key,ref_cluster_set) in ref_partitions.iter(){
+      assert!(cluster_partitions.contains_key(ref_key));
+      let cluster_set = &cluster_partitions[ref_key];
+      assert_eq!(*cluster_set, *ref_cluster_set);
+    }
+    for (clu_key,cluster_set) in cluster_partitions.iter(){
+      assert!(ref_partitions.contains_key(clu_key));
+      let ref_cluster_set = &ref_partitions[clu_key];
+      assert_eq!(*cluster_set, *ref_cluster_set);
+    }
+
   }
   //----------------------------------------------------------------------------
   #[test]

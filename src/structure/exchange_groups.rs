@@ -62,7 +62,7 @@ impl ExchangeGroupManager{
     let line = "exchange_group,\
 center_x,center_y,center_z,\
 normal_x,normal_y,normal_z,\
-exchange_coupling\n".to_string();
+exchange_coupling,res_seq_id,res\n".to_string();
     if stream.write(line.as_bytes()).is_err(){
       return Err(CluEError::CannotWriteFile(filename.to_string()) );
     }
@@ -75,13 +75,30 @@ exchange_coupling\n".to_string();
       let n = exchange_group.normal();
       let j = self.exchange_couplings[ii];
 
-      let line = format!("{},{},{},{},{},{},{},{}\n",
+      let indices = exchange_group.indices();
+
+      let res_seq_id = if let Some(idx) = &structure.bath_particles[indices[0]]
+        .residue_sequence_number
+      {
+        format!("{}",idx)
+      }else{
+        "".to_string()
+      };
+      let res = if let Some(r) = &structure.bath_particles[indices[0]]
+        .residue
+      {
+        format!("{}",r)
+      }else{
+        "".to_string()
+      };
+
+      let line = format!("{},{},{},{},{},{},{},{},{},{}\n",
           methyl_str, 
           r.x() - pdb_origin.x(), 
           r.y() - pdb_origin.y(), 
           r.z() - pdb_origin.z(), 
           n.x(),n.y(), n.z(), 
-          j);
+          j, res_seq_id,res);
     
       if stream.write(line.as_bytes()).is_err(){
         return Err(CluEError::CannotWriteFile(filename.to_string()) );

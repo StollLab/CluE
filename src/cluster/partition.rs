@@ -13,7 +13,13 @@ use crate::structure::{
   Structure,
 };
 
+use crate::cluster::find_isolated_subgraphs::find_nearly_isolated_subgraphs;
+use crate::kmeans::get_kmeans_partition;
+use crate::math::unique;
+use crate::space_3d::Vector3D;
+
 use std::collections::HashMap;
+use rand_chacha::ChaCha20Rng;
 
 // TODO: Change this to a value in Config.
 const DROP_ALL_SPINS_FROM_METHYLS_THAT_ARE_NOT_CLUSTERS: bool = false;
@@ -22,7 +28,59 @@ const DROP_ALL_SPINS_FROM_METHYLS_THAT_ARE_NOT_CLUSTERS: bool = false;
 pub enum PartitioningMethod{
   Particles, 
   ExchangeGroupsAndParticles,
+  KMeans(f64),
 }
+/*
+impl PartitioningMethod{
+  pub fn from_toml_value(value: toml::Value) -> Result<Self,CluEError> {
+
+    match value{
+      toml::Value::String(s) => {
+        if s == KEY_PARTITION_PARTICLE.to_string({
+            Ok(Self::Particles)
+        }else if s == KEY_PARTITION_EX_GROUPS.to_string(){
+          Ok(Self::ExchangeGroupsAndParticles)
+        }else{
+          return Err(CluEError::CannotParsePartitioningMethod(0,s.to_string()));     
+        }
+      },
+      toml::Value::Table(table) => from_toml_table(table),
+      _ => Err(CluEError::CannotParsePartitioningMethod(0,value.to_string())),   
+    }
+  }
+  //----------------------------------------------------------------------------
+  pub fn from_toml_table(table: toml::Table,unit_of_distance: f64) 
+      -> Result<Self,CluEError>
+  {
+    let mut out = Self::new();
+    out.set_from_toml_table(table,unit_of_distance)?;
+    Ok(out)
+  }
+  //----------------------------------------------------------------------------
+  pub fn set_from_toml_table(&mut self, 
+      table: toml::Table,
+      unit_of_distance: f64)
+      -> Result<(),CluEError>
+  {
+    if let Some(value) = table.get(KEY_PARTITIONING_METHOD){
+      let Some(array) = value.as_array() else{
+        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
+      };
+      self.indices = array.iter().filter_map(|v| v.as_integer())
+        .map(|n| n as usize).collect::<Vec::<usize>>();
+    }
+
+    if let Some(value) = table.get(KEY_SELE_NOT_INDICES){
+      let Some(array) = value.as_array() else{
+        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
+      }; 
+      self.not_indices = array.iter().filter_map(|v| v.as_integer())
+        .map(|n| n as usize).collect::<Vec::<usize>>();
+    }
+  }
+  //----------------------------------------------------------------------------
+}
+*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -31,15 +89,18 @@ pub enum PartitionBlock{
   Unset,
   Detection,
   Bath(usize),
+  Preset(usize),
   Inactive,
 }
 impl PartitionBlock{
   //----------------------------------------------------------------------------
   fn to_number(&self) -> Option<usize>{
     match self{
+      PartitionBlock::Unset => None,
       PartitionBlock::Detection => Some(0),
       PartitionBlock::Bath(n) => Some(*n),
-      _ => None
+      PartitionBlock::Preset(n) => Some(*n),
+      PartitionBlock::Inactive => None,
     }
   }
   //----------------------------------------------------------------------------
@@ -125,55 +186,111 @@ impl PartitionTable{
 
 //------------------------------------------------------------------------------
 /// This function builds the partition table for use in pCCE.
-pub fn get_partition_table(spin_adjacency_list: &AdjacencyList,
+pub fn get_partition_table(rng: &mut ChaCha20Rng,
+    spin_adjacency_list: &AdjacencyList,
     tensors: &HamiltonianTensors,
     structure: &Structure, config: &Config) 
     -> Result<PartitionTable,CluEError>
 {
+
   let Some(partitioning) = &config.partitioning else{
     return Err(CluEError::NoPartitioningMethod)
   };
 
-  let element_to_block: Vec::<PartitionBlock> = match partitioning{
-    PartitioningMethod::Particles => {
-      let mut el_to_blk : Vec::<PartitionBlock>
-        = (0..tensors.len()).map(PartitionBlock::Bath).collect();
-      el_to_blk[0] = PartitionBlock::Detection;
-      el_to_blk
-    },
+  let (mut element_to_block, max_block_index) 
+      = get_partition_pretable(tensors, structure, config)?;
+
+  match partitioning{
+    PartitioningMethod::Particles => set_element_to_block_singles(
+        &mut element_to_block, max_block_index),
     PartitioningMethod::ExchangeGroupsAndParticles 
-      => get_element_to_block_exchange_groups_and_particles(
-          spin_adjacency_list,tensors,structure)?,
+      => set_element_to_block_exchange_groups(
+          &mut element_to_block, max_block_index,
+          spin_adjacency_list,structure)?,
+    PartitioningMethod::KMeans(kluster_size) 
+      => set_element_to_block_kmeans(
+          rng, 
+          &mut element_to_block, max_block_index,
+          *kluster_size,
+          spin_adjacency_list,structure)?,
   };
 
   PartitionTable::from(element_to_block)
 }
 //------------------------------------------------------------------------------
-fn get_element_to_block_exchange_groups_and_particles(
-    spin_adjacency_list: &AdjacencyList,
-    tensors: &HamiltonianTensors,
-    structure: &Structure,
-    ) -> Result<Vec::<PartitionBlock>,CluEError>
-{
-  // Initialize partition blocks.
-  let mut element_to_block = (0..tensors.len())
-      .map(|_| PartitionBlock::Unset).collect::<Vec::<PartitionBlock>>();
+// This function extracts and set user specified blocks.
+fn get_partition_pretable(tensors: &HamiltonianTensors, 
+    structure: &Structure, config: &Config)
+    ->  Result<(Vec::<PartitionBlock>, usize),CluEError>{
 
+  
+  // Initialize unset partition.  
+  let mut element_to_block : Vec::<PartitionBlock>
+      = (0..tensors.len()).map(|_| PartitionBlock::Unset).collect();
+
+  // Set Block 0 as the detection block.
+  element_to_block[0] = PartitionBlock::Detection;
+
+  let mut max_block_index = 0;
+
+  let partition_table = config.get_partition_table()?;
+
+  for (serial,blk) in partition_table.iter(){
+    
+    let Some(bath_idx) = structure.bath_to_serial_indices
+        .get(&(*serial as u32,0 as usize)) 
+    else{
+      panic!("TODO");
+    };
+    let Some(active_idx) = structure.bath_indices_to_active_indices[*bath_idx] 
+    else{
+      panic!("TODO");
+    };
+    element_to_block[active_idx] = PartitionBlock::Preset(*blk);
+    if *blk > max_block_index{
+      max_block_index = *blk;
+    }
+  }
+
+  Ok( (element_to_block, max_block_index) )
+}
+
+//------------------------------------------------------------------------------
+fn set_element_to_block_singles(
+    element_to_block: &mut [PartitionBlock], mut max_block_index: usize)
+{
+  for blk in element_to_block.iter_mut(){
+    if *blk != PartitionBlock::Unset{
+      continue;
+    }
+    max_block_index += 1;
+    *blk = PartitionBlock::Bath(max_block_index);
+  }
+}
+//------------------------------------------------------------------------------
+fn set_element_to_block_exchange_groups(
+    element_to_block: &mut [PartitionBlock], mut max_id: usize,
+    spin_adjacency_list: &AdjacencyList,
+    structure: &Structure,
+    ) -> Result<(),CluEError>
+{
   // Look for an exchange group manager.
   let Some(exchange_group_manager) = &structure.exchange_groups else {
-    return Ok(element_to_block);
+    set_element_to_block_singles(element_to_block, max_id);
+    return Ok(());
   };
 
   // Check that there are exchange groups. 
   if exchange_group_manager.exchange_groups.is_empty(){
-    return Ok(element_to_block);
+    set_element_to_block_singles(element_to_block, max_id);
+    return Ok(());
   }
  
-  // The 0 index in tensors is the detected spin's.  
-  element_to_block[0] = PartitionBlock::Detection;
 
-  // Initialize an id counter.
-  let mut max_id = 0;
+  let v:  Vec::<usize> = structure.bath_indices_to_active_indices.iter()
+      .filter_map(|x| (*x)).collect();
+  let u = math::unique(v.clone());
+  assert_eq!(v.len(),u.len());
 
   // Loop through all exchange groups.
   for exchange_group in exchange_group_manager.exchange_groups.iter()
@@ -191,7 +308,18 @@ fn get_element_to_block_exchange_groups_and_particles(
     for &bath_idx in indices.iter(){
       if let Some(spin_idx) 
           = structure.bath_indices_to_active_indices[bath_idx] {
-        spins.push(spin_idx);
+        match element_to_block[spin_idx]{
+          PartitionBlock::Unset => spins.push(spin_idx),
+          PartitionBlock::Detection | PartitionBlock::Bath(_) =>{
+            let Some(block_n) = element_to_block[spin_idx].to_number() else{
+              return Err(CluEError::SpinAlreadyPartitioned(bath_idx+1,-1));
+            }; 
+            return Err(
+                CluEError::SpinAlreadyPartitioned(bath_idx+1, block_n as i32));
+          },
+          PartitionBlock::Preset(_) => (),
+          PartitionBlock::Inactive => (),
+        }
       }
     }
 
@@ -213,17 +341,16 @@ fn get_element_to_block_exchange_groups_and_particles(
           element_to_block[*spin_idx] = PartitionBlock::Bath(max_id);
         }
       }
-      continue;
+    }else{
+      // Assign block ID.
+      max_id += 1;
+
+      // Write block ID to the partition table.
+      for spin_idx in spins.iter(){
+        element_to_block[*spin_idx] = PartitionBlock::Bath(max_id);
+      }
     }
 
-
-    // Assign block ID.
-    max_id += 1;
-
-    // Write block ID to the partition table.
-    for spin_idx in spins.iter(){
-      element_to_block[*spin_idx] = PartitionBlock::Bath(max_id);
-    }
   }
 
   // Loop though partition table, 
@@ -237,7 +364,40 @@ fn get_element_to_block_exchange_groups_and_particles(
   }
 
   // Return Partition table.
-  Ok(element_to_block)    
+  Ok(())    
+}
+//------------------------------------------------------------------------------
+fn set_element_to_block_kmeans(
+    rng: &mut ChaCha20Rng,
+    element_to_block: &mut [PartitionBlock], mut max_id: usize,
+    kluster_size: f64,
+    spin_adjacency_list: &AdjacencyList,
+    structure: &Structure,
+    ) -> Result<(),CluEError>
+{
+  // Separate the bath spins into connected subgraphs.
+  let subgraphs: Vec::<AdjacencyList> 
+      = find_nearly_isolated_subgraphs(spin_adjacency_list,Some(0))?;
+
+  // Run k-means clustering on each subgraph and collect the results.
+  for subgraph in subgraphs.iter(){
+    let indices = subgraph.get_active_vertices();
+
+    let positions: Vec::<Vector3D> = structure.get_positions(&indices);
+
+    let number_klusters 
+        = (indices.len() as f64 / kluster_size).round() as usize;
+
+    let klusters = get_kmeans_partition(rng, number_klusters, &positions);
+
+    for (ii,index) in indices.iter().enumerate(){
+      element_to_block[*index] 
+          = PartitionBlock::Bath(klusters[ii] + max_id + 1);
+    }
+    max_id += unique(klusters).len();
+  }
+
+  Ok(())
 }
 //------------------------------------------------------------------------------
 /// This function takes a graph (as a `&AdjacencyList`), and a 
@@ -538,7 +698,6 @@ mod tests{
 
     let (spin_adjacency_list,tensors,structure,config) = get_tempo();
 
-    let ref_number_clusters = [7,9,15];
 
     // Define reference clusters in PDB indices.
     let mut ref_clusters: Vec::<Vec::<Vec::<usize>>> = vec![
@@ -563,8 +722,6 @@ mod tests{
         vec![15,18],
       ],
       vec![
-        vec![3,4,5],
-        vec![7,8,9],
         vec![11,14,15],
         vec![11,14,18],
         vec![11,12,14],
@@ -581,6 +738,9 @@ mod tests{
       ],
     ];
 
+    let ref_number_clusters: Vec::<usize> 
+        = ref_clusters.iter().map(|v| v.len()).collect();
+
     // Convert PDB indices to internal indices.
     for (ii,n) in ref_number_clusters.iter().enumerate(){
       for jj in 0..*n{
@@ -593,7 +753,8 @@ mod tests{
     }
 
 
-    let partition_table = get_partition_table(&spin_adjacency_list,
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let partition_table = get_partition_table(&mut rng, &spin_adjacency_list,
         &tensors, &structure, &config).unwrap();
 
     let block_adjacency_list 
@@ -763,34 +924,41 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   #[test]
-  fn test_get_element_to_block_exchange_groups_and_particles(){
-    let (adjacency_list,tensors,structure,_config) = get_tempo();
+  fn test_set_element_to_block_exchange_groups(){
+    let (adjacency_list,tensors,structure,config) = get_tempo();
 
-    let element_to_block 
-      = get_element_to_block_exchange_groups_and_particles(&adjacency_list,
-          &tensors, &structure).unwrap();
+    let (mut element_to_block, max_block_index) 
+        = get_partition_pretable(&tensors, &structure, &config).unwrap();
 
-    let expected = PartitionTable::from_indices(vec![
-        0,
-        //11,11, // C1,C3
-        1,1,1, // H6,H4,H5
-        //11, // C2
-        2,2,2, // H2,H3,H1
-        //11, // C4
-        5,6, // H8,H7
-        //11, // C5
-        7,8, // H10, H9
-        //11, // C6
-        9,10, // H11,H12
-        //11,11, // C7,C9
-        3,3,3, // H18,H16,H17 
-        //11, // C8
-        4,4,4,// H14,H13,H15
-        11, // N
-        //11, // O
-    ]).unwrap();
-    assert_eq!(element_to_block.len(),expected.element_to_block.len());
-    assert_eq!(element_to_block, expected.element_to_block);
+    set_element_to_block_exchange_groups(
+        &mut element_to_block, max_block_index,
+        &adjacency_list, &structure).unwrap();
+
+    let expected = vec![
+        PartitionBlock::Detection,
+        // C1,C3
+        PartitionBlock::Preset(1),PartitionBlock::Preset(1),
+        PartitionBlock::Preset(1), // H6,H4,H5
+        // C2
+        PartitionBlock::Preset(1),PartitionBlock::Preset(1),
+        PartitionBlock::Preset(1), // H2,H3,H1
+        // C4
+        PartitionBlock::Bath(4),PartitionBlock::Bath(5), // H8,H7
+        // C5
+        PartitionBlock::Bath(6),PartitionBlock::Bath(7), // H10, H9
+        // C6
+        PartitionBlock::Bath(8),PartitionBlock::Bath(9), // H11,H12
+        //C7,C9
+        PartitionBlock::Bath(2),PartitionBlock::Bath(2),
+        PartitionBlock::Bath(2), // H18,H16,H17 
+        // C8
+        PartitionBlock::Bath(3),PartitionBlock::Bath(3),
+        PartitionBlock::Bath(3),// H14,H13,H15
+        PartitionBlock::Bath(10), // N
+        // O
+    ];
+    assert_eq!(element_to_block.len(),expected.len());
+    assert_eq!(element_to_block, expected);
   }
   //----------------------------------------------------------------------------
   fn get_tempo() -> (AdjacencyList,HamiltonianTensors,Structure,Config)
@@ -802,6 +970,14 @@ mod tests{
       magnetic_field = 1.2
       replicate_unit_cell = false
       partitioning = "exchange_groups"
+      partition_table = [
+        3,1,
+        4,1,
+        5,1,
+        7,1,
+        8,1,
+        9,1,
+      ]
       
       pulse_sequence = "hahn"
       tau_increments = [1e-2]
