@@ -64,7 +64,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "clue_oxide"
-version = "0.2.3-alpha.2"
+version = "0.2.3-alpha.3"
 dependencies = [
  "csv",
  "lebedev_laikov",
