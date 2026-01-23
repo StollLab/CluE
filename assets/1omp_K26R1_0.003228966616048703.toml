@@ -1,0 +1,110 @@
+input_structure_file = "assets/1omp_K26R1_0.003228966616048703.pdb"
+
+populations = "thermal"
+
+cluster_method = "cce"
+
+magnetic_field = 1.2
+
+max_cluster_size = 2
+
+max_spins = 3
+
+number_timepoints = [301]
+
+partitioning = "exchange_groups"
+
+replicate_unit_cell = false
+
+pulse_sequence = "hahn"
+
+radius = 300
+
+run_name = "system"
+
+temperature = 50
+
+tau_increments = [5e-2]
+
+[detected_spin]
+  position = ["r1_n","r1_o"]
+  g_matrix.values = [2.00841, 2.00604, 2.00223]
+  g_matrix.axes.x = {from = "r1_n", to ="r1_o"}
+  g_matrix.axes.y = {from = "r1_c2", to ="r1_c5"}
+
+[pair_cutoffs]
+  hahn_mod_depth = 2e-7
+  hahn_taylor_4 = 4e-13
+  
+[orientations]
+  grid = "vector"
+  vector = [0.67436015, 0.67436015, 0.3007936 ]
+  
+[output]
+  auxiliary_signals = true
+  bath = true
+  clusters = true
+  info = true
+  partition_table = true
+  exchange_groups = true
+  structure_pdb = false
+  orientation_signals = true
+  methyl_partitions = true
+  orientation_grid = true
+
+
+
+[[groups]]
+  name = "r1_h"
+  selection.residues = ["R1C"]
+  selection.elements = ["H"]
+  1H.c3_tunnel_splitting = 86.4846352321929e-3
+
+[[groups]]
+  name = "pro_nx"
+  selection.not_residues = ["R1C"]
+  selection.elements = ["H"]
+  selection.bonded_elements = ["C"]
+  1H.c3_tunnel_splitting = 53.39849286870266e-3
+
+[[groups]]
+  name = "pro_ex"
+  selection.not_residues = ["R1C"]
+  selection.elements = ["H"]
+  selection.bonded_elements = ["O","N"]
+  selection.not_bonded_elements = ["C"]
+  1H.active = false
+
+[[groups]]
+  name = "r1_n"
+  selection.residues = ["R1C"]
+  selection.names = ["N1"]
+
+  14N.hyperfine.values = [14.7,14.7,101.4] 
+  14N.hyperfine.axes.x = {to = "r1_o"} 
+  14N.hyperfine.axes.y = {from = "r1_c2", to ="r1_c5"}
+
+  14N.electric_quadrupole.values = [1.23, 0.36, -1.59]
+  14N.electric_quadrupole.axes.x = {to = "r1_o"} 
+  14N.electric_quadrupole.axes.y = {from = "r1_c2", to ="r1_c5"}
+
+
+[[groups]]
+  name = "r1_o"
+  selection.residues = ["R1C"]
+  selection.names = ["O1"]
+
+[[groups]]
+  name = "r1_c2"
+  selection.residues = ["R1C"]
+  selection.names = ["C2"]
+
+[[groups]]
+  name = "r1_c5"
+  selection.residues = ["R1C"]
+  selection.names = ["C5"]
+
+
+
+
+

@@ -40,6 +40,10 @@ pub fn partition_cluster_set_by_exchange_groups(cluster_set: ClusterSet,
 
       let key = get_cluster_partition_key(cluster,
           exchange_group_manager,structure)?;
+      if key == "methyl_1718_1719_1720_methyl_4448_4449_4450"{
+        println!("DB: key({:?}) = {}",cluster.vertices,key);
+        println!("DB: C({:?}) = {:?}",cluster.vertices,cluster.to_string_result(structure));
+      }
 
       let mut counts: Vec::<usize> = vec![0;max_size];
 

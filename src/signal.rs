@@ -52,6 +52,10 @@ impl Signal{
     Signal{data}
   }
   //----------------------------------------------------------------------------
+  pub fn norm(&self) -> f64{
+    self.data.iter().map(|z| z.norm_sqr()).sum::<f64>().sqrt()
+  }
+  //----------------------------------------------------------------------------
   /// This function scales every element by `scale_factor`.
   pub fn mut_scale(&mut self, scale_factor: Complex<f64>){
 
@@ -72,6 +76,8 @@ impl Signal{
 
   }
   //----------------------------------------------------------------------------
+  /*
+  // TODO: delete or fix.
   /// This function tries to read a csv file into an `Ok(Signal)`.  
   /// It will return an `Err(CluEError)` if it fails. 
   pub fn read_from_csv(filename: &str) -> Result<Self,CluEError>
@@ -107,6 +113,7 @@ impl Signal{
     }
     Ok(signal)
   }
+  */
   //----------------------------------------------------------------------------
   /// This function tries to write a `Signal` ro csv file.  
   /// It will return an `Err(CluEError)` if it fails. 

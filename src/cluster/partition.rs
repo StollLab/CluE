@@ -6,6 +6,7 @@ use crate::cluster::{
 };
 use crate::clue_errors::CluEError;
 use crate::config::Config;
+use crate::config::SAVE_FILE_PARTITION_TABLE;
 use crate::math;
 use crate::quantum::tensors::HamiltonianTensors;
 use crate::structure::{
@@ -17,9 +18,14 @@ use crate::cluster::find_isolated_subgraphs::find_nearly_isolated_subgraphs;
 use crate::kmeans::get_kmeans_partition;
 use crate::math::unique;
 use crate::space_3d::Vector3D;
+use crate::io::write_data;
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufWriter;
+use std::io::Write;
 use rand_chacha::ChaCha20Rng;
+
 
 // TODO: Change this to a value in Config.
 const DROP_ALL_SPINS_FROM_METHYLS_THAT_ARE_NOT_CLUSTERS: bool = false;
@@ -180,6 +186,57 @@ impl PartitionTable{
 
   }
   //----------------------------------------------------------------------------
+  pub fn to_csv(&self,save_path: &str,structure: &Structure)
+    -> Result<(),CluEError> 
+  {
+    let n = self.element_to_block.len();
+    let mut indices = Vec::<usize>::with_capacity(n);
+    let mut blocks = Vec::<usize>::with_capacity(n);
+
+    for (active_idx,block) in self.element_to_block.iter().enumerate(){
+      if active_idx == 0{continue;}
+      let Some(b) = block.to_number() else { continue; };
+      let idx = structure.nth_active_to_reference_index[active_idx];
+      indices.push(idx);
+      blocks.push(b);
+    }
+
+    let headers = vec!["index".to_string(),"block".to_string()];
+    let filename = format!("{}/{}.csv",save_path, 
+        SAVE_FILE_PARTITION_TABLE);
+    write_data(&[indices,blocks], &filename, headers)?;
+
+
+    let filename = &format!("{}/{}.toml",save_path, 
+        SAVE_FILE_PARTITION_TABLE);
+
+    let Ok(file) = File::create(filename) else{
+      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    };
+
+    let mut toml_string = "".to_string();
+
+    for (blk,elements) in self.block_to_elements.iter().enumerate(){
+      if elements[0] == 0{ continue;}
+      let idx = structure.nth_active_to_reference_index[elements[0]];
+      let mut elements_string = format!("{}",idx);
+      for e in elements.iter().skip(1){
+        if *e == 0{ continue;}
+        let idx = structure.nth_active_to_reference_index[*e];
+        elements_string = format!("{},{}",elements_string,idx);
+      }
+
+      toml_string = format!("{}block_{} = [{}]\n",toml_string,blk,elements_string);
+    }
+    let mut stream = BufWriter::with_capacity(toml_string.as_bytes().len(),file);
+    if stream.write(toml_string.as_bytes()).is_err(){
+      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    };
+
+    Ok(())
+  }
+
+  //----------------------------------------------------------------------------
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -197,6 +254,9 @@ pub fn get_partition_table(rng: &mut ChaCha20Rng,
     return Err(CluEError::NoPartitioningMethod)
   };
 
+  // element_to_block: Vec::<PartitionBlock>, has an entry for each particle
+  // specified in tensors.  
+  // max_block_index specifies the highest block id used.
   let (mut element_to_block, max_block_index) 
       = get_partition_pretable(tensors, structure, config)?;
 
@@ -233,20 +293,29 @@ fn get_partition_pretable(tensors: &HamiltonianTensors,
 
   let mut max_block_index = 0;
 
+  // partition_table: Vec::<serial: usize, block_id: usize>
   let partition_table = config.get_partition_table()?;
 
+  // The partition_table is user specifed in terms of PDB serial ids,
+  // but CluE needs the partition table in terms of the indices used
+  // in tensors: &HamiltonianTensors.
   for (serial,blk) in partition_table.iter(){
     
-    let Some(bath_idx) = structure.bath_to_serial_indices
+    // Converert PDB serial id to bath_index used on structure. 
+    let Some(bath_idx) = structure.map_serial_id_to_bath_index
         .get(&(*serial as u32,0 as usize)) 
     else{
       panic!("TODO");
     };
+
+    // Convert bath_index to active_idx, used in tensors.
     let Some(active_idx) = structure.bath_indices_to_active_indices[*bath_idx] 
     else{
       panic!("TODO");
     };
     element_to_block[active_idx] = PartitionBlock::Preset(*blk);
+
+    // Update max_block_index.
     if *blk > max_block_index{
       max_block_index = *blk;
     }
@@ -256,6 +325,8 @@ fn get_partition_pretable(tensors: &HamiltonianTensors,
 }
 
 //------------------------------------------------------------------------------
+// This function looks for all entries in element_to_block that are unset
+// and gives them a unique block id.
 fn set_element_to_block_singles(
     element_to_block: &mut [PartitionBlock], mut max_block_index: usize)
 {
@@ -287,11 +358,6 @@ fn set_element_to_block_exchange_groups(
   }
  
 
-  let v:  Vec::<usize> = structure.bath_indices_to_active_indices.iter()
-      .filter_map(|x| (*x)).collect();
-  let u = math::unique(v.clone());
-  assert_eq!(v.len(),u.len());
-
   // Loop through all exchange groups.
   for exchange_group in exchange_group_manager.exchange_groups.iter()
   {
@@ -304,25 +370,42 @@ fn set_element_to_block_exchange_groups(
       continue;
     }
 
+    // Initialize list of spin indices. 
     let mut spins = Vec::<usize>::with_capacity(3);
+
+    // Loop throught the indices of each methyl/ammonium group.
     for &bath_idx in indices.iter(){
-      if let Some(spin_idx) 
-          = structure.bath_indices_to_active_indices[bath_idx] {
-        match element_to_block[spin_idx]{
-          PartitionBlock::Unset => spins.push(spin_idx),
-          PartitionBlock::Detection | PartitionBlock::Bath(_) =>{
-            let Some(block_n) = element_to_block[spin_idx].to_number() else{
-              return Err(CluEError::SpinAlreadyPartitioned(bath_idx+1,-1));
-            }; 
-            return Err(
-                CluEError::SpinAlreadyPartitioned(bath_idx+1, block_n as i32));
-          },
-          PartitionBlock::Preset(_) => (),
-          PartitionBlock::Inactive => (),
-        }
+
+      // Get tensor/active index to determine which entry of element_to_block
+      // to access. 
+      let Some(spin_idx)  = structure.bath_indices_to_active_indices[bath_idx]
+          else { continue;};
+
+      match element_to_block[spin_idx]{
+
+        // If the spin has no block, save its index for later.
+        PartitionBlock::Unset => spins.push(spin_idx),
+        
+        // If the spin is in the detection or bath blocks,
+        // run some validation.  
+        PartitionBlock::Detection | PartitionBlock::Bath(_) =>{
+          let Some(block_n) = element_to_block[spin_idx].to_number() else{
+            return Err(CluEError::SpinAlreadyPartitioned(bath_idx+1,-1));
+          }; 
+          return Err(
+              CluEError::SpinAlreadyPartitioned(bath_idx+1, block_n as i32));
+        },
+
+        // If the spin's block is already set, do nothing.
+        PartitionBlock::Preset(_) => (),
+        
+        // If the spin is inactive, do nothing.
+        PartitionBlock::Inactive => (),
       }
     }
 
+    // Get the number of edges in the adjacency subgraph containing the
+    // spins.
     let mut num_edges = 0;
     for &spin_idx0 in spins.iter(){
       for &spin_idx1 in spins.iter(){
@@ -332,6 +415,7 @@ fn set_element_to_block_exchange_groups(
       }
     }
 
+    // Check if the spins do not form a connected methyl group.
     if spins.len() != 3 || num_edges < 2{
       for spin_idx in spins.iter(){
         if DROP_ALL_SPINS_FROM_METHYLS_THAT_ARE_NOT_CLUSTERS{
@@ -363,7 +447,6 @@ fn set_element_to_block_exchange_groups(
     *el_to_blk = PartitionBlock::Bath(max_id);
   }
 
-  // Return Partition table.
   Ok(())    
 }
 //------------------------------------------------------------------------------

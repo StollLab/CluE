@@ -14,6 +14,7 @@ use crate::config::{
   SAVE_FILE_METHYL_PARTITIONS,
   SAVE_DIR_ORIENTATION_SIGNALS,
   SAVE_FILE_ORIENTATIONS,
+  SAVE_FILE_PARTITION_TABLE,
   SAVE_FILE_SANS_SPIN_SIGNALS,
   SAVE_FILE_STRUCTURE_PDB,
   SAVE_FILE_TENSORS,
@@ -147,10 +148,12 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
       let potential_max_order = max_cluster_size*max_spins_per_cluster_unit;
       
       let max_spins = match config.max_spins{
-        Some(s) => std::cmp::max(s,potential_max_order),
+        Some(s) => s,
         None => potential_max_order,
       };
 
+      println!("DB: s = {}; p ={}; c = {:?}",
+          max_spins,potential_max_order,config.max_spins);
       ClusterSpinOperators::new(&spin_multiplicity_set,
         max_spins)?
     },
@@ -253,19 +256,26 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     Some(ClusterSource::Structure) => {
 
       // Pull out unit_of_clustering early, before more expensive calculations.
-     let Some(unit_of_clustering) = &config.unit_of_clustering else{
-       return Err(CluEError::NoUnitOfClustering);
-     };
+      let Some(unit_of_clustering) = &config.unit_of_clustering else{
+        return Err(CluEError::NoUnitOfClustering);
+      };
 
       // Determine spin adjacencies.
       let spin_adjacency_list 
           = build_adjacency_list(&tensors, structure, config)?;
 
       // Partition the system into blocks.
-     let partition_table = get_partition_table(rng,
+      // The partition table references spins by their tensor/active index.
+      let partition_table = get_partition_table(rng,
          &spin_adjacency_list,
          &tensors, structure, config)?;
 
+      if let Some(path) = &save_path_opt{
+        if config.write_partition_table == Some(true){
+          let save_path = format!("{}/{}",path,save_dir);
+          partition_table.to_csv(path,structure)?;
+        }
+      } 
       // Determine block adjacencies for the partitioned system.
       let block_adjacency_list 
           = partition_system(&spin_adjacency_list,&partition_table)?;
@@ -280,7 +290,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
 
       if let Some(max_spins) = config.max_spins{
         clu_set.prune_large_clusters(max_spins)?;
-     } 
+      } 
 
      clu_set
     },
@@ -437,10 +447,17 @@ fn calculate_methyl_partition_cce(
 
     for (key_name, value_cluster_set) in cluster_partitions.iter(){
 
+      if key_name == "methyl_1718_1719_1720_methyl_4448_4449_4450"{
+        println!("DB: {}",key_name);
+      }
+
       let mut part_signal = Signal::ones(n_tot);
 
       for size_idx in 0..(*value_cluster_set).len() {
         for cluster in value_cluster_set.clusters[size_idx].iter(){
+          if key_name == "methyl_1718_1719_1720_methyl_4448_4449_4450"{
+            println!("DB: {:?}",cluster.vertices);
+          }
           if let Ok(Some(aux_signal)) = &cluster.signal{
             part_signal = &part_signal * aux_signal;
           }

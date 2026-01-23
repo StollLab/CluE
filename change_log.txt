@@ -1,4 +1,11 @@
 --------------------------------------------------------------------------------
+CluE Oxide: 0.2.3-alpha.3
+
+ADDED: 
+  Option to output the partition table used.
+
+  Integration test for 1OMP.
+--------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.2
 
 ADDED:

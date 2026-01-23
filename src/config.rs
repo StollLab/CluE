@@ -19,7 +19,7 @@ use crate::integration_grid::IntegrationGrid;
 use crate::misc::are_all_same_type;
 
 
-use crate::io::{FromTOMLString,read_csv};
+use crate::io::{FromTOMLString,read_csv,write_data};
 
 
 use substring::Substring;
@@ -47,6 +47,7 @@ pub const SAVE_FILE_EXCHANGE_GROUPS: &str = "exchange_groups";
 pub const SAVE_FILE_METHYL_PARTITIONS: &str = "methyl_partitions";
 pub const SAVE_DIR_ORIENTATION_SIGNALS: &str = "orientations";
 pub const SAVE_FILE_ORIENTATIONS: &str = "orientation_grid";
+pub const SAVE_FILE_PARTITION_TABLE: &str = "partition_table";
 pub const SAVE_FILE_SANS_SPIN_SIGNALS: &str = "sans_spin_signals";
 pub const SAVE_FILE_STRUCTURE_PDB: &str = "structure_pdb";
 pub const SAVE_FILE_TENSORS: &str = "tensors";
@@ -117,6 +118,7 @@ pub struct Config{
   pub write_methyl_partitions: Option<bool>,
   pub write_orientation_grid: Option<bool>,
   pub write_orientation_signals: Option<bool>,
+  pub write_partition_table: Option::<bool>,
   pub write_sans_spin_signals: Option<bool>,
   pub write_structure_pdb: Option<bool>,
   pub write_tensors: Option<bool>,
@@ -361,6 +363,10 @@ impl Config{
     Ok(time_axis)
   }
   //----------------------------------------------------------------------------
+  /// This function tries to build a `Vec::<(usize,usize)>`, where
+  /// the first `usize` is the PDB serial number and the second `usize` 
+  /// is the partinioning block id.  
+  /// Block 0 is reserved for the detected spin.
   pub fn get_partition_table(&self) 
       -> Result<Vec::<(usize,usize)>,CluEError>
   {
@@ -1003,43 +1009,46 @@ impl Config{
     // W--Z
     if let Some(output) = config_toml.output{
       if let Some(&b) = output.get(KEY_OUT_AUX_SIGS){ 
-        self.write_auxiliary_signals = Some(b)
+        self.write_auxiliary_signals = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_BATH){ 
-        self.write_bath = Some(b)
+        self.write_bath = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_DET_SPIN){ 
-        self.write_detected_spin = Some(b)
+        self.write_detected_spin = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_CLUSTERS){ 
-        self.write_clusters = Some(b)
+        self.write_clusters = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_CONFIG){ 
-        self.write_config = Some(b)
+        self.write_config = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_INFO){ 
-        self.write_info = Some(b)
+        self.write_info = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_EXCHANGE_GROUPS){ 
-        self.write_exchange_groups = Some(b)
+        self.write_exchange_groups = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_METHYL_PARTITIONS){ 
-        self.write_methyl_partitions = Some(b)
+        self.write_methyl_partitions = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_ORI_GRID){ 
-        self.write_orientation_grid = Some(b)
+        self.write_orientation_grid = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_ORI_SIGS){ 
-        self.write_orientation_signals = Some(b)
+        self.write_orientation_signals = Some(b);
+      }
+      if let Some(&b) = output.get(KEY_OUT_PART_TAB){ 
+        self.write_partition_table = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_SANS_SPIN_SIGS){ 
-        self.write_sans_spin_signals = Some(b)
+        self.write_sans_spin_signals = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_STRUC_PDB){ 
-        self.write_structure_pdb = Some(b)
+        self.write_structure_pdb = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_TENSORS){ 
-        self.write_tensors = Some(b)
+        self.write_tensors = Some(b);
       }
     }
 

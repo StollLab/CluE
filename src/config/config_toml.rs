@@ -152,6 +152,7 @@ pub const KEY_OUT_EXCHANGE_GROUPS: &str = "exchange_groups";
 pub const KEY_OUT_METHYL_PARTITIONS: &str = "methyl_partitions";
 pub const KEY_OUT_ORI_GRID: &str = "orientation_grid";
 pub const KEY_OUT_ORI_SIGS: &str = "orientation_signals";
+pub const KEY_OUT_PART_TAB: &str = "partition_table";
 pub const KEY_OUT_SANS_SPIN_SIGS: &str = "sans_spin_signals";
 pub const KEY_OUT_STRUC_PDB: &str = "structure_pdb";
 pub const KEY_OUT_TENSORS: &str = "tensors";

@@ -125,10 +125,10 @@ pub struct Structure{
   extracell_particle_config_ids: Vec::<Option<usize>>,
   pub pdb_origin: Vector3D,
   primary_cell_indices: Vec::<usize>,
-  nth_active_to_reference_index: Vec::<usize>,
+  pub nth_active_to_reference_index: Vec::<usize>,
   pub active_indices: Vec::<usize>,
   pub bath_indices_to_active_indices: Vec::<Option<usize>>,
-  pub bath_to_serial_indices: HashMap::<(u32,usize),usize>,
+  pub map_serial_id_to_bath_index: HashMap::<(u32,usize),usize>,
 }
 
 impl Structure{
@@ -158,7 +158,7 @@ impl Structure{
       nth_active_to_reference_index: Vec::<usize>::new(),
       active_indices: Vec::<usize>::new(),
       bath_indices_to_active_indices: Vec::<Option<usize>>::new(),
-      bath_to_serial_indices: HashMap::<(u32,usize),usize>::new(),
+      map_serial_id_to_bath_index: HashMap::<(u32,usize),usize>::new(),
     }
 
   }
@@ -309,13 +309,13 @@ impl Structure{
   //----------------------------------------------------------------------------
   pub fn set_serials(&mut self) -> Result<(),CluEError>{
   
-    self.bath_to_serial_indices = HashMap::<(u32,usize),usize>::with_capacity(
+    self.map_serial_id_to_bath_index = HashMap::<(u32,usize),usize>::with_capacity(
         self.bath_particles.len());
 
     for (bath_idx, particle) in self.bath_particles.iter().enumerate(){
       let cell_id = self.cell_id(bath_idx)?;
       if let Some(serial) = particle.serial{
-        self.bath_to_serial_indices.insert((serial,cell_id),bath_idx);
+        self.map_serial_id_to_bath_index.insert((serial,cell_id),bath_idx);
       }
     }
     Ok(())
