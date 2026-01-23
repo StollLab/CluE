@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde::{Serialize,Deserialize};
 
-const ALLOWED_KEYS: [&str;120] = [
+const ALLOWED_KEYS: [&str;121] = [
   "abundance",
   "active",
   "auxiliary_signals",
@@ -24,6 +24,7 @@ const ALLOWED_KEYS: [&str;120] = [
   "cosubstitute",
   "coupling",
   "coupling_xx_yy",
+  "connect_exchange_groups",
   "clash_distance",
   "clash_distance_pbc",
   "cluster_batch_size",
@@ -306,6 +307,7 @@ pub struct ConfigTOML{
   pub clash_distance: Option<f64>, 
   pub clash_distance_pbc: Option<f64>,
   pub cluster_batch_size: Option<usize>, 
+  pub connect_exchange_groups: Option<bool>,
   pub populations: Option<String>, 
   pub cluster_method: Option<String>,
   pub cluster_source: Option<String>,
@@ -432,6 +434,7 @@ mod tests{
 
         cluster_method = "CCE"
         cluster_source = "clusters_file.toml"
+        connect_exchange_groups = true
         input_structure_file = "../../assets/TEMPO_wat_gly_70A.pdb"
         magnetic_field = 1.2
         max_cell_size = 2

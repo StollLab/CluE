@@ -559,7 +559,6 @@ mod tests{
     structure.build_primary_structure(&mut rng, &config).unwrap();
 
   
-    println!("DB: {:#?}",structure.connections);
     assert_eq!(structure.molecules.len(),1);
     assert_eq!(structure.molecules[0],vec![0,1,2]);
     assert_eq!(structure.molecule_ids,vec![0,0,0]);

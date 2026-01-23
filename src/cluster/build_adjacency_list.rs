@@ -9,6 +9,7 @@ use crate::signal::calculate_analytic_restricted_2cluster_signals::{
   hahn_three_spin_fourth_order_coefficient,
 };
 use crate::structure::Structure;
+use crate::structure::exchange_groups::GetIndices;
 
 //------------------------------------------------------------------------------
 /// This function builds the clusterization graph, where spins are vertices,
@@ -32,6 +33,10 @@ pub fn build_adjacency_list(tensors: &HamiltonianTensors,
       }
 
     }
+  }
+
+  if config.connect_exchange_groups == Some(true){
+    connect_exchange_groups(&mut adjacency_list,structure)?;
   }
   Ok(adjacency_list)
 }
@@ -128,3 +133,37 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
 
   Ok(true)
 }
+//------------------------------------------------------------------------------
+fn connect_exchange_groups(
+    adjacency_list: &mut AdjacencyList, structure: &Structure)
+  -> Result<(),CluEError>
+{
+  let Some(manager) = &structure.exchange_groups else{
+    return Ok(());
+  };
+
+  'ex_grp: for exchange_group in manager.exchange_groups.iter(){
+
+    for idx in (*exchange_group).indices(){
+      if !structure.bath_particles[idx].active{ continue 'ex_grp;}
+    } 
+
+    let indices = (*exchange_group).indices().iter()
+        .filter_map(|idx| structure.bath_indices_to_active_indices[*idx])
+        .collect::<Vec::<usize>>();
+
+    for &idx0 in indices.iter(){
+      for &idx1 in indices.iter(){
+        if idx1 <= idx0{ continue; }
+
+        adjacency_list.connect(idx0,idx1)
+      }
+    }
+  }
+
+  Ok(())
+}  
+
+
+
+

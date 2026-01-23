@@ -7,7 +7,6 @@ use crate::cluster::cluster_toml::ClusterTOML;
 use crate::io::FromTOMLString;
 
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::BufWriter;
 use std::io::Write;
 
@@ -64,9 +63,6 @@ impl ClusterSet{
   pub fn save(&self, filename: &str,structure: &Structure) 
     -> Result<(),CluEError>
   {
-    let Ok(file) = File::create(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
-    };
 
     let cluster_toml = self.to_cluster_toml( Some(structure) )?;
 
@@ -74,7 +70,7 @@ impl ClusterSet{
       return Err(CluEError::CannotWriteFile(filename.to_string()) );
     };
 
-    let mut file = match std::fs::File::create(filename){
+    let file = match std::fs::File::create(filename){
       Ok(f) => f,
       Err(_) => return Err(CluEError::CannotWriteFile(filename.to_string()) ),
     };
@@ -84,45 +80,6 @@ impl ClusterSet{
       return Err(CluEError::CannotWriteFile(filename.to_string()) );
     }
 
-
-    /*
-    let max_size = self.clusters.len();
-    let n_clusters: usize = self.clusters.iter().map(|c| c.len()).sum();
-
-    let chars_per_line = 4 + 2*max_size;
-    let bytes_per_char = 32;
-    
-    let n_bytes = n_clusters*chars_per_line*bytes_per_char + 3200;
-
-    let mut stream = BufWriter::with_capacity(n_bytes,file);
-
-    let mut line = "#[clusters, number_clusters = [".to_string();
-    for (ii,cluster_of_size) in self.clusters.iter().enumerate(){
-      if ii == 0{
-        line = format!("{}{}",line,cluster_of_size.len());
-      }else{
-        line = format!("{},{}",line,cluster_of_size.len());
-      }
-    }
-    line = format!("{}] ]\n\n",line);
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
-    }
-
-    for (size_idx,cluster_of_size) in self.clusters.iter().enumerate(){
-      let line = format!("#[cluster_size = {}]\n",size_idx +1);
-      if stream.write(line.as_bytes()).is_err(){
-        return Err(CluEError::CannotWriteFile(filename.to_string()) );
-      }
-      for cluster in cluster_of_size.iter(){
-        let line = format!("{}\n",
-            cluster.to_string_result(structure)? );
-          if stream.write(line.as_bytes()).is_err(){
-            return Err(CluEError::CannotWriteFile(filename.to_string()) );
-          }
-      }
-    }
-    */
     Ok(())
   }
   //----------------------------------------------------------------------------

@@ -19,7 +19,7 @@ use crate::integration_grid::IntegrationGrid;
 use crate::misc::are_all_same_type;
 
 
-use crate::io::{FromTOMLString,read_csv,write_data};
+use crate::io::{FromTOMLString,read_csv};
 
 
 use substring::Substring;
@@ -87,6 +87,7 @@ pub struct Config{
   pub cluster_batch_size: Option<usize>, 
   pub cluster_source: Option<ClusterSource>,
   pub cluster_method: Option<ClusterMethod>,
+  pub connect_exchange_groups: Option<bool>,
   pub min_cell_size: Option<usize>,
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
@@ -806,6 +807,10 @@ impl Config{
       self.cluster_batch_size = config_toml.cluster_batch_size;
     }
 
+    if config_toml.connect_exchange_groups.is_some(){
+      self.connect_exchange_groups = config_toml.connect_exchange_groups;
+    }
+
 
     if let Some(clu_src) = config_toml.cluster_source{
       if clu_src.ends_with(".toml") || clu_src.ends_with(".txt"){
@@ -1170,6 +1175,7 @@ mod tests{
       clash_distance = 0.1
       clash_distance_pbc = 0.1
       cluster_batch_size = 20000
+      connect_exchange_groups = true
       populations = "thermal"
       cluster_method = "cce"
       cluster_source = "clusters_file.toml"
@@ -1318,6 +1324,7 @@ mod tests{
          Some("../../assets/TEMPO_wat_gly_70A.pdb".to_string()));
     assert_eq!(config.cluster_source,
          Some(ClusterSource::File("clusters_file.toml".to_string())));
+    assert_eq!(config.connect_exchange_groups,Some(true));
 
     assert_eq!(config.max_cell_size, Some(2));
     assert_eq!(config.magnetic_field, Some(Vector3D::from([0.0,0.0,1.2])));

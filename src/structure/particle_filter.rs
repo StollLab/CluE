@@ -690,7 +690,6 @@ impl SecondaryParticleFilter{
         -> Result<ParticleFilter,CluEError>
     {
       let Some((_id, p_cfg)) = config.find_particle_config(label) else{
-        println!("DB: {:#?}",config);
         return Err(CluEError::MissingFilter(label.to_string()));
       };
 
