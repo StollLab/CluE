@@ -13,11 +13,8 @@ fn test_1omp(){
 
  let signal = Signal{data: signal};
 
- let ref_signals = load_csv_to_vec_signals(
+ let ref_signal = Signal::read_from_csv(
      "assets/1omp_K26R1_0.003228966616048703_signal.csv").unwrap();
-
- let n = ref_signals.len();
- let ref_signal = Signal{data: ref_signals[n-1].data.clone()};
 
  assert_eq!(signal.len(),ref_signal.len());
 

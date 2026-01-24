@@ -76,44 +76,16 @@ impl Signal{
 
   }
   //----------------------------------------------------------------------------
-  /*
-  // TODO: delete or fix.
-  /// This function tries to read a csv file into an `Ok(Signal)`.  
-  /// It will return an `Err(CluEError)` if it fails. 
   pub fn read_from_csv(filename: &str) -> Result<Self,CluEError>
   {
-    match Self::read_single_signal_from_csv(filename){
-      Ok(data) => Ok(Signal{data}),
-      Err(_) => Err(CluEError::CannotOpenFile(filename.to_string())),
-    }
+    let signals = load_csv_to_vec_signals(filename)?;
 
-  }
-  //----------------------------------------------------------------------------
-  // This function tries to read a csv file into an `Ok(Vec::<Complex<f64>>)`.
-  // This is the back end to `read_from_csv()`. 
-  fn read_single_signal_from_csv(filename: &str)
-    -> Result<Vec::<Complex<f64>>,Box<dyn Error>>
-  {
-    // Count data points.
-    let mut rdr = csv::Reader::from_path(filename)?;
-    let mut num_data = 0;
-    for _result in rdr.records() {
-        num_data += 1;
-    }
+    let n = signals.len();
 
-    // Load signal.
-    let mut signal = Vec::<Complex<f64>>::with_capacity(num_data);
-    let mut rdr = csv::Reader::from_path(filename)?;
-    for result in rdr.records() {
-        let record = result?;
-        if let Some(v) = record.get(0){
-          let v = v.parse::<Complex<f64>>()?;
-          signal.push(v);
-        }
-    }
+    let signal = Self{data: signals[n-1].data.clone()};
+
     Ok(signal)
   }
-  */
   //----------------------------------------------------------------------------
   /// This function tries to write a `Signal` ro csv file.  
   /// It will return an `Err(CluEError)` if it fails. 
