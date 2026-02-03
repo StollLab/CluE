@@ -1,6 +1,5 @@
 use clue_oxide::config::Config;
 use clue_oxide::run;
-use clue_oxide::signal::load_csv_to_vec_signals;
 use clue_oxide::signal::Signal;
 
 const ERROR_THRESHOLD: f64 = 1e-12;
@@ -9,7 +8,7 @@ fn test_1omp(){
  let config = Config::from_toml_file(
      "assets/1omp_K26R1_0.003228966616048703.toml").unwrap();
  
- let (time_axis,signal) = run(config).unwrap();
+ let (_time_axis,signal) = run(config).unwrap();
 
  let signal = Signal{data: signal};
 

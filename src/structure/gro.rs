@@ -1,14 +1,8 @@
 use crate::clue_errors::CluEError;
-//use crate::cluster::adjacency::AdjacencyList;
 use crate::physical_constants::NANOMETER;
-//use crate::elements::Element;
-//use crate::isotopes::Isotope;
 use crate::structure::{Structure, particle::Particle};
-//use crate::space_3d::Vector3D;
 
-//use std::io::BufRead;
 use std::io::BufWriter;
-//use std::collections::HashMap;
 use substring::Substring;
 use std::fs::File;
 use std::io::prelude::*;
@@ -173,8 +167,8 @@ fn set_bath_particle_gro_string(&self, line: &mut String, particle: &Particle,
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[cfg(test)]
 mod test{
-  use super::*;
 
+  /*
   fn get_gro_string() -> String{
     // https://manual.gromacs.org/2025.1/reference-manual/file-formats.html#gro
     "\
@@ -188,6 +182,7 @@ MD of 2 waters, t= 0.0\n\
     2WATER  HW3    6   1.326   0.120   0.568  1.9427 -0.8216 -0.0244\n\
    1.82060   1.82060   1.82060".to_string()
   }
+  */
 
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

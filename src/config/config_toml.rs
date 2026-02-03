@@ -562,7 +562,7 @@ mod tests{
 
       "##;
 
-    let config = ConfigTOML::from_toml_string(toml_str).unwrap();  
+    let _config = ConfigTOML::from_toml_string(toml_str).unwrap();  
 
     
   }

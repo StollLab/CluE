@@ -58,6 +58,7 @@ impl Cluster{
     self.vertices.len()
   }
   //----------------------------------------------------------------------------
+  /*
   // This function translates `Cluster` to a `Result<String>.
   // The difference between this function and `to_string()` is that this 
   // function need a `&Structure` to convert the vertices from internal 
@@ -81,6 +82,7 @@ impl Cluster{
     } 
     Ok(format!("{}]",string))
   }
+  */
   //----------------------------------------------------------------------------
   /// This function returns a reference to the cluster vertices.
   pub fn vertices(&self) -> &Vec::<usize>{
