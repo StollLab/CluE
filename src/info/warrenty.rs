@@ -1,5 +1,5 @@
-/// This function prints the warrenty info.
-pub fn print_warrenty(){
+/// This function prints the warranty info.
+pub fn print_warranty(){
 println!("\n\n\
                     GNU GENERAL PUBLIC LICENSE\n\
                        Version 3, 29 June 2007\n\

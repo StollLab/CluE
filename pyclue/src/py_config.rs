@@ -105,8 +105,8 @@ impl PyConfig{
       info::license::print_license();
     }
 
-    if input.show_warrenty{
-      info::warrenty::print_warrenty();
+    if input.show_warranty{
+      info::warranty::print_warranty();
     }
 
     if input.show_version{
