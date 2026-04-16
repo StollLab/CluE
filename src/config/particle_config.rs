@@ -287,6 +287,7 @@ impl ParticleProperties{
 pub struct IsotopeProperties{
   pub active: Option<bool>,
   pub electric_quadrupole_coupling: Option<TensorSpecifier>,
+  pub zerofield_coupling: Option<TensorSpecifier>,
   pub exchange_coupling: Option<f64>,
   pub g_matrix: Option<TensorSpecifier>,
   pub hyperfine_coupling: Option<TensorSpecifier>,
@@ -324,6 +325,12 @@ impl IsotopeProperties{
       let tensor = TensorSpecifier::from_toml_value(
           value.clone(), unit_of_energy)?;
       self.electric_quadrupole_coupling = Some(tensor);
+    }
+
+    if let Some(value) = table.get(KEY_ISO_ZEROFIELD){
+      let tensor = TensorSpecifier::from_toml_value(
+          value.clone(), unit_of_energy)?;
+      self.zerofield_coupling = Some(tensor);
     }
 
     if let Some(value) = table.get(KEY_ISO_HYPERFINE){

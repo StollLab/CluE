@@ -28,7 +28,7 @@ impl Structure{
     // Set isotpic identities after adding voidable particles since the
     // non-void particles can potentially have multiple isotopic options. 
     self.set_isotopologue(rng, config)?;
-  
+
     self.set_primary_cell_voidable_particles(rng, config)?; 
 
     self.update_exhange_groups(config)?;
@@ -318,11 +318,17 @@ impl Structure{
     };
 
     let n_particles = self.bath_particles.len();
+    
+    // Loop through particles by index.
     for idx in 0..n_particles{
 
       let indices: Vec::<usize>;
       let r: &Vector3D;
+
+      // Check if the particle is part of an exchange group.
       if let Some(exchange_group_manager) = &self.exchange_groups{
+        
+        // Get center of group.
         match exchange_group_manager.exchange_group_ids[idx]{
           Some(id) 
             => {
@@ -336,6 +342,8 @@ impl Structure{
           },
         }
       }else{
+        // The particle is a singleton 
+        // and the center is the particle coordinates
         r = &self.bath_particles[idx].coordinates;
         indices = vec![idx];
       }
@@ -346,7 +354,11 @@ impl Structure{
         }
       }
     }
-
+    for particle in self.bath_particles.iter_mut(){
+      if particle.isotope.spin_multiplicity() < 2{
+        particle.active = false;
+      }
+    }
     Ok(())
   }
   
@@ -388,21 +400,35 @@ impl Structure{
   //----------------------------------------------------------------------------
   // This removes particles in in PBC copies that closer than a user specified
   // distance.
+  // TODO: Improve run time.  This function is slow for large systems.  
+  // TODO: Change double loop over particles to ad double loop over cells,
+  // TODO: and filter for adjacent cells.
   fn trim_pbc_clashes(&mut self, config: &Config) -> Result<(),CluEError>{
+
+    match config.replicate_unit_cell{
+      Some(ReplicateUnitCell::No) => return Ok(()),
+      None => return Ok(()),
+      _ => (),
+    }
 
     let Some(clash_distance) = &config.clash_distance_pbc else {
       return Ok(());
     };
+    let clash_distance_squared = clash_distance*clash_distance;
 
     let mut to_remove = (0..self.bath_particles.len()).map(|_| false)
       .collect::<Vec::<bool>>();
-    for (idx0, particle0) in self.bath_particles.iter().enumerate(){
+
+    for (idx0, particle0) in self.bath_particles.iter().enumerate()
+    {
       if !particle0.active { continue; }
+
       let cell_id0 = self.cell_id(idx0)?;
       let r0 = &self.bath_particles[idx0].coordinates;
 
       for (idx1, particle1) in self.bath_particles.iter().enumerate()
-        .skip(idx0){
+        .skip(idx0)
+      {
         if !particle1.active { continue; }
         if to_remove[idx1] { continue; }
 
@@ -412,15 +438,15 @@ impl Structure{
 
         let r1 = &self.bath_particles[idx1].coordinates;
 
-        let delta_r = (r1 -r0).norm();
+        let delta_r = (r1 -r0);
+        let delta_r_2 = delta_r.dot(&delta_r);
 
-        to_remove[idx1] = delta_r < *clash_distance;
+        to_remove[idx1] = delta_r_2 < clash_distance_squared;
       } 
     }
 
     for (idx, remove) in to_remove.iter().enumerate(){
       if *remove{
-
         self.bath_particles[idx].active = false;
       }
     }
@@ -516,9 +542,6 @@ impl Structure{
     // Initialize rng range.
     let range = Uniform::new(0.0f64, 1.0);
 
-    // Check if there are any configurations.
-    let particle_configs = &config.particles;
-
     for unit_cell_id in 0..self.cell_offsets.len(){
 
       // Loop over bath particle.
@@ -527,7 +550,10 @@ impl Structure{
         // Generate a random number.
         let random_number = range.sample(rng);
 
+        // Loop through particle that should be changed together.
         for particle_idx0 in cosubstitution_group.iter(){
+
+          // Only substutute active particles.
           if !self.bath_particles[*particle_idx0].active {continue;}
         
           let Some(particle_idx) 
@@ -536,21 +562,21 @@ impl Structure{
           let particle = &mut self.bath_particles[particle_idx];
       
           // Check if this particle has a custom config.
-          let config_id = match unit_cell_id {
+          let particle_config = match unit_cell_id {
             0 => {
               let Some(cid) = self.particle_config_ids[*particle_idx0] 
                 else { continue};
-              cid
+              &config.particles[cid]
             },
             _ => {
               let Some(cid) = self.extracell_particle_config_ids[*particle_idx0] 
               else { continue};
-              cid
+              &config.extracell_particles[cid]
             },
           };
 
           // Check if this particle has any custom properties.
-          let Some(properties) = &particle_configs[config_id].properties else{
+          let Some(properties) = &particle_config.properties else{
             continue;
           };
 
@@ -559,9 +585,15 @@ impl Structure{
      
           let isotopic_distribution = &properties.isotopic_distribution;
           
-
+          // Loop through all potential substitutes.
+          // For eample, H defaults to 1H, 2H has a 40% abundance and 3H 10%,
+          // then if random_number = 0.45, the group will be set as 3H,
+          // since on the first pass cdf = 2H.abundance = 0.4 < 0.45,
+          // but on the second pass 
+          // cdf = 2H.abundance + 3H.abundance = 0.5 > 0.45.
           for iso in isotopic_distribution.isotope_abundances.iter(){
             cdf += iso.abundance;
+
             if cdf >= random_number{
               particle.isotope = iso.isotope;
               particle.active = particle.isotope.spin_multiplicity() > 1;

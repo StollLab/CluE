@@ -6,12 +6,14 @@ pub const I: Complex<f64> = Complex::<f64>{re: 0.0, im: 1.0};
 pub const ONE: Complex<f64> = Complex::<f64>{re: 1.0, im: 0.0};
 pub const ZERO: Complex<f64> = Complex::<f64>{re: 0.0, im: 0.0};
 pub const PI: f64 = std::f64::consts::PI;
+pub const SQRT2: f64 = std::f64::consts::SQRT_2;
+pub const SQRT2_INV: f64 = std::f64::consts::FRAC_1_SQRT_2;
 
 // Units
 pub const METER: f64 = 1.0;
 pub const KILOMETER: f64 = METER*1e3;
 pub const CENTIMETER: f64 = METER*1e-2;
-pub const MILIMETER: f64 = METER*1e-3;
+pub const MILLIMETER: f64 = METER*1e-3;
 pub const MICROMETER: f64 = METER*1e-6;
 pub const MICRON: f64 = MICROMETER;
 pub const NANOMETER: f64 = METER*1e-9;
@@ -20,16 +22,16 @@ pub const PICOMETER: f64 = METER*1e-12;
 pub const FEMTOMETER: f64 = METER*1e-15;
 
 pub const SECOND: f64 = 1.0;
-pub const MILISECOND: f64 = SECOND*1e-3;
+pub const MILLISECOND: f64 = SECOND*1e-3;
 pub const MICROSECOND: f64 = SECOND*1e-6;
 pub const NANOSECOND: f64 = SECOND*1e-9;
 pub const PICOSECOND: f64 = SECOND*1e-12;
 pub const FEMTOSECOND: f64 = SECOND*1e-15;
 
 pub const TESLA: f64 = 1.0;
-pub const MILITESLA: f64 = TESLA*1e-3;
+pub const MILLITESLA: f64 = TESLA*1e-3;
 pub const GAUSS: f64 = TESLA*1e-4;
-pub const MILIGAUSS: f64 = GAUSS*1e-3;
+pub const MILLIGAUSS: f64 = GAUSS*1e-3;
 pub const KILOGAUSS: f64 = GAUSS*1e3;
 
 pub const JOULE: f64 = 1.0;
@@ -86,7 +88,7 @@ pub const ELECTRON_G: f64 = 2.00231930436256;
 pub const ELEMENTARY_CHARGE: f64 = 1.602176634e-19 * COULOMB;
 
 pub const ELECTRON_VOLT: f64 = ELEMENTARY_CHARGE * VOLT;
-pub const MILIELECTRON_VOLT: f64 = ELECTRON_VOLT*1e-3;
+pub const MILLIELECTRON_VOLT: f64 = ELECTRON_VOLT*1e-3;
 
 // 2025 https://physics.nist.gov/cgi-bin/cuu/Value?hr
 pub const HARTREE: f64 =  4.3597447222060e-18 * JOULE;
@@ -113,7 +115,7 @@ pub fn energy_unit_to_hertz(unit: &str) -> Result<f64,CluEError>
     "GHz" => Ok(GIGAHERTZ),
     "THz" => Ok(TERAHERTZ),
     "meV" => Ok(ELECTRON_VOLT*JOULES_TO_HERTZ),
-    "eV" => Ok(MILIELECTRON_VOLT*JOULES_TO_HERTZ),
+    "eV" => Ok(MILLIELECTRON_VOLT*JOULES_TO_HERTZ),
     "Eh" => Ok(HARTREE*JOULES_TO_HERTZ),
     "J" => Ok(JOULE*JOULES_TO_HERTZ),
     "kJ" => Ok(KILOJOULE*JOULES_TO_HERTZ),
@@ -132,7 +134,7 @@ pub fn distance_unit_to_meters(unit: &str) -> Result<f64,CluEError>
     "pm" => Ok(PICOMETER),
     "nm" => Ok(NANOMETER),
     "μm" => Ok(MICROMETER),
-    "mm" => Ok(MILIMETER),
+    "mm" => Ok(MILLIMETER),
     "cm" => Ok(CENTIMETER),
     "m" => Ok(METER),
     "km" => Ok(KILOMETER),
@@ -144,9 +146,9 @@ pub fn distance_unit_to_meters(unit: &str) -> Result<f64,CluEError>
 pub fn magnetic_field_unit_to_tesla(unit: &str) -> Result<f64,CluEError>
 {
   match unit{
-    "mT" => Ok(MILITESLA),
+    "mT" => Ok(MILLITESLA),
     "T" => Ok(TESLA),
-    "mG" => Ok(MILIGAUSS),
+    "mG" => Ok(MILLIGAUSS),
     "G" => Ok(GAUSS),
     "kG" => Ok(KILOGAUSS),
     _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
@@ -160,7 +162,7 @@ pub fn time_unit_to_seconds(unit: &str) -> Result<f64,CluEError>
     "fs" => Ok(FEMTOSECOND),
     "ns" => Ok(NANOSECOND),
     "μs" => Ok(MICROSECOND),
-    "ms" => Ok(MILISECOND),
+    "ms" => Ok(MILLISECOND),
     "s" => Ok(SECOND),
     _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
   }

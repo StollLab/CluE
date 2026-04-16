@@ -110,10 +110,6 @@ impl Structure{
       return Err(CluEError::NoCentralSpinIdentity);
     };
     
-    let Some(transition) = config.detected_spin_transition else{
-      return Err(CluEError::NoCentralSpinTransition);
-    };
-
     let Some(spin_multiplicity) = config.detected_spin_multiplicity else{
       return Err(CluEError::NoDetectedSpinMultiplicity);
     };
@@ -132,13 +128,20 @@ impl Structure{
     };
     let gamma_matrix = g_matrix.scale(mu/HBAR);
 
+    let zerofield_tensor = match &config.detected_spin_zerofield_coupling{
+      Some(zerofield_specifier) => 
+          Some(construct_symmetric_tensor_from_tensor_specifier(rng,
+            zerofield_specifier, None, self,config)?),
+      None => None,
+    }; 
 
     self.detected_particle = Some(DetectedSpin{
         gamma_matrix,
         isotope,
         weighted_coordinates,
         spin_multiplicity,
-        transition,
+        //transition,
+        zerofield_tensor, 
         });
 
 

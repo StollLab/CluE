@@ -6,7 +6,7 @@ pub fn build_subclusters(cluster: &[usize]) -> Vec::<Vec::<usize>>{
 
   let cluster_size = cluster.len();
   
-  if cluster_size <= 1 {
+  if cluster_size == 0 {
     // There are no proper subclusters.
     return Vec::<Vec::<usize>>::new();
   }

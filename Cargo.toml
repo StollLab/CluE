@@ -38,6 +38,9 @@ serde = { version = "1.0", features = ["derive"] }
 strum = "0.27"
 strum_macros = "0.27"
 
+libmath = "0.2.1"
+mcmf = "2.0.0"
+
 
 [target.'cfg(unix)'.dependencies]
 # To build openblas instead of using the system's openblas, comment this line

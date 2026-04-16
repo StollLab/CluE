@@ -1,7 +1,9 @@
 use crate::physical_constants::PI;
 use crate::CluEError;
-use crate::misc::are_all_same_type;
-
+use crate::misc::{
+  are_all_same_type,
+  mat_from_toml_array,
+};
 
 use rand::distributions::Uniform;
 use rand_distr::Distribution;
@@ -32,12 +34,22 @@ impl SymmetricTensor3D{
     if !are_all_same_type(&array){
       return Err(CluEError::TOMLArrayContainsMultipleTypes);
     }
-    if !array[0].is_float(){
+    let vec: Vec::<f64> = if array[0].is_array(){
+        let m = mat_from_toml_array(array)?;
+        if m.dim().0 != 3 || m.dim().1 != 3{
+          return Err(CluEError::TOMLArrayDoesNotSpecifyATensor);
+        }
+        vec![ m[[0,0]], m[[0,1]], m[[0,2]],
+              m[[1,0]], m[[1,1]], m[[1,2]],
+              m[[2,0]], m[[2,1]], m[[2,2]],
+         ]
+    }else if array[0].is_float(){
+      array.iter()
+          .filter_map(|v| v.as_float()).collect()
+    }else{      
       return Err(CluEError::TOMLArrayDoesNotSpecifyATensor);
-    }
+    };
 
-    let vec: Vec::<f64> = array.iter()
-      .filter_map(|v| v.as_float()).collect();
 
     match vec.len(){
       1 => Ok(Self::eye().scale(vec[0] )),

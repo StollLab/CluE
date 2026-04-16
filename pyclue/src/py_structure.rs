@@ -2,7 +2,11 @@ use pyo3::prelude::*;
 
 use clue_oxide::structure::Structure;
 use clue_oxide::clue_errors::CluEError;
+use clue_oxide::space_3d::Vector3D;
+use clue_oxide::cluster::adjacency::AdjacencyList;
+use clue_oxide::structure::particle::Particle;
 
+use crate::py_adjacency::PyAdjacencyList;
 use crate::py_config::PyConfig;
 use crate::py_clue_errors::PyCluEError;
 use crate::py_particle::PyParticle;
@@ -16,14 +20,35 @@ pub struct PyStructure{
 
 #[pymethods]
 impl PyStructure{
-  /*
   #[new]
-  fn new() -> Self{
+//  #[staticmethod]
+  fn new(
+      bath_particles: Vec::<PyParticle>,
+      connections: PyAdjacencyList,
+      cell_edges: Vec::<Vec::<f64>>,
+      ) -> Self
+  {
+   
+    let bath_particles: Vec::<Particle> = bath_particles.iter()
+        .map(|p| p.particle.clone()).collect();
+
+    let connections: AdjacencyList = connections.list;
+
+    let mut cell_offsets = Vec::<Vector3D>::new();
+
+    for edge in cell_edges.iter(){
+      let a = Vector3D::from([edge[0],edge[1],edge[2]]);
+      cell_offsets.push(a);
+    } 
+
     Self{
-      structure: Structure::new(),
+      structure: Structure::new(
+        bath_particles,
+        connections,
+        cell_offsets,        
+      ),
     }
   }
-  */
   //----------------------------------------------------------------------------
   #[staticmethod]
   fn build_structure(pyconfig: &mut PyConfig) -> Result<Self,PyCluEError>
@@ -68,6 +93,10 @@ impl PyStructure{
   //----------------------------------------------------------------------------
   pub fn number(&self) -> usize{
     self.structure.number()
+  }
+  //----------------------------------------------------------------------------
+  pub fn write_pdb(&self,file_name: String) -> Result<(),PyCluEError>{
+    Ok(self.structure.write_pdb(&file_name)?)
   }
   //----------------------------------------------------------------------------
   pub fn write_gro(&self,file_name: String) -> Result<(),PyCluEError>{

@@ -10,6 +10,6 @@ Options:\n    \
     -l, --license    Prints license.\n    \
     -O, --option     input additional options.\n    \
     -V, --version    Prints version information.\n    \
-    -W, --warrenty   Prints warrenty information.\n    \
+    -W, --warranty   Prints warranty information.\n    \
 ");
 }

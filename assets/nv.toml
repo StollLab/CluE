@@ -1,0 +1,57 @@
+cluster_method = "gcce"
+
+detection_operator = "S+"
+detection_operator = [[0,1],[0,0]]
+
+number_timepoints = [301]
+tau_increments = [5e-2]
+tau2_increments = [5e-2]
+
+[detected_spin]
+spin_multiplicity = 3
+detection_operator = "S+"
+transitions = [[0,1], [1,2]]
+
+pulse_sequence = [
+  ["pulse","pi/2"],
+  ["delay", 5 ],
+  ["delay2", 5 ],
+  ["pulse","pi"],
+  ["delay","tau"],
+  ["detect"]
+]
+[[pulses]]
+name = "pi/2"
+axis = "y"
+turn_angle = 0.25 # pi/2
+transitions = [[0,1], [1,2]]
+
+[[pulses]]
+name = "pi"
+axis = "y"
+turn_angle = 0.5 # pi
+transitions = [[0,1], [1,2]]
+
+[[pulses]]
+name = "piB"
+target = "pump"
+
+[pump_spins]
+position = [0,0,0]
+g_matrix = []
+
+# DEER Sequence
+pulse_sequence = [
+  ["pulse","pi/2"],
+  ["delay", 5 ],
+  ["pulse","piA"],
+  ["delay", 5 ],
+  ["delay","tau"],
+  ["pulse","piB"],
+  ["delay","-tau"],
+  ["delay", 10 ],
+  ["pulse","piA"],
+  ["delay", 10 ],
+  ["detect"]
+]
+

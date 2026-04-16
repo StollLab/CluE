@@ -34,7 +34,8 @@ const DROP_ALL_SPINS_FROM_METHYLS_THAT_ARE_NOT_CLUSTERS: bool = false;
 pub enum PartitioningMethod{
   Particles, 
   ExchangeGroupsAndParticles,
-  KMeans(f64),
+  KMeans(usize),
+  RestrictedKMeans(usize),
 }
 /*
 impl PartitioningMethod{
@@ -271,7 +272,13 @@ pub fn get_partition_table(rng: &mut ChaCha20Rng,
       => set_element_to_block_kmeans(
           rng, 
           &mut element_to_block, max_block_index,
-          *kluster_size,
+          *kluster_size,false,
+          spin_adjacency_list,structure)?,
+    PartitioningMethod::RestrictedKMeans(kluster_size) 
+      => set_element_to_block_kmeans(
+          rng, 
+          &mut element_to_block, max_block_index,
+          *kluster_size,true,
           spin_adjacency_list,structure)?,
   };
 
@@ -453,7 +460,7 @@ fn set_element_to_block_exchange_groups(
 fn set_element_to_block_kmeans(
     rng: &mut ChaCha20Rng,
     element_to_block: &mut [PartitionBlock], mut max_id: usize,
-    kluster_size: f64,
+    kluster_size: usize,do_restricted_kmeans: bool,
     spin_adjacency_list: &AdjacencyList,
     structure: &Structure,
     ) -> Result<(),CluEError>
@@ -469,9 +476,10 @@ fn set_element_to_block_kmeans(
     let positions: Vec::<Vector3D> = structure.get_positions(&indices);
 
     let number_klusters 
-        = (indices.len() as f64 / kluster_size).round() as usize;
+        = (indices.len() as f64 / kluster_size as f64).round() as usize;
 
-    let klusters = get_kmeans_partition(rng, number_klusters, &positions);
+    let klusters = get_kmeans_partition(rng, number_klusters, &positions,
+        do_restricted_kmeans)?;
 
     for (ii,index) in indices.iter().enumerate(){
       element_to_block[*index] 
@@ -610,11 +618,11 @@ fn expand_block_clusters_and_sort(
   let max_cluster_size = block_cluster_set.clusters.len();
 
   // Initialize clusters.
-  let mut clusters = Vec::<Vec::<Cluster>>::with_capacity(max_cluster_size);
+  let mut clusters = Vec::<Vec::<Cluster>>::with_capacity(max_cluster_size+1);
 
   // Initialize cluster indices.
   let mut cluster_indices 
-      = Vec::<HashMap::<Vec::<usize>,usize>>::with_capacity(max_cluster_size);
+      = Vec::<HashMap::<Vec::<usize>,usize>>::with_capacity(max_cluster_size+1);
 
   // Loop through cluster sizes, an reserve the required space.
   for &n in n_clusters.iter(){
@@ -644,13 +652,13 @@ fn expand_block_clusters_and_sort(
       // the `index` that that will retrieve the cluster from
       // `clusters[size - 1]` is the length of `clusters[size - 1]` 
       // before appending our cluster.
-      let index = clusters[size - 1].len();
+      let index = clusters[size].len();
 
       // Record where to find this cluster for future reference.
-      cluster_indices[size - 1].insert(cluster.vertices.clone(),index);
+      cluster_indices[size].insert(cluster.vertices.clone(),index);
 
       // Push the cluster.
-      clusters[size - 1].push(cluster);
+      clusters[size].push(cluster);
     }
   }
 
@@ -687,12 +695,12 @@ fn count_expanded_clusters(
       }
       // Ensure n_clusters can hold the extra count.
       loop{
-        if n_clusters.len() >= size{ break; }
+        if n_clusters.len() > size{ break; }
         n_clusters.push(0);
       }
 
       // Count the expanded cluster as the correct size.
-      n_clusters[size -1] += 1;
+      n_clusters[size] += 1;
     }
   } 
   n_clusters
@@ -784,6 +792,7 @@ mod tests{
 
     // Define reference clusters in PDB indices.
     let mut ref_clusters: Vec::<Vec::<Vec::<usize>>> = vec![
+      vec![vec![]],
       vec![
         vec![11],
         vec![12],
@@ -821,15 +830,19 @@ mod tests{
       ],
     ];
 
+    assert_eq!(ref_clusters.len() , 4);
     let ref_number_clusters: Vec::<usize> 
         = ref_clusters.iter().map(|v| v.len()).collect();
 
+    assert_eq!(ref_number_clusters.len() , 4);
+    assert_eq!(ref_number_clusters[0] , 1);
+
     // Convert PDB indices to internal indices.
-    for (ii,n) in ref_number_clusters.iter().enumerate(){
-      for jj in 0..*n{
-          for kk in 0..ii+1{
-            let bath_idx = ref_clusters[ii][jj][kk] - 1;
-            ref_clusters[ii][jj][kk] 
+    for (size,n) in ref_number_clusters.iter().enumerate(){
+      for clu_idx in 0..*n{
+          for p_idx in 0..size{
+            let bath_idx = ref_clusters[size][clu_idx][p_idx] - 1;
+            ref_clusters[size][clu_idx][p_idx] 
               = structure.bath_indices_to_active_indices[bath_idx].unwrap();
           }
       }
@@ -851,13 +864,15 @@ mod tests{
     let cluster_set = expand_block_clusters(block_cluster_set,&partition_table,
         &UnitOfClustering::Spin).unwrap();
 
-    for (ii,n) in ref_number_clusters.iter().enumerate(){
-      assert_eq!(*n,cluster_set.clusters[ii].len());
+    for (size,n) in ref_number_clusters.iter().enumerate(){
+      assert_eq!(*n,cluster_set.clusters[size].len());
     }
-    for (ii,n) in ref_number_clusters.iter().enumerate(){
-      for jj in 0..*n{
+
+    for (size,n) in ref_number_clusters.iter().enumerate(){
+      for clu_idx in 0..*n{
         assert!(
-            ref_clusters[ii].contains(cluster_set.clusters[ii][jj].vertices())
+            ref_clusters[size].contains(
+                cluster_set.clusters[size][clu_idx].vertices())
         );
       }
     }
@@ -894,64 +909,47 @@ mod tests{
     let cluster_set = expand_block_clusters(block_cluster_set.clone(), 
         &partition_table, &UnitOfClustering::Spin).unwrap();
 
-    assert_eq!(cluster_set.clusters[0].len(), 2);
-    assert_eq!(cluster_set.clusters[1].len(), 1);
-    /*
-    assert_eq!(cluster_set.clusters[2].len(), 4);
-    assert_eq!(cluster_set.clusters[3].len(), 0);
-    assert_eq!(cluster_set.clusters[4].len(), 0);
-    assert_eq!(cluster_set.clusters[5].len(), 1);
-    */
+    assert_eq!(cluster_set.clusters[0].len(), 1);
+    assert_eq!(cluster_set.clusters[1].len(), 2);
+    assert_eq!(cluster_set.clusters[2].len(), 1);
 
-    assert_eq!(cluster_set.clusters[0][0].vertices, vec![6]);
-    assert_eq!(cluster_set.clusters[0][1].vertices, vec![9]);
+    assert_eq!(cluster_set.clusters[0][0].vertices, vec![]);
 
-    assert_eq!(cluster_set.clusters[1][0].vertices, vec![7,8]);
-    /*
-    assert_eq!(cluster_set.clusters[2][0].vertices, vec![0,1,2]);
-    assert_eq!(cluster_set.clusters[2][1].vertices, vec![3,4,5]);
-    assert_eq!(cluster_set.clusters[2][2].vertices, vec![6,7,8]);
-    assert_eq!(cluster_set.clusters[2][3].vertices, vec![7,8,9]);
+    assert_eq!(cluster_set.clusters[1][0].vertices, vec![6]);
+    assert_eq!(cluster_set.clusters[1][1].vertices, vec![9]);
 
-    assert_eq!(cluster_set.clusters[5][0].vertices, vec![0,1,2,3,4,5]);
-    */
+    assert_eq!(cluster_set.clusters[2][0].vertices, vec![7,8]);
 
-    assert_eq!(cluster_set.cluster_indices[0][&vec![6]],0);
-    assert_eq!(cluster_set.cluster_indices[0][&vec![9]],1);
+    assert_eq!(cluster_set.cluster_indices[0][&vec![]],0);
 
-    assert_eq!(cluster_set.cluster_indices[1][&vec![7,8]],0);
-    /*
-    assert_eq!(cluster_set.cluster_indices[2][&vec![0,1,2]],0);
-    assert_eq!(cluster_set.cluster_indices[2][&vec![3,4,5]],1);
-    assert_eq!(cluster_set.cluster_indices[2][&vec![6,7,8]],2);
-    assert_eq!(cluster_set.cluster_indices[2][&vec![7,8,9]],3);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![6]],0);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![9]],1);
 
-    assert_eq!(cluster_set.cluster_indices[5][&vec![0,1,2,3,4,5]],0);
-    */
+    assert_eq!(cluster_set.cluster_indices[2][&vec![7,8]],0);
 
     let cluster_set = expand_block_clusters(block_cluster_set, &partition_table,
         &UnitOfClustering::Set).unwrap();
 
-    assert_eq!(cluster_set.clusters[0][0].vertices, vec![0,1,2]);
-    assert_eq!(cluster_set.clusters[0][1].vertices, vec![3,4,5]);
-    assert_eq!(cluster_set.clusters[0][2].vertices, vec![6]);
-    assert_eq!(cluster_set.clusters[0][3].vertices, vec![7,8]);
-    assert_eq!(cluster_set.clusters[0][4].vertices, vec![9]);
+    assert_eq!(cluster_set.clusters[1][0].vertices, vec![0,1,2]);
+    assert_eq!(cluster_set.clusters[1][1].vertices, vec![3,4,5]);
+    assert_eq!(cluster_set.clusters[1][2].vertices, vec![6]);
+    assert_eq!(cluster_set.clusters[1][3].vertices, vec![7,8]);
+    assert_eq!(cluster_set.clusters[1][4].vertices, vec![9]);
 
-    assert_eq!(cluster_set.clusters[1][0].vertices, vec![0,1,2,3,4,5]);
-    assert_eq!(cluster_set.clusters[1][1].vertices, vec![6,7,8]);
-    assert_eq!(cluster_set.clusters[1][2].vertices, vec![7,8,9]);
+    assert_eq!(cluster_set.clusters[2][0].vertices, vec![0,1,2,3,4,5]);
+    assert_eq!(cluster_set.clusters[2][1].vertices, vec![6,7,8]);
+    assert_eq!(cluster_set.clusters[2][2].vertices, vec![7,8,9]);
 
 
-    assert_eq!(cluster_set.cluster_indices[0][&vec![0,1,2]],0);
-    assert_eq!(cluster_set.cluster_indices[0][&vec![3,4,5]],1);
-    assert_eq!(cluster_set.cluster_indices[0][&vec![6]],2);
-    assert_eq!(cluster_set.cluster_indices[0][&vec![7,8]],3);
-    assert_eq!(cluster_set.cluster_indices[0][&vec![9]],4);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![0,1,2]],0);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![3,4,5]],1);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![6]],2);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![7,8]],3);
+    assert_eq!(cluster_set.cluster_indices[1][&vec![9]],4);
 
-    assert_eq!(cluster_set.cluster_indices[1][&vec![0,1,2,3,4,5]],0);
-    assert_eq!(cluster_set.cluster_indices[1][&vec![6,7,8]],1);
-    assert_eq!(cluster_set.cluster_indices[1][&vec![7,8,9]],2);
+    assert_eq!(cluster_set.cluster_indices[2][&vec![0,1,2,3,4,5]],0);
+    assert_eq!(cluster_set.cluster_indices[2][&vec![6,7,8]],1);
+    assert_eq!(cluster_set.cluster_indices[2][&vec![7,8,9]],2);
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -963,8 +961,8 @@ mod tests{
     let n_clusters = count_expanded_clusters(&block_cluster_set,
         &partition_table);
 
-    assert_eq!(n_clusters.len(),6);
-    assert_eq!(n_clusters,vec![2,1,4,0,0,1]);
+    assert_eq!(n_clusters.len(),7);
+    assert_eq!(n_clusters,vec![1,2,1,4,0,0,1]);
 
   }
   //----------------------------------------------------------------------------

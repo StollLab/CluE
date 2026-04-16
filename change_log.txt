@@ -1,4 +1,17 @@
 --------------------------------------------------------------------------------
+CluE Oxide: 0.2.3-alpha.4
+
+ADDED:
+  CluE can now run gCCE.
+
+  CluE can now use k-means and restricted k-means for pCCE.
+
+CHANGED:
+  Improved spin Hamiltonian setup: SpinHamiltonian now stores the eigen 
+  decomposition of Hβ, and Hα, rather than Hβ, and Hα themselves.
+
+  Added check to drop spin-0 bath particles, which do not contribute.
+--------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.3
 
 ADDED: 
@@ -9,11 +22,11 @@ ADDED:
 CluE Oxide: 0.2.3-alpha.2
 
 ADDED:
-Now CluE checks the input TOML for keys that do nothing.  
-This turns many typos into errors, rather than silently ignoring them.
+  Now CluE checks the input TOML for keys that do nothing.  
+  This turns many typos into errors, rather than silently ignoring them.
 
 CHANGED:
-Clusters are now saved and loaded as TOML files.
+  Clusters are now saved and loaded as TOML files.
 
 --------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.1
@@ -23,19 +36,19 @@ ADDED:
 
 REMOVED:
 
-The old input format has been removed.
+  The old input format has been removed.
 
-Removed the old input format from pyCluE.
+  Removed the old input format from pyCluE.
 
-Removed config options:
+  Removed config options:
   root_dir,
   load_geometry
 
 CHANGED:
 
-Fixed small bugs in the TOML input. 
+  Fixed small bugs in the TOML input. 
 
-Changed config TOML options:
+  Changed config TOML options:
   cluster_density_matrix -> populations,
   number_system_instances -> number_runs,
   periodic_boundary_conditions -> replicate_unit_cell,

@@ -90,7 +90,11 @@ impl HamiltonianTensors{
     if det_zeeman.any_nan(){
       return Err(CluEError::NANTensorDetectedZeeman);
     }
-    spin1_tensors.set(0, det_zeeman);
+    spin1_tensors.add(0, det_zeeman);
+
+    if let Some(zf_ten) = &detected_particle.zerofield_tensor{
+      spin2_tensors.add(0,0, zf_ten.clone());
+    }
 
     let eye = SymmetricTensor3D::eye();
 
@@ -122,22 +126,30 @@ impl HamiltonianTensors{
         return Err(CluEError::NANTensorBathZeeman(
               particle_idx0,particle0.isotope.to_string()));
       }
-      spin1_tensors.set(idx0, bath_zeeman);
+      spin1_tensors.add(idx0, bath_zeeman);
 
 
       // hyperfine
       let hf_ten = construct_hyperfine_tensor(rng,detected_particle, particle0, 
           particle_idx0, structure, config)?; 
 
-      spin2_tensors.set(0,idx0, hf_ten);
+      spin2_tensors.add(0,idx0, hf_ten);
 
       
       // electric quadrupole coupling
-      let quadrupole_opt = construct_electric_quadrupole_tensor(rng,particle0, 
+      let quadrupole_opt = construct_bath_electric_quadrupole_tensor(rng,particle0, 
           particle_idx0, structure, config)?;
 
       if let Some(quadrupole_ten) = quadrupole_opt{
-        spin2_tensors.set(idx0,idx0, quadrupole_ten);
+        spin2_tensors.add(idx0,idx0, quadrupole_ten);
+      }
+
+      // zero-field coupling
+      let zerofield_opt = construct_bath_zerofield_tensor(rng,particle0, 
+          particle_idx0, structure, config)?;
+
+      if let Some(zerofield_ten) = zerofield_opt{
+        spin2_tensors.add(idx0,idx0, zerofield_ten);
       }
 
 
@@ -164,7 +176,7 @@ impl HamiltonianTensors{
                ));
          }
 
-         spin2_tensors.set(idx1,idx0, dd_ten);
+         spin2_tensors.add(idx1,idx0, dd_ten);
       }
     }
 
@@ -348,6 +360,13 @@ impl<'a> Spin1Tensors{
     self.tensors[n] = Some(ten);
   }
   //----------------------------------------------------------------------------
+  pub fn add(&mut self, n: usize, mut ten: Vector3D){
+    if let Some(ten0) = self.get(n){
+      ten = &ten + ten0;
+    }
+    self.set(n,ten);
+  }
+  //----------------------------------------------------------------------------
   pub fn get(&'a self, n: usize) -> Option< &'a Vector3D> {
     match &self.tensors[n] {
       Some(ten) => Some(ten),
@@ -522,7 +541,7 @@ fn construct_bath_zeeman_tensor(rng: &mut ChaCha20Rng,
   Ok(construct_zeeman_tensor(&gamma_matrix,magnetic_field))
 }
 //------------------------------------------------------------------------------
-fn construct_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
+fn construct_bath_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
     particle0: &Particle,particle_index: usize,
     structure: &Structure, config: &Config)
   -> Result<Option<SymmetricTensor3D>, CluEError>
@@ -532,6 +551,31 @@ fn construct_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
   }
 
   match structure.extract_electric_quadrupole_specifier(particle_index,config)
+  {
+    Some(tensor_specifier) => {
+      let tensor = construct_symmetric_tensor_from_tensor_specifier(rng,
+        tensor_specifier, Some(particle_index),structure, config)?;
+
+      if tensor.any_nan(){
+        return Err(CluEError::NANTensorQuadrupole(
+          particle_index,particle0.isotope.to_string()));
+      }
+      Ok(Some(tensor))
+    },
+    None => Ok(None),
+  }
+}
+//------------------------------------------------------------------------------
+fn construct_bath_zerofield_tensor(rng: &mut ChaCha20Rng,
+    particle0: &Particle,particle_index: usize,
+    structure: &Structure, config: &Config)
+  -> Result<Option<SymmetricTensor3D>, CluEError>
+{
+  if particle0.isotope.spin_multiplicity() < 3 {
+    return Ok(None);
+  }
+
+  match structure.extract_zerofield_specifier(particle_index,config)
   {
     Some(tensor_specifier) => {
       let tensor = construct_symmetric_tensor_from_tensor_specifier(rng,

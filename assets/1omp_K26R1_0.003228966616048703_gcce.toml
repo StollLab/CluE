@@ -2,7 +2,7 @@ input_structure_file = "assets/1omp_K26R1_0.003228966616048703.pdb"
 
 populations = "thermal"
 
-cluster_method = "cce"
+cluster_method = "gcce"
 
 magnetic_field = 1.2
 
@@ -31,6 +31,14 @@ tau_increments = [5e-2]
   g_matrix.values = [2.00841, 2.00604, 2.00223]
   g_matrix.axes.x = {from = "r1_n", to ="r1_o"}
   g_matrix.axes.y = {from = "r1_c2", to ="r1_c5"}
+  detection_operator = [
+    [0.0,1.0],
+    [0.0,0.0],
+  ]
+  density_matrix = [
+    [0.0,0.0],
+    [0.0,1.0],
+  ]
 
 [pair_cutoffs]
   hahn_mod_depth = 2e-7

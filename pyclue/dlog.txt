@@ -1,0 +1,834 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE lib.rs in src/ and dev_src/:
+2d1
+< pub mod clue_toml;
+4d2
+< pub mod lebedev;
+13a12
+> pub mod py_system;
+15d13
+< pub mod run_clue;
+18d15
+< use clue_toml::*;
+20d16
+< use lebedev::*;
+28a25
+> use py_system::*;
+30d26
+< use run_clue::*;
+44,45d39
+< 
+< 
+56d49
+<     m.add_class::<PyIntegrationGrid>()?;
+61a55,57
+>     m.add_class::<PySystem>()?;
+>     m.add_class::<PyValue>()?;
+>     m.add_class::<PyOrientations>()?;
+63,68c59,61
+<     m.add_function( wrap_pyfunction!(run,m)? )?;
+<     m.add_function( wrap_pyfunction!(build_lebedev,m)? )?;
+<     m.add_function( wrap_pyfunction!(dict_to_toml_string,m)? )?;
+<     m.add_function( wrap_pyfunction!(load_time_axis,m)? )?;
+<     m.add_function( wrap_pyfunction!(load_signal,m)? )?;
+<     m.add_function( wrap_pyfunction!(load_auxiliary_signals,m)? )?;
+---
+>     m.add_function( wrap_pyfunction!(read_time_axis,m)? )?;
+>     m.add_function( wrap_pyfunction!(read_signal,m)? )?;
+>     m.add_function( wrap_pyfunction!(read_auxiliary_signals,m)? )?;
+diff src//lib.rs dev_src//lib.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_config.rs in src/ and dev_src/:
+10d9
+< use std::collections::HashMap;
+14a14,16
+>     particle_config::ParticleProperties,
+>     DensityMatrixMethod,
+>     OrientationAveraging,
+15a18,23
+>     config_toml::{
+>       DEFAULT_UNIT_ENERGY,
+>       DEFAULT_UNIT_DISTANCE,
+>       DEFAULT_UNIT_MAGNETIC_FIELD,
+>       DEFAULT_UNIT_TIME,
+>     }
+17a26,27
+>   physical_constants::*,
+>   space_3d::Vector3D,
+21d30
+< use crate::dict_to_toml_string;
+27a37,40
+>   unit_of_distance: f64,
+>   unit_of_energy: f64,
+>   unit_of_magnetic_field: f64,
+>   unit_of_time: f64,
+32a46,53
+>   /*
+>   //----------------------------------------------------------------------------
+>   fn from_pydict(pydict: &PyDict) -> Result<Self,PyCluEError>
+>   {
+>     let toml = toml::to_string(pydict).unwrap();
+>     Self::from_input(toml)
+>   }
+>   */
+38c59
+<   pub fn run(&self)
+---
+>   pub fn run(&self)// -> Result<(Vec::<f64>, Vec::<Complex::<f64>>),PyCluEError>{
+60,66d80
+<   pub fn from_dict(config: HashMap::<String,PyObject>) -> Result<Self,PyCluEError>
+<   {
+<     let toml_string = dict_to_toml_string(config)?;
+<     Self::from_input(toml_string)
+<   }
+<   //----------------------------------------------------------------------------
+<   #[staticmethod]
+83a98,101
+>       unit_of_distance: distance_unit_to_meters(DEFAULT_UNIT_DISTANCE)?,
+>       unit_of_energy: energy_unit_to_hertz(DEFAULT_UNIT_ENERGY)?,
+>       unit_of_magnetic_field: magnetic_field_unit_to_tesla(DEFAULT_UNIT_MAGNETIC_FIELD)?,
+>       unit_of_time: time_unit_to_seconds(DEFAULT_UNIT_TIME)?,
+133a152,155
+>       unit_of_distance: distance_unit_to_meters(DEFAULT_UNIT_DISTANCE)?,
+>       unit_of_energy: energy_unit_to_hertz(DEFAULT_UNIT_ENERGY)?,
+>       unit_of_magnetic_field: magnetic_field_unit_to_tesla(DEFAULT_UNIT_MAGNETIC_FIELD)?,
+>       unit_of_time: time_unit_to_seconds(DEFAULT_UNIT_TIME)?,
+134a157,621
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_do_replicate_unit_cell(&self) -> Option<bool>{
+>     self.config.do_replicate_unit_cell.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_do_replicate_unit_cell(&mut self, value:  bool){
+>     self.config.do_replicate_unit_cell = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_clash_distance(&self) -> Option<f64>{
+>     match self.config.clash_distance{
+>       Some(x) => Some(x/self.unit_of_distance),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_clash_distance(&mut self, value: f64){
+>     self.config.clash_distance = Some(value*self.unit_of_distance);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_clash_distance_pbc(&self) -> Option<f64>{
+>     match self.config.clash_distance_pbc{
+>       Some(x) => Some(x/self.unit_of_distance),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_clash_distance_pbc(&mut self, value: f64 ){
+>     self.config.clash_distance_pbc = Some(value*self.unit_of_distance);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_cluster_batch_size(&self) -> Option<usize>{
+>     self.config.cluster_batch_size.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_cluster_batch_size(&mut self, value: usize){
+>     self.config.cluster_batch_size = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set cluster_method
+>   //----------------------------------------------------------------------------
+>   pub fn get_clusters_file(&self) -> Option<String>{
+>     self.config.clusters_file.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_clusters_file(&mut self, value: String ){
+>     self.config.clusters_file = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set density_matrix
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set detected_spin_g_matrix
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set detected_spin_identity
+>   //----------------------------------------------------------------------------
+>   pub fn get_detected_spin_multiplicity(&self) -> Option<usize>{
+>     self.config.detected_spin_multiplicity.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_detected_spin_multiplicity(&mut self, value:  usize){
+>     self.config.detected_spin_multiplicity = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set detected_spin_position
+>   //----------------------------------------------------------------------------
+>   pub fn get_detected_spin_transition(&self) -> Option<[usize;2]>{
+>     self.config.detected_spin_transition.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_detected_spin_transition(&mut self, value: [usize;2] ){
+>     self.config.detected_spin_transition = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_input_structure_file(&self) -> Option<String>{
+>     self.config.input_structure_file.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_input_structure_file(&mut self, value:  Option<String>){
+>     self.config.input_structure_file = value;
+>   }
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set load_geometry
+>   //----------------------------------------------------------------------------
+>   pub fn get_magnetic_field(&self) -> Option<f64>{
+>     match &self.config.magnetic_field{
+>       Some(vector) => Some(vector.z()),
+>       None => None,
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_magnetic_field(&mut self, value: f64){
+>     let value = Vector3D::from([ 0.0, 0.0, value*self.unit_of_magnetic_field]);
+>     self.config.magnetic_field = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_max_cell_size(&self) -> Option<usize>{
+>     self.config.max_cell_size.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_max_cell_size(&mut self, value:  usize){
+>     self.config.max_cell_size = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_max_cluster_size(&self) -> Option<usize>{
+>     self.config.max_cluster_size.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_max_cluster_size(&mut self, value:  usize){
+>     self.config.max_cluster_size = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_max_spins(&self) -> Option<usize>{
+>     self.config.max_spins.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_max_spins(&mut self, value: usize){
+>     self.config.max_spins = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_min_cell_size(&self) -> Option<usize>{
+>     self.config.min_cell_size.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_min_cell_size(&mut self, value: usize){
+>     self.config.min_cell_size = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_neighbor_cutoff_coupling_xx_yy(&self) -> Option<f64>{
+>     match self.config.neighbor_cutoff_coupling_xx_yy{
+>       Some(x) => Some(x/self.unit_of_energy),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_neighbor_cutoff_coupling_xx_yy(&mut self, value:  f64){
+>     self.config.neighbor_cutoff_coupling_xx_yy = Some(value*self.unit_of_energy);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_neighbor_cutoff_delta_hyperfine_zz(&self) -> Option<f64>{
+>     match self.config.neighbor_cutoff_delta_hyperfine_zz{
+>       Some(x) => Some(x/self.unit_of_energy),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_neighbor_cutoff_delta_hyperfine_zz(&mut self, value: f64){
+>     self.config.neighbor_cutoff_delta_hyperfine_zz = Some(value*self.unit_of_energy);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_neighbor_cutoff_point_dipole_perpendicular(&self) -> Option<f64>{
+>     match self.config.neighbor_cutoff_point_dipole_perpendicular{
+>       Some(x) => Some(x/self.unit_of_energy),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_neighbor_cutoff_point_dipole_perpendicular(&mut self, value: f64){
+>     self.config.neighbor_cutoff_point_dipole_perpendicular = Some(value*self.unit_of_energy);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_neighbor_cutoff_distance(&self) -> Option<f64>{
+>     match self.config.neighbor_cutoff_distance{
+>       Some(x) => Some(x/self.unit_of_distance),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_neighbor_cutoff_distance(&mut self, value: f64){
+>     self.config.neighbor_cutoff_distance = Some(value*self.unit_of_distance);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_neighbor_cutoff_3_spin_hahn_mod_depth(&self) -> Option<f64>{
+>     self.config.neighbor_cutoff_3_spin_hahn_mod_depth.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_neighbor_cutoff_3_spin_hahn_mod_depth(&mut self, value: f64){
+>     self.config.neighbor_cutoff_3_spin_hahn_mod_depth = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_neighbor_cutoff_3_spin_hahn_taylor_4(&self) -> Option<f64>{
+>     let u = self.unit_of_energy*HZ_TO_RAD_PER_S;
+>     let u4 = u*u*u*u;
+>     match self.config.neighbor_cutoff_3_spin_hahn_taylor_4{
+>       Some(x) => Some(x/u4),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_neighbor_cutoff_3_spin_hahn_taylor_4(&mut self, value: f64){
+>     let u = self.unit_of_energy*HZ_TO_RAD_PER_S;
+>     let u4 = u*u*u*u;
+>     self.config.neighbor_cutoff_3_spin_hahn_taylor_4 = Some(value*u4);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_number_runs(&self) -> Option<usize>{
+>     self.config.number_runs.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_number_runs(&mut self, value:  usize){
+>     self.config.number_runs = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_number_timepoints(&self) -> Vec::<usize>{
+>     self.config.number_timepoints.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_number_timepoints(&mut self, value:  Vec::<usize>){
+>     self.config.number_timepoints = value;
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (distribution,n_points))]
+>   pub fn set_orientations(&mut self, 
+>       distribution: String, n_points: Option<usize>)
+>     -> Result<(),PyCluEError>
+>   {
+> 
+>     let toml_str = match n_points{
+>       Some(n) => format!("{} = {}",distribution, n), 
+>       None => format!("{}",distribution),
+>     };
+> 
+>     let ori = OrientationAveraging::from_toml_string(&toml_str)?;
+>     self.config.orientation_grid = Some(ori);
+>     Ok(())
+>   }
+>   //----------------------------------------------------------------------------
+>   // TODO get/set partitioning
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set particles, and consider better name
+>   //----------------------------------------------------------------------------
+>   pub fn get_pdb_model_index(&self) -> Option<usize>{
+>     self.config.pdb_model_index.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_pdb_model_index(&mut self, value: usize ){
+>     self.config.pdb_model_index = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   // TODO: get/set pulse_sequence.
+>   //----------------------------------------------------------------------------
+>   //----------------------------------------------------------------------------
+>   pub fn get_radius(&self) -> Option<f64>{
+>     match self.config.radius{
+>       Some(x) => Some(x/self.unit_of_distance),
+>       None => None
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_radius(&mut self, value: f64){
+>     self.config.radius = Some(value*self.unit_of_distance);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_rng_seed(&self) -> Option<u64>{
+>     self.config.rng_seed.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_rng_seed(&mut self, value: u64){
+>     self.config.rng_seed = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_output_directory(&self) -> Option<String>{
+>     self.config.output_directory.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_output_directory(&mut self, value:  Option<String>){
+>     self.config.output_directory = value;
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_run_name(&self) -> Option<String>{
+>     self.config.run_name.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_run_name(&mut self, value:  Option<String>){
+>     self.config.run_name = value;
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_temperature(&self) -> Option<f64>{
+>     match self.config.density_matrix{
+>       Some(DensityMatrixMethod::Thermal(value)) => Some(value),
+>       _ => None,  
+>     }
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_temperature(&mut self, value:  f64){
+>     self.config.density_matrix = Some(DensityMatrixMethod::Thermal(value));
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_tau_increments(&self) -> Vec::<f64>{
+>     self.config.tau_increments.iter().map(|t| t/self.unit_of_time)
+>         .collect::<Vec::<f64>>()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_tau_increments(&mut self, value: Vec::<f64>){
+>     self.config.tau_increments = value.iter().map(|t| t*self.unit_of_time)
+>         .collect::<Vec::<f64>>();
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (group,isotope))]
+>   pub fn get_tunnel_splitting(&self,group: String,isotope: String) 
+>       -> Option<f64>
+>   {
+>     for particle_config in self.config.particles.iter(){
+>       if particle_config.label != group{
+>         continue;
+>       }
+> 
+>       let Some(properties) = &particle_config.properties else {
+>         return None;
+>       };
+>       
+>       let Some(spin_prop) = properties.isotope_properties.get(&isotope) else {
+>         return None;
+>       };
+> 
+>       if let Some(j) = spin_prop.exchange_coupling{
+>         return Some(j/C3_TUNNEL_SPLITTING_TO_EXCHANGE_COUPLING);
+>       }
+>       return None;
+>     }
+>     None
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (group,isotope,value))]
+>   pub fn set_tunnel_splitting(&mut self,
+>       group: String, isotope: String, value: f64) 
+>       -> Result<(),PyCluEError>
+>   {
+>     let j =  C3_TUNNEL_SPLITTING_TO_EXCHANGE_COUPLING*value;
+> 
+>     for particle_config in self.config.particles.iter_mut(){
+>       if particle_config.label != group{
+>         continue;
+>       }
+> 
+>       if particle_config.properties.is_none(){
+>         particle_config.properties = Some(ParticleProperties::new());
+>       }
+> 
+>       let properties = particle_config.properties.as_mut().unwrap();
+>       
+>       let spin_prop = properties.isotope_properties
+>           .get_mut(&isotope).unwrap(); 
+> 
+>       spin_prop.exchange_coupling = Some(j)
+>     }
+>     Ok(())
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_auxiliary_signals(&self) -> Option<bool>{
+>     self.config.write_auxiliary_signals.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_auxiliary_signals(&mut self, value: bool){
+>     self.config.write_auxiliary_signals = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_bath(&self) -> Option<bool>{
+>     self.config.write_bath.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_bath(&mut self, value: bool){
+>     self.config.write_bath = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_clusters(&self) -> Option<bool>{
+>     self.config.write_clusters.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_clusters(&mut self, value: bool){
+>     self.config.write_clusters = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_info(&self) -> Option<bool>{
+>     self.config.write_info.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_info(&mut self, value: bool){
+>     self.config.write_info = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_exchange_groups(&self) -> Option<bool>{
+>     self.config.write_exchange_groups.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_exchange_groups(&mut self, value: bool){
+>     self.config.write_exchange_groups = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_methyl_partitions(&self) -> Option<bool>{
+>     self.config.write_methyl_partitions.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_methyl_partitions(&mut self, value: bool){
+>     self.config.write_methyl_partitions = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_orientation_signals(&self) -> Option<bool>{
+>     self.config.write_orientation_signals.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_orientation_signals(&mut self, value: bool){
+>     self.config.write_orientation_signals = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_sans_spin_signals(&self) -> Option<bool>{
+>     self.config.write_sans_spin_signals.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_sans_spin_signals(&mut self, value: bool){
+>     self.config.write_sans_spin_signals = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_structure_pdb(&self) -> Option<bool>{
+>     self.config.write_structure_pdb.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_structure_pdb(&mut self, value: bool){
+>     self.config.write_structure_pdb = Some(value);
+>   }
+>   //----------------------------------------------------------------------------
+>   pub fn get_write_tensors(&self) -> Option<bool>{
+>     self.config.write_tensors.clone()
+>   }
+>   //----------------------------------------------------------------------------
+>   #[pyo3(signature = (value))]
+>   pub fn set_write_tensors(&mut self, value: bool){
+>     self.config.write_tensors = Some(value);
+diff src//py_config.rs dev_src//py_config.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE io.rs in src/ and dev_src/:
+3,4d2
+< use numpy::PyArray;
+< 
+7c5
+< //  io::load_auxiliary_signals,
+---
+>   io::load_auxiliary_signals,
+9d6
+< use clue_oxide::signal::load_csv_to_vec_signals;
+13c10,11
+< use crate::py_config::PyConfig;
+---
+> use crate::py_system::PySystem;
+> use crate::py_signal::PySignals;
+16d13
+< use ndarray::{Array1,Ix1};
+22,23c19,20
+< pub fn load_time_axis(filename: String)
+<     -> Result< Py<PyArray<f64,Ix1>>  ,PyCluEError>
+---
+> pub fn read_time_axis(filename: String)
+>     -> Result< Vec::<f64>  ,PyCluEError>
+25,28c22
+<   let s = Array1::from_vec(clue_oxide::io::read_time_axis(&filename)?);
+<   Ok(Python::with_gil(|py|{
+<       PyArray::from_owned_array(py, s).unbind()
+<   }))
+---
+>   Ok(clue_oxide::io::read_time_axis(&filename)?)
+32,33c26,27
+< pub fn load_signal(filename: String)
+<     -> Result< Py<PyArray<Complex<f64>,Ix1>>  ,PyCluEError>
+---
+> pub fn read_signal(filename: String)
+>     -> Result< Vec< Vec::<Complex<f64>> > ,PyCluEError>
+35,41c29
+<   let signals = load_csv_to_vec_signals(&filename)?;
+<   let n = signals.len();
+<   let s = Array1::from_vec(signals[n-1].data.clone());
+< 
+<   Ok(Python::with_gil(|py|{
+<       PyArray::from_owned_array(py, s).unbind()
+<   }))
+---
+>   let signals = PySignals::read_from_csv(filename)?;
+42a31
+>   Ok(signals.get_data())
+46c35
+< pub fn load_auxiliary_signals(
+---
+> pub fn read_auxiliary_signals(
+50c39
+<     pyconfig: &PyConfig) 
+---
+>     pyconfig: &PySystem) 
+57,58c46
+<   clue_oxide::io::load_auxiliary_signals(
+<       &mut cluster_set, &pyconfig.config, &path_to_files)?;
+---
+>    load_auxiliary_signals(&mut cluster_set, &pyconfig.config, &path_to_files)?;
+diff src//io.rs dev_src//io.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_exchange_groups.rs in src/ and dev_src/:
+34c34
+<         PyArray::from_owned_array(py, centroids).unbind()
+---
+>         PyArray::from_owned_array_bound(py, centroids).unbind()
+36,43d35
+<   }
+<   //----------------------------------------------------------------------------
+<   pub fn get_exchange_groups(&self) -> Vec::<String>{
+< 
+<     self.exchange_group_manager.exchange_groups.iter()
+<       .map(|ex| ex.to_string())
+<       .collect::<Vec::<String>>() 
+< 
+diff src//py_exchange_groups.rs dev_src//py_exchange_groups.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_cluster.rs in src/ and dev_src/:
+diff src//py_cluster.rs dev_src//py_cluster.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_structure.rs in src/ and dev_src/:
+6c6
+< use crate::py_config::PyConfig;
+---
+> use crate::py_system::PySystem;
+29c29
+<   fn build_structure(pyconfig: &mut PyConfig) -> Result<Self,PyCluEError>
+---
+>   fn build_structure(pyconfig: &mut PySystem) -> Result<Self,PyCluEError>
+diff src//py_structure.rs dev_src//py_structure.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_tensors.rs in src/ and dev_src/:
+6c6
+< use crate::py_config::PyConfig;
+---
+> use crate::py_system::PySystem;
+18c18
+<   fn generate(pystructure: &PyStructure, pyconfig: &mut PyConfig) 
+---
+>   fn generate(pystructure: &PyStructure, pyconfig: &PySystem) 
+22c22
+<     let tensors = HamiltonianTensors::generate(&mut pyconfig.rng,
+---
+>     let tensors = HamiltonianTensors::generate(
+diff src//py_tensors.rs dev_src//py_tensors.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_physical_constants.rs in src/ and dev_src/:
+diff src//py_physical_constants.rs dev_src//py_physical_constants.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE analytic_restricted_2cluster.rs in src/ and dev_src/:
+diff src//analytic_restricted_2cluster.rs dev_src//analytic_restricted_2cluster.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_clue_errors.rs in src/ and dev_src/:
+diff src//py_clue_errors.rs dev_src//py_clue_errors.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE __pycache__ in src/ and dev_src/:
+diff src//__pycache__ dev_src//__pycache__:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_particle.rs in src/ and dev_src/:
+23,26d22
+<   pub fn get_isotope(&self) -> PyIsotope {
+<     PyIsotope{isotope: self.particle.isotope.clone() }
+<   }
+<   //----------------------------------------------------------------------------
+105,108d100
+<   }
+<   //----------------------------------------------------------------------------
+<   fn __eq__(&self, other: PyIsotope) -> bool{
+<     self.isotope == other.isotope
+diff src//py_particle.rs dev_src//py_particle.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_signal.rs in src/ and dev_src/:
+13c13
+<   pub signal: Signal,
+---
+>   signal: Signal,
+30c30
+<   pub fn load_from_csv(filename: String) -> Result<Self,PyCluEError>{
+---
+>   pub fn read_from_csv(filename: String) -> Result<Self,PyCluEError>{
+56c56
+<   pub fn len(&self) -> usize{
+---
+>   fn len(&self) -> usize{
+60c60
+<   pub fn mut_scale(&mut self, value: Complex::<f64>){
+---
+>   fn mut_scale(&mut self, value: Complex::<f64>){
+64c64
+<   pub fn scale(&self, value: Complex::<f64>) -> Self{
+---
+>   fn scale(&self, value: Complex::<f64>) -> Self{
+68c68
+<   pub fn rmsd_with(&self, other: &PySignal) -> f64{
+---
+>   fn rmsd_with(&self, other: &PySignal) -> f64{
+169c169
+<   pub fn load_from_csv(filename: String) -> Result<PySignals,PyCluEError>{
+---
+>   pub fn read_from_csv(filename: String) -> Result<PySignals,PyCluEError>{
+201a202,211
+> /*
+> #[pyfunction]
+> pub fn read_signals_file(filename: String) 
+>     -> Result< Vec< Vec::<Complex<f64>> > ,PyCluEError> 
+> {
+>   let signals = PySignals::read_from_csv(filename)?;
+> 
+>   Ok(signals.get_data())
+> }
+> */
+diff src//py_signal.rs dev_src//py_signal.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FILE py_spin_operators.rs in src/ and dev_src/:
+24c24
+<       PyArray::from_owned_array(py, s).unbind() 
+---
+>       PyArray::from_owned_array_bound(py, s).unbind() 
+35c35
+<       PyArray::from_owned_array(py, s).unbind() 
+---
+>       PyArray::from_owned_array_bound(py, s).unbind() 
+46c46
+<       PyArray::from_owned_array(py, s).unbind() 
+---
+>       PyArray::from_owned_array_bound(py, s).unbind() 
+57c57
+<       PyArray::from_owned_array(py, s).unbind() 
+---
+>       PyArray::from_owned_array_bound(py, s).unbind() 
+68c68
+<       PyArray::from_owned_array(py, s).unbind() 
+---
+>       PyArray::from_owned_array_bound(py, s).unbind() 
+79c79
+<       PyArray::from_owned_array(py, s).unbind() 
+---
+>       PyArray::from_owned_array_bound(py, s).unbind() 
+diff src//py_spin_operators.rs dev_src//py_spin_operators.rs:
+ b''
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+

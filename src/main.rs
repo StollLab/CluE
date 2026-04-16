@@ -44,8 +44,8 @@ fn main() {
     return;
   }
 
-  if input.show_warrenty{
-    info::warrenty::print_warrenty();
+  if input.show_warranty{
+    info::warranty::print_warranty();
     return;
   }
 

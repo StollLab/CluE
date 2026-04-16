@@ -5,265 +5,17 @@ use std::fmt;
 use std::collections::HashMap;
 
 use serde::{Serialize,Deserialize};
-
-const ALLOWED_KEYS: [&str;121] = [
-  "abundance",
-  "active",
-  "auxiliary_signals",
-  "axes",
-  "bath",
-  "bonded_elements",
-  "bonded_indices",
-  "bonded_names",
-  "bonded_residues",
-  "bonded_residue_sequence_numbers",
-  "bonded_serials",
-  "c3_tunnel_splitting",
-  "cell_ids",
-  "cell_type",
-  "cosubstitute",
-  "coupling",
-  "coupling_xx_yy",
-  "connect_exchange_groups",
-  "clash_distance",
-  "clash_distance_pbc",
-  "cluster_batch_size",
-  "cluster_method",
-  "cluster_source",
-  "clusters",
-  "config",
-  "delta_hyperfine_zz",
-  "detected_spin",
-  "distance",
-  "drop_probability",
-  "electric_quadrupole",
-  "elements",
-  "exchange_coupling",
-  "exchange_groups",
-  "file",
-  "from",
-  "from_bonded_to",
-  "from_same_molecule_as",
-  "g_matrix",
-  "grid",
-  "groups",
-  "hahn_mod_depth",
-  "hahn_taylor_4",
-  "hyperfine",
-  "identity",
-  "indices",
-  "info",
-  "input_structure_file",
-  "isotpes",
-  "lebedev",
-  "magnetic_field",
-  "max_cell_size",
-  "max_cluster_size",
-  "max_spins",
-  "methyl_partitions",
-  "min_cell_size",
-  "name",
-  "names",
-  "not_bonded_elements",
-  "not_bonded_indices",
-  "not_bonded_names",
-  "not_bonded_residues",
-  "not_bonded_residue_sequence_numbers",
-  "not_bonded_serials",
-  "not_cell_ids",
-  "not_elements",
-  "not_indices",
-  "not_isotopes",
-  "not_names",
-  "not_residues",
-  "not_residue_sequence_numbers",
-  "not_serials",
-  "not_within_distance",
-  "number",
-  "number_runs",
-  "number_timepoints",
-  "orientation_grid",
-  "orientations",
-  "orientation_signals",
-  "output",
-  "output_directory",
-  "pair_cutoffs",
-  "partitioning",
-  "partition_table",
-  "pdb_model_index",
-  "point_dipole_perpendicular",
-  "populations",
-  "position",
-  "pulse_sequence",
-  "radius",
-  "random",
-  "replicate_unit_cell",
-  "residues",
-  "residue_sequence_numbers",
-  "rng_seed",
-  "run_name",
-  "sans_spin_signals",
-  "save_dir",
-  "selection",
-  "serials",
-  "singles",
-  "spin_multiplicity",
-  "structure_pdb",
-  "tau_increments",
-  "temperature",
-  "tensors",
-  "thermal",
-  "to",
-  "to_bonded_to",
-  "to_same_molecule_as",
-  "transition",
-  "unit_of_distance",
-  "unit_of_energy",
-  "unit_of_magnetic_field",
-  "unit_of_time",
-  "values",
-  "vector",
-  "vector_grid",
-  "within_distance",
-  "x",
-  "y",
-  "z",
-];
-
-pub const DEFAULT_UNIT_ENERGY: &str = "MHz";
-pub const DEFAULT_UNIT_DISTANCE: &str = "Å";
-pub const DEFAULT_UNIT_MAGNETIC_FIELD: &str = "T";
-pub const DEFAULT_UNIT_TIME: &str = "μs";
-
-// General Keys
-pub const KEY_CUTOFF_COUPLING: &str = "coupling_xx_yy";
-pub const KEY_CUTOFF_DELTA_HF: &str = "delta_hyperfine_zz";
-pub const KEY_CUTOFF_DIPOLE_PERP: &str = "point_dipole_perpendicular";
-pub const KEY_CUTOFF_DISTANCE: &str = "distance";
-pub const KEY_CUTOFF_HAHN_MOD_DEPTH: &str = "hahn_mod_depth";
-pub const KEY_CUTOFF_HAHN_TAYLOR_4: &str = "hahn_taylor_4";
-
-pub const KEY_OUT_AUX_SIGS: &str = "auxiliary_signals";
-pub const KEY_OUT_BATH: &str = "bath";
-pub const KEY_OUT_DET_SPIN: &str = "detected_spin";
-pub const KEY_OUT_CLUSTERS: &str = "clusters";
-pub const KEY_OUT_CONFIG: &str = "config";
-pub const KEY_OUT_INFO: &str = "info";
-pub const KEY_OUT_EXCHANGE_GROUPS: &str = "exchange_groups";
-pub const KEY_OUT_METHYL_PARTITIONS: &str = "methyl_partitions";
-pub const KEY_OUT_ORI_GRID: &str = "orientation_grid";
-pub const KEY_OUT_ORI_SIGS: &str = "orientation_signals";
-pub const KEY_OUT_PART_TAB: &str = "partition_table";
-pub const KEY_OUT_SANS_SPIN_SIGS: &str = "sans_spin_signals";
-pub const KEY_OUT_STRUC_PDB: &str = "structure_pdb";
-pub const KEY_OUT_TENSORS: &str = "tensors";
-
-pub const KEY_DENSITY_MATRIX_ID: &str  = "identity";
-pub const KEY_DENSITY_MATRIX_THERMAL: &str  = "thermal";
-
-pub const KEY_PARTITION_EX_GROUPS: &str = "exchange_groups";
-pub const KEY_PARTITION_PARTICLE: &str = "singles";
-
-pub const KEY_ORI_LEBEDEV: &str = "lebedev";
-pub const KEY_ORI_RANDOM: &str = "random";
-pub const KEY_ORI_FILE: &str = "file";
-pub const KEY_ORI_VECTOR: &str = "vector";
-pub const KEY_ORI_VECTORGRID: &str = "vector_grid";
-
-
-pub const KEY_EIG_VALUES: &str = "values";                                           
-pub const KEY_EIG_AXES: &str = "axes";                                               
-pub const KEY_EIG_X_AXIS: &str = "x";                                                
-pub const KEY_EIG_Y_AXIS: &str = "y";                                                
-pub const KEY_EIG_Z_AXIS: &str = "z";
-
-// Group Keys
-pub const KEY_NAME: &str = "name";
-
-pub const KEY_DROP_PROB: &str = "drop_probability";
-
-pub const KEY_ISO_COSUBSTITUTE: &str = "cosubstitute";
-
-
-// Filter Keys
-pub const KEY_SELECTION: &str = "selection";
-pub const KEY_CELL_TYPE: &str = "cell_type";
-
-
-pub const KEY_SELE_INDICES: &str = "indices";
-pub const KEY_SELE_NOT_INDICES: &str = "not_indices";
-
-pub const KEY_SELE_CELL_IDS: &str = "cell_ids";
-pub const KEY_SELE_NOT_CELL_IDS: &str = "not_cell_ids";
-
-pub const KEY_SELE_ELEMENTS: &str = "elements";
-pub const KEY_SELE_NOT_ELEMENTS: &str = "not_elements";
-
-pub const KEY_SELE_SERIALS: &str = "serials";
-pub const KEY_SELE_NOT_SERIALS: &str = "not_serials";
-
-pub const KEY_SELE_NAMES: &str = "names";
-pub const KEY_SELE_NOT_NAMES: &str = "not_names";
-
-pub const KEY_SELE_RESIDUES: &str = "residues";
-pub const KEY_SELE_NOT_RESIDUES: &str = "not_residues";
-
-pub const KEY_SELE_RES_SEQ_NUMS: &str = "residue_sequence_numbers";
-pub const KEY_SELE_NOT_RES_SEQ_NUMS: &str = "not_residue_sequence_numbers";
-
-pub const KEY_SELE_ISOTOPES: &str = "isotpes";
-pub const KEY_SELE_NOT_ISOTOPES: &str = "not_isotopes";
-
-pub const KEY_SELE_BONDED_INDICES: &str = "bonded_indices";
-pub const KEY_SELE_NOT_BONDED_INDICES: &str = "not_bonded_indices";
-
-pub const KEY_SELE_WITHIN_DISTANCE: &str = "within_distance";
-pub const KEY_SELE_NOT_WITHIN_DISTANCE: &str = "not_within_distance";
-
-pub const KEY_SELE_BONDED_ELEMENTS: &str = "bonded_elements";
-pub const KEY_SELE_NOT_BONDED_ELEMENTS: &str = "not_bonded_elements";
-
-pub const KEY_SELE_BONDED_SERIALS: &str = "bonded_serials";
-pub const KEY_SELE_NOT_BONDED_SERIALS: &str = "not_bonded_serials";
-
-pub const KEY_SELE_BONDED_NAMES: &str = "bonded_names";
-pub const KEY_SELE_NOT_BONDED_NAMES: &str = "not_bonded_names";
-
-pub const KEY_SELE_BONDED_RESIDUES: &str = "bonded_residues";
-pub const KEY_SELE_NOT_BONDED_RESIDUES: &str = "not_bonded_residues";
-
-pub const KEY_SELE_BONDED_RES_SEQ_NUMS: &str = "bonded_residue_sequence_numbers";
-pub const KEY_SELE_NOT_BONDED_RES_SEQ_NUMS: &str 
-    = "not_bonded_residue_sequence_numbers";
-
-// Isotope Key
-pub const KEY_ISO_ABUNDACE: &str = "abundance";
-pub const KEY_ISO_ACTIVE: &str = "active";
-pub const KEY_ISO_G_MATRIX: &str = "g_matrix";
-pub const KEY_ISO_HYPERFINE: &str = "hyperfine";
-pub const KEY_ISO_ELEC_QUADRUPOLE: &str = "electric_quadrupole";
-pub const KEY_ISO_EXCHANGE_COUPLING: &str = "exchange_coupling";
-pub const KEY_ISO_C3_TUNNEL_SPLITTING: &str = "c3_tunnel_splitting";
-pub const KEY_ISO_: &str = "";
-
-pub const KEY_VEC_SPECIFIER_FROM: &str = "from";
-pub const KEY_VEC_SPECIFIER_FROM_BONDED_TO: &str = "from_bonded_to";
-pub const KEY_VEC_SPECIFIER_FROM_SAME_MOLECULE_AS: &str = "from_same_molecule_as";
-pub const KEY_VEC_SPECIFIER_TO: &str = "to";
-pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
-pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
-pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
-   
-// moveed trait def to io.rs.
-//pub trait FromTOMLString{
-//  fn from_toml_string(s: &str) -> Result<Self,CluEError> where Self: Sized;
-//}
+pub use crate::config::toml_keys::*;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,Default,Serialize,Deserialize)]
 pub struct DetectedSpinTOML{
   pub multiplicity: Option<usize>,
   pub g_matrix: Option<toml::Value>,
+  pub electric_quadrupole: Option<toml::Value>,
+  pub zerofield: Option<toml::Value>,
+  pub density_matrix: Option<toml::Value>,
+  pub detection_operator: Option<toml::Value>,
   //pub g_values: Option<Vec::<f64>>,
   //pub gx: Option<toml::Value>,
   //pub gy: Option<toml::Value>,
@@ -312,6 +64,7 @@ pub struct ConfigTOML{
   pub cluster_method: Option<String>,
   pub cluster_source: Option<String>,
   pub input_structure_file: Option<String>,
+  pub kmeans_size: Option::<usize>,
   pub magnetic_field: Option<f64>,
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
@@ -320,10 +73,11 @@ pub struct ConfigTOML{
   pub number_runs: Option<usize>, 
   pub number_timepoints: Option<Vec::<usize>>,
   pub replicate_unit_cell: Option<toml::Value>,
+  pub run_in_parallel: Option<bool>,
   pub partitioning: Option<String>, 
   pub partition_table: Option<toml::Value>,
   pub pdb_model_index: Option<usize>,
-  pub pulse_sequence: Option<String>,  
+  pub pulse_sequence: Option<toml::Value>,  
   pub radius: Option<f64>,
   pub rng_seed: Option<u64>,
   pub output_directory: Option<String>,
@@ -382,8 +136,25 @@ fn check_toml_table(config: &toml::Table, depth: usize) -> Result<(),CluEError>{
     if let toml::Value::Table(table) = value{
       check_toml_table(table,depth +1)?;
     } 
+    if let toml::Value::Array(array) = value{
+      check_toml_array(array,depth +1)?;
+    }
   }
 
+  Ok(())
+}
+//------------------------------------------------------------------------------
+fn check_toml_array(config: &[toml::Value], depth: usize) -> Result<(),CluEError>
+{  
+  assert!(depth <= MAX_DEPTH);
+
+  for el in config.iter(){
+    match el{
+      toml::Value::Table(table) => check_toml_table(table,depth +1)?,
+      toml::Value::Array(array) => check_toml_array(array,depth +1)?,
+      _ => (),  
+    } 
+  }
   Ok(())
 }
 //------------------------------------------------------------------------------
@@ -450,7 +221,7 @@ mod tests{
 
         radius = 80
         rng_seed = 0
-        save_dir = "save_directory"
+        output_directory = "save_directory"
 
         number_timepoints = [40,60]
         tau_increments = [1, 500] # ns
@@ -472,7 +243,8 @@ mod tests{
         #vector = [1,0,0]
 
         [detected_spin]
-        spin_multiplicity = 2
+        multiplicity = 2
+        detection_operator = [[0,1],[0,0]]  
         transition = [0,1]
         g_matrix.values = [2.0097, 2.0064, 2.0025]
         g_matrix.axes.x = [-1.1500, -0.4700, 0.7100]
@@ -547,17 +319,17 @@ mod tests{
         15N.abundance = 0.1
 
 
-        14N.hyperfine_coupling.values = [14.7,14.7,101.4]
-        14N.hyperfine_coupling.axes.x = { from = "self", to_bonded_to = "r1m_o" }
-        14N.hyperfine_coupling.axes.y = { from_bonded_to = "r1m_c1", to_bonded_to = "r1m_c19" }
+        14N.hyperfine.values = [14.7,14.7,101.4]
+        14N.hyperfine.axes.x = { from = "self", to_bonded_to = "r1m_o" }
+        14N.hyperfine.axes.y = { from_bonded_to = "r1m_c1", to_bonded_to = "r1m_c19" }
 
-        14N.electric_quadrupole_coupling.values = [
+        14N.electric_quadrupole.values = [
           -0.6714,  0.4899, 1.4813, 
           0.4899,  1.1125, -0.1011, 
           1.4813, -0.1011, -0.4411
         ]
-        14N.electric_quadrupole_coupling.axes.x = [1,0,0] 
-        14N.electric_quadrupole_coupling.axes.y = [0,1,0] 
+        14N.electric_quadrupole.axes.x = [1,0,0] 
+        14N.electric_quadrupole.axes.y = [0,1,0] 
 
 
       "##;

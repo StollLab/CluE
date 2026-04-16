@@ -13,9 +13,16 @@ pub fn find_clusters( adjacency_list: &AdjacencyList, max_size: usize)
   -> Result< ClusterSet, CluEError>
 {
 
-  let mut clusters = Vec::<Vec::<Cluster>>::with_capacity(max_size);
+  let mut clusters = Vec::<Vec::<Cluster>>::with_capacity(max_size+1);
   let mut cluster_indices 
-    = Vec::<HashMap<Vec::<usize>,usize>>::with_capacity(max_size);
+    = Vec::<HashMap<Vec::<usize>,usize>>::with_capacity(max_size+1);
+
+  // Add zero-clusters.
+  clusters.push(vec![Cluster::from(vec![])]);
+  let mut zero_cluster_indices = HashMap::<Vec::<usize>,usize>::new();
+  zero_cluster_indices.insert(vec![], 0);
+  cluster_indices.push(zero_cluster_indices );
+
 
   let vertices = adjacency_list.get_active_vertices();
   let n_one_clusters = vertices.len();
@@ -35,7 +42,7 @@ pub fn find_clusters( adjacency_list: &AdjacencyList, max_size: usize)
   clusters.push(one_clusters);
   cluster_indices.push(one_cluster_indices);
 
-  for clu_size in 1..max_size{
+  for clu_size in 2..=max_size{
 
     // Build n-clusters from (n-1)-clusters.
     if let Ok(n_cluster_set)
@@ -57,7 +64,7 @@ pub fn find_clusters( adjacency_list: &AdjacencyList, max_size: usize)
       }
 
     }else{
-        return Err(CluEError::NoClustersOfSize(clu_size+1));
+        return Err(CluEError::NoClustersOfSize(clu_size));
     }
 
 
@@ -157,15 +164,20 @@ mod tests{
     let clusters = &mut cluster_set.clusters;
     let cluster_indices = &cluster_set.cluster_indices;
 
-    assert!(clusters[8].is_empty());
+    assert!(clusters[9].is_empty());
     clusters.pop();
-    assert_eq!(clusters.len(),8);
+    assert_eq!(clusters.len(),9);
 
-    assert_eq!(clusters[0].len(), 8);
+    assert_eq!(clusters[0].len(), 1);
+    let v = Vec::<usize>::new();
+    assert_eq!(clusters[0][0].vertices, v);
+    assert_eq!(cluster_indices[0][&v], 0);
+
+    assert_eq!(clusters[1].len(), 8);
     for ii in 0..8{
       let v = Vec::<usize>::from([ii]);
-      let idx = cluster_indices[0][&v];
-      assert_eq!(clusters[0][idx].vertices,*v);
+      let idx = cluster_indices[1][&v];
+      assert_eq!(clusters[1][idx].vertices,*v);
     }
     
     // 0-------1
@@ -185,10 +197,10 @@ mod tests{
       vec![6,7],
     ];
 
-    assert_eq!(clusters[1].len(), two_clusters.len());
+    assert_eq!(clusters[2].len(), two_clusters.len());
     for v in two_clusters.iter(){
-      let idx = cluster_indices[1][v];
-      assert_eq!(clusters[1][idx].vertices,*v);
+      let idx = cluster_indices[2][v];
+      assert_eq!(clusters[2][idx].vertices,*v);
     } 
 
     // 0-------1
@@ -222,7 +234,7 @@ mod tests{
       vec![5,6,7],
     ];
 
-    let size_idx = 2;
+    let size_idx = 3;
     assert_eq!(clusters[size_idx].len(), three_clusters.len());
     for v in three_clusters.iter(){
       let idx = cluster_indices[size_idx][v];
@@ -274,7 +286,7 @@ mod tests{
       vec![4,5,6,7],
     ];
 
-    let size_idx = 3;
+    let size_idx = 4;
     assert_eq!(clusters[size_idx].len(), four_clusters.len());
     for v in four_clusters.iter(){
       let idx = cluster_indices[size_idx][v];
@@ -334,7 +346,7 @@ mod tests{
       vec![3,4,5,6,7],
     ];
 
-    let size_idx = 4;
+    let size_idx = 5;
     assert_eq!(clusters[size_idx].len(), five_clusters.len());
     for v in five_clusters.iter(){
       let idx = cluster_indices[size_idx][v];
@@ -374,7 +386,7 @@ mod tests{
       vec![2,3,4,5,6,7],
     ];
 
-    let size_idx = 5;
+    let size_idx = 6;
     assert_eq!(clusters[size_idx].len(), six_clusters.len());
     for v in six_clusters.iter(){
       let idx = cluster_indices[size_idx][v];
@@ -398,7 +410,7 @@ mod tests{
       vec![1,2,3,4,5,6,7],
     ];
 
-    let size_idx = 6;
+    let size_idx = 7;
     assert_eq!(clusters[size_idx].len(), seven_clusters.len());
     for v in seven_clusters.iter(){
       let idx = cluster_indices[size_idx][v];
@@ -416,7 +428,7 @@ mod tests{
       vec![0,1,2,3,4,5,6,7],
     ];
 
-    let size_idx = 7;
+    let size_idx = 8;
     assert_eq!(clusters[size_idx].len(), eight_clusters.len());
     for v in eight_clusters.iter(){
       let idx = cluster_indices[size_idx][v];

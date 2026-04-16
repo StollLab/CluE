@@ -15,13 +15,33 @@ pub struct PyParticle{
 
 #[pymethods]
 impl PyParticle{
+  #[new]
+  fn new(element: String, x: f64, y: f64, z: f64) -> Result<Self,PyCluEError>{
+    let element = Element::from(&element)?;
+
+    let particle = Particle::new(element,x,y,z);
+
+    Ok(Self{particle})
+  }
   //----------------------------------------------------------------------------
   pub fn get_element(&self) -> PyElement {
     PyElement{element: self.particle.element.clone() }
   }
   //----------------------------------------------------------------------------
+  pub fn set_element(&mut self, element: &str) -> Result<(),PyCluEError>{
+    let el = Element::from(element);
+    self.particle.element = el?;
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
   pub fn get_isotope(&self) -> PyIsotope {
     PyIsotope{isotope: self.particle.isotope.clone() }
+  }
+  //----------------------------------------------------------------------------
+  pub fn set_isotope(&mut self, isotope: &str) -> Result<(),PyCluEError>{
+    let p = Isotope::from(isotope);
+    self.particle.isotope = p?;
+    Ok(())
   }
   //----------------------------------------------------------------------------
   pub fn get_coordinates(&self) -> [f64;3] {

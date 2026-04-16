@@ -14,14 +14,14 @@ use std::io::Write;
 /// The `ClusterSet` is a data structure that holds clusters of various sizes
 /// as well as indices to find the cluster.
 /// The first field is `clusters: Vec::<Vec::<Cluster>>`, where
-/// `clusters[0]` is a  vector of 1-clusters, `clusters[1]` a vector of
+/// `clusters[1]` is a  vector of 1-clusters, `clusters[2]` a vector of
 /// 2-clusters, and so on. 
 /// The other field is `cluster_indices: Vec::<HashMap::<Vec::<usize>,usize>>`,
-/// where `cluster_indices[0]` is a `HashMap` that has the vertices of 
+/// where `cluster_indices[1]` is a `HashMap` that has the vertices of 
 /// 1-clusters as keys and the index where the cluster with those vertices can
 /// be found as the value.
 /// For example if (key,value) = (`vec![a,b]`,idx) in `cluster_indices[1]`,
-/// then `clusters[1][idx]` has vertices `vec![a,b]`.
+/// then `clusters[2][idx]` has vertices `vec![a,b]`.
 #[derive(Debug,Clone,PartialEq)]
 pub struct ClusterSet{
   pub clusters: Vec::<Vec::<Cluster>>,
@@ -256,43 +256,43 @@ mod tests{
 
     let mut cluster_set = find_clusters(&cube,4).unwrap();
 
-    assert_eq!(cluster_set.clusters[0].len(), 8);
-    assert_eq!(cluster_set.clusters[1].len(), 12);
-    assert_eq!(cluster_set.clusters[2].len(), 24);
-    assert_eq!(cluster_set.clusters[3].len(), 38);
+    assert_eq!(cluster_set.clusters[1].len(), 8);
+    assert_eq!(cluster_set.clusters[2].len(), 12);
+    assert_eq!(cluster_set.clusters[3].len(), 24);
+    assert_eq!(cluster_set.clusters[4].len(), 38);
 
     cluster_set.prune_large_clusters(4).unwrap();
 
-    assert_eq!(cluster_set.clusters[0].len(), 8);
-    assert_eq!(cluster_set.clusters[1].len(), 12);
-    assert_eq!(cluster_set.clusters[2].len(), 24);
-    assert_eq!(cluster_set.clusters[3].len(), 38);
+    assert_eq!(cluster_set.clusters[1].len(), 8);
+    assert_eq!(cluster_set.clusters[2].len(), 12);
+    assert_eq!(cluster_set.clusters[3].len(), 24);
+    assert_eq!(cluster_set.clusters[4].len(), 38);
 
     cluster_set.prune_large_clusters(3).unwrap();
 
-    assert_eq!(cluster_set.clusters[0].len(), 8);
-    assert_eq!(cluster_set.clusters[1].len(), 12);
-    assert_eq!(cluster_set.clusters[2].len(), 24);
-    assert_eq!(cluster_set.clusters[3].len(), 0);
+    assert_eq!(cluster_set.clusters[1].len(), 8);
+    assert_eq!(cluster_set.clusters[2].len(), 12);
+    assert_eq!(cluster_set.clusters[3].len(), 24);
+    assert_eq!(cluster_set.clusters[4].len(), 0);
 
     cluster_set.prune_large_clusters(2).unwrap();
 
-    assert_eq!(cluster_set.clusters[0].len(), 8);
-    assert_eq!(cluster_set.clusters[1].len(), 12);
-    assert_eq!(cluster_set.clusters[2].len(), 0);
-    assert_eq!(cluster_set.clusters[3].len(), 0);
-
-    let clusters_0 = cluster_set.clusters[0].clone();
-    cluster_set.clusters[0] = cluster_set.clusters[1].clone();
-    cluster_set.clusters[1] = clusters_0;
-
-    assert_eq!(cluster_set.clusters[0].len(), 12);
     assert_eq!(cluster_set.clusters[1].len(), 8);
+    assert_eq!(cluster_set.clusters[2].len(), 12);
+    assert_eq!(cluster_set.clusters[3].len(), 0);
+    assert_eq!(cluster_set.clusters[4].len(), 0);
+
+    let clusters_0 = cluster_set.clusters[1].clone();
+    cluster_set.clusters[1] = cluster_set.clusters[2].clone();
+    cluster_set.clusters[2] = clusters_0;
+
+    assert_eq!(cluster_set.clusters[1].len(), 12);
+    assert_eq!(cluster_set.clusters[2].len(), 8);
 
     cluster_set.prune_large_clusters(1).unwrap();
 
-    assert_eq!(cluster_set.clusters[0].len(), 0);
-    assert_eq!(cluster_set.clusters[1].len(), 8);
+    assert_eq!(cluster_set.clusters[1].len(), 0);
+    assert_eq!(cluster_set.clusters[2].len(), 8);
 
   }
   //----------------------------------------------------------------------------
@@ -303,6 +303,7 @@ mod tests{
       number_clusters = [3,3,1]
 
       clusters = [
+        [],
         [[1],[2],[3]],
         [[1,2],[1,3],[2,3]],
         [[1,2,3]]
@@ -312,6 +313,7 @@ mod tests{
 
     let expected = ClusterSet::from(
         vec![
+          vec![],
           vec![
             Cluster::from(vec![1]), 
             Cluster::from(vec![2]), 

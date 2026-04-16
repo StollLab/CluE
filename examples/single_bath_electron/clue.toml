@@ -1,0 +1,54 @@
+#run_in_parallel = false
+
+input_structure_file = "bath.pdb"
+
+
+cluster_method = "gcce"
+
+magnetic_field = 1.2
+
+rng_seed = 0
+number_runs = 1
+max_cluster_size = 1
+
+max_spins = 4
+
+pulse_sequence = "free_evolution"
+
+radius = 200
+
+run_name = "system"
+
+
+#number_timepoints = [201]
+#tau_increments = [20e-2]
+number_timepoints = [201]
+tau_increments = [2e-2]
+
+output_directory = "CluE-out"
+
+[detected_spin]
+  position = [0.0, 0.0, 0.0]
+  multiplicity = 2
+  transition = [1,0]
+  detection_operator = [
+    [1.0, 0.0],
+    [0.0, 0.0],
+  ]
+  density_matrix = [
+    [1.0, 0.0],
+    [0.0, 0.0],
+  ]
+
+
+  
+[output]
+  auxiliary_signals = false
+  bath = true
+  clusters = true
+  info = true
+  exchange_groups = true
+  structure_pdb = true
+  orientation_signals = true
+  methyl_partitions = true
+  orientation_grid = true

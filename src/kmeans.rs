@@ -1,20 +1,28 @@
+use crate::CluEError;
 use crate::space_3d::Vector3D;
 
 use rand::distributions::Uniform;
 use rand_distr::Distribution;
 use rand_chacha::ChaCha20Rng;
 
+use mcmf::{GraphBuilder, Vertex, Cost, Capacity};
+use math::round;
 
 pub fn get_kmeans_partition(
     rng: &mut ChaCha20Rng,
     k: usize,
     data: &[Vector3D],
-    ) -> Vec::<usize>
+    do_restricted_kmeans: bool,
+    ) -> Result<Vec::<usize>,CluEError>
 {
 
   let mut klusters = initialize_klusters(rng, k, &data);
 
-  assign_data(&mut klusters, &data);
+  if do_restricted_kmeans{
+    restricted_assign_data(&mut klusters, &data)?;
+  }else{  
+    assign_data(&mut klusters, &data)?;
+  }
 
   move_kluster_centers(&mut klusters, &data);
 
@@ -23,7 +31,11 @@ pub fn get_kmeans_partition(
   loop{
     klusters0 = klusters.clone();
 
-    assign_data(&mut klusters, &data);
+    if do_restricted_kmeans{
+      restricted_assign_data(&mut klusters, &data)?;
+    }else{  
+      assign_data(&mut klusters, &data)?;
+    }
 
     move_kluster_centers(&mut klusters, &data);
 
@@ -43,7 +55,7 @@ pub fn get_kmeans_partition(
     }
   }
 
-  element_to_block
+  Ok(element_to_block)
 }
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -84,6 +96,83 @@ impl Kluster{
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[derive(Debug,Clone,PartialEq,Eq,Ord,PartialOrd,Hash)]
+enum VertexClass{
+  Data,
+  ClusterCenter,
+}
+
+#[derive(Debug,Clone,PartialEq,Eq,Ord,PartialOrd,Hash)]
+struct KMNode{
+  class: VertexClass,
+  index: usize,
+}
+
+fn restricted_assign_data(
+    klusters: &mut[Kluster],
+    data: &[Vector3D], 
+    ) 
+  -> Result<(),CluEError>
+{ 
+  // Clear old assignments.
+  for kluster in klusters.iter_mut(){
+    println!("DB: {:?}",kluster);
+    kluster.elements = Vec::<usize>::new();
+  }
+
+  let n_klusters = klusters.len();
+
+  let mut graph = GraphBuilder::<KMNode>::new();
+
+  let src_cap = round::ceil((data.len() as f64)/(n_klusters as f64),0) as i32;
+
+  // Add edge from each kluster to the sink vertex with capacity `src_cap`. 
+  for jj in 0..klusters.len(){
+    let vertex_c = KMNode{class: VertexClass::ClusterCenter, index: jj};
+    graph.add_edge(vertex_c.clone(),Vertex::Sink,Capacity(src_cap),Cost(0));
+  }
+
+  // Add edge from the source vertex each data point. 
+  for (ii,x) in data.iter().enumerate(){
+
+    let vertex_x = KMNode{class: VertexClass::Data, index: ii};
+    graph.add_edge(Vertex::Source,vertex_x.clone(),Capacity(1),Cost(0));
+    
+    // Add edge from each datum to each kluster.
+    for (jj,c) in klusters.iter().enumerate(){
+      let vertex_c = KMNode{class: VertexClass::ClusterCenter, index: jj};
+
+      let distance = (x - &c.center).norm();
+      let cost = round::half_up(distance,0) as i32;
+      println!("DB: d = {}",distance);
+
+      graph.add_edge(vertex_x.clone(),vertex_c.clone(),Capacity(1),Cost(cost));
+    }
+  }
+
+  // Run min-cost max-flow.
+  let (_cost, paths) = graph.mcmf();
+
+  for p in paths.iter(){
+    let mcmf::Vertex::Node(kluster) = p.vertices()[2] else{
+      return Err(CluEError::FailedKMeans);
+    };
+    if kluster.class != VertexClass::ClusterCenter{
+      return Err(CluEError::FailedKMeans);
+    }
+
+    let mcmf::Vertex::Node(datum) = p.vertices()[1] else{
+      return Err(CluEError::FailedKMeans);
+    };
+    if datum.class != VertexClass::Data{
+      return Err(CluEError::FailedKMeans);
+    }
+    
+    klusters[kluster.index].elements.push(datum.index);
+  }
+
+  Ok(())
+}
 //------------------------------------------------------------------------------
 fn are_klusters_identical(klusters: &[Kluster],klusters0: &[Kluster]) -> bool
 {
@@ -117,7 +206,9 @@ fn move_kluster_centers(klusters: &mut Vec::<Kluster>, data: &[Vector3D])
   }
 }
 //------------------------------------------------------------------------------
-fn assign_data(klusters: &mut Vec::<Kluster>, data: &[Vector3D]){
+fn assign_data(klusters: &mut Vec::<Kluster>, data: &[Vector3D])
+  -> Result<(),CluEError>
+{
 
   for kluster in klusters.iter_mut(){
     kluster.elements = Vec::<usize>::new();
@@ -137,6 +228,7 @@ fn assign_data(klusters: &mut Vec::<Kluster>, data: &[Vector3D]){
     }
     klusters[min_index].elements.push(ii);
   }
+  Ok(())
 }
 //------------------------------------------------------------------------------
 fn initialize_klusters(
@@ -180,7 +272,7 @@ mod tests{
     let mut rng = ChaCha20Rng::seed_from_u64(2);
     let (data,_expected_klusters) = get_test_kluster_data();
 
-    let elements_to_block = get_kmeans_partition(&mut rng,k,&data);
+    let elements_to_block = get_kmeans_partition(&mut rng,k,&data,false).unwrap();
     assert_eq!(elements_to_block.len(),12); 
 
     assert_eq!(elements_to_block[0],elements_to_block[1]);
@@ -204,6 +296,38 @@ mod tests{
 
     assert_ne!(elements_to_block[6],elements_to_block[9]);
   
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_get_restricted_kmeans_partition(){
+    let k = 4;
+    let mut rng = ChaCha20Rng::seed_from_u64(2);
+    let (data,_expected_klusters) = get_test_kluster_data();
+
+    let elements_to_block = get_kmeans_partition(&mut rng,k,&data,true).unwrap();
+    assert_eq!(elements_to_block.len(),12); 
+
+    assert_eq!(elements_to_block[0],elements_to_block[1]);
+    assert_eq!(elements_to_block[0],elements_to_block[2]);
+
+    assert_eq!(elements_to_block[3],elements_to_block[4]);
+    assert_eq!(elements_to_block[3],elements_to_block[5]);
+
+    assert_eq!(elements_to_block[6],elements_to_block[7]);
+    assert_eq!(elements_to_block[6],elements_to_block[8]);
+
+    assert_eq!(elements_to_block[9],elements_to_block[10]);
+    assert_eq!(elements_to_block[9],elements_to_block[11]);
+
+    assert_ne!(elements_to_block[0],elements_to_block[3]);
+    assert_ne!(elements_to_block[0],elements_to_block[6]);
+    assert_ne!(elements_to_block[0],elements_to_block[9]);
+
+    assert_ne!(elements_to_block[3],elements_to_block[6]);
+    assert_ne!(elements_to_block[3],elements_to_block[9]);
+
+    assert_ne!(elements_to_block[6],elements_to_block[9]);
+
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -265,7 +389,7 @@ mod tests{
     
     assert!(!are_klusters_identical(&klusters, &expected_klusters));
 
-    assign_data(&mut klusters,&data);
+    assign_data(&mut klusters,&data).unwrap();
     for (ii,kluster) in klusters.iter().enumerate(){
       assert_eq!(kluster.elements, expected_klusters[ii].elements)
     }

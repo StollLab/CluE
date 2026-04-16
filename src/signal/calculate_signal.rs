@@ -40,7 +40,7 @@ use crate::signal::cluster_correlation_expansion::*;
 use crate::signal::calculate_analytic_restricted_2cluster_signals::{
   calculate_analytic_restricted_2cluster_signals};
 use crate::Structure;
-use crate::quantum::spin_hamiltonian::*;
+use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::math;
 use crate::space_3d::UnitSpherePoint;
 
@@ -68,7 +68,7 @@ pub fn calculate_signals(rng: &mut ChaCha20Rng, config: &Config,
 
   let n_tot = config.number_timepoints.iter().sum::<usize>();
 
-  let mut signals = (0..max_cluster_size).map(|_ii| Signal::zeros(n_tot))
+  let mut signals = (0..=max_cluster_size).map(|_ii| Signal::zeros(n_tot))
     .collect::<Vec::<Signal>>();
 
   for (ii,&seed) in new_seeds.iter().enumerate(){
@@ -107,13 +107,23 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
     // Get number of data points per trace.
     let n_tot = config.number_timepoints.iter().sum::<usize>();
 
-    (0..max_cluster_size).map(|_| Signal::zeros(n_tot))
+    (0..=max_cluster_size).map(|_| Signal::zeros(n_tot))
     .collect::<Vec::<Signal>>()
   };
 
 
   // Build input structure.
   let structure = Structure::build_structure(rng,config)?;
+
+  let det_spin_matrix_dim = match config.cluster_method{
+    Some(ClusterMethod::GCCE) => {
+      let Some(det_spin) = & structure.detected_particle else{
+        return Err(CluEError::NoCentralSpin);
+      };
+      det_spin.spin_multiplicity
+    },
+    _ => 1,  
+  };
 
 
   // Generate coupling tensors.
@@ -126,6 +136,12 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
   optionally_save_tensors(&save_dir_opt,&tensors,&structure,config)?;
 
 
+  let n_electron = if config.cluster_method == Some(ClusterMethod::GCCE){
+    1
+  }else{
+    0
+  };
+
   let spin_ops = {
 
     let spin_multiplicity_set =
@@ -133,26 +149,29 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
 
     match config.unit_of_clustering{
     Some(UnitOfClustering::Spin) 
-        => ClusterSpinOperators::new(&spin_multiplicity_set,max_cluster_size)?,
+        => ClusterSpinOperators::new(det_spin_matrix_dim,
+            &spin_multiplicity_set,max_cluster_size,config)?,
 
     Some(UnitOfClustering::Set) => {
       let max_spins_per_cluster_unit = match config.partitioning{
         Some(PartitioningMethod::Particles) => 1,
         Some(PartitioningMethod::ExchangeGroupsAndParticles) => 3,
-        Some(PartitioningMethod::KMeans(_)) => usize::MAX,
+        Some(PartitioningMethod::KMeans(kmeans_size)) => kmeans_size,
+        Some(PartitioningMethod::RestrictedKMeans(kmeans_size)) => kmeans_size,
         None => return Err(CluEError::NoPartitioningMethod),
       };
 
 
-      let potential_max_order = max_cluster_size*max_spins_per_cluster_unit;
+      let potential_max_order = n_electron 
+          + max_cluster_size*max_spins_per_cluster_unit;
       
       let max_spins = match config.max_spins{
-        Some(s) => s,
+        Some(s) => s + n_electron,
         None => potential_max_order,
       };
 
-      ClusterSpinOperators::new(&spin_multiplicity_set,
-        max_spins)?
+      ClusterSpinOperators::new(det_spin_matrix_dim,&spin_multiplicity_set,
+        max_spins,config)?
     },
     None => return Err(CluEError::NoUnitOfClustering),
     }
@@ -198,7 +217,7 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
 
     let weight = Complex::<f64>{ re: integration_grid.weight(iori), im: 0.0};
 
-    for size_idx in 0..max_cluster_size{
+    for size_idx in 0..=max_cluster_size{
       ori_sigs[size_idx].mut_scale(weight);
       order_n_signals[size_idx] 
         = &order_n_signals[size_idx] + &ori_sigs[size_idx];
@@ -210,7 +229,7 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
   // Optionally save signals.
   if let Some(save_dir) =  &save_dir_opt{
     let save_path = format!("{}/signal.csv", save_dir);
-    let headers = (1..=max_cluster_size)
+    let headers = (0..=max_cluster_size)
       .map(|ii| format!("signal_{}",ii))
       .collect::<Vec::<String>>();
     write_vec_signals(&order_n_signals, headers, &save_path)?;
@@ -293,8 +312,10 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     None => return Err(CluEError::NoClusterSource),
   };
 
-  for (size_idx,clusters_of_size) in cluster_set.clusters.iter().enumerate(){
-    println!("Found {} clusters of size {}.",clusters_of_size.len(),size_idx+1);
+  for (size_idx,clusters_of_size) in cluster_set.clusters
+      .iter().enumerate().skip(1)
+  {
+    println!("Found {} clusters of size {}.",clusters_of_size.len(),size_idx);
   }
 
   if let Some(path) = &save_path_opt{
@@ -317,12 +338,12 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     None => return Err(CluEError::NoClusterMethod)
   };
 
-
   if let Some(save_dir) =  &save_path_opt{
     let save_path = format!("{}/signal.csv", save_dir);
-    let headers = (1..=max_cluster_size)
+    let headers = (0..=max_cluster_size)
       .map(|ii| format!("signal_{}",ii))
       .collect::<Vec::<String>>();
+
     write_vec_signals(&order_n_signals, headers, &save_path)?;
 
     if config.write_sans_spin_signals == Some(true){

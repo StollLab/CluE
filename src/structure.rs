@@ -46,7 +46,8 @@ pub struct DetectedSpin{
   pub isotope: Isotope,
   pub weighted_coordinates: IntegrationGrid,
   pub spin_multiplicity: usize,
-  pub transition: [usize;2],
+  //pub transition: [usize;2],
+  pub zerofield_tensor: Option<SymmetricTensor3D>,
 }
 //------------------------------------------------------------------------------
 impl DetectedSpin{
@@ -444,6 +445,18 @@ impl Structure{
         particle_index,config)?;
 
     isotope_properties.electric_quadrupole_coupling.as_ref()
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns the zero-field coupling for particle 
+  /// `particle_index`.
+  pub fn extract_zerofield_specifier<'a>(&self, particle_index: usize,
+      config: &'a Config)
+    -> Option<&'a TensorSpecifier>
+  {
+    let isotope_properties = self.extract_isotope_properties(
+        particle_index,config)?;
+
+    isotope_properties.zerofield_coupling.as_ref()
   }
   //----------------------------------------------------------------------------
   /// This function returns the g-matrix for particle `particle_index`.

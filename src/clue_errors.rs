@@ -73,6 +73,7 @@ pub enum CluEError{
   ClusterTOMLNoNumberClusters,
   ClusterTOMLWrongClusterSize,  
   ConfigModeNotRecognized(String),
+  PulseSequenceNotSupported(String,String),
   DeprecatedKeywordReplaced(usize,String,String),
   DetectedSpinDoesNotHaveAnActiveIndex,
   EmptyVector(usize),
@@ -90,10 +91,13 @@ pub enum CluEError{
   ExpectedTOMLFloat(String),
   ExpectedTOMLString(String),
   ExpectedTOMLTable(String),
+  FailedKMeans,
+  FilterAlreadySet(String),
   FilterNoMaxDistance(String),
   FilterNeedsALabel,
   FilterNoMinDistance(String),
   FiltersOverlap(String,String),
+  HamiltonianAndDensityNotSameDimension(usize,usize),
   InconsistentExhangeGroupActiveStatus(usize),
   IncorrectFormattingIsotopeAbundances(usize),
   IncorrectNumberOfAxes(usize,usize),
@@ -103,9 +107,14 @@ pub enum CluEError{
   InvalidAxes,
   InvalidClusterPartitionKey,
   InvalidConfigFile(String),
+  InvalidDensityMatrix,
+  InvalidDetectionOperator,
+  InvalidKMeansSize,
+  InvalidPulse(String),
   InvalidPulseSequence(usize),
   InvalidSecondaryFilter(usize,String),
   InvalidToken(usize,String),
+  InvalidSpinMultiplicity(usize),
   IsotopeAbundancesCannotBeNormalized(usize),
   IsotopeAbundancesMustBeNonnegative(usize),
   LenghMismatchTimepointsIncrements(usize,usize),
@@ -142,6 +151,8 @@ pub enum CluEError{
   NoClustersOfSize(usize),
   NoClusterSource,
   NoDensityMatrixMethod,
+  NoDetectedSpinDensityMatrix,
+  NoDetectedSpinDetectionOperator,
   NoDetectedSpinIdentity,
   NoDetectedSpinMultiplicity,
   NoDetectedSpinNotSet,
@@ -151,6 +162,7 @@ pub enum CluEError{
   NoGMatrixValues,
   NoHyperfineSpecifier(String,String),
   NoInputFile,
+  NoKMeansSize,
   NoMagneticField,
   NoModelIndex,
   NoMaxClusterSize,
@@ -163,6 +175,10 @@ pub enum CluEError{
   NoRadius,
   NoRelationalOperators(usize),
   NoRHS(usize),
+  NoRunInParallel,
+  NoDensityMatrixWithMultiplicity(usize),
+  NoDetOpWithMultiplicity(usize),
+  NoPulseOpWithMultiplicity(String,usize),
   NoSpinOpForClusterSize(usize,usize),
   NoSpinOpWithMultiplicity(usize),
   NoStructureFile,
@@ -176,12 +192,12 @@ pub enum CluEError{
   NoTimeAxis,
   NoTimeIncrements,
   NoTimepoints,
+  NoTransition,
   NoUnitOfClustering,
   NoUnitOfDistance,
   NoUnitOfEnergy,
   NoUnitOfMagneticField,
   NoUnitOfTime,
-  OptionAlreadySet(usize,String),
   ParticlesClash(usize,String,usize,String,f64,f64),
   ParticleIsNotActive(usize),
   PartitionIsIncomplette,
@@ -202,6 +218,7 @@ pub enum CluEError{
   TOMLArrayDoesNotSpecifyATensor,
   TOMLArrayDoesNotSpecifyAVector,
   TOMLArrayIsEmpty,
+  TOMLArrayIsNotAMatrix,
   TOMLValueDoesNotSpecifyAPartitionTable,
   TOMLValueIsNotABool,
   UnavailableSpinOp(usize,usize),
@@ -444,6 +461,9 @@ size n.", file),
       CluEError::ConfigModeNotRecognized(mode) => write!(f,
           "#[{}] is not recognized",mode),
 
+      CluEError::PulseSequenceNotSupported(fun,seq) => write!(f,
+        "\"{}\" does not support {}",fun,seq),
+
       CluEError::DeprecatedKeywordReplaced(line_number, 
           deprecated, replaced) => write!(f,
           "line {}, \"{}\" is deprecated and is replaced by \"{}\"", 
@@ -501,6 +521,12 @@ fo nth active"),
           "line {}, expected a vector of {} floats on the right hand side",
           line_number,n),
 
+      CluEError::FailedKMeans => write!(f,
+          "k-means failed"),
+
+      CluEError::FilterAlreadySet(filter) => write!(f,
+          "{} has already been set",filter),
+
       CluEError::FilterNeedsALabel => write!(f,
           "group requires a label to be set: #[group(label = LABEL)]"),
 
@@ -515,6 +541,11 @@ fo nth active"),
       CluEError::FiltersOverlap(label0,label1) => write!(f,
           "groups \"{}\" and \"{}\" overlap: \
 particles must not reside in more than one group",label0,label1),
+
+      CluEError::HamiltonianAndDensityNotSameDimension(h,rho) => write!(f,
+          "the Hamiltonian and density matrix are \"{}\" and \"{}\" dimensional\
+respectively: they must have the same dimension",
+          h,rho),
 
       CluEError::InconsistentExhangeGroupActiveStatus(ex_grp_id) => write!(f,
           "in exchange group {}, spins should all be either active or inactive",
@@ -547,14 +578,29 @@ and p0,p1 > 0 are abundances",line_number),
       CluEError::InvalidConfigFile(filename) => write!(f,
           "cannot not read config file \"{}\"", filename),
 
-      CluEError::InvalidPulseSequence(line_number) => write!(f,
-          "line {}, invalid pulse sequence",line_number),
+      CluEError::InvalidDensityMatrix => write!(f,
+          "invalid density matrix"),
+
+      CluEError::InvalidDetectionOperator => write!(f,
+          "invalid detection operator"),
+
+      CluEError::InvalidKMeansSize => write!(f,
+          "kmeans_size must be at least 1"),
+
+      CluEError::InvalidPulse(pulse) => write!(f,
+          "invalid {}",pulse),
+
+      CluEError::InvalidPulseSequence(step) => write!(f,
+          "invalid pulse sequence at step {}",step),
 
       CluEError::InvalidSecondaryFilter(line_number, arg) => write!(f,
           "line {}, invalid secondary filter \"{}\"",line_number, arg),
 
       CluEError::InvalidToken(line_number,err_token) => write!(f,
           "line {}, invalid token \"{}\"",line_number, err_token),
+
+      CluEError::InvalidSpinMultiplicity(n) => write!(f,
+          "invalid spin multiplicity \"{}\"",n),
 
       CluEError::IsotopeAbundancesCannotBeNormalized(line_number) => write!(f,
           "line {}, isotope abundances cannot be normalized",line_number),
@@ -673,6 +719,12 @@ periodic boundary conditions should be applied"),
       CluEError::NoDensityMatrixMethod=> write!(f,
           "no density matrix method specified"),
       
+      CluEError::NoDetectedSpinDensityMatrix=> write!(f,
+          "no density matrix for the detected spin"),
+      
+      CluEError::NoDetectedSpinDetectionOperator=> write!(f,
+          "no detection operator"),
+      
       CluEError::NoDetectedSpinIdentity => write!(f,
           "detected_spin_identity is not set"),
 
@@ -696,6 +748,9 @@ periodic boundary conditions should be applied"),
       
       CluEError::NoInputFile => write!(f,
           "no input file"),
+
+      CluEError::NoKMeansSize => write!(f,
+          "k-means requires kmeans_size to be set"),
       
       CluEError::NoHyperfineSpecifier(label,isotope) => write!(f,
           "no hyperfine specifier found for {} {}",label,isotope),
@@ -768,6 +823,9 @@ periodic boundary conditions should be applied"),
       CluEError::NoTimepoints => write!(f,
           "please specify how many timepoints there are for each increment"),
       
+      CluEError::NoTransition => write!(f,
+          "please specify a transition for the detected spin"),
+      
       CluEError::NoUnitOfClustering => write!(f,
           "please specify a unit of clustering"),
 
@@ -785,6 +843,21 @@ periodic boundary conditions should be applied"),
       
       CluEError::NoRHS(line_number) => write!(f,
           "line {}, cannot read right hand side",line_number),
+
+      CluEError::NoRunInParallel => write!(f,
+          "run_in_parallel is not set"),
+
+      CluEError::NoDensityMatrixWithMultiplicity(spin_multiplicity) => write!(f,
+          "no bath-spin-{} density matrices are built for the detected spin", 
+          (*spin_multiplicity as f64 - 1.0)/2.0),
+
+      CluEError::NoDetOpWithMultiplicity(spin_multiplicity) => write!(f,
+          "no bath-spin-{} operators are built for the detected spin", 
+          (*spin_multiplicity as f64 - 1.0)/2.0),
+
+      CluEError::NoPulseOpWithMultiplicity(p,spin_multiplicity) => write!(f,
+          "pulse {} has no bath-spin-{} operator", 
+          p,(*spin_multiplicity as f64 - 1.0)/2.0),
 
       CluEError::NoSpinOpForClusterSize(cluster_size,max_size) => write!(f,
           "no spin operators for clusters of size {} are built,\
@@ -806,9 +879,6 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
 
       CluEError::PartitionIsIncomplette => write!(f,
           "partition table should contain n cells indexed by [0,n-1]"),
-
-      CluEError::OptionAlreadySet(line_number,err_token) => write!(f,
-          "line {}, \"{}\" has already been set",line_number, err_token),
 
       CluEError::UnmatchedBlockComment(line_number) => write!(f,
           "line {}, unmatched \"*/\"", line_number),
@@ -878,6 +948,10 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
 
       CluEError::TOMLArrayIsEmpty => write!(f,
           "TOML array is empty", 
+          ),
+
+      CluEError::TOMLArrayIsNotAMatrix => write!(f,
+          "TOML array is not a matrix", 
           ),
 
       CluEError::TOMLValueDoesNotSpecifyAPartitionTable => write!(f,

@@ -16,7 +16,10 @@ use crate::space_3d::Vector3D;
 use crate::structure::particle_filter::VectorSpecifier;
 use crate::integration_grid::IntegrationGrid;
 
-use crate::misc::are_all_same_type;
+use crate::misc::{
+  are_all_same_type,
+  cxmat_from_toml_array,  
+};
 
 
 use crate::io::{FromTOMLString,read_csv};
@@ -32,13 +35,20 @@ use std::fmt;
 use std::fs;
 use std::mem;
 
+use num_complex::Complex;
+use ndarray::Array2;
+
+type CxMat = Array2::<Complex<f64>>;
+
+pub mod command_line_input;
 pub mod config_toml;
 pub mod particle_config;
-pub mod command_line_input;
+pub mod toml_keys;
 
 
 // Define the directory and file names used to save outputs.
 pub const SAVE_DIR_AUXILIARY_SIGNALS: &str = "auxiliary_signals";
+pub const SAVE_DIR_CLUSTER_SIGNALS: &str = "cluster_signals";
 pub const SAVE_FILE_BATH: &str = "bath";
 pub const SAVE_FILE_CLUSTERS: &str = "clusters";
 pub const SAVE_DIR_INFO: &str = "info";
@@ -59,11 +69,16 @@ pub struct Config{
 
   // Detected Spin
   pub density_matrix: Option<DensityMatrixMethod>,
+  pub detected_density_matrix: Option<CxMat>,
   pub detected_spin_g_matrix: Option<TensorSpecifier>,
   pub detected_spin_identity: Option<Isotope>,
   pub detected_spin_multiplicity: Option<usize>,
   pub detected_spin_position: Option<DetectedSpinCoordinates>,
   pub detected_spin_transition: Option<[usize;2]>,
+  pub detection_operator: Option<CxMat>,
+  pub detected_spin_zerofield_coupling: Option<TensorSpecifier>,
+  pub detected_spin_quadrupole_coupling: Option<TensorSpecifier>,
+  pub pulses: HashMap::<String,CxMat>,
 
   // Structure
   pub replicate_unit_cell: Option<ReplicateUnitCell>,
@@ -95,6 +110,7 @@ pub struct Config{
   pub partitioning: Option<PartitioningMethod>,
   pub partition_table: Option<PartitionTableConfig>,
   pub rng_seed: Option<u64>,
+  pub run_in_parallel: Option<bool>,
   pub unit_of_clustering: Option<UnitOfClustering>,
 
   // Experimental Details
@@ -103,8 +119,10 @@ pub struct Config{
   pub pulse_sequence: Option<PulseSequence>,
   time_axis: Vec::<f64>,
   pub tau_increments: Vec::<f64>,
+  pub tau2_increments: Vec::<f64>,
   pub number_runs: Option<usize>, 
   pub number_timepoints: Vec::<usize>,
+  pub number_timepoints2: Vec::<usize>,
 
   // Output
   pub output_directory: Option<String>,
@@ -112,6 +130,7 @@ pub struct Config{
   pub write_auxiliary_signals: Option<bool>, 
   pub write_bath: Option<bool>,
   pub write_clusters: Option<bool>,
+  pub write_cluster_signals: Option<bool>, 
   pub write_config: Option<bool>,
   pub write_detected_spin: Option<bool>,
   pub write_info: Option<bool>,
@@ -182,6 +201,12 @@ impl Config{
     if self.clash_distance.is_none(){
       self.clash_distance = Some(1e-12);
     }
+    /*
+    // Slow for large systems.   
+    if self.clash_distance_pbc.is_none(){
+      self.clash_distance_pbc = Some(1e-11);
+    }
+    */
 
 
     if self.cluster_batch_size.is_none(){
@@ -199,12 +224,23 @@ impl Config{
     if self.pdb_model_index.is_none(){
       self.pdb_model_index = Some(0);
     }
+    if self.run_in_parallel.is_none(){
+      self.run_in_parallel = Some(true);
+    }
+
     if self.density_matrix.is_none(){
       self.density_matrix = Some(DensityMatrixMethod::Identity);
     }
 
     if self.number_runs.is_none(){
       self.number_runs = Some(1);
+    }
+
+    if self.number_timepoints2.is_empty(){
+      self.number_timepoints2 = vec![1];
+    }
+    if self.tau2_increments.is_empty(){
+      self.tau2_increments = vec![0.0];
     }
 
     if self.unit_of_clustering.is_none(){
@@ -248,11 +284,15 @@ impl Config{
     if self.detected_spin_identity.is_none(){
       self.detected_spin_identity = Some(Isotope::Electron);
     }
+    if self.detected_spin_multiplicity.is_none(){
+      let Some(spin) = self.detected_spin_identity else{
+        return Err(CluEError::NoDetectedSpinIdentity);
+      };
+      self.detected_spin_multiplicity = Some(spin.spin_multiplicity());
+    }
 
     // Set g-matrix
-    if self.detected_spin_g_matrix.is_some(){
-     
-    }else{
+    if self.detected_spin_g_matrix.is_none(){
       self.detected_spin_g_matrix = Some(TensorSpecifier::Eig(EigSpecifier{
         values: Some([ELECTRON_G,ELECTRON_G,ELECTRON_G]),
         x_axis: Some(VectorSpecifier::Vector(Vector3D::from([1.0, 0.0, 0.0]))),
@@ -260,14 +300,21 @@ impl Config{
         z_axis: None,
           }));
     }
-    if self.detected_spin_multiplicity.is_none(){
+    if self.detected_spin_multiplicity.is_none() {
       self.detected_spin_multiplicity = match self.detected_spin_identity{
         Some(isotope) => Some(isotope.spin_multiplicity()),
         None => return Err(CluEError::NoDetectedSpinIdentity),
       };
-    }
+    };
+
     if self.detected_spin_transition.is_none(){
-      self.detected_spin_transition = Some([0,1]);
+      let Some(s) = self.detected_spin_multiplicity else{
+        return Err(CluEError::NoDetectedSpinMultiplicity);
+      };
+
+      if s == 2{
+        self.detected_spin_transition = Some([s/2 - 1,s/2]);
+      }
     }
     Ok(())
   }
@@ -349,6 +396,16 @@ impl Config{
     let n_tot = n_dts.iter().sum::<usize>();
     let mut time_axis = Vec::<f64>::with_capacity(n_tot);
     match pulse_sequence{
+      PulseSequence::FreeEvolution =>{
+        let mut t = 0.0;
+        for (idx, &n_dt) in n_dts.iter().enumerate(){
+          let dt = dts[idx];
+          for _ii in 0..n_dt{
+            time_axis.push(t);
+            t += dt;
+          }
+        }
+      }
       PulseSequence::CarrPurcell(n_pi_pulses) => {
         let mut t = 0.0;
         for (idx, &n_dt) in n_dts.iter().enumerate(){
@@ -359,6 +416,8 @@ impl Config{
           }
         }
       }
+      PulseSequence::RefocusedHahnEcho => panic!("TODO"),
+      PulseSequence::Custom(_) => panic!("TODO"),
     }
 
     Ok(time_axis)
@@ -420,7 +479,6 @@ impl Config{
 /// `DensityMatrixMethod` specifies different methods for determining the
 #[derive(Debug,Clone,PartialEq)]
 pub enum DensityMatrixMethod{
-  ApproxThermal(f64),
   Identity,
   Thermal(f64),
 }
@@ -642,15 +700,69 @@ impl PartitionTableConfig{
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[derive(Debug,Clone,PartialEq)]
+pub enum PulseStepSpecifier{
+  Pulse(String),
+  FixedDelay(i32,Option<usize>),  
+  TauDelay,
+  Detect,
+}
+
+impl PulseStepSpecifier{
+  //----------------------------------------------------------------------------
+  pub fn from_toml_array(pulse_step: &toml::Value) -> Result<Self,CluEError>{
+    
+    let out = match &pulse_step[0]{
+      toml::Value::String(ps) => {
+        match ps.as_str(){
+          "pulse" => PulseStepSpecifier::Pulse(pulse_step[1].to_string()),
+          "delay" => PulseStepSpecifier::TauDelay,
+          "detect" => PulseStepSpecifier::Detect,
+          _ => panic!("TODO CluEError"),  
+        }
+      } 
+      _ => panic!("TODO CluEError"),  
+    };
+
+    Ok(out)  
+  }
+  //----------------------------------------------------------------------------
+}
 /// `PulseSequence` lists the options for pulse sequences to simulate.
 #[derive(Debug,Clone,PartialEq)]
 pub enum PulseSequence{
+  FreeEvolution,
   CarrPurcell(usize),
-  //RefocusedEcho,
+  RefocusedHahnEcho,
+  Custom(Vec::<PulseStepSpecifier>),
 }
+
 impl PulseSequence{
-  pub fn from(pulse_seq: &str) -> Result<Self,CluEError>
-{
+  pub fn from_toml_value(pulse_seq: &toml::Value) -> Result<Self,CluEError>
+  {
+    match pulse_seq{
+      toml::Value::String(ps) => Self::from_str(ps),
+      toml::Value::Array(ps) => Self::from_toml_array(ps),  
+      _ => panic!("TODO CluEError"),  
+    }
+  }
+  //----------------------------------------------------------------------------
+  pub fn from_toml_array(pulse_seq: &[toml::Value]) -> Result<Self,CluEError>{
+    let mut pulse_sequence 
+      = Vec::<PulseStepSpecifier>::with_capacity(pulse_seq.len());
+
+    for step in pulse_seq.iter(){
+      let pulse_step = match step{
+        _ => panic!("TODO CluEError"),       
+      };
+      pulse_sequence.push(pulse_step)
+    }
+  
+    Ok(Self::Custom(pulse_sequence))
+  }
+  //----------------------------------------------------------------------------
+  pub fn from_str(pulse_seq: &str) -> Result<Self,CluEError>
+  {
   if pulse_seq.substring(0,3) == "cp-"{
     let Ok(n_pi) = pulse_seq.substring(3,pulse_seq.len()).parse::<usize>()else{
       return Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string()));
@@ -658,10 +770,12 @@ impl PulseSequence{
     return Ok(Self::CarrPurcell(n_pi)); 
   }
   match pulse_seq{
+    "free_evolution" => Ok(PulseSequence::FreeEvolution),
+    "fid" => Ok(PulseSequence::CarrPurcell(0)),
     "hahn" => Ok(PulseSequence::CarrPurcell(1)),
     _ => Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string())),
   }
-}
+  }  
 
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -674,6 +788,7 @@ pub enum OrientationAveraging{
   Grid(IntegrationGrid),
   Lebedev(usize),
   Random(usize),
+  // TODO: Direction(VectorSpecifier),
 }
 impl FromTOMLString for OrientationAveraging{
   fn from_toml_string(toml_str: &str) -> Result<Self,CluEError>{
@@ -833,6 +948,16 @@ impl Config{
           = Some(TensorSpecifier::from_toml_value(toml_value,1.0)?);
       }
       
+      if let Some(toml_value) = detected_spin.electric_quadrupole{
+        self.detected_spin_quadrupole_coupling 
+          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy)?);
+      }
+      
+      if let Some(toml_value) = detected_spin.zerofield{
+        self.detected_spin_zerofield_coupling 
+          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy)?);
+      }
+      
       if let Some(spin_id) = &detected_spin.identity{                          
         self.detected_spin_identity =  Some(Isotope::from(spin_id)?);
       }
@@ -850,6 +975,24 @@ impl Config{
             &mut self.detected_spin_transition, 
             &mut detected_spin.transition);
       }
+      if let Some(det_op) = detected_spin.detection_operator{
+        match det_op{
+          toml::Value::Array(array) => {
+            let op = cxmat_from_toml_array(array.clone())?;
+            self.detection_operator = Some(op)
+          },
+          _ => return Err(CluEError::InvalidDetectionOperator),
+        }
+      }
+      if let Some(rho) = detected_spin.density_matrix{
+        match rho{
+          toml::Value::Array(array) => {
+            let op = cxmat_from_toml_array(array.clone())?;
+            self.detected_density_matrix = Some(op)
+          },
+          _ => return Err(CluEError::InvalidDensityMatrix),
+        }
+      }
     
     }
     //E--G
@@ -863,6 +1006,7 @@ impl Config{
             group.clone(),unit_of_distance,unit_of_energy)?;
       }
     }
+
     //I
     if config_toml.input_structure_file.is_some(){
       self.input_structure_file = config_toml.input_structure_file;
@@ -945,13 +1089,40 @@ impl Config{
     {
       self.partitioning = Some(PartitioningMethod::Particles);
 
-    }else if config_toml.partitioning 
+    }
+    else if config_toml.partitioning 
         == Some(KEY_PARTITION_EX_GROUPS.to_string())
     {
       self.partitioning 
           = Some(PartitioningMethod::ExchangeGroupsAndParticles);
 
-    }else if let Some(s) = config_toml.partitioning
+    }
+    else if config_toml.partitioning
+        == Some(KEY_PARTITION_KMEANS.to_string())
+    { 
+      let Some(kmeans_size) = config_toml.kmeans_size else{
+        return Err(CluEError::NoKMeansSize);
+      };
+      if kmeans_size < 1{
+        return Err(CluEError::InvalidKMeansSize);
+      }    
+      self.partitioning 
+          = Some(PartitioningMethod::KMeans(kmeans_size));
+    
+    }
+    else if config_toml.partitioning 
+        == Some(KEY_PARTITION_RESTRICTED_KMEANS.to_string())
+    {
+      let Some(kmeans_size) = config_toml.kmeans_size else{
+        return Err(CluEError::NoKMeansSize);
+      };
+      if kmeans_size < 1{
+        return Err(CluEError::InvalidKMeansSize);
+      }    
+      self.partitioning 
+          = Some(PartitioningMethod::RestrictedKMeans(kmeans_size));
+    }
+    else if let Some(s) = config_toml.partitioning
     {
       return Err(CluEError::CannotParsePartitioningMethod(0,s.to_string()));  
     }
@@ -965,12 +1136,15 @@ impl Config{
       self.pdb_model_index = config_toml.pdb_model_index;
     }
     if let Some(pulse_seq) = &config_toml.pulse_sequence{
-      self.pulse_sequence = Some(PulseSequence::from(pulse_seq)?);
+      self.pulse_sequence = Some(PulseSequence::from_toml_value(pulse_seq)?);
     }
 
     // R--S
     if let Some(radius) = config_toml.radius{
       self.radius = Some(radius*unit_of_distance);
+    }
+    if let Some(b) = config_toml.run_in_parallel{
+      self.run_in_parallel = Some(b);
     }
 
     if let Some(pbc) = config_toml.replicate_unit_cell{
@@ -1018,6 +1192,9 @@ impl Config{
       }
       if let Some(&b) = output.get(KEY_OUT_BATH){ 
         self.write_bath = Some(b);
+      }
+      if let Some(&b) = output.get(KEY_OUT_CLU_SIGS){ 
+        self.write_cluster_signals = Some(b);
       }
       if let Some(&b) = output.get(KEY_OUT_DET_SPIN){ 
         self.write_detected_spin = Some(b);
@@ -1280,8 +1457,8 @@ mod tests{
         
         cosubstitute = "same_molecule"
 
-        1H.abundace = 0.5
-        2H.abundace = 0.5
+        1H.abundance = 0.5
+        2H.abundance = 0.5
 
         [groups.selection]
           elements = ["H"]

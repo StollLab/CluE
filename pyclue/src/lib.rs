@@ -2,6 +2,7 @@ pub mod analytic_restricted_2cluster;
 pub mod clue_toml;
 pub mod io;
 pub mod lebedev;
+pub mod py_adjacency;
 pub mod py_clue_errors;
 pub mod py_cluster;
 pub mod py_config;
@@ -18,6 +19,7 @@ use analytic_restricted_2cluster::*;
 use clue_toml::*;
 use io::*;
 use lebedev::*;
+use py_adjacency::PyAdjacencyList;
 use py_cluster::PyCluster;
 use py_config::*;
 use py_exchange_groups::*;
@@ -49,6 +51,7 @@ use clue_oxide as clue;
 #[pymodule(name = "clue_oxide")]
 fn clue_odide(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPhysicalConstants>()?;
+    m.add_class::<PyAdjacencyList>()?;
     m.add_class::<PyCluster>()?;
     m.add_class::<PyConfig>()?;
     m.add_class::<PyElement>()?;

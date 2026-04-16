@@ -1,13 +1,18 @@
+
+use crate::quantum::cluster_operators::*;
+
 use crate::physical_constants::*;
 use crate::clue_errors::*;
 use crate::config::{Config,PulseSequence,DensityMatrixMethod};
 use crate::HamiltonianTensors;
 use crate::signal::Signal;
+use crate::quantum::gcce_hamiltonian::{
+  get_free_evolutions_propagators,
+  get_2nd_free_evolutions_propagators,
+};
 
-use std::fmt;
-use ndarray::Array2;
+use ndarray::{Array1,Array2};
 use ndarray_linalg::{Eigh, UPLO, Trace};
-use ndarray::linalg::kron;
 use num_complex::Complex;
 
 type CxMat = Array2::<Complex<f64>>;
@@ -15,8 +20,8 @@ type CxMat = Array2::<Complex<f64>>;
 /// This function evolves the quantum system according to the specified
 /// pulse sequence and returns the time dependent expectation value of the
 /// measurement.
-pub fn propagate_pulse_sequence(
-    density_matrix: &CxMat, hamiltonian: &SpinHamiltonian, config: &Config)
+pub fn propagate_pulse_sequence_block_diag(
+    density_matrix: &CxMat, hamiltonian: &BlockDiagSpinHamiltonian, config: &Config)
   -> Result<Signal,CluEError>
 {
 
@@ -37,145 +42,125 @@ pub fn propagate_pulse_sequence(
 
   let mut signal = Vec::<Complex<f64>>::with_capacity(n_tot);
 
-  let du_betas = get_propagators(&hamiltonian.beta,tau_increments)?;
-  let du_alphas = get_propagators(&hamiltonian.alpha,tau_increments)?;
+  let (_du_betas,u_betas) = get_free_evolutions_propagators(
+      &hamiltonian.beta_eigvals,&hamiltonian.beta_eigvecs,
+      config)?;
+
+  let (_du_alphas,u_alphas) = get_free_evolutions_propagators(
+      &hamiltonian.alpha_eigvals,&hamiltonian.alpha_eigvecs,
+      config)?;
+
+  let (_du2_betas,u2_betas) = match pulse_sequence{
+    PulseSequence::RefocusedHahnEcho =>
+      get_2nd_free_evolutions_propagators(
+          &hamiltonian.beta_eigvals,&hamiltonian.beta_eigvecs, config)?,
+
+    _ => (vec![CxMat::eye(0)],vec![CxMat::eye(0)]),
+  }; 
+
+  let (_du2_alphas,u2_alphas) = match pulse_sequence{
+    PulseSequence::RefocusedHahnEcho =>
+      get_2nd_free_evolutions_propagators(
+          &hamiltonian.alpha_eigvals,&hamiltonian.alpha_eigvecs, config)?,
+
+    _ => (vec![CxMat::eye(0)],vec![CxMat::eye(0)]),
+  }; 
 
 
-  let mut u_beta = CxMat::eye(du_betas[0].dim().0);
-  let mut u_alpha = CxMat::eye(du_alphas[0].dim().0);
-  let mut u_beta_dag = CxMat::eye(du_betas[0].dim().0);
-  let mut u_alpha_dag = CxMat::eye(du_alphas[0].dim().0);
-
-  for (idt,_dt) in tau_increments.iter().enumerate(){
-    let n_timepoints = number_timepoints[idt];
-    for _inumt in 0..n_timepoints{
+  for (idt,u_beta) in u_betas.iter().enumerate(){
+    let u_alpha = &u_alphas[idt];
+    let u_beta_dag = u_beta.t().map(|u_ij| u_ij.conj() );
+    let u_alpha_dag = u_alpha.t().map(|u_ij| u_ij.conj() );
     
-      let u: CxMat;
-      match pulse_sequence{
-        PulseSequence::CarrPurcell(0) => // FID
-          u = u_alpha_dag.dot(&u_beta),
+    let u: CxMat;
+    match pulse_sequence{
+      PulseSequence::CarrPurcell(0) => // FID
+        u = u_alpha_dag.dot(u_beta),
 
-        PulseSequence::CarrPurcell(1) => // Hahn echo
-          u = u_alpha_dag.dot(&u_beta_dag.dot(&u_alpha.dot(&u_beta))),  
-        
-        PulseSequence::CarrPurcell(2) => // CP-2
-          u = u_beta_dag.dot(&u_alpha_dag.dot(&u_alpha_dag.dot(&u_beta_dag
-                .dot(&u_alpha.dot(&u_beta.dot(&u_alpha.dot(&u_beta))))))),
-        
-        PulseSequence::CarrPurcell(n_pi) => { // CP-n
-          let u_aa = u_alpha.dot(&u_alpha);
-          let u_bb = u_beta.dot(&u_beta);
-          let exponent = ((*n_pi as f64 - 1.0)/2.0) as usize;
-          let aabb1 = u_aa.dot(&u_bb);
-          let bbaa1 = u_bb.dot(&u_aa);
-          let mut aabb = aabb1.clone();
-          let mut bbaa = bbaa1.clone();
-          for _ii in 1..exponent{
-            aabb = aabb1.dot(&aabb);
-            bbaa = bbaa1.dot(&bbaa);
-          }
-          if n_pi%2 == 0{
-            u = ((u_alpha.dot(&bbaa.dot(&u_bb.dot(&u_alpha))))
-                .t().map(|v| v.conj()))
-              .dot( &(u_beta.dot(&aabb.dot(&u_aa.dot(&u_beta)))));
-          }else{
-            u = ((u_beta.dot(&aabb.dot(&u_alpha))).t().map(|v| v.conj()))
-              .dot( &(u_alpha.dot(&bbaa.dot(&u_beta))) );
-          }
-        },
-      }
+      PulseSequence::CarrPurcell(1) => // Hahn echo
+        u = u_alpha_dag.dot(&u_beta_dag.dot(&u_alpha.dot(u_beta))),  
+      
+      PulseSequence::CarrPurcell(2) => // CP-2
+        u = u_beta_dag.dot(&u_alpha_dag.dot(&u_alpha_dag.dot(&u_beta_dag
+              .dot(&u_alpha.dot(&u_beta.dot(&u_alpha.dot(u_beta))))))),
+      
+      PulseSequence::CarrPurcell(n_pi) => { // CP-n
+        let u_aa = u_alpha.dot(u_alpha);
+        let u_bb = u_beta.dot(u_beta);
+        let exponent = ((*n_pi as f64 - 1.0)/2.0) as usize;
+        let aabb1 = u_aa.dot(&u_bb);
+        let bbaa1 = u_bb.dot(&u_aa);
+        let mut aabb = aabb1.clone();
+        let mut bbaa = bbaa1.clone();
+        for _ii in 1..exponent{
+          aabb = aabb1.dot(&aabb);
+          bbaa = bbaa1.dot(&bbaa);
+        }
+        if n_pi%2 == 0{
+          u = ((u_alpha.dot(&bbaa.dot(&u_bb.dot(u_alpha))))
+              .t().map(|v| v.conj()))
+            .dot( &(u_beta.dot(&aabb.dot(&u_aa.dot(u_beta)))));
+        }else{
+          u = ((u_beta.dot(&aabb.dot(u_alpha))).t().map(|v| v.conj()))
+            .dot( &(u_alpha.dot(&bbaa.dot(u_beta))) );
+        }
+      },
 
-      let it = std::iter::zip(density_matrix,&u);
-      let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
-      signal.push(v);
+      PulseSequence::RefocusedHahnEcho => {
+        // Initialize u to satisfy the compiler.
+        u = CxMat::eye(0);
 
+        for (idt2,u2_beta) in u2_betas.iter().enumerate(){
+          let u2_alpha = &u2_alphas[idt2];
+          let u2_beta_dag = u2_beta.t().map(|u_ij| u_ij.conj() );
+          let u2_alpha_dag = u2_alpha.t().map(|u_ij| u_ij.conj() );
 
-      u_beta = du_betas[idt].dot(&u_beta);
-      u_alpha = du_alphas[idt].dot(&u_alpha);
+          // In the full spin Hamiltonian,
+          // U(2τ1 + 2τ2) = U0(τ2)Up(π)U0(τ2)U0(τ1)Up(π)U0(τ1)Up(π/2).
+          // In the reduced spin-space where only spin Hamiltonian
+          // is block diagonal is the electron spin's ms, U reduces to
+          // U(2τ1 + 2τ2,-) = U0(τ2,-)U0(τ2,+)U0(τ1,+)U0(τ1,-).
+          // or
+          // U(2τ1 + 2τ2,+) = U0(τ2,+)U0(τ2,-)U0(τ1,-)U0(τ1,+)
+          // with
+          // U(2τ1 + 2τ2,+)^† = U0(τ1,+)^†U0(τ1,-)^†U0(τ2,-)^†U0(τ2,+)^†
+          // With S+ as the detection operator,
+          // <S+(2τ1 + 2τ2)> = <U(2τ1 + 2τ2,+)^† U(2τ1 + 2τ2,-)>.
 
-      u_beta_dag = u_beta.t().map(|u_ij| u_ij.conj() );
-      u_alpha_dag = u_alpha.t().map(|u_ij| u_ij.conj() );
+          let u_baab = u2_beta.dot(&u2_alpha.dot(&u_alpha.dot(u_beta)));
+          let u_abba_dag 
+            = u_alpha_dag.dot(&u_beta_dag.dot(&u2_beta_dag.dot(&u2_alpha_dag)));
+  
+          let u = u_abba_dag.dot(&u_baab);
+          let it = std::iter::zip(density_matrix,&u);
+          let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+          signal.push(v);
+        }
+      },
+      PulseSequence::FreeEvolution => return Err(
+          CluEError::PulseSequenceNotSupported(
+            "propagate_pulse_sequence_block_diag".to_string(),
+            "free evolution".to_string(),
+            )),
+      PulseSequence::Custom(_) => return Err(
+          CluEError::PulseSequenceNotSupported(
+            "propagate_pulse_sequence_block_diag".to_string(),
+            "custom pulse sequences".to_string(),
+            )),
     }
+
+    if *pulse_sequence == PulseSequence::RefocusedHahnEcho { continue; }
+    let it = std::iter::zip(density_matrix,&u);
+    let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+    signal.push(v);
   }
 
   Ok(Signal{data: signal})
 }
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-/*
-/// This function is still under construction.
-/// Please be patient.
-pub fn propagate_pulse_sequence_gcce(
-    density_matrix: &CxMat, hamiltonian: &CxMat, config: &Config)
-  -> Result<Signal,CluEError>
-{  
-  let Some(pulse_sequence) = &config.pulse_sequence else{
-    return Err(CluEError::NoPulseSequence);
-  };
-
-  let tau_increments = &config.tau_increments;
-  if tau_increments.is_empty(){
-    return Err(CluEError::NoTimeIncrements);
-  }
-
-  let number_timepoints = &config.number_timepoints;
-  if number_timepoints.is_empty(){
-    return Err(CluEError::NoTimepoints);
-  }
-  let n_tot = number_timepoints.iter().sum::<usize>();
-
-  let mut signal = Vec::<Complex<f64>>::with_capacity(n_tot);
-
-  let dus = get_propagators(&hamiltonian,tau_increments)?;
-  let mut u_of_tau = CxMat::eye(dus[0].dim().0);
-
-  let Some(spin_multiplicity) = config.detected_spin_multiplicity else{
-    return Err(CluEError::NoDetectedSpinMultiplicity);
-  };
-
-  let Some(transition) = &config.detected_spin_transition else{
-    return Err(CluEError::NoDetectedSpinTransition);
-  };
-
-  let u_pi = ideal_pulse(&SpinOp::Sx, PI, 
-    spin_multiplicity, transition)?;
-
-  let detection_op0 = CxMat::eye(dus[0].dim().0);
-
-  for (idt,_dt) in tau_increments.iter().enumerate(){
-    let n_timepoints = number_timepoints[idt];
-    for _inumt in 0..n_timepoints{
-    
-      let mut u_sequence = CxMat::eye(dus[0].dim().0);
-
-      match pulse_sequence{
-        PulseSequence::CarrPurcell(n_pi) => { // CP-n
-          let u_seg = u_of_tau.dot(&u_pi.dot(&u_of_tau));
-          for _ii in 0..*n_pi{
-            u_sequence = u_sequence.dot(&u_seg);
-          }
-        }
-      }
-
-      let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
-      
-      let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
-
-      let it = std::iter::zip(density_matrix,&detection_op);
-      let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
-      signal.push(v);
-
-
-      u_of_tau = dus[idt].dot(&u_of_tau);
-    }
-  }
-
-  panic!("CluE gCCE is still under construction.");
-  //Ok(Signal{data: signal})
-}
-*/
 //------------------------------------------------------------------------------
 /// This function builds the density matrix.
-pub fn get_density_matrix(hamiltonian: &SpinHamiltonian, config: &Config)
+pub fn get_density_matrix(hamiltonian: &BlockDiagSpinHamiltonian, config: &Config)
   -> Result<CxMat,CluEError>
 {
 
@@ -186,30 +171,20 @@ pub fn get_density_matrix(hamiltonian: &SpinHamiltonian, config: &Config)
   let mut density_matrix: CxMat;
 
   match density_matrix_method{
-    // TODO: Deprecate ApproxThermal.
-    DensityMatrixMethod::ApproxThermal(temperature) => {
-
-      let beta = I/(temperature*BOLTZMANN/HBAR);
-      
-      let mean_hamiltonian = (&hamiltonian.beta + &hamiltonian.alpha)/2.0;
-      
-      let mut rhos = get_propagators_complex_time(&mean_hamiltonian,
-          &[-beta])?;
-
-      density_matrix = rhos.remove(0);
-    },
     DensityMatrixMethod::Identity => {
-      let dim = hamiltonian.beta.dim().0;
+      let dim = hamiltonian.beta_eigvecs.dim().0;
       density_matrix = CxMat::eye(dim);
     },
     DensityMatrixMethod::Thermal(temperature) => {
 
       let beta = I/(temperature*BOLTZMANN/HBAR);
       
-      let rho_alpha = get_propagators_complex_time(&hamiltonian.alpha,
+      let rho_alpha = get_propagators_complex_time_from_eig(
+          &hamiltonian.alpha_eigvals, &hamiltonian.alpha_eigvecs,
           &[-beta])?;
 
-      let rho_beta = get_propagators_complex_time(&hamiltonian.beta,
+      let rho_beta = get_propagators_complex_time_from_eig(
+          &hamiltonian.beta_eigvals, &hamiltonian.beta_eigvecs,
           &[-beta])?;
 
       density_matrix = &rho_alpha[0] - &rho_beta[0];
@@ -237,6 +212,37 @@ pub fn get_propagators(hamiltonian: &CxMat, times: &[f64]  )
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(hamiltonian.to_string()));
   };
+
+  let mut propagators = Vec::<CxMat>::with_capacity(times.len());
+
+  let inv_eigvecs = eigvecs.t().map(|v| v.conj());
+
+  for &t in times.iter(){
+    let u_eig = CxMat::from_diag(&eigvals.map(|nu| 
+          { let i_phase: Complex<f64> = (-I*2.0*PI*nu)*t;
+            i_phase.exp() 
+          }  
+          )
+        );
+
+    let u = eigvecs.dot( &u_eig.dot( &inv_eigvecs) );
+
+    propagators.push(u);
+
+  }
+
+  Ok(propagators)
+}
+//------------------------------------------------------------------------------
+/// This function takes a Hamiltonian (Hz) and a vector of times (s), 
+/// and calculates the propagator for each time.
+/// For each time _t_, the propagator _U_(_t_) = exp(-i2π_tH_), 
+/// where _H_ is a Hamiltonian in frequency units.
+pub fn get_propagators_from_eig(
+    eigvals: &Array1::<f64>, eigvecs: &CxMat, 
+    times: &[f64]  )
+  -> Result<Vec::<CxMat>,CluEError> 
+{
 
   let mut propagators = Vec::<CxMat>::with_capacity(times.len());
 
@@ -293,59 +299,90 @@ pub fn get_propagators_complex_time(hamiltonian: &CxMat,
   Ok(propagators)
 }
 //------------------------------------------------------------------------------
-/*
-fn ideal_two_state_pulse(spin_op: &SpinOp, angle: f64)
-  -> CxMat
+/// This function takes a Hamiltonian (Hz) and a vector of times (s), 
+/// and calculates the propagator for each time.
+/// For each time _t_, the propagator _U_(_t_) = exp(-i2π_tH_), 
+/// where _H_ is a Hamiltonian in frequency units.
+pub fn get_propagators_complex_time_from_eig(
+    eigvals: &Array1::<f64>, eigvecs: &CxMat,
+    times: &[Complex<f64>]  )
+  -> Result<Vec::<CxMat>,CluEError> 
 {
 
+  let mut propagators = Vec::<CxMat>::with_capacity(times.len());
 
-  let e = CxMat::eye(2);
-  let i_sigma = get_spin_operator(2,spin_op)*(I*2.0);
+  let inv_eigvecs = eigvecs.t().map(|v| v.conj());
 
-  e*( (angle/2.0).cos() ) + i_sigma*((angle/2.0).sin() )
+  for &t in times.iter(){
+    let u_eig = CxMat::from_diag(&eigvals.map(|nu| 
+          { let i_phase: Complex<f64> = (-I*2.0*PI*nu)*t;
+            i_phase.exp() 
+          }  
+          )
+        );
 
+    let u = eigvecs.dot( &u_eig.dot( &inv_eigvecs) );
 
-}
-*/
-//------------------------------------------------------------------------------
-/*
-fn ideal_pulse(spin_op: &SpinOp, angle: f64, 
-    spin_multipliciy: usize, transition: &[usize;2])
-  -> Result<CxMat,CluEError>
-{
-  let u2 = ideal_two_state_pulse(spin_op, angle);
+    propagators.push(u);
 
-  let mut u = CxMat::eye(spin_multipliciy);
-
-  for (ii,m) in transition.iter().enumerate(){
-    let idx0 = spin_multipliciy - m - 1;
-    for (jj,n) in transition.iter().enumerate(){
-      let idx1 = spin_multipliciy - n - 1;
-
-      u[[idx0,idx1]] = u2[[ii,jj]];
-    }
   }
 
-  Ok(u)
+  Ok(propagators)
 }
-*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-/// `SpinHamiltonian` defines a block diagonal spin Hamiltonian, where
+/// `BlockDiagSpinHamiltonian` defines a block diagonal spin Hamiltonian, where
 /// the detected spin's eigenstates are beta and alpha.
-pub struct SpinHamiltonian{
-  beta: CxMat,
-  alpha: CxMat,
+pub struct BlockDiagSpinHamiltonian{
+  pub beta_eigvals: Array1::<f64>,
+  pub beta_eigvecs: CxMat,
+  pub alpha_eigvals: Array1::<f64>,
+  pub alpha_eigvecs: CxMat,
+}
+impl BlockDiagSpinHamiltonian{
+  pub fn new(beta: &CxMat,alpha: &CxMat) -> Result<Self,CluEError>
+  {
+
+    let Ok((beta_eigvals, beta_eigvecs)) = beta.eigh(UPLO::Lower) else{
+      return Err(
+          CluEError::CannotDiagonalizeHamiltonian(beta.to_string()));
+    };
+    let Ok((alpha_eigvals, alpha_eigvecs)) = alpha.eigh(UPLO::Lower) else{
+      return Err(
+          CluEError::CannotDiagonalizeHamiltonian(alpha.to_string()));
+    };
+  
+    Ok(BlockDiagSpinHamiltonian{
+      beta_eigvals, beta_eigvecs,
+      alpha_eigvals, alpha_eigvecs,
+    })
+  }
+  //----------------------------------------------------------------------------
+  pub fn beta(&self) -> CxMat{
+    let eigvals = CxMat::from_diag(&self.beta_eigvals
+        .map(|v| Complex::<f64>{re: *v, im: 0.0}));
+    let inv_eigvecs = self.beta_eigvecs.t().map(|v| v.conj());  
+
+    self.beta_eigvecs.dot(&eigvals.dot(&inv_eigvecs))
+  }
+  //----------------------------------------------------------------------------
+  pub fn alpha(&self) -> CxMat{
+    let eigvals = CxMat::from_diag(&self.alpha_eigvals
+        .map(|v| Complex::<f64>{re: *v, im: 0.0}));
+    let inv_eigvecs = self.alpha_eigvecs.t().map(|v| v.conj());  
+
+    self.alpha_eigvecs.dot(&eigvals.dot(&inv_eigvecs))
+  }
 }
 //------------------------------------------------------------------------------
 /// This function builds the cluster spin Hamiltonian assuming
 /// < mS | H | mS' > = 0, for mS != mS',
-pub fn build_hamiltonian(spin_indices: &[usize],
+pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
     spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors, 
     config: &Config)
-  -> Result<SpinHamiltonian,CluEError>
+  -> Result<BlockDiagSpinHamiltonian,CluEError>
 {
 
 
@@ -353,7 +390,10 @@ pub fn build_hamiltonian(spin_indices: &[usize],
     return Err(CluEError::NoCentralSpin);
   };
 
-  let central_spin_mult = central_spin.spin_multiplicity();
+  let Some(central_spin_mult) = config.detected_spin_multiplicity else{
+    return Err(CluEError::NoDetectedSpinMultiplicity);
+  };
+
   let s = (central_spin_mult as f64 - 1.0)/2.0;
   let spin_ms: Vec::<f64> = (0..central_spin_mult).map(|n| (n as f64 - s))
     .collect();
@@ -430,72 +470,13 @@ pub fn build_hamiltonian(spin_indices: &[usize],
 
   let beta = ham0.clone() + ham_ms.clone()*ms_beta;
   let alpha = ham0 + ham_ms*ms_alpha;
-  
-Ok(SpinHamiltonian{beta,alpha})
-}
-//------------------------------------------------------------------------------
-/// This function builds the cluster spin Hamiltonian without assuming
-/// < mS | H | mS' > = 0, for mS != mS',
-pub fn build_spin_hamiltonian(spin_indices: &[usize],
-    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors)
-  -> Result<CxMat,CluEError>
-{
 
-  // Get list of spin multiplicities.
-  let spin_multiplicities: Vec::<usize> = 
-    spin_indices.iter().map(|idx| tensors.spin_multiplicities[*idx]).collect();
-
-  // Find Hilbert space dimensionality.
-  let mut dim: usize = 1;
-  spin_multiplicities.iter().for_each(|spin_mul| dim *= spin_mul);
-
-  // Initialize Hamiltonian.
-  let mut ham = CxMat::zeros((dim,dim));
-
-  let cluster_size = spin_indices.len();
-
-  // Loop through spins and build up Hamiltonian,
-  for (sop_idx0, &ten_idx0) in spin_indices.iter().enumerate(){
-
-    let spin_mult0 = tensors.spin_multiplicities[ten_idx0];
-    let sx0 = spin_ops.get(&SpinOp::Sx,spin_mult0,cluster_size,sop_idx0)?;
-    let sy0 = spin_ops.get(&SpinOp::Sy,spin_mult0,cluster_size,sop_idx0)?;
-    let sz0 = spin_ops.get(&SpinOp::Sz,spin_mult0,cluster_size,sop_idx0)?;
-
-    // Zeeman
-    if let Some(vec) = tensors.spin1_tensors.get(ten_idx0){
-      ham = ham + sx0*vec.x();
-      ham = ham + sy0*vec.y();
-      ham = ham + sz0*vec.z();
-    }
-
-    for (sop_idx1, &ten_idx1) in spin_indices.iter().enumerate().skip(sop_idx0){
-
-      let spin_mult1 = tensors.spin_multiplicities[ten_idx1];
-      let sx1 = spin_ops.get(&SpinOp::Sx,spin_mult1,cluster_size,sop_idx1)?;
-      let sy1 = spin_ops.get(&SpinOp::Sy,spin_mult1,cluster_size,sop_idx1)?;
-      let sz1 = spin_ops.get(&SpinOp::Sz,spin_mult1,cluster_size,sop_idx1)?;
-      
-      // hyperfine, dipole-dipole, and electric quadrupole
-      if let Some(ten) = tensors.spin2_tensors.get(ten_idx0,ten_idx1){
-        ham = ham + sx0.dot(sx1)*ten.xx();
-        ham = ham + sx0.dot(sy1)*ten.xy();
-        ham = ham + sx0.dot(sz1)*ten.xz();
-        ham = ham + sy0.dot(sx1)*ten.yx();
-        ham = ham + sy0.dot(sy1)*ten.yy();
-        ham = ham + sy0.dot(sz1)*ten.yz();
-        ham = ham + sz0.dot(sx1)*ten.zx();
-        ham = ham + sz0.dot(sy1)*ten.zy();
-        ham = ham + sz0.dot(sz1)*ten.zz();
-      }
-    }
-  }
-
-  Ok(ham)
+  BlockDiagSpinHamiltonian::new(&beta,&alpha)
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/*
 /// 'ClusterSpinOperators' contains the spin operators used for clusters of 
 /// spins.
 /// `max_size` is the maximum cluster size specified.
@@ -512,7 +493,7 @@ impl<'a> ClusterSpinOperators {
   /// This function builds 'ClusterSpinOperators' for clusters of 
   /// `spin_multiplicities` up to size `max_size`.
   pub fn new(spin_multiplicities: &[usize], max_size: usize) 
-   -> Result<ClusterSpinOperators, CluEError> {
+   -> Result<Self, CluEError> {
     
     let n_mults = spin_multiplicities.len();
 
@@ -523,7 +504,7 @@ impl<'a> ClusterSpinOperators {
       cluster_spin_ops.push(sops);
     }
 
-    Ok(ClusterSpinOperators{
+    Ok(Self{
         max_size,
         spin_multiplicities: spin_multiplicities.to_owned(),
         cluster_spin_ops,
@@ -556,16 +537,19 @@ impl<'a> ClusterSpinOperators {
 
 
 }
+*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/*
 /// `KronSpinOpXYZ` contains the Sx, Sy, and Sz spin operators tensored
 /// with various identity matrices on either side.
 pub struct KronSpinOpXYZ {
   sx_list: KronSpinOpList,
   sy_list: KronSpinOpList,
   sz_list: KronSpinOpList,
+  sp_list: KronSpinOpList,
 }
 
 impl<'a> KronSpinOpXYZ {
@@ -579,11 +563,13 @@ impl<'a> KronSpinOpXYZ {
     let sx_list = KronSpinOpList::new(spin_multiplicity, SpinOp::Sx, max_size)?;
     let sy_list = KronSpinOpList::new(spin_multiplicity, SpinOp::Sy, max_size)?;
     let sz_list = KronSpinOpList::new(spin_multiplicity, SpinOp::Sz, max_size)?;
+    let sp_list = KronSpinOpList::new(spin_multiplicity, SpinOp::Sp, max_size)?;
 
     Ok(KronSpinOpXYZ{
       sx_list,  
       sy_list,  
       sz_list,  
+      sp_list,  
     })
   }
   //----------------------------------------------------------------------------
@@ -598,14 +584,17 @@ impl<'a> KronSpinOpXYZ {
        SpinOp::Sx => self.sx_list.get(op_pos,n_ops),
        SpinOp::Sy => self.sy_list.get(op_pos,n_ops),
        SpinOp::Sz => self.sz_list.get(op_pos,n_ops),
+       SpinOp::Sp => self.sp_list.get(op_pos,n_ops),
        _ => Err(CluEError::CannotFindSpinOp(sop.to_string())),
      }
   } 
 }
+*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/*
 /// `KronSpinOpList` contains a spin operator tensored with various identity 
 /// matrices on either side.
 pub struct KronSpinOpList {
@@ -669,10 +658,12 @@ impl<'a> KronSpinOpList {
     ( n_ops*(n_ops - 1) )/2 + op_pos
   }
 }
+*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/*
 //------------------------------------------------------------------------------
 /// This function generates the matrix for spin operators, `sops`,
 /// corresponding to spins with `spin_mults` spin multiplicities.
@@ -724,9 +715,9 @@ impl fmt::Display for SpinOp {
     }
 }
 //------------------------------------------------------------------------------
-// This function builds the matrix corresponding to the specified spin operator
-// and multiplicity.
-fn get_spin_operator(spin_multiplicity: usize, sop: &SpinOp) -> CxMat{
+/// This function builds the matrix corresponding to the specified spin operator
+/// and multiplicity.
+pub fn get_spin_operator(spin_multiplicity: usize, sop: &SpinOp) -> CxMat{
   match sop {
     SpinOp::E => CxMat::eye(spin_multiplicity),
     SpinOp::Sx => spin_x(spin_multiplicity),
@@ -737,10 +728,12 @@ fn get_spin_operator(spin_multiplicity: usize, sop: &SpinOp) -> CxMat{
     SpinOp::S2 => spin_squared(spin_multiplicity),
   }
 }
+*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+/*
 //------------------------------------------------------------------------------
 /// This function generates the Sx matrix:
 /// <m'|Sx|m> = 1/2*(delta_{m',m+1} + delta_{m'+1,1})*sqrt(S*(S+1) - m'*m).
@@ -852,6 +845,7 @@ pub fn spin_squared(spin_multiplicity: usize) -> CxMat {
 
   op
 }
+*/
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
@@ -871,7 +865,7 @@ mod tests {
 
   //----------------------------------------------------------------------------
   #[test]
-  fn test_propagate_pulse_sequence(){
+  fn test_propagate_pulse_sequence_block_diag(){
 
     let z0 = 33.0e9;
     let z1 = 80.0e6;
@@ -882,9 +876,11 @@ mod tests {
   
     let spin_indices = vec![1,2];
     
-    let spin_ops = ClusterSpinOperators::new(&vec![2],2).unwrap();
-
     let mut config = Config::new();
+    config.set_defaults().unwrap();
+
+    let spin_ops = ClusterSpinOperators::new(1,&vec![2],2,&config).unwrap();
+
     let nt = 21;
     config.number_timepoints = vec![nt];
     let delta_hf = a1 - a2;
@@ -895,14 +891,14 @@ mod tests {
     config.set_defaults().unwrap();
     config.set_time_axis().unwrap();
   
-    let hamiltonian = build_hamiltonian(&spin_indices,&spin_ops, &tensors,
+    let hamiltonian = build_block_diag_hamiltonian(&spin_indices,&spin_ops, &tensors,
         &config).unwrap();
 
     config.density_matrix = Some(DensityMatrixMethod::Identity);
     let density_matrix = get_density_matrix(&hamiltonian,&config).unwrap();
 
-    let signal = propagate_pulse_sequence(&density_matrix, &hamiltonian, 
-        &config).unwrap();
+    let signal = propagate_pulse_sequence_block_diag(
+        &density_matrix, &hamiltonian, &config).unwrap();
 
     assert_eq!(signal.data.len(),nt);
 
@@ -924,29 +920,8 @@ mod tests {
     }
   }
   //----------------------------------------------------------------------------
-  /*
   #[test]
-  fn test_propagate_pulse_sequence_gcce(){
-    assert!(false);
-  }
-  */
-  //----------------------------------------------------------------------------
-  /*
-  #[test]
-  fn test_ideal_two_state_pulse(){
-    assert!(false);
-  }
-  */
-  //----------------------------------------------------------------------------
-  /*
-  #[test]
-  fn test_ideal_pulse(){
-    assert!(false);
-  }
-  */
-  //----------------------------------------------------------------------------
-  #[test]
-  fn test_build_hamiltonian(){
+  fn test_build_block_diag_hamiltonian(){
 
     let z0 = 1000.0;
     let z1 = 100.0;
@@ -957,12 +932,15 @@ mod tests {
     let tensors = build_restricted_three_spin_tensors(z0, z1, a1, a2, b);
   
 
-    let spin_indices = vec![1,2];
-    let spin_ops = ClusterSpinOperators::new(&vec![2],2).unwrap();
     let mut config = Config::new();
     config.set_defaults().unwrap();
 
-    let hamiltonian = build_hamiltonian(&spin_indices,&spin_ops, &tensors,
+    let spin_indices = vec![1,2];
+    let spin_ops = ClusterSpinOperators::new(1,&vec![2],2,&config).unwrap();
+    let mut config = Config::new();
+    config.set_defaults().unwrap();
+
+    let hamiltonian = build_block_diag_hamiltonian(&spin_indices,&spin_ops, &tensors,
         &config).unwrap();
 
     let ms = 0.5;
@@ -986,46 +964,12 @@ mod tests {
       [ZERO,ZERO,ZERO,z0 -z1 - (a1+a2)/4.0 + b/4.0],
     ];
 
-    assert!(approx_eq(&hamiltonian.beta, &beta, 1e-12));
-    assert!(approx_eq(&hamiltonian.alpha, &alpha, 1e-12));
-  }
-  //----------------------------------------------------------------------------
-  #[test]
-  fn test_build_spin_hamiltonian(){
 
-    let z0 = 1000.0;
-    let z1 = 100.0;
-    let a1 = 2.0;
-    let a2 = -1.0;
-    let b = 0.1;
+    let halpha = hamiltonian.alpha();
+    let hbeta = hamiltonian.beta();
 
-    let tensors = build_restricted_three_spin_tensors(z0, z1, a1, a2, b);
-  
-
-    let spin_indices = vec![0,1,2];
-    let spin_ops = ClusterSpinOperators::new(&vec![2],3).unwrap();
-
-    let hamiltonian = build_spin_hamiltonian(&spin_indices,&spin_ops, &tensors,
-        ).unwrap();
-
-    let mut config = Config::new();
-    config.set_defaults().unwrap();
-
-    let spin_indices = vec![1,2];
-
-    let block_hamiltonian = build_hamiltonian(&spin_indices,&spin_ops, &tensors,
-        &config).unwrap();
-
-
-    assert_eq!(hamiltonian.len(), 4*block_hamiltonian.beta.len());
-
-    let beta = hamiltonian.slice(ndarray::s![4..,4..]).to_owned();
-    assert!(approx_eq(&block_hamiltonian.beta, &beta, 1e-12));
-
-    let alpha = hamiltonian.slice(ndarray::s![0..4,0..4]).to_owned();
-    assert!(approx_eq(&block_hamiltonian.alpha, &alpha, 1e-12));
-
-
+    assert!(approx_eq(&hbeta, &beta, 1e-12));
+    assert!(approx_eq(&halpha, &alpha, 1e-12));
   }
   //----------------------------------------------------------------------------
   fn build_restricted_three_spin_tensors(z0: f64, z1: f64, a1: f64, a2: f64, 
@@ -1071,45 +1015,27 @@ mod tests {
   fn test_get_density_matrix(){
     let sz = spin_z(2);
     let delta_energy = 416732382466.5515; // kB*T/h at T = 20 K.
-    let ham = sz*delta_energy;
-
-    let spin_hamiltonian = SpinHamiltonian{beta: ham.clone(),alpha: ham};
+    let beta = (sz.clone() -  CxMat::eye(2))*delta_energy;
+    let alpha = (sz.clone() +  CxMat::eye(2))*delta_energy;
+    let spin_hamiltonian = BlockDiagSpinHamiltonian::new(&beta,&alpha).unwrap();
 
     let mut config = Config::new();
 
     config.density_matrix = Some(DensityMatrixMethod::Identity);
     let density_matrix = get_density_matrix(&spin_hamiltonian,&config).unwrap();
 
-    let mut expected = CxMat::eye(2)/2.0;
+    let expected = CxMat::eye(2)/2.0;
 
     assert!(approx_eq(&density_matrix, &expected, 1e-12));
 
-    config.density_matrix = Some(DensityMatrixMethod::ApproxThermal(20.0));
-    
+    config.density_matrix = Some(DensityMatrixMethod::Thermal(20.0));
     let density_matrix = get_density_matrix(&spin_hamiltonian,&config).unwrap();
 
+    let e_inv = (-ONE).exp();
+    let z = e_inv*e_inv + e_inv;
+    let expected = Array2::from_diag(&array![e_inv*e_inv, e_inv])/z;
+    assert!(approx_eq(&density_matrix, &expected, 1e-12));
 
-    let z = (0.5*ONE).exp() + (-0.5*ONE).exp();
-    expected[[0,0]] = (-0.5*ONE).exp()/z;
-    expected[[1,1]] = (0.5*ONE).exp()/z;
-
-    assert!(approx_eq(&density_matrix, &expected, 1e-9));
-
-    let sx = spin_x(2);
-    let ham = sx*delta_energy;
-    let spin_hamiltonian = SpinHamiltonian{beta: ham.clone(),alpha: ham};
-
-    let density_matrix = get_density_matrix(&spin_hamiltonian,&config).unwrap();
-
-    let c = ( (0.5*ONE).exp() + (-0.5*ONE).exp())/2.0;
-    let s = ( (0.5*ONE).exp() - (-0.5*ONE).exp())/2.0;
-    
-    expected[[0,0]] = 0.5*ONE;
-    expected[[1,1]] = 0.5*ONE;
-    expected[[0,1]] = -0.5*ONE*s/c;
-    expected[[1,0]] = -0.5*ONE*s/c;
-
-    assert!(approx_eq(&density_matrix, &expected, 1e-9));
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -1173,6 +1099,7 @@ mod tests {
     mat0.dot(mat1) - mat1.dot(mat0)
   }
   //----------------------------------------------------------------------------
+  /*
   #[test]
   #[allow(non_snake_case)]
   fn test_ClusterSpinOperators() {
@@ -1206,7 +1133,9 @@ mod tests {
     }
 
   }
+  */
   //----------------------------------------------------------------------------
+  /*
   #[test]
   #[allow(non_snake_case)]
   fn test_KronSpinOpXYZ() {
@@ -1229,7 +1158,9 @@ mod tests {
     }
 
   }
+  */
   //----------------------------------------------------------------------------
+  /*
   #[test]
   #[allow(non_snake_case)]
   fn test_KronSpinOpList() {
@@ -1270,7 +1201,9 @@ mod tests {
   }
 
   }
+  */
   //----------------------------------------------------------------------------
+  /*
   #[test]
   fn test_kron_spin_op() {
 
@@ -1287,7 +1220,9 @@ mod tests {
           &(&zz + &(&(pm*(0.5*ONE))+&(mp*(0.5*ONE)))),1e-12)
         );
   }
+  */
 //------------------------------------------------------------------------------
+  /*
   #[test]
   fn test_spin_ops() {
 
@@ -1308,6 +1243,7 @@ mod tests {
 
     }
   }
+  */
   //----------------------------------------------------------------------------
   
   fn check_spin_ops(

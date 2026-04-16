@@ -95,6 +95,7 @@ impl ParticleFilter{
       self.indices = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as usize).collect::<Vec::<usize>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_INDICES){
       let Some(array) = value.as_array() else{
@@ -103,23 +104,51 @@ impl ParticleFilter{
       self.not_indices = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as usize).collect::<Vec::<usize>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_CELL_IDS){
+      if !self.cell_ids.is_empty(){
+        return Err(CluEError::FilterAlreadySet("cell_ids".to_string()));
+      }
       let Some(array) = value.as_array() else{
         return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
       };
       self.cell_ids = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as usize).collect::<Vec::<usize>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_CELL_IDS){
+      if !self.not_cell_ids.is_empty(){
+        return Err(CluEError::FilterAlreadySet("not_cell_ids".to_string()));
+      }
       let Some(array) = value.as_array() else{
         return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
       }; 
       self.not_cell_ids = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as usize).collect::<Vec::<usize>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if let Some(value) = table.get(KEY_SELE_PRIMARY_CELL){
+      if !self.cell_ids.is_empty(){
+        return Err(CluEError::FilterAlreadySet("cell_ids".to_string()));
+      }
+      if !self.not_cell_ids.is_empty(){
+        return Err(CluEError::FilterAlreadySet("not_cell_ids".to_string()));
+      }
+
+      let Some(b) = value.as_bool() else{
+        return Err(CluEError::ExpectedTOMLBool(value.type_str().to_string()));
+      };      
+      if b{
+        self.cell_ids.push(0);
+      }else{
+        self.not_cell_ids.push(0);
+      }
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_ELEMENTS){
@@ -132,6 +161,7 @@ impl ParticleFilter{
         self.elements.push(el);
       }
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_ELEMENTS){
       let Some(array) = value.as_array() else{
@@ -143,6 +173,7 @@ impl ParticleFilter{
         self.not_elements.push(el);
       }
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_SERIALS){
@@ -152,6 +183,7 @@ impl ParticleFilter{
       self.serials = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_SERIALS){
       let Some(array) = value.as_array() else{
@@ -160,6 +192,7 @@ impl ParticleFilter{
       self.not_serials = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_NAMES){
@@ -169,6 +202,7 @@ impl ParticleFilter{
       self.names = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_NAMES){
       let Some(array) = value.as_array() else{
@@ -177,6 +211,7 @@ impl ParticleFilter{
       self.not_names = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_RESIDUES){
@@ -186,6 +221,7 @@ impl ParticleFilter{
       self.residues = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_RESIDUES){
       let Some(array) = value.as_array() else{
@@ -194,6 +230,7 @@ impl ParticleFilter{
       self.not_residues = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_RES_SEQ_NUMS){
@@ -203,6 +240,7 @@ impl ParticleFilter{
       self.residue_sequence_numbers = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_RES_SEQ_NUMS){
       let Some(array) = value.as_array() else{
@@ -212,6 +250,7 @@ impl ParticleFilter{
         .filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_ISOTOPES){
@@ -224,6 +263,7 @@ impl ParticleFilter{
         self.isotopes.push(i);
       }
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_ISOTOPES){
       let Some(array) = value.as_array() else{
@@ -235,6 +275,7 @@ impl ParticleFilter{
         self.not_isotopes.push(el);
       }
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_INDICES){
@@ -244,6 +285,7 @@ impl ParticleFilter{
       self.bonded_indices = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as usize).collect::<Vec::<usize>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_INDICES){
       let Some(array) = value.as_array() else{
@@ -252,6 +294,7 @@ impl ParticleFilter{
       self.not_bonded_indices = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as usize).collect::<Vec::<usize>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_WITHIN_DISTANCE){
@@ -260,6 +303,7 @@ impl ParticleFilter{
       };
       self.within_distance = Some(r*unit_of_distance);
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_WITHIN_DISTANCE){
       let Some(r) = value.as_float() else{
@@ -267,6 +311,7 @@ impl ParticleFilter{
       };
       self.not_within_distance = Some(r*unit_of_distance);
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_ELEMENTS){
@@ -279,6 +324,7 @@ impl ParticleFilter{
         self.bonded_elements.push(el);
       }
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_ELEMENTS){
       let Some(array) = value.as_array() else{
@@ -290,6 +336,7 @@ impl ParticleFilter{
         self.not_bonded_elements.push(el);
       }
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_SERIALS){
@@ -299,6 +346,7 @@ impl ParticleFilter{
       self.bonded_serials = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_SERIALS){
       let Some(array) = value.as_array() else{
@@ -307,6 +355,7 @@ impl ParticleFilter{
       self.not_bonded_serials = array.iter().filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_NAMES){
@@ -316,6 +365,7 @@ impl ParticleFilter{
       self.bonded_names = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_NAMES){
       let Some(array) = value.as_array() else{
@@ -324,6 +374,7 @@ impl ParticleFilter{
       self.not_bonded_names = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_RESIDUES){
@@ -333,6 +384,7 @@ impl ParticleFilter{
       self.bonded_residues = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_RESIDUES){
       let Some(array) = value.as_array() else{
@@ -341,6 +393,7 @@ impl ParticleFilter{
       self.not_bonded_residues = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_RES_SEQ_NUMS){
@@ -351,6 +404,7 @@ impl ParticleFilter{
         .filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_RES_SEQ_NUMS){
       let Some(array) = value.as_array() else{
@@ -360,6 +414,7 @@ impl ParticleFilter{
         .filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
     }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     Ok(())
   }

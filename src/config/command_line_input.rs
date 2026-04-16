@@ -10,7 +10,7 @@ pub struct CommandLineInput{
   pub show_license: bool,
   pub show_title: bool,
   pub show_version: bool,
-  pub show_warrenty: bool,
+  pub show_warranty: bool,
   next_arg: NextArg
 }
 
@@ -34,7 +34,7 @@ impl CommandLineInput{
       show_license: false,
       show_title: true,
       show_version: false,
-      show_warrenty: false,
+      show_warranty: false,
       next_arg: NextArg::InputConfig,
     };
 
@@ -93,7 +93,7 @@ impl CommandLineInput{
       //"--output" => self.next_arg = NextArg::Output,
       "--option" => self.next_arg = NextArg::ConfigOption,
       "--version" => self.show_version = true,
-      "--warrenty" => self.show_warrenty = true,
+      "--warranty" => self.show_warranty = true,
       _ => return Err(CluEError::UnrecognizedOption(option.to_string() )),  
     }
     Ok(())
@@ -123,7 +123,7 @@ impl CommandLineInput{
       //"o" => self.next_arg = NextArg::Output,
       "O" => self.next_arg = NextArg::ConfigOption,
       "V" => self.show_version = true,
-      "W" => self.show_warrenty = true,
+      "W" => self.show_warranty = true,
       _ => return Err(CluEError::UnrecognizedOption(option.to_string() )),  
     }
     Ok(())

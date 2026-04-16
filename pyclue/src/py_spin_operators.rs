@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 use numpy::PyArray;
 
-use clue_oxide::quantum::spin_hamiltonian as clue_spin;
+use clue_oxide::quantum::cluster_operators as clue_spin;
 use clue_oxide::{
   clue_errors::CluEError,
   physical_constants::ELEMENTARY_CHARGE,
