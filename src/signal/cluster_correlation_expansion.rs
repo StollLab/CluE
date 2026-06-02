@@ -1,9 +1,9 @@
 use crate::config::{
   ClusterMethod,
   Config,
-  PulseSequence,
   SAVE_DIR_AUXILIARY_SIGNALS,
   SAVE_DIR_CLUSTER_SIGNALS,
+  pulse_sequence::PulseSequence,
 };
 use crate::clue_errors::CluEError;
 use crate::cluster::{Cluster,
@@ -53,7 +53,7 @@ pub fn do_cluster_correlation_expansion(
       save_path_opt,structure)?; 
 
 
-  let n_tot = config.number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   let mut order_n_signals = Vec::<Signal>::with_capacity(
       cluster_set.clusters.len()
@@ -98,7 +98,7 @@ fn calculate_auxiliary_signals(
     return Err(CluEError::NoClusterBatchSize);
   };
 
-  let n_tot = config.number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   // Loop over cluster sizes.
   for cluster_size in 0..clusters.len(){
@@ -285,7 +285,7 @@ fn calculate_cluster_signal(tensor_indices: &[usize],
     if number_timepoints.is_empty(){
       return Err(CluEError::NoTimepoints);
     }
-    let n_tot = number_timepoints.iter().sum::<usize>();
+    let n_tot = config.get_total_number_timesteps();
     return Ok(Some(Signal::ones(n_tot)));
   }
 
@@ -375,7 +375,6 @@ mod tests{
   use super::*;
 
   use crate::cluster::adjacency::AdjacencyList;
-  use crate::config::PulseSequence;
   use crate::find_clusters;
   use crate::physical_constants::ONE;
   use crate::quantum::tensors::*;
@@ -409,7 +408,7 @@ mod tests{
     config.unit_of_clustering = Some(UnitOfClustering::Spin);
 
     config.set_defaults().unwrap();
-    config.set_time_axis().unwrap();
+    config.set_tau_axis().unwrap();
   
 
     let mut adjacency_list = AdjacencyList::with_capacity(5);
@@ -473,7 +472,7 @@ mod tests{
     config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
 
     config.set_defaults().unwrap();
-    config.set_time_axis().unwrap();
+    config.set_tau_axis().unwrap();
   
     let signal_opt  = calculate_cluster_signal(&vec![1,2], &spin_ops, &tensors, 
         &config).unwrap();

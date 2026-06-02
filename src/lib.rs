@@ -44,7 +44,7 @@ pub fn run(mut config: Config)
   -> Result<( Vec::<f64>, Vec::<Complex::<f64>> ),CluEError>
 {
 
-  config.set_time_axis()?;
+  config.set_tau_axis()?;
 
   let mut rng = match config.rng_seed{
     Some(seed) => ChaCha20Rng::seed_from_u64(seed),
@@ -66,14 +66,19 @@ pub fn run(mut config: Config)
   };
 
 
-  let mut time_axis = config.get_time_axis()?;
 
   let seconds_to_unit_of_time = match config.unit_of_time_to_seconds{
     Some(unit_of_time_to_seconds) => 1.0/unit_of_time_to_seconds,
     None => return Err(CluEError::NoUnitOfTime),
   };
 
-  for t in time_axis.iter_mut(){
+  let mut tau_axis = config.get_tau_axis()?;
+  for t in tau_axis.iter_mut(){
+    *t *= seconds_to_unit_of_time; 
+  }
+
+  let mut tau2_axis = config.get_tau2_axis()?;
+  for t in tau2_axis.iter_mut(){
     *t *= seconds_to_unit_of_time; 
   }
 
@@ -83,8 +88,27 @@ pub fn run(mut config: Config)
       Err(_) => return Err(CluEError::CannotCreateDir(save_path.to_string())),
     }
 
-    io::write_data(&[time_axis.clone()],
-        &format!("{}/time_axis.csv",save_path), vec!["time_axis".to_string()])?;
+    if tau2_axis.is_empty(){
+      io::write_data(&[tau_axis.clone()],
+          &format!("{}/tau_axis.csv",save_path), vec!["tau_axis".to_string()])?;
+    }else{
+      let n = tau_axis.len()*tau2_axis.len();
+
+      let mut tau1 = Vec::<f64>::with_capacity(n);
+      let mut tau2 = Vec::<f64>::with_capacity(n);
+
+      for t1 in tau_axis.iter(){
+        for t2 in tau2_axis.iter(){
+          tau1.push(*t1);
+          tau2.push(*t2);  
+        }
+      } 
+
+      io::write_data(&vec![tau1,tau2],
+          &format!("{}/tau_axis.csv",save_path), 
+          vec!["tau1_axis".to_string(),"tau2_axis".to_string() ])?;
+    
+    }
   }
 
   let order_n_signals 
@@ -101,6 +125,6 @@ pub fn run(mut config: Config)
     write_vec_signals(&order_n_signals, headers, &save_path)?;
   }
 
-  Ok((time_axis.clone(), order_n_signals[max_size-1].data.clone()))
+  Ok((tau_axis.clone(), order_n_signals[max_size-1].data.clone()))
 }
 

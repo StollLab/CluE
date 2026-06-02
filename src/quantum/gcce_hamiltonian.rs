@@ -2,10 +2,10 @@ use crate::CluEError;
 use crate::config::{
   Config,
   DensityMatrixMethod,
-  PulseSequence,
 };
+use crate::config::pulse_sequence::PulseSequence;
 use crate::math::cxmat_pow_n;
-use crate::physical_constants::{BOLTZMANN,HBAR,I,ONE,ZERO};
+use crate::physical_constants::{BOLTZMANN,HBAR,I,ZERO};
 use crate::quantum::spin_hamiltonian::{
   get_propagators_from_eig,
   get_propagators_complex_time_from_eig,
@@ -43,77 +43,128 @@ pub fn propagate_custom_pulse_sequence(
   if number_timepoints.is_empty(){
     return Err(CluEError::NoTimepoints);
   }
-  let n_tot = number_timepoints.iter().sum::<usize>();
+
+  let tau2_increments = &config.tau2_increments;
+  if tau2_increments.is_empty(){
+    return Err(CluEError::NoTimeIncrements2);
+  }
+
+  let number_timepoints2 = &config.number_timepoints2;
+  if number_timepoints2.is_empty(){
+    return Err(CluEError::NoTimepoints2);
+  }
+
+
+  let n_tot = config.get_total_number_timesteps();
 
   let mut signal = Vec::<Complex<f64>>::with_capacity(n_tot);
 
   let dus = get_propagators_from_eig(h_eigvals,h_eigvecs,tau_increments)?;
   let mut u_of_tau = CxMat::eye(dus[0].dim().0);
 
+  let du2s = get_propagators_from_eig(h_eigvals,h_eigvecs,tau2_increments)?;
+  let mut u_of_tau2 = CxMat::eye(du2s[0].dim().0);
+
   for (idt,_dt) in tau_increments.iter().enumerate(){
     let n_timepoints = number_timepoints[idt];
+
     for _inumt in 0..n_timepoints{
+      for (idt2,_dt2) in tau2_increments.iter().enumerate(){
+        let n_timepoints2 = number_timepoints2[idt2];
+        
+        for _inumt2 in 0..n_timepoints2{
     
-      let mut v = ZERO;
-      let mut u_sequence = CxMat::eye(dus[0].dim().0);
+          let mut v = ZERO;
+          let mut u_sequence = CxMat::eye(dus[0].dim().0);
 
-      for step in pulse_sequence.iter(){
-        match step{
-          PulseStep::Pulse(p) => u_sequence = p.dot(&u_sequence),  
-          PulseStep::FixedDelay(number, index_opt) =>{
-            let delay_idx = match index_opt{ 
-              Some(i) => *i,
-              None => idt,
-            };
+          for step in pulse_sequence.iter(){
+            match step{
+              PulseStep::Pulse(p) => u_sequence = p.dot(&u_sequence),  
+              PulseStep::FixedDelay(number, index_opt) =>{
+                let delay_idx = match index_opt{ 
+                  Some(i) => *i,
+                  None => idt,
+                };
 
-            let u_step = cxmat_pow_n(&dus[delay_idx],*number);
-            u_sequence = u_step.dot(&u_sequence); 
+                let u_step = cxmat_pow_n(&dus[delay_idx],*number);
+                u_sequence = u_step.dot(&u_sequence); 
 
-          }, 
-          PulseStep::InvFixedDelay(number,index_opt) =>{
-            let delay_idx = match index_opt{ 
-              Some(i) => *i,
-              None => idt,
-            };
+              }, 
+              PulseStep::InvFixedDelay(number,index_opt) =>{
+                let delay_idx = match index_opt{ 
+                  Some(i) => *i,
+                  None => idt,
+                };
 
-            let u = dus[delay_idx].t().map(|u_ij| u_ij.conj() );
-            let u_step = cxmat_pow_n(&u,*number);
-            u_sequence = u_step.dot(&u_sequence); 
-          }, 
-          PulseStep::TauDelay => {
-              u_sequence = u_of_tau.dot(&u_sequence); 
-          },
-          PulseStep::InvTauDelay => {
-              let u_of_tau_dag = u_of_tau.t().map(|u_ij| u_ij.conj() );
-              u_sequence = u_of_tau_dag.dot(&u_sequence); 
-          },
-          PulseStep::Detect(detection_op0) => {
-            let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
-            let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
-            let it = std::iter::zip(density_matrix,&detection_op);
-            v += it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
-          },
-          /*
-          PulseStep::Integrate(delay,detection_op0) =>{
-            let delay_idx = match delay.index{ 
-              Some(i) => i,
-              None => idt,
-            };
+                let u = dus[delay_idx].t().map(|u_ij| u_ij.conj() );
+                let u_step = cxmat_pow_n(&u,*number);
+                u_sequence = u_step.dot(&u_sequence); 
+              }, 
+              PulseStep::FixedDelay2(number, index_opt) =>{
+                let delay_idx = match index_opt{ 
+                  Some(i) => *i,
+                  None => idt2,
+                };
 
-            for _ii in 0..delay.number{
-              let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
-              let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
-              let it = std::iter::zip(density_matrix,&detection_op);
-              v += it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
-              u_sequence = dus[delay_idx].dot(&u_sequence); 
+                let u_step = cxmat_pow_n(&du2s[delay_idx],*number);
+                u_sequence = u_step.dot(&u_sequence); 
+
+              }, 
+              PulseStep::InvFixedDelay2(number,index_opt) =>{
+                let delay_idx = match index_opt{ 
+                  Some(i) => *i,
+                  None => idt2,
+                };
+
+                let u = du2s[delay_idx].t().map(|u_ij| u_ij.conj() );
+                let u_step = cxmat_pow_n(&u,*number);
+                u_sequence = u_step.dot(&u_sequence); 
+              }, 
+              PulseStep::TauDelay => {
+                  u_sequence = u_of_tau.dot(&u_sequence); 
+              },
+              PulseStep::InvTauDelay => {
+                  let u_of_tau_dag = u_of_tau.t().map(|u_ij| u_ij.conj() );
+                  u_sequence = u_of_tau_dag.dot(&u_sequence); 
+              },
+              PulseStep::Tau2Delay => {
+                  u_sequence = u_of_tau2.dot(&u_sequence); 
+              },
+              PulseStep::InvTau2Delay => {
+                  let u_of_tau2_dag = u_of_tau2.t().map(|u_ij| u_ij.conj() );
+                  u_sequence = u_of_tau2_dag.dot(&u_sequence); 
+              },
+              PulseStep::Detect(detection_op0) => {
+                let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
+                let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
+                let it = std::iter::zip(density_matrix,&detection_op);
+                v += it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+              },
+              /*
+              PulseStep::Integrate(delay,detection_op0) =>{
+                let delay_idx = match delay.index{ 
+                  Some(i) => i,
+                  None => idt,
+                };
+    
+                for _ii in 0..delay.number{
+                  let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
+                  let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
+                  let it = std::iter::zip(density_matrix,&detection_op);
+                  v += it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+                  u_sequence = dus[delay_idx].dot(&u_sequence); 
+                }
+              },
+             */ 
+              
             }
-          },
-         */ 
-          
+          }
+
+          signal.push(v);
+
+          u_of_tau2 = du2s[idt].dot(&u_of_tau2);
         }
       }
-
-      signal.push(v);
       u_of_tau = dus[idt].dot(&u_of_tau);
 
     }
@@ -250,7 +301,7 @@ pub fn get_free_evolutions_propagators(//hamiltonian: &CxMat,
   if number_timepoints.is_empty(){
     return Err(CluEError::NoTimepoints);
   }
-  let n_tot = number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   let dus = get_propagators_from_eig(eigvals,eigvecs,tau_increments)?;
 
@@ -280,7 +331,7 @@ pub fn get_2nd_free_evolutions_propagators(//hamiltonian: &CxMat,
   if number_timepoints.is_empty(){
     return Err(CluEError::NoTimepoints);
   }
-  let n_tot = number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   let dus = get_propagators_from_eig(eigvals,eigvecs,tau_increments)?;
 
@@ -420,59 +471,6 @@ pub fn get_cluster_density_matrix(electron_density_matrix: &CxMat,
 
 }  
 //------------------------------------------------------------------------------
-// TODO: remove
-/// Deprecated
-pub fn get_electron_bath_density_matrix(//hamiltonian: &CxMat, 
-    h_eigvals: &Array1::<f64>, h_eigvecs: &CxMat, config: &Config)
-  -> Result<CxMat,CluEError>
-{
-
-  panic!("get_electron_bath_density_matrix is deprecated.");
-  let Some(density_matrix_method) = &config.density_matrix else{
-    return Err(CluEError::NoDensityMatrixMethod);
-  };
-
-
-  let mut density_matrix: CxMat;
-
-  match density_matrix_method{
-    DensityMatrixMethod::Identity => {
-      let dim = h_eigvecs.dim().0;
-      density_matrix = CxMat::eye(dim);
-    },
-    /*  
-    DensityMatrixMethod::Sz => {
-      let dim = h_eigvecs.dim().0;
-      density_matrix = CxMat::eye(dim);
-      for ii in dim/2..dim{
-        density_matrix[[ii,ii]] = -ONE;
-      }
-    
-      return Ok(density_matrix);
-    },
-    */
-    DensityMatrixMethod::Thermal(temperature) => {
-
-      let beta = I*HBAR/(temperature*BOLTZMANN);
-
-      let mut rho_list = get_propagators_complex_time_from_eig(
-          h_eigvals, h_eigvecs, &[-beta])?;
-      density_matrix = rho_list.swap_remove(0);
-    },
-  }
-
-  let Ok(z) = density_matrix.trace() else{
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
-  };
-  if z.norm() < 1e-12{
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
-  }
-  density_matrix /= z;
-  Ok(density_matrix)
-}
-//------------------------------------------------------------------------------
-
-
 
 
 //==============================================================================
@@ -503,7 +501,7 @@ mod tests{
        [detected_spin]
          transition = [0,1]
      "##).unwrap();
-    config.set_time_axis().unwrap();
+    config.set_tau_axis().unwrap();
 
     let z0 = 33.0e9;
     let z1 = 80.0e6;
@@ -574,7 +572,7 @@ mod tests{
        [detected_spin]
          transition = [0,1]
      "##).unwrap();
-    config.set_time_axis().unwrap();
+    config.set_tau_axis().unwrap();
 
     let z0 = 33.0e9;
     let z1 = 80.0e6;

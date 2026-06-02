@@ -72,6 +72,7 @@ pub struct ConfigTOML{
   pub min_cell_size: Option<usize>,
   pub number_runs: Option<usize>, 
   pub number_timepoints: Option<Vec::<usize>>,
+  pub number_timepoints2: Option<Vec::<usize>>,
   pub replicate_unit_cell: Option<toml::Value>,
   pub run_in_parallel: Option<bool>,
   pub partitioning: Option<String>, 
@@ -84,6 +85,7 @@ pub struct ConfigTOML{
   pub run_name: Option<String>,
   pub temperature: Option<f64>,  
   pub tau_increments: Option<Vec::<f64>>,
+  pub tau2_increments: Option<Vec::<f64>>,
   pub unit_of_energy: Option<String>,
   pub unit_of_magnetic_field: Option<String>,
   pub unit_of_distance: Option<String>,
@@ -94,7 +96,8 @@ pub struct ConfigTOML{
   pub orientations: Option<OrientationsTOML>,
   pub output: Option<HashMap::<String,bool>>, 
   pub pair_cutoffs: Option<HashMap::<String,f64>>,
-  pub groups: Option<Vec::<toml::Value>>, // TODO
+  pub groups: Option<Vec::<toml::Value>>, 
+  pub pulses: Option<Vec::<toml::Value>>, 
 }
 impl ConfigTOML{
   fn set_default_units(&mut self){
@@ -216,8 +219,14 @@ mod tests{
         partitioning = "exchange_groups"
         pdb_model_index = 0
         
-        ##pulse_sequence = { CarrPurcell = 1 }
-        pulse_sequence = "CP-1"
+        #pulse_sequence = "CP-1"
+        pulse_sequence = [
+          ["pulse","pi/2"],
+          ["delay", "tau"],
+          ["pulse","pi"],
+          ["delay", "tau"],
+          ["detect"],
+        ]
 
         radius = 80
         rng_seed = 0
@@ -290,6 +299,19 @@ mod tests{
         structure_pdb = true
         tensors = false
 
+        [[pulses]]
+          name = "pi/2"
+          matrix = [
+            [0.7071067811865476, -0.7071067811865476],
+            [0.7071067811865476,  0.7071067811865476],
+          ]
+
+        [[pulses]]
+          name = "pi"
+          matrix = [
+            [0.0, -1.0],
+            [1.0,  0.0],
+          ]
 
         [[groups]]
         name = "hydrogens"
@@ -334,7 +356,8 @@ mod tests{
 
       "##;
 
-    let _config = ConfigTOML::from_toml_string(toml_str).unwrap();  
+    let config = ConfigTOML::from_toml_string(toml_str).unwrap();  
+    assert!(config.pulse_sequence.is_some());
 
     
   }

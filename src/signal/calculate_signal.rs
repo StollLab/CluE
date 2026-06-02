@@ -66,7 +66,7 @@ pub fn calculate_signals(rng: &mut ChaCha20Rng, config: &Config,
       range.sample(rng) )
     .collect::<Vec::<u64>>();
 
-  let n_tot = config.number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   let mut signals = (0..=max_cluster_size).map(|_ii| Signal::zeros(n_tot))
     .collect::<Vec::<Signal>>();
@@ -105,7 +105,7 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
   // Initialize output.
   let mut order_n_signals = {
     // Get number of data points per trace.
-    let n_tot = config.number_timepoints.iter().sum::<usize>();
+    let n_tot = config.get_total_number_timesteps();
 
     (0..=max_cluster_size).map(|_| Signal::zeros(n_tot))
     .collect::<Vec::<Signal>>()
@@ -404,7 +404,7 @@ fn caculate_bath_spin_contributions(
 {
 
   // Get number of data points per trace.
-  let n_tot = config.number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   let mut spin_contributions = (0..structure.number_active())
     .map(|_| Signal::ones(n_tot)).collect::<Vec::<Signal>>();
@@ -460,7 +460,7 @@ fn calculate_methyl_partition_cce(
     let cluster_partitions = partition_cluster_set_by_exchange_groups(
         cluster_set, exchange_group_manager, structure)?;
 
-    let n_tot = config.number_timepoints.iter().sum::<usize>();
+    let n_tot = config.get_total_number_timesteps();
 
     for (key_name, value_cluster_set) in cluster_partitions.iter(){
 

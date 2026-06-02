@@ -278,6 +278,7 @@ fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
   let z_coor = line[46..=53].trim().parse::<f64>();
   let residue = Some(line[17..=19].trim().to_string());
   let residue_sequence_number = line[22..=25].trim().parse::<u32>();
+  let chain_id = Some(line[21..=21].to_string());
 
 
 
@@ -309,6 +310,7 @@ fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
       name,
       residue,
       residue_sequence_number: residue_sequence_number.ok(),
+      chain_id,
       })
 }
 //------------------------------------------------------------------------------

@@ -3,7 +3,8 @@ use crate::quantum::cluster_operators::*;
 
 use crate::physical_constants::*;
 use crate::clue_errors::*;
-use crate::config::{Config,PulseSequence,DensityMatrixMethod};
+use crate::config::{Config,DensityMatrixMethod};
+use crate::config::pulse_sequence::PulseSequence;
 use crate::HamiltonianTensors;
 use crate::signal::Signal;
 use crate::quantum::gcce_hamiltonian::{
@@ -38,7 +39,7 @@ pub fn propagate_pulse_sequence_block_diag(
   if number_timepoints.is_empty(){
     return Err(CluEError::NoTimepoints);
   }
-  let n_tot = number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
 
   let mut signal = Vec::<Complex<f64>>::with_capacity(n_tot);
 
@@ -384,11 +385,6 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
     config: &Config)
   -> Result<BlockDiagSpinHamiltonian,CluEError>
 {
-
-
-  let Some(central_spin) = config.detected_spin_identity else{
-    return Err(CluEError::NoCentralSpin);
-  };
 
   let Some(central_spin_mult) = config.detected_spin_multiplicity else{
     return Err(CluEError::NoDetectedSpinMultiplicity);
@@ -889,7 +885,7 @@ mod tests {
     config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
 
     config.set_defaults().unwrap();
-    config.set_time_axis().unwrap();
+    config.set_tau_axis().unwrap();
   
     let hamiltonian = build_block_diag_hamiltonian(&spin_indices,&spin_ops, &tensors,
         &config).unwrap();

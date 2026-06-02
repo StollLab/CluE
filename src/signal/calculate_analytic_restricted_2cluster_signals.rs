@@ -40,7 +40,7 @@ pub fn calculate_analytic_restricted_2cluster_signals(
   };
   
   
-  let n_tot = config.number_timepoints.iter().sum::<usize>();
+  let n_tot = config.get_total_number_timesteps();
   let mut signal = Signal::ones(n_tot);
   let mut order_n_signals = Vec::<Signal>::with_capacity(2);
   order_n_signals.push(signal.clone());
@@ -140,12 +140,13 @@ pub fn analytic_restricted_2cluster_signal(vertices: &[usize],
   let omega = 2.0*PI*hahn_three_spin_modulation_frequency(delta_hf,b);
   let k = hahn_three_spin_modulation_depth(delta_hf,b);
 
-  let time_axis = config.get_time_axis_as_ref()?;
-  let nt = time_axis.len();
+  let tau_axis = config.get_tau_axis_as_ref()?;
+  let nt = tau_axis.len();
   let mut data = Vec::<Complex<f64>>::with_capacity(nt);
 
-  for t in time_axis.iter(){
-    let s4 = (omega*(*t)).sin().powi(4);
+  for t in tau_axis.iter(){
+    let twotau = 2.0*(*t);
+    let s4 = (omega*twotau).sin().powi(4);
     data.push(ONE - k*s4 );
   }
 

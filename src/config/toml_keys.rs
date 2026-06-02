@@ -10,6 +10,7 @@ pub const KEY_CUTOFF_DIPOLE_PERP: &str = "point_dipole_perpendicular";
 pub const KEY_CUTOFF_DISTANCE: &str = "distance";
 pub const KEY_CUTOFF_HAHN_MOD_DEPTH: &str = "hahn_mod_depth";
 pub const KEY_CUTOFF_HAHN_TAYLOR_4: &str = "hahn_taylor_4";
+pub const KEY_CUTOFF_DELTA_ZEEMAN: &str = "delta_zeeman";
 
 pub const KEY_OUT_AUX_SIGS: &str = "auxiliary_signals";
 pub const KEY_OUT_CLU_SIGS: &str = "cluster_signals";
@@ -67,6 +68,9 @@ pub const KEY_SELE_NOT_INDICES: &str = "not_indices";
 pub const KEY_SELE_CELL_IDS: &str = "cell_ids";
 pub const KEY_SELE_NOT_CELL_IDS: &str = "not_cell_ids";
 
+pub const KEY_SELE_CHAIN_IDS: &str = "chain_ids";
+pub const KEY_SELE_NOT_CHAIN_IDS: &str = "not_chain_ids";
+
 pub const KEY_SELE_PRIMARY_CELL: &str = "primary_cell";
 
 pub const KEY_SELE_ELEMENTS: &str = "elements";
@@ -92,6 +96,9 @@ pub const KEY_SELE_NOT_BONDED_INDICES: &str = "not_bonded_indices";
 
 pub const KEY_SELE_WITHIN_DISTANCE: &str = "within_distance";
 pub const KEY_SELE_NOT_WITHIN_DISTANCE: &str = "not_within_distance";
+
+pub const KEY_SELE_BONDED_CHAIN_IDS: &str = "bonded_chain_ids";
+pub const KEY_SELE_NOT_BONDED_CHAIN_IDS: &str = "not_bonded_chain_ids";
 
 pub const KEY_SELE_BONDED_ELEMENTS: &str = "bonded_elements";
 pub const KEY_SELE_NOT_BONDED_ELEMENTS: &str = "not_bonded_elements";
@@ -128,13 +135,14 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;353] = [
+pub const ALLOWED_KEYS: [&str;362] = [
   "abundance",
   "active",
   "auxiliary_signals",
   "axes",
   "bath",
   "bonded_elements",
+  "bonded_chain_ids",
   "bonded_indices",
   "bonded_names",
   "bonded_residues",
@@ -143,6 +151,7 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "c3_tunnel_splitting",
   "cell_ids",
   "cell_type",
+  "chain_ids",
   "cosubstitute",
   "coupling",
   "coupling_xx_yy",
@@ -156,6 +165,7 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "cluster_signals",
   "config",
   "delta_hyperfine_zz",
+  "delta_zeeman",
   "density_matrix",
   "detected_spin",
   "detection_operator",
@@ -183,6 +193,7 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "kmeans_size",
   "lebedev",
   "magnetic_field",
+  "matrix",
   "max_cell_size",
   "max_cluster_size",
   "max_spins",
@@ -192,12 +203,14 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "name",
   "names",
   "not_bonded_elements",
+  "not_bonded_chain_ids",
   "not_bonded_indices",
   "not_bonded_names",
   "not_bonded_residues",
   "not_bonded_residue_sequence_numbers",
   "not_bonded_serials",
   "not_cell_ids",
+  "not_chain_ids",
   "not_elements",
   "not_indices",
   "not_isotopes",
@@ -209,6 +222,7 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "number",
   "number_runs",
   "number_timepoints",
+  "number_timepoints2",
   "orientation_grid",
   "orientations",
   "orientation_signals",
@@ -223,6 +237,7 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "position",
   "primary_cell",
   "pulse_sequence",
+  "pulses",
   "radius",
   "random",
   "replicate_unit_cell",
@@ -237,6 +252,7 @@ pub const ALLOWED_KEYS: [&str;353] = [
   "singles",
   "structure_pdb",
   "tau_increments",
+  "tau2_increments",
   "temperature",
   "tensors",
   "thermal",

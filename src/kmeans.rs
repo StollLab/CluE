@@ -116,7 +116,6 @@ fn restricted_assign_data(
 { 
   // Clear old assignments.
   for kluster in klusters.iter_mut(){
-    println!("DB: {:?}",kluster);
     kluster.elements = Vec::<usize>::new();
   }
 
@@ -144,7 +143,6 @@ fn restricted_assign_data(
 
       let distance = (x - &c.center).norm();
       let cost = round::half_up(distance,0) as i32;
-      println!("DB: d = {}",distance);
 
       graph.add_edge(vertex_x.clone(),vertex_c.clone(),Capacity(1),Cost(cost));
     }

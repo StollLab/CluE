@@ -1,4 +1,4 @@
-use crate::config::PulseStepSpecifier;
+use crate::config::pulse_sequence::{PulseSequence,PulseStepSpecifier};
 use crate::clue_errors::CluEError;
 use crate::quantum::cluster_operators::{
   ClusterSpinOperators,
@@ -15,12 +15,17 @@ type CxMat = Array2::<Complex<f64>>;
 pub const PI_OVER_2_PULSE_NAME: &str = "pi/2";
 pub const PI_PULSE_NAME: &str = "pi";
 
+#[derive(Debug,Clone,PartialEq)]
 pub enum PulseStep<'a>{
   Pulse(&'a CxMat),
   FixedDelay(usize, Option<usize>),
+  FixedDelay2(usize, Option<usize>),
   InvFixedDelay(usize, Option<usize>),
+  InvFixedDelay2(usize, Option<usize>),
   TauDelay,
+  Tau2Delay,
   InvTauDelay,
+  InvTau2Delay,
   Detect(&'a CxMat),  
 }
 
@@ -65,11 +70,21 @@ pub fn generate_pulse_sequence<'a>(
         spin_multiplicity, cluster_size)?
       ),
       PulseStepSpecifier::TauDelay => PulseStep::TauDelay,
+      PulseStepSpecifier::Tau2Delay => PulseStep::Tau2Delay,
+      PulseStepSpecifier::InvTauDelay => PulseStep::InvTauDelay,
+      PulseStepSpecifier::InvTau2Delay => PulseStep::InvTau2Delay,
       PulseStepSpecifier::FixedDelay(number,index_opt) =>{
         if *number >= 0{
           PulseStep::FixedDelay(*number as usize, index_opt.clone() )
         }else{
           PulseStep::InvFixedDelay((*number).abs() as usize, index_opt.clone())
+        }  
+      },
+      PulseStepSpecifier::FixedDelay2(number,index_opt) =>{
+        if *number >= 0{
+          PulseStep::FixedDelay2(*number as usize, index_opt.clone() )
+        }else{
+          PulseStep::InvFixedDelay2((*number).abs() as usize, index_opt.clone())
         }  
       },
       PulseStepSpecifier::Detect =>PulseStep::Detect(

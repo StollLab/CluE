@@ -22,6 +22,7 @@ pub struct Particle{
   pub name: Option<String>,
   pub residue: Option<String>,
   pub residue_sequence_number: Option<u32>,
+  pub chain_id: Option<String>,
 }
 
 impl Particle{
@@ -40,6 +41,7 @@ impl Particle{
       name: None,
       residue: None,
       residue_sequence_number: None,
+      chain_id: None,
     }
   }
 }

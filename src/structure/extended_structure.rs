@@ -438,7 +438,7 @@ impl Structure{
 
         let r1 = &self.bath_particles[idx1].coordinates;
 
-        let delta_r = (r1 -r0);
+        let delta_r = r1 -r0;
         let delta_r_2 = delta_r.dot(&delta_r);
 
         to_remove[idx1] = delta_r_2 < clash_distance_squared;

@@ -39,6 +39,9 @@ pub struct ParticleFilter{
   pub residue_sequence_numbers: Vec::<u32>,
   pub not_residue_sequence_numbers: Vec::<u32>,
 
+  pub chain_ids: Vec::<String>, 
+  pub not_chain_ids: Vec::<String>, 
+
   //exchange_groups: Vec::<ExchangeGroup>,
   //not_exchange_groups: Vec::<ExchangeGroup>,
 
@@ -65,6 +68,10 @@ pub struct ParticleFilter{
 
   pub bonded_residue_sequence_numbers: Vec::<u32>,
   pub not_bonded_residue_sequence_numbers: Vec::<u32>,
+
+  pub bonded_chain_ids: Vec::<String>, 
+  pub not_bonded_chain_ids: Vec::<String>, 
+
 
 
 }
@@ -228,6 +235,25 @@ impl ParticleFilter{
         return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
       }; 
       self.not_residues = array.iter().filter_map(|v| v.as_str())
+        .map(|s| s.to_string()).collect::<Vec::<String>>();
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+    if let Some(value) = table.get(KEY_SELE_CHAIN_IDS){
+      let Some(array) = value.as_array() else{
+        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
+      };
+      self.chain_ids = array.iter().filter_map(|v| v.as_str())
+        .map(|s| s.to_string()).collect::<Vec::<String>>();
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if let Some(value) = table.get(KEY_SELE_NOT_CHAIN_IDS){
+      let Some(array) = value.as_array() else{
+        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
+      }; 
+      self.not_chain_ids = array.iter().filter_map(|v| v.as_str())
         .map(|s| s.to_string()).collect::<Vec::<String>>();
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -416,6 +442,25 @@ impl ParticleFilter{
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+
+    if let Some(value) = table.get(KEY_SELE_BONDED_CHAIN_IDS){
+      let Some(array) = value.as_array() else{
+        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
+      };
+      self.bonded_chain_ids = array.iter().filter_map(|v| v.as_str())
+        .map(|s| s.to_string()).collect::<Vec::<String>>();
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if let Some(value) = table.get(KEY_SELE_NOT_BONDED_CHAIN_IDS){
+      let Some(array) = value.as_array() else{
+        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
+      }; 
+      self.not_bonded_chain_ids = array.iter().filter_map(|v| v.as_str())
+        .map(|s| s.to_string()).collect::<Vec::<String>>();
+    }
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     Ok(())
   }
   //----------------------------------------------------------------------------
@@ -487,6 +532,13 @@ impl ParticleFilter{
       if let Some(res) = &particle.residue{ 
         if (!self.residues.is_empty() && !self.residues.contains(res))
          || self.not_residues.contains(res){
+          return None;
+      }}
+
+      // Chain
+      if let Some(chain_id) = &particle.chain_id{ 
+        if (!self.chain_ids.is_empty() && !self.chain_ids.contains(chain_id))
+         || self.not_chain_ids.contains(chain_id){
           return None;
       }}
 
@@ -654,6 +706,37 @@ impl ParticleFilter{
         for neighbor_idx in neighbors{
           if let Some(residue) = &particles[*neighbor_idx].residue{
             if residue == not_bonded_residue{
+              return None;
+            }
+          }
+        } 
+      }
+
+      // Bonded Chain IDs
+      let mut pass = self.bonded_chain_ids.is_empty();
+      for bonded_chain_id in self.bonded_chain_ids.iter(){ 
+        let Some(neighbors) = structure.connections.get_neighbors(idx0) else{
+          break;
+        };
+        for neighbor_idx in neighbors{
+          if let Some(chain_id) = &particles[*neighbor_idx].chain_id{
+            if chain_id == bonded_chain_id{
+              pass = true;
+              break;
+            }
+          } 
+        }
+      }
+      if !pass{  return None;}
+
+      // Not Bonded Chain IDs
+      for not_bonded_chain_id in self.not_bonded_chain_ids.iter(){ 
+        let Some(neighbors) = structure.connections.get_neighbors(idx0) else{
+          break;
+        };
+        for neighbor_idx in neighbors{
+          if let Some(chain_id) = &particles[*neighbor_idx].chain_id{
+            if chain_id == not_bonded_chain_id{
               return None;
             }
           }

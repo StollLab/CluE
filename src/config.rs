@@ -10,6 +10,7 @@ use crate::config::command_line_input::CommandLineInput;
 use crate::config::particle_config::{
   CellType, ParticleConfig,EigSpecifier,TensorSpecifier
 };
+use crate::config::pulse_sequence::*;
 use crate::isotopes::Isotope;
 use crate::physical_constants::*;
 use crate::space_3d::Vector3D;
@@ -44,6 +45,7 @@ pub mod command_line_input;
 pub mod config_toml;
 pub mod particle_config;
 pub mod toml_keys;
+pub mod pulse_sequence;
 
 
 // Define the directory and file names used to save outputs.
@@ -97,6 +99,7 @@ pub struct Config{
   pub neighbor_cutoff_distance: Option<f64>,
   pub neighbor_cutoff_3_spin_hahn_mod_depth: Option<f64>,
   pub neighbor_cutoff_3_spin_hahn_taylor_4: Option<f64>,
+  pub neighbor_cutoff_delta_zeeman: Option<f64>,
 
   // CCE
   pub cluster_batch_size: Option<usize>, 
@@ -117,7 +120,9 @@ pub struct Config{
   pub magnetic_field: Option<Vector3D>,
   pub orientation_grid: Option<OrientationAveraging>,
   pub pulse_sequence: Option<PulseSequence>,
-  time_axis: Vec::<f64>,
+  tau_axis: Vec::<f64>,
+  tau2_axis: Vec::<f64>,
+  total_number_timepoints: usize,
   pub tau_increments: Vec::<f64>,
   pub tau2_increments: Vec::<f64>,
   pub number_runs: Option<usize>, 
@@ -182,7 +187,7 @@ impl Config{
 
     let mut config = Self::from_toml_string(&toml_str)?;
 
-    match config.set_time_axis(){
+    match config.set_tau_axis(){
       Ok(_) => (),
       Err(err) => return Err(err),
     }
@@ -230,6 +235,10 @@ impl Config{
 
     if self.density_matrix.is_none(){
       self.density_matrix = Some(DensityMatrixMethod::Identity);
+    }
+
+    if self.neighbor_cutoff_delta_zeeman.is_none(){
+      self.neighbor_cutoff_delta_zeeman = Some(1e-12);
     }
 
     if self.number_runs.is_none(){
@@ -347,30 +356,90 @@ impl Config{
   }
   //----------------------------------------------------------------------------
   /// This function gets the simulated experiment's time axis.
-  pub fn get_time_axis_as_ref(&self) -> Result<&Vec::<f64>,CluEError>
+  pub fn get_tau_axis_as_ref(&self) -> Result<&Vec::<f64>,CluEError>
   {
-    if self.time_axis.is_empty() {
+    if self.tau_axis.is_empty() {
       return Err(CluEError::NoTimeAxis);
     };
-    Ok(&self.time_axis)
+    Ok(&self.tau_axis)
   }
   //----------------------------------------------------------------------------
   /// This function gets the simulated experiment's time axis.
-  pub fn get_time_axis(&self) -> Result<Vec::<f64>,CluEError>
+  pub fn get_tau2_axis_as_ref(&self) -> Result<&Vec::<f64>,CluEError>
   {
-    if self.time_axis.is_empty() {
-      return self.construct_time_axis();
+    if self.tau2_axis.is_empty() {
+      return Err(CluEError::NoTimeAxis);
     };
-    Ok(self.time_axis.clone())
+    Ok(&self.tau2_axis)
   }
   //----------------------------------------------------------------------------
-  pub fn set_time_axis(&mut self) -> Result<(),CluEError>
+  /// This function gets the simulated experiment's time axis.
+  pub fn get_tau_axis(&self) -> Result<Vec::<f64>,CluEError>
   {
-    self.time_axis  = self.construct_time_axis()?;
+    if self.tau_axis.is_empty() {
+      return Err(CluEError::NoTimeAxis);
+    };
+    Ok(self.tau_axis.clone())
+  }
+  //----------------------------------------------------------------------------
+  /// This function gets the simulated experiment's time axis.
+  pub fn get_tau2_axis(&self) -> Result<Vec::<f64>,CluEError>
+  {
+    if self.tau2_axis.is_empty() {
+      return Err(CluEError::NoTimeAxis);
+    };
+    Ok(self.tau2_axis.clone())
+  }
+  //----------------------------------------------------------------------------
+  pub fn set_tau_axis(&mut self) -> Result<(),CluEError>
+  {
+    let (result, n1) = Self::construct_tau_axis(
+        &self.number_timepoints, &self.tau_increments);
+
+    self.tau_axis = result?;
+
+    let (result, n2) = Self::construct_tau_axis(
+        &self.number_timepoints2, &self.tau2_increments);
+
+    self.tau2_axis = result?;
+
+    self.total_number_timepoints = n1*n2;
 
     Ok(())
   }
   //----------------------------------------------------------------------------
+  pub fn construct_tau_axis(
+    number_timepoints: &[usize], 
+    tau_increments: &[f64],
+      ) -> (Result<Vec::<f64>,CluEError>,usize)
+  {
+    if tau_increments.len() != number_timepoints.len(){
+      return (Err(CluEError::LenghMismatchTimepointsIncrements(
+            number_timepoints.len(),tau_increments.len())), 0);
+    }
+  
+    let n_tot = number_timepoints.iter().sum::<usize>();
+    
+    let mut tau_axis = Vec::<f64>::with_capacity(n_tot);
+    
+    let mut t = 0.0;
+
+    for (idx, &n_dt) in number_timepoints.iter().enumerate(){
+      let dt = tau_increments[idx];
+      for _ii in 0..n_dt{
+        tau_axis.push(t);
+        t += dt;
+      }
+    }
+
+    (Ok(tau_axis), n_tot)
+  }
+  //----------------------------------------------------------------------------
+  pub fn get_total_number_timesteps(&self) -> usize{
+    self.total_number_timepoints
+  }
+  //----------------------------------------------------------------------------
+  /*
   /// This function constructs the simulated experiment's time axis.
   pub fn construct_time_axis(&self) -> Result<Vec::<f64>,CluEError>
   {
@@ -422,6 +491,7 @@ impl Config{
 
     Ok(time_axis)
   }
+  */
   //----------------------------------------------------------------------------
   /// This function tries to build a `Vec::<(usize,usize)>`, where
   /// the first `usize` is the PDB serial number and the second `usize` 
@@ -698,87 +768,6 @@ impl PartitionTableConfig{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-
-//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-#[derive(Debug,Clone,PartialEq)]
-pub enum PulseStepSpecifier{
-  Pulse(String),
-  FixedDelay(i32,Option<usize>),  
-  TauDelay,
-  Detect,
-}
-
-impl PulseStepSpecifier{
-  //----------------------------------------------------------------------------
-  pub fn from_toml_array(pulse_step: &toml::Value) -> Result<Self,CluEError>{
-    
-    let out = match &pulse_step[0]{
-      toml::Value::String(ps) => {
-        match ps.as_str(){
-          "pulse" => PulseStepSpecifier::Pulse(pulse_step[1].to_string()),
-          "delay" => PulseStepSpecifier::TauDelay,
-          "detect" => PulseStepSpecifier::Detect,
-          _ => panic!("TODO CluEError"),  
-        }
-      } 
-      _ => panic!("TODO CluEError"),  
-    };
-
-    Ok(out)  
-  }
-  //----------------------------------------------------------------------------
-}
-/// `PulseSequence` lists the options for pulse sequences to simulate.
-#[derive(Debug,Clone,PartialEq)]
-pub enum PulseSequence{
-  FreeEvolution,
-  CarrPurcell(usize),
-  RefocusedHahnEcho,
-  Custom(Vec::<PulseStepSpecifier>),
-}
-
-impl PulseSequence{
-  pub fn from_toml_value(pulse_seq: &toml::Value) -> Result<Self,CluEError>
-  {
-    match pulse_seq{
-      toml::Value::String(ps) => Self::from_str(ps),
-      toml::Value::Array(ps) => Self::from_toml_array(ps),  
-      _ => panic!("TODO CluEError"),  
-    }
-  }
-  //----------------------------------------------------------------------------
-  pub fn from_toml_array(pulse_seq: &[toml::Value]) -> Result<Self,CluEError>{
-    let mut pulse_sequence 
-      = Vec::<PulseStepSpecifier>::with_capacity(pulse_seq.len());
-
-    for step in pulse_seq.iter(){
-      let pulse_step = match step{
-        _ => panic!("TODO CluEError"),       
-      };
-      pulse_sequence.push(pulse_step)
-    }
-  
-    Ok(Self::Custom(pulse_sequence))
-  }
-  //----------------------------------------------------------------------------
-  pub fn from_str(pulse_seq: &str) -> Result<Self,CluEError>
-  {
-  if pulse_seq.substring(0,3) == "cp-"{
-    let Ok(n_pi) = pulse_seq.substring(3,pulse_seq.len()).parse::<usize>()else{
-      return Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string()));
-    };
-    return Ok(Self::CarrPurcell(n_pi)); 
-  }
-  match pulse_seq{
-    "free_evolution" => Ok(PulseSequence::FreeEvolution),
-    "fid" => Ok(PulseSequence::CarrPurcell(0)),
-    "hahn" => Ok(PulseSequence::CarrPurcell(1)),
-    _ => Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string())),
-  }
-  }  
-
-}
-//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -1066,6 +1055,9 @@ impl Config{
 
         self.neighbor_cutoff_3_spin_hahn_taylor_4 = Some(cutoff*u4)
       }
+      if let Some(&cutoff) = pair_cutoffs.get(KEY_CUTOFF_DELTA_ZEEMAN){ 
+        self.neighbor_cutoff_delta_zeeman = Some(cutoff)
+      }
 
     }
 
@@ -1075,6 +1067,9 @@ impl Config{
 
     if let Some(number_timepoints) = &mut config_toml.number_timepoints{
       mem::swap(&mut self.number_timepoints, number_timepoints);
+    }
+    if let Some(number_timepoints2) = &mut config_toml.number_timepoints2{
+      mem::swap(&mut self.number_timepoints2, number_timepoints2);
     }
 
     // O
@@ -1183,6 +1178,12 @@ impl Config{
         *t *= unit_of_time;
       }
       mem::swap(&mut self.tau_increments, tau_increments);
+    }
+    if let Some(tau2_increments) = &mut config_toml.tau2_increments{ 
+      for t in tau2_increments.iter_mut(){
+        *t *= unit_of_time;
+      }
+      mem::swap(&mut self.tau2_increments, tau2_increments);
     }
 
     // W--Z
@@ -1619,24 +1620,25 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   #[test]
-  fn test_set_time_axis(){
+  fn test_set_tau_axis(){
     let mut config = Config::new();
     config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
     config.number_timepoints = vec![100,91];
-    config.tau_increments = vec![0.5e-8, 0.5e-7];
-    config.set_time_axis().unwrap();
-    let time_axis = config.get_time_axis().unwrap();
-    assert_eq!(time_axis.len(),191);
-    assert_eq!(time_axis[0],0.0);
+    config.tau_increments = vec![1.0e-8, 1e-7];
+    config.set_tau_axis().unwrap();
+    let tau_axis = config.get_tau_axis().unwrap();
+    assert_eq!(tau_axis.len(),191);
+    assert_eq!(tau_axis[0],0.0);
     let t = 1e-8;
-    assert!((time_axis[1]-t).abs()/t<1e-12);
+    assert!((tau_axis[1]-t).abs()/t<1e-12);
     let t = 1e-6;
-    assert!((time_axis[100]-t).abs()/t<1e-12);
+    assert!((tau_axis[100]-t).abs()/t<1e-12);
     let t = 1.1e-6;
-    assert!((time_axis[101]-t).abs()/t<1e-12);
+    assert!((tau_axis[101]-t).abs()/t<1e-12);
     let t = 10e-6;
-    assert!((time_axis[190]-t).abs()/t<1e-12);
+    assert!((tau_axis[190]-t).abs()/t<1e-12);
     
   }
+
 }
 

@@ -63,11 +63,14 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
   };
 
   let delta_zeeman = zeeman1 - zeeman0;
-  let sum_zeeman = zeeman1 + zeeman0;
 
-  // Enforce conservation of Zeeman energy.
-  if 2.0*delta_zeeman.norm()/sum_zeeman.norm() > 1e-12 {
-    return Ok(false);
+  // Assume conservation of Zeeman energy:
+  // let H_Zeeman = dot(omega_1,I_1) + dot(omega_2,I_2),
+  // and check if |omega_1 - omega_2| > cutoff.
+  if let Some(cutoff_delta_zeeman) = &config.neighbor_cutoff_delta_zeeman{
+    if delta_zeeman.norm() > *cutoff_delta_zeeman {
+      return Ok(false);
+    }
   }
 
   let Some(dipdip) = tensors.spin2_tensors.get(idx0,idx1) else {

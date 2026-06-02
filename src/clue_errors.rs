@@ -191,7 +191,9 @@ pub enum CluEError{
   NoTensorValues,
   NoTimeAxis,
   NoTimeIncrements,
+  NoTimeIncrements2,
   NoTimepoints,
+  NoTimepoints2,
   NoTransition,
   NoUnitOfClustering,
   NoUnitOfDistance,
@@ -219,8 +221,11 @@ pub enum CluEError{
   TOMLArrayDoesNotSpecifyAVector,
   TOMLArrayIsEmpty,
   TOMLArrayIsNotAMatrix,
+  TOMLArrayIsNotAComplexNumber,
   TOMLValueDoesNotSpecifyAPartitionTable,
   TOMLValueIsNotABool,
+  ErrorPulseSequence(String),
+  TomlPulseStepSpecifier(String),
   UnavailableSpinOp(usize,usize),
   UnassignedCosubstitutionGroup(usize),
   UnequalLengths(String,usize,String,usize),
@@ -231,9 +236,11 @@ pub enum CluEError{
   UnrecognizedUnit(String),
   VectorSpecifierDoesNotSpecifyUniqueVector(String),
   WrongClusterSizeForAnalyticCCE(usize),
+  WrongDelayDimension(usize),
   WrongNumberOfAxes(usize,usize),
   WrongOrientationGridDim(usize,usize,usize),
   WrongProbabilityDistributionDim(usize,usize,usize),
+  WrongTauDimension(usize,usize),
   WrongVectorLength(usize,usize,usize)
 }
 
@@ -818,10 +825,16 @@ periodic boundary conditions should be applied"),
           "the time-axis has not been built"),
       
       CluEError::NoTimeIncrements => write!(f,
-          "no time increments defined"),
+          "no tau increments defined"),
+      
+      CluEError::NoTimeIncrements2 => write!(f,
+          "no taa2 increments defined"),
       
       CluEError::NoTimepoints => write!(f,
-          "please specify how many timepoints there are for each increment"),
+          "please specify how many timepoints there are for each tau increment"),
+
+      CluEError::NoTimepoints2 => write!(f,
+          "please specify how many timepoints there are for each tau2 increment"),
       
       CluEError::NoTransition => write!(f,
           "please specify a transition for the detected spin"),
@@ -954,6 +967,10 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
           "TOML array is not a matrix", 
           ),
 
+      CluEError::TOMLArrayIsNotAComplexNumber => write!(f,
+          "TOML array is not a complex number", 
+          ),
+
       CluEError::TOMLValueDoesNotSpecifyAPartitionTable => write!(f,
           "TOML value is not a partition table", 
           ),
@@ -961,6 +978,12 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
       CluEError::TOMLValueIsNotABool => write!(f,
           "TOML value is not a bool", 
           ),
+
+      CluEError::ErrorPulseSequence(msg) => write!(f,
+          "{}",msg),
+
+      CluEError::TomlPulseStepSpecifier(msg) => write!(f,
+          "{}",msg),
 
       CluEError::UnassignedCosubstitutionGroup(index)=> write!(f,
           "particle {} cannot be assigned to a cosubstitution group",
@@ -990,6 +1013,9 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
       CluEError::WrongClusterSizeForAnalyticCCE(given_size) => write!(f,
           "analytic 2-CCE cannot work with clusters of size {}",given_size),
 
+      CluEError::WrongDelayDimension(d_given) => write!(f,
+          "delay{} was provided, but only 1 and 2 are available",d_given),
+
       CluEError::WrongNumberOfAxes(num_axes, expected_num) => write!(f,
           "{} axes were provided, but {} are expected",num_axes, expected_num),
 
@@ -1002,6 +1028,9 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
           expected, actual) => write!(f,
           "line {}, expected probability distribution with {} dimensions, \
 but found {} dimensions", line_number, expected,actual),
+
+      CluEError::WrongTauDimension(d_given, d_expected) => write!(f,
+          "tau{} was provided, but tau{} is expected",d_given, d_expected),
 
       CluEError::WrongVectorLength(line_number, expected, actual) => write!(f,
           "line {}, expected vector of length {}, but recieved a length of {}", 
