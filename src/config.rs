@@ -812,7 +812,7 @@ impl OrientationAveraging{
       let Some(n_ori) = ori_toml.number else{
         return Err(CluEError::CannotParseOrientations(grid.to_string()));
       };
-      return Ok(OrientationAveraging::Lebedev(n_ori));
+      Ok(OrientationAveraging::Lebedev(n_ori))
 
     } else if grid == KEY_ORI_RANDOM{
 
@@ -1251,7 +1251,7 @@ impl Config{
       return Err(CluEError::NoInputFile);
     };
 
-    return Self::from_toml_file(filename); 
+    Self::from_toml_file(filename)
   }
   //----------------------------------------------------------------------------
   // This functions sets properties for particles outside the primary cell.

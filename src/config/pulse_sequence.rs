@@ -144,7 +144,7 @@ impl PulseSequence{
     match pulse_seq{
       toml::Value::String(ps) => Self::from_str(ps),
       toml::Value::Array(ps) => Self::from_toml_array(ps),  
-      _ => return Err(CluEError::ErrorPulseSequence(
+      _ => Err(CluEError::ErrorPulseSequence(
             "cannot parse pule sequence".to_string())), 
     }
   }

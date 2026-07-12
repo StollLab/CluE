@@ -16,15 +16,15 @@ pub fn get_kmeans_partition(
     ) -> Result<Vec::<usize>,CluEError>
 {
 
-  let mut klusters = initialize_klusters(rng, k, &data);
+  let mut klusters = initialize_klusters(rng, k, data);
 
   if do_restricted_kmeans{
-    restricted_assign_data(&mut klusters, &data)?;
+    restricted_assign_data(&mut klusters, data)?;
   }else{  
-    assign_data(&mut klusters, &data)?;
+    assign_data(&mut klusters, data)?;
   }
 
-  move_kluster_centers(&mut klusters, &data);
+  move_kluster_centers(&mut klusters, data);
 
   let mut klusters0: Vec::<Kluster>;
 
@@ -32,12 +32,12 @@ pub fn get_kmeans_partition(
     klusters0 = klusters.clone();
 
     if do_restricted_kmeans{
-      restricted_assign_data(&mut klusters, &data)?;
+      restricted_assign_data(&mut klusters, data)?;
     }else{  
-      assign_data(&mut klusters, &data)?;
+      assign_data(&mut klusters, data)?;
     }
 
-    move_kluster_centers(&mut klusters, &data);
+    move_kluster_centers(&mut klusters, data);
 
 
     if are_klusters_identical(&klusters,&klusters0){

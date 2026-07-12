@@ -126,7 +126,7 @@ impl ParticleConfig{
           return Err(CluEError::ExpectedTOMLString(
                 value.type_str().to_string()));
         };
-        self.cell_type = CellType::from(&cell_type_str)?;
+        self.cell_type = CellType::from(cell_type_str)?;
       }
 
       if let Some(filter) = &mut self.filter {
@@ -252,7 +252,7 @@ impl ParticleProperties{
           return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
         };
         self.isotopic_distribution.isotope_abundances.push(
-            IsotopeAbundance{isotope: isotope.clone(),abundance} );
+            IsotopeAbundance{isotope: isotope,abundance} );
       }
 
       if let Some(iso_prop) = self.isotope_properties.get_mut(&iso_str){
@@ -339,10 +339,8 @@ impl IsotopeProperties{
       self.hyperfine_coupling = Some(tensor);
     }
 
-    let n_ex = vec![
-      table.contains_key(KEY_ISO_EXCHANGE_COUPLING),
-      table.contains_key(KEY_ISO_C3_TUNNEL_SPLITTING)
-    ].iter().map(|b| if *b{1}else{0} ).sum();
+    let n_ex = [table.contains_key(KEY_ISO_EXCHANGE_COUPLING),
+      table.contains_key(KEY_ISO_C3_TUNNEL_SPLITTING)].iter().map(|b| if *b{1}else{0} ).sum();
 
     if n_ex > 1{
       return Err(CluEError::TooManyExchangeCouplingsSpecified(n_ex));
@@ -501,7 +499,7 @@ impl EigSpecifier{
   
     let values = if let Some(toml::Value::Array(array)) 
         = table.get(KEY_EIG_VALUES){
-      if !are_all_same_type(&array){
+      if !are_all_same_type(array){
         return Err(CluEError::TOMLArrayContainsMultipleTypes);
       }
       if array.len() != 3 || !array[0].is_float(){

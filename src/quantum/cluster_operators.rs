@@ -156,9 +156,9 @@ fn build_detection_operators(det_multiplicity: usize,
       Some(transition) => {
         HashMap::<String,CxMat>::from([
           (PI_OVER_2_PULSE_NAME.to_string(), ideal_pulse(&SpinOp::Sy, 0.5*PI,
-                                 det_multiplicity, &transition)),
+                                 det_multiplicity, transition)),
           (PI_PULSE_NAME.to_string(), ideal_pulse(&SpinOp::Sy, PI,
-                                 det_multiplicity, &transition)),
+                                 det_multiplicity, transition)),
         ])},
       None => return Err(CluEError::NoDetectedSpinTransition),
     }  

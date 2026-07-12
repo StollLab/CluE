@@ -75,7 +75,7 @@ impl ClusterSet{
       Err(_) => return Err(CluEError::CannotWriteFile(filename.to_string()) ),
     };
 
-    let mut stream = BufWriter::with_capacity(toml_string.as_bytes().len(),file);
+    let mut stream = BufWriter::with_capacity(toml_string.len(),file);
     if stream.write(toml_string.as_bytes()).is_err(){
       return Err(CluEError::CannotWriteFile(filename.to_string()) );
     }

@@ -87,7 +87,7 @@ exchange_coupling,res_seq_id,res\n".to_string();
       let res = if let Some(r) = &structure.bath_particles[indices[0]]
         .residue
       {
-        format!("{}",r)
+        r.to_string()
       }else{
         "".to_string()
       };

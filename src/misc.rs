@@ -71,7 +71,7 @@ pub fn vec_complex_f64_from_toml_array(array: Vec::<toml::Value>)
   let mut out = Vec::<Z64>::with_capacity(array.len());
   for el in array{
     match el{
-      toml::Value::Float(x) => out.push(Z64{re: x as f64, im:0.0}),
+      toml::Value::Float(x) => out.push(Z64{re: x, im:0.0}),
       toml::Value::Array(arr) => out.push(complex_f64_from_toml_array(arr)?),
       _ => return Err(CluEError::ExpectedTOMLFloat(el.type_str().to_string())),
     }
@@ -142,7 +142,7 @@ pub fn vec_f64_from_toml_array(array: Vec::<toml::Value>)
   let mut out = Vec::<f64>::with_capacity(array.len());
   for el in array.iter(){
     match el{
-      toml::Value::Float(x) => out.push(*x as f64),
+      toml::Value::Float(x) => out.push({ *x }),
       _ => return Err(CluEError::ExpectedTOMLFloat(el.type_str().to_string())),
     }
   }

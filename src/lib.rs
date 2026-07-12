@@ -57,7 +57,7 @@ pub fn run(mut config: Config)
       if output_directory.is_empty(){
         None
       }else{
-        Some(format!("{}", output_directory))
+        Some(output_directory.to_string())
       }
     },
     None => {
@@ -105,7 +105,7 @@ pub fn run(mut config: Config)
         }
       } 
 
-      io::write_data(&vec![tau1,tau2],
+      io::write_data(&[tau1,tau2],
           &format!("{}/tau_axis.csv",save_path), 
           vec!["tau1_axis".to_string(),"tau2_axis".to_string() ])?;
     

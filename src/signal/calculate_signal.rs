@@ -522,7 +522,7 @@ fn get_system_save_dir_opt(
             let mut coors = det.weighted_coordinates.clone();
             let pdb_origin = &structure.pdb_origin;
             coors.translate_mut(
-                &vec![-pdb_origin.x(),-pdb_origin.y(),-pdb_origin.z()]
+                &[-pdb_origin.x(),-pdb_origin.y(),-pdb_origin.z()]
             );
             coors = coors.scale(1.0/ANGSTROM);
             coors.to_csv(

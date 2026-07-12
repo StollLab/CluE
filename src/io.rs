@@ -157,7 +157,7 @@ pub fn write_data<T>(data: &[Vec::<T>], filename: &str,
     match write_vecs_to_csv(data,filename,headers){
       Ok(()) => Ok(()),
       Err(err) => Err(CluEError::CannotWriteFile(
-            format!("{}, {}", filename.to_string(),err.to_string() ))),
+            format!("{}, {}", filename,err ))),
     }
 }
 //------------------------------------------------------------------------------

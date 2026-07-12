@@ -75,16 +75,16 @@ pub fn generate_pulse_sequence<'a>(
       PulseStepSpecifier::InvTau2Delay => PulseStep::InvTau2Delay,
       PulseStepSpecifier::FixedDelay(number,index_opt) =>{
         if *number >= 0{
-          PulseStep::FixedDelay(*number as usize, index_opt.clone() )
+          PulseStep::FixedDelay(*number as usize, *index_opt )
         }else{
-          PulseStep::InvFixedDelay((*number).abs() as usize, index_opt.clone())
+          PulseStep::InvFixedDelay((*number).unsigned_abs() as usize, *index_opt)
         }  
       },
       PulseStepSpecifier::FixedDelay2(number,index_opt) =>{
         if *number >= 0{
-          PulseStep::FixedDelay2(*number as usize, index_opt.clone() )
+          PulseStep::FixedDelay2(*number as usize, *index_opt )
         }else{
-          PulseStep::InvFixedDelay2((*number).abs() as usize, index_opt.clone())
+          PulseStep::InvFixedDelay2((*number).unsigned_abs() as usize, *index_opt)
         }  
       },
       PulseStepSpecifier::Detect =>PulseStep::Detect(

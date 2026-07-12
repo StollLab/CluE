@@ -96,7 +96,7 @@ fn grow_subgraph_from_vertex(
 fn get_next_vertex(neighbors: &HashMap::<usize,bool>) -> Option::<usize>
 {
   for (key,value) in neighbors.iter(){
-    if *value == false{
+    if !(*value){
       return Some(*key);
     }
   }

@@ -94,13 +94,10 @@ impl Cluster{
   {
 
     let mut vertices = self.vertices.clone();
-    match structure_opt{
-      Some(structure) => {
-        for v in vertices.iter_mut(){
-          *v = structure.get_reference_index_of_nth_active(*v)?;
-        }
-      },
-      None => (),
+    if let Some(structure) = structure_opt {
+      for v in vertices.iter_mut(){
+        *v = structure.get_reference_index_of_nth_active(*v)?;
+      }
     }
 
     Ok(vertices)

@@ -229,7 +229,7 @@ impl PartitionTable{
 
       toml_string = format!("{}block_{} = [{}]\n",toml_string,blk,elements_string);
     }
-    let mut stream = BufWriter::with_capacity(toml_string.as_bytes().len(),file);
+    let mut stream = BufWriter::with_capacity(toml_string.len(),file);
     if stream.write(toml_string.as_bytes()).is_err(){
       return Err(CluEError::CannotWriteFile(filename.to_string()) );
     };
@@ -310,7 +310,7 @@ fn get_partition_pretable(tensors: &HamiltonianTensors,
     
     // Converert PDB serial id to bath_index used on structure. 
     let Some(bath_idx) = structure.map_serial_id_to_bath_index
-        .get(&(*serial as u32,0 as usize)) 
+        .get(&(*serial as u32,0_usize)) 
     else{
       panic!("TODO");
     };
