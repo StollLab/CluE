@@ -1,4 +1,20 @@
 --------------------------------------------------------------------------------
+CluE Oxide: 0.2.3-alpha.5
+
+ADDED:
+  A tau2_axis was introduced.
+
+CHANGED:
+  Complex matrices can now be specified in the toml files.
+  For example to use Sy as a detection opperator use the following.
+    detection_opperator = [
+      [ [0.0,0.0], [0.0, -1.0]  ],
+      [ [0.0,1.0], [0.0, 0.0]  ],
+    ]
+
+
+  The time_axis was chaned to tau_axis. 
+--------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.4
 
 ADDED:

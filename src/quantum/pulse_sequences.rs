@@ -1,4 +1,4 @@
-use crate::config::pulse_sequence::{PulseSequence,PulseStepSpecifier};
+use crate::config::pulse_sequence::PulseStepSpecifier;
 use crate::clue_errors::CluEError;
 use crate::quantum::cluster_operators::{
   ClusterSpinOperators,

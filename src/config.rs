@@ -26,7 +26,6 @@ use crate::misc::{
 use crate::io::{FromTOMLString,read_csv};
 
 
-use substring::Substring;
 
 use toml::Value;
 use serde::{Serialize,Deserialize};
@@ -702,16 +701,22 @@ impl ReplicateUnitCell{
 /// `ClusterMethod` list different cluster simulation methods.
 #[derive(Debug,Clone,PartialEq)]
 pub enum ClusterMethod{
-  AnalyticRestricted2CCE,
+  //AnalyticRestricted2CCE,
   CCE,
   GCCE,
+  APPA,
+  LCE,
+  PCA
 }
 impl ClusterMethod{
   pub fn from(method_str: &str) -> Result<Self,CluEError>{
     match method_str.to_lowercase().as_str(){
-      "r2cce" => Ok(Self::AnalyticRestricted2CCE),
+      //"r2cce" => Ok(Self::AnalyticRestricted2CCE),
       "cce" => Ok(Self::CCE),
       "gcce" => Ok(Self::GCCE),
+      "appa" => Ok(Self::APPA),
+      "lce" => Ok(Self::LCE),
+      "pca" => Ok(Self::PCA),
       _ => Err(CluEError::CannotParseClusterMethod(method_str.to_string())),
     }
   }

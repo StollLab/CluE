@@ -34,11 +34,11 @@ use crate::cluster::partition::{
 use crate::HamiltonianTensors;
 use crate::integration_grid::IntegrationGrid;
 use crate::physical_constants::{ANGSTROM,ONE,PI};
-use crate::signal::Signal;
-use crate::signal::write_vec_signals;
-use crate::signal::cluster_correlation_expansion::*;
-use crate::signal::calculate_analytic_restricted_2cluster_signals::{
-  calculate_analytic_restricted_2cluster_signals};
+use crate::signal::{
+  Signal,
+  write_vec_signals,
+  cluster_signals::calculate_cluster_signals,
+};
 use crate::Structure;
 use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::math;
@@ -328,11 +328,11 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
 
   // Calculate cluster signals.
   let order_n_signals = match &config.cluster_method{
-    Some(ClusterMethod::AnalyticRestricted2CCE) => 
-      calculate_analytic_restricted_2cluster_signals(&mut cluster_set, &tensors,
-          config,&save_path_opt,structure)?,
+    //Some(ClusterMethod::AnalyticRestricted2CCE) => 
+    //  calculate_analytic_restricted_2cluster_signals(&mut cluster_set, &tensors,
+    //      config,&save_path_opt,structure)?,
     Some(_cce) => {
-      do_cluster_correlation_expansion(&mut cluster_set, spin_ops, &tensors, 
+      calculate_cluster_signals(&mut cluster_set, spin_ops, &tensors, 
           config,&save_path_opt,structure)?
     },
     None => return Err(CluEError::NoClusterMethod)

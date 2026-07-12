@@ -1,0 +1,143 @@
+#run_in_parallel = false
+
+input_structure_file = "diamond.pdb"
+
+#populations = "thermal"
+#temperature = 1
+
+cluster_method = "gcce"
+
+#magnetic_field = 1024.99e-4
+magnetic_field = 1024.475e-4
+#magnetic_field = 1025.01454e-4
+#magnetic_field = 1025e-4
+#magnetic_field = 1025.01454e-4
+
+rng_seed = 0
+number_runs = 1
+max_cluster_size = 1
+
+max_spins = 4
+
+
+replicate_unit_cell = true
+
+#pulse_sequence = "free_evolution"
+pulse_sequence = [
+  ["delay", "tau"],
+  ["detect"],
+]
+radius = 20
+
+run_name = "system"
+
+
+#number_timepoints = [201]
+#tau_increments = [20e-2]
+number_timepoints = [201]
+tau_increments = [20e-2]
+
+output_directory = "CluE-out"
+
+[detected_spin]
+  position = ["vacancy"]
+  multiplicity = 3
+  transition = [1,0]
+  detection_operator = [
+    [0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0],
+  ]
+  density_matrix = [
+    [0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0],
+  ]
+  zerofield.values = [-961.86666667, -951.46666667, 1913.33333333]
+#  zerofield.values = [961.86666667, 951.46666667, -1913.33333333]
+#  zerofield.values = [  956.66666667, -1913.33333333,   956.66666667]
+#  zerofield.values = [  956.66666667, 956.66666667, -1913.33333333]
+  zerofield.axes.z = {from = "N",to = "vacancy"}
+  zerofield.axes.x = {from = "CX",to = "vacancy"}
+
+#  g_matrix = 2.0013
+
+[pair_cutoffs]
+#  hahn_mod_depth = 2e-7
+#  hahn_taylor_4 = 4e-13
+#  hahn_mod_depth = 2e-16
+#  hahn_taylor_4 = 4e-22
+  hahn_mod_depth = 2e-14
+  hahn_taylor_4 = 4e-20
+#  hahn_mod_depth = 2e-14
+#  hahn_taylor_4 = 4e-20
+#  hahn_mod_depth = 2e-2
+#  hahn_taylor_4 = 4e-8
+  
+[orientations]
+  grid = "vector"
+  vector = [0.89169, 0.89169, 0.89169]
+#  vector = [0.5773502691896257, 0.5773502691896257, 0.5773502691896257]
+#  vector ={from = "N",to = "vacancy"}
+#  grid = "lebedev"
+#  number = 170
+  
+[output]
+  auxiliary_signals = false
+  bath = true
+  clusters = true
+  info = true
+  exchange_groups = true
+  structure_pdb = true
+  orientation_signals = true
+  methyl_partitions = true
+  orientation_grid = true
+
+[[groups]]
+  name = 'vacancy'
+  selection.cell_type = "primary_cell"
+  selection.names = ["CV"]
+  drop_probability = 1.0
+
+
+[[groups]]
+  name = "N"
+  selection.cell_type = "primary_cell"
+  selection.names = ["CN"]
+  14N.abundance = 1.0
+  electric_quadrupole.values = [ 1.6, 1.6, -3.2]
+  electric_quadrupole.axes.z = {from = "N",to = "vacancy"}
+  electric_quadrupole.axes.x = {from = "CX",to = "vacancy"}
+  hyperfine.values = [ -2.7, -2.7, -2.2]
+  hyperfine.axes.z = {from = "N",to = "vacancy"}
+  hyperfine.axes.x = {from = "CX",to = "vacancy"}
+
+[[groups]]
+  name = "CX"
+  selection.cell_type = "primary_cell"
+  selection.names = ["CX"]
+  #13C.abundance = 1.0
+  #13C.abundance = 0.107
+  13C.abundance = 0.011
+  #13C.abundance = 0.0107
+
+[[groups]]
+  name = "C0"
+  selection.cell_type = "primary_cell"
+  selection.not_names = ["CN","CV","CX"]
+  #13C.abundance = 1.0
+  #13C.abundance = 0.107
+  13C.abundance = 0.011
+  #13C.abundance = 0.0107
+
+[[groups]]
+  name = "C1"
+  selection.elements = ["C"]
+  selection.cell_type = "extracells"
+  #13C.abundance = 1.0
+  #13C.abundance = 0.107
+  13C.abundance = 0.011
+  #13C.abundance = 0.0107
+
+
+

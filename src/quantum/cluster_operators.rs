@@ -634,16 +634,7 @@ mod tests {
   use super::*;
 
   use crate::math::commutator;
-  use crate::space_3d::{SymmetricTensor3D,Vector3D};
-  use crate::quantum::tensors::*;
-  use crate::signal::calculate_analytic_restricted_2cluster_signals::{
-    analytic_restricted_2cluster_signal,
-    hahn_three_spin_modulation_frequency,
-    //hahn_three_spin_modulation_depth
-  };
 
-  use ndarray::array;
-  use ndarray_linalg::Norm;
 
 
   //----------------------------------------------------------------------------

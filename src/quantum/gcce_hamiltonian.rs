@@ -60,15 +60,15 @@ pub fn propagate_custom_pulse_sequence(
   let mut signal = Vec::<Complex<f64>>::with_capacity(n_tot);
 
   let dus = get_propagators_from_eig(h_eigvals,h_eigvecs,tau_increments)?;
-  let mut u_of_tau = CxMat::eye(dus[0].dim().0);
 
   let du2s = get_propagators_from_eig(h_eigvals,h_eigvecs,tau2_increments)?;
-  let mut u_of_tau2 = CxMat::eye(du2s[0].dim().0);
 
+  let mut u_of_tau = CxMat::eye(dus[0].dim().0);
   for (idt,_dt) in tau_increments.iter().enumerate(){
     let n_timepoints = number_timepoints[idt];
-
     for _inumt in 0..n_timepoints{
+
+    let mut u_of_tau2 = CxMat::eye(du2s[0].dim().0);
       for (idt2,_dt2) in tau2_increments.iter().enumerate(){
         let n_timepoints2 = number_timepoints2[idt2];
         
@@ -162,7 +162,7 @@ pub fn propagate_custom_pulse_sequence(
 
           signal.push(v);
 
-          u_of_tau2 = du2s[idt].dot(&u_of_tau2);
+          u_of_tau2 = du2s[idt2].dot(&u_of_tau2);
         }
       }
       u_of_tau = dus[idt].dot(&u_of_tau);
@@ -351,6 +351,20 @@ pub fn get_2nd_free_evolutions_propagators(//hamiltonian: &CxMat,
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
+/*
+fn build_pump_pulse(spin_indices: &[usize], pumped_spins: &[usize],
+    spin_ops: &ClusterSpinOperators, config: &Config)
+  -> Option<CxMat>
+{
+
+  // Loop through spins and build up Hamiltonian,
+  for (sop_idx0, &ten_idx0) in spin_indices.iter().enumerate(){
+    if !pumped_spins.contains(ten_ind0){ continue} 
+  }
+
+}
+*/
+//------------------------------------------------------------------------------
 /// This function builds the cluster spin Hamiltonian without assuming
 /// < mS | H | mS' > = 0, for mS != mS',
 pub fn build_spin_hamiltonian(spin_indices: &[usize],
@@ -484,7 +498,7 @@ mod tests{
   use crate::quantum::spin_hamiltonian::{
     build_block_diag_hamiltonian,
   };
-  use crate::signal::calculate_analytic_restricted_2cluster_signals::analytic_restricted_2cluster_signal;
+  use crate::cluster_methods::appa::appa_hahn;
 
 
   //----------------------------------------------------------------------------
@@ -544,7 +558,7 @@ mod tests{
 
     let spin_indices = vec![1,2];
 
-    let ref_signal = analytic_restricted_2cluster_signal(
+    let ref_signal = appa_hahn(
         &spin_indices,&tensors,&config).unwrap().unwrap();
 
     for (ii,v) in signal.data.iter().enumerate(){
@@ -612,7 +626,7 @@ mod tests{
 
     let spin_indices = vec![1,2];
 
-    let ref_signal = analytic_restricted_2cluster_signal(
+    let ref_signal = appa_hahn(
         &spin_indices,&tensors,&config).unwrap().unwrap();
 
     for (ii,v) in signal.data.iter().enumerate(){

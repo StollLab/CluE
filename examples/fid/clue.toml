@@ -1,0 +1,79 @@
+input_structure_file = "TEMPO_MD_300K_25ns.pdb"
+
+run_in_parallel = false
+
+
+cluster_method = "gcce"
+
+magnetic_field = 1.2
+
+max_cluster_size = 1
+
+radius = 6
+
+tau_increments = [1e-5, 4.0, 0.05]
+number_timepoints = [20001,0,0]
+
+#pulse_sequence = "fid"
+pulse_sequence = [
+ ["pulse","pi/2"],
+ ["delay", -2,2],
+ ["delay", "tau"],
+ ["detect"],
+]
+
+[pair_cutoffs]
+  hahn_mod_depth = 2e-6
+  hahn_taylor_4 = 4e-12
+
+[detected_spin]
+  position = ["n","o"]
+  g_matrix.values = [2.00841, 2.00604, 2.00223]
+  g_matrix.axes.x = {from = "n", to ="o"}
+  g_matrix.axes.y = {from = "c1", to ="c7"}
+  density_matrix = [ 
+    [0.0, 0.0], 
+    [0.0,1.0] 
+  ]
+  detection_operator = [
+    [0.0, 1.0], 
+    [0.0, 0.0], 
+  ]
+
+
+[[pulses]]
+name = "pi/2"
+matrix = [
+  [0.7071067811865476, -0.7071067811865476],
+  [0.7071067811865476,  0.7071067811865476],
+]
+
+[[pulses]]
+name = "pi"
+matrix = [
+  [0.0, -1.0],
+  [1.0,  0.0],
+]
+
+[[groups]]
+  name = "n"
+  selection.residues = ["TEM"]
+  selection.names = ["N"]
+
+[[groups]]
+  name = "o"
+  selection.residues = ["TEM"]
+  selection.names = ["O"]
+
+[[groups]]
+  name = "c1"
+  selection.residues = ["TEM"]
+  selection.names = ["C1"]
+
+[[groups]]
+  name = "c7"
+  selection.residues = ["TEM"]
+  selection.names = ["C7"]
+
+
+

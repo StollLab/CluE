@@ -186,8 +186,6 @@ impl PulseSequence{
 #[cfg(test)]
 mod tests{
   use super::*;
-  use crate::elements::Element;
-  use crate::structure::particle_filter::SecondaryParticleFilter;
   //----------------------------------------------------------------------------
   #[allow(non_snake_case)]
   #[test]

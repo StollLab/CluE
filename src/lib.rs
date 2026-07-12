@@ -9,6 +9,7 @@
 pub mod config;
 pub mod clue_errors;
 pub mod cluster;
+pub mod cluster_methods;
 pub mod elements;
 pub mod info;
 pub mod isotopes;

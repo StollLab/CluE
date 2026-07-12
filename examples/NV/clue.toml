@@ -5,9 +5,12 @@ input_structure_file = "diamond.pdb"
 #populations = "thermal"
 #temperature = 1
 
-cluster_method = "gcce"
+cluster_method = "cce"
 
-magnetic_field = 1024.99e-4
+#magnetic_field = 140e-4
+magnetic_field = 40e-4
+#magnetic_field = 1024.99e-4
+#magnetic_field = 1024.475e-4
 #magnetic_field = 1025.01454e-4
 #magnetic_field = 1025e-4
 #magnetic_field = 1025.01454e-4
@@ -18,11 +21,17 @@ max_cluster_size = 2
 
 max_spins = 4
 
+partitioning = "restricted_kmeans"
+kmeans_size = 2
 
 replicate_unit_cell = true
 
-pulse_sequence = "free_evolution"
-
+pulse_sequence = "cp-1"
+#pulse_sequence = "free_evolution"
+#pulse_sequence = [
+#  ["delay", "tau"],
+#  ["detect"],
+#]
 radius = 20
 
 run_name = "system"
@@ -31,7 +40,7 @@ run_name = "system"
 #number_timepoints = [201]
 #tau_increments = [20e-2]
 number_timepoints = [201]
-tau_increments = [20e-2]
+tau_increments = [40e-2]
 
 output_directory = "CluE-out"
 
@@ -41,7 +50,7 @@ output_directory = "CluE-out"
   transition = [1,0]
   detection_operator = [
     [0.0, 0.0, 0.0],
-    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
     [0.0, 0.0, 0.0],
   ]
   density_matrix = [
@@ -49,8 +58,10 @@ output_directory = "CluE-out"
     [0.0, 1.0, 0.0],
     [0.0, 0.0, 0.0],
   ]
-  #zerofield.values = [-951.46666667, -961.86666667, 1913.33333333]
-  zerofield.values = [-961.86666667, -951.46666667, 1913.33333333]
+#  zerofield.values = [-961.86666667, -951.46666667, 1913.33333333]
+#  zerofield.values = [961.86666667, 951.46666667, -1913.33333333]
+#  zerofield.values = [  956.66666667, -1913.33333333,   956.66666667]
+  zerofield.values = [  956.66666667, 956.66666667, -1913.33333333]
   zerofield.axes.z = {from = "N",to = "vacancy"}
   zerofield.axes.x = {from = "CX",to = "vacancy"}
 
@@ -71,6 +82,13 @@ output_directory = "CluE-out"
 [orientations]
   grid = "vector"
   vector = [0.89169, 0.89169, 0.89169]
+#  vector_grid = [
+#    [0.89169, 0.89169, 0.89169,0.25],
+#    [-0.89169, -0.89169, -0.89169,0.25],
+#    [-0.89169, 0.89169, 0.89169,0.25],
+#    [0.89169, -0.89169, -0.89169,0.25],
+#  ]
+#  vector = [0.5773502691896257, 0.5773502691896257, 0.5773502691896257]
 #  vector ={from = "N",to = "vacancy"}
 #  grid = "lebedev"
 #  number = 170
@@ -97,7 +115,13 @@ output_directory = "CluE-out"
   name = "N"
   selection.cell_type = "primary_cell"
   selection.names = ["CN"]
-  14N.abundance = 1.0
+  15N.abundance = 1.0
+#  electric_quadrupole.values = [ 1.6, 1.6, -3.2]
+#  electric_quadrupole.axes.z = {from = "N",to = "vacancy"}
+#  electric_quadrupole.axes.x = {from = "CX",to = "vacancy"}
+  hyperfine.values = [ -2.7, -2.7, -2.2]
+  hyperfine.axes.z = {from = "N",to = "vacancy"}
+  hyperfine.axes.x = {from = "CX",to = "vacancy"}
 
 [[groups]]
   name = "CX"

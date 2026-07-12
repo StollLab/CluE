@@ -4,9 +4,9 @@ use crate::clue_errors::CluEError;
 use crate::cluster::adjacency::AdjacencyList;
 use crate::quantum::tensors::{
   get_perpendicular_dipole_dipole_frequency, HamiltonianTensors};
-use crate::signal::calculate_analytic_restricted_2cluster_signals::{
-  hahn_three_spin_modulation_depth,
-  hahn_three_spin_fourth_order_coefficient,
+use crate::cluster_methods::appa::{
+  appa_hahn_modulation_depth,
+  appa_hahn_fourth_order_coefficient,
 };
 use crate::structure::Structure;
 use crate::structure::exchange_groups::GetIndices;
@@ -114,11 +114,11 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
   }
 
   if let Some(cutoff) = &config.neighbor_cutoff_3_spin_hahn_mod_depth{
-    let k = hahn_three_spin_modulation_depth(delta_hf,b);
+    let k = appa_hahn_modulation_depth(delta_hf,b);
     if k < *cutoff {return Ok(false);}
   }
   if let Some(cutoff) = &config.neighbor_cutoff_3_spin_hahn_taylor_4{
-    let kom4 = hahn_three_spin_fourth_order_coefficient(delta_hf,b);
+    let kom4 = appa_hahn_fourth_order_coefficient(delta_hf,b);
     if kom4 < *cutoff {return Ok(false);}
   }
 

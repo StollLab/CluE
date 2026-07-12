@@ -128,12 +128,15 @@ pub fn propagate_pulse_sequence_block_diag(
           // With S+ as the detection operator,
           // <S+(2τ1 + 2τ2)> = <U(2τ1 + 2τ2,+)^† U(2τ1 + 2τ2,-)>.
 
+          // U0(τ2,-)U0(τ2,+)U0(τ1,+)U0(τ1,-)
           let u_baab = u2_beta.dot(&u2_alpha.dot(&u_alpha.dot(u_beta)));
+
+          // U0(τ1,+)^† U0(τ1,-)^† U0(τ2,-)^† U0(τ2,+)^†
           let u_abba_dag 
             = u_alpha_dag.dot(&u_beta_dag.dot(&u2_beta_dag.dot(&u2_alpha_dag)));
   
-          let u = u_abba_dag.dot(&u_baab);
-          let it = std::iter::zip(density_matrix,&u);
+          let u_re = u_abba_dag.dot(&u_baab);
+          let it = std::iter::zip(density_matrix,&u_re);
           let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
           signal.push(v);
         }
@@ -852,10 +855,9 @@ mod tests {
   use crate::space_3d::{SymmetricTensor3D,Vector3D};
   use crate::quantum::tensors::*;
   use ndarray::array;
-  use crate::signal::calculate_analytic_restricted_2cluster_signals::{
-    analytic_restricted_2cluster_signal,
-    hahn_three_spin_modulation_frequency,
-    //hahn_three_spin_modulation_depth
+  use crate::cluster_methods::appa::{
+    appa_hahn,
+    appa_hahn_frequency,
   };
 
 
@@ -880,7 +882,7 @@ mod tests {
     let nt = 21;
     config.number_timepoints = vec![nt];
     let delta_hf = a1 - a2;
-    let freq = hahn_three_spin_modulation_frequency(delta_hf,b);
+    let freq = appa_hahn_frequency(delta_hf,b);
     config.tau_increments = vec![0.05/freq];
     config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
 
@@ -898,7 +900,7 @@ mod tests {
 
     assert_eq!(signal.data.len(),nt);
 
-    let ref_signal_opt = analytic_restricted_2cluster_signal(
+    let ref_signal_opt = appa_hahn(
         &spin_indices,&tensors,&config).unwrap();
     let Some(ref_signal) = ref_signal_opt else{
       panic!("Could not calculate reference signal.");
@@ -1091,202 +1093,6 @@ mod tests {
     true
   }
   //----------------------------------------------------------------------------
-  fn commutator(mat0: &CxMat, mat1: &CxMat) -> CxMat{
-    mat0.dot(mat1) - mat1.dot(mat0)
-  }
-  //----------------------------------------------------------------------------
-  /*
-  #[test]
-  #[allow(non_snake_case)]
-  fn test_ClusterSpinOperators() {
-
-    let spin_multiplicities = vec![2,3];
-    let max_size = 3;
-    let sops = ClusterSpinOperators::new(&spin_multiplicities,max_size).unwrap();
-
-
-    for ispin_mult in &spin_multiplicities {
-      let ispin_mult = *ispin_mult;
-      for cluster_size in 1..=max_size{
-        for op_pos in 0..cluster_size {
-          let sx = sops.get(&SpinOp::Sx,ispin_mult,cluster_size,op_pos)
-            .unwrap();
-
-          let sy = sops.get(&SpinOp::Sy,ispin_mult,cluster_size,op_pos)
-            .unwrap();
-
-          let sz = sops.get(&SpinOp::Sz,ispin_mult,cluster_size,op_pos)
-            .unwrap();
-
-          let sp = sx + sy*I;
-          let sm = sx - sy*I;
-          let s2 = sx.dot(sx) + sy.dot(sy) + sz.dot(sz);
-
-          assert_eq!(sx.ncols(), ispin_mult.pow(cluster_size as u32));
-          assert!(check_spin_ops(sx,sy,sz,&sp,&sm,&s2));
-        }
-      }
-    }
-
-  }
-  */
-  //----------------------------------------------------------------------------
-  /*
-  #[test]
-  #[allow(non_snake_case)]
-  fn test_KronSpinOpXYZ() {
-    let spin_multiplicity = 2;
-    let max_size = 2;
-    let sops = KronSpinOpXYZ::new(spin_multiplicity, max_size).unwrap();
-
-    for n_ops in 1..=max_size{
-      for op_pos in 0..n_ops {
-        let sx = sops.get(&SpinOp::Sx, op_pos,n_ops).unwrap();
-        let sy = sops.get(&SpinOp::Sy, op_pos,n_ops).unwrap();
-        let sz = sops.get(&SpinOp::Sz, op_pos,n_ops).unwrap();
-        let sp = sx + sy*I;
-        let sm = sx - sy*I;
-        let s2 = sx.dot(sx) + sy.dot(sy) + sz.dot(sz);
-
-        assert_eq!(sx.ncols(), spin_multiplicity.pow(n_ops as u32));
-        assert!(check_spin_ops(sx,sy,sz,&sp,&sm,&s2));
-      }
-    }
-
-  }
-  */
-  //----------------------------------------------------------------------------
-  /*
-  #[test]
-  #[allow(non_snake_case)]
-  fn test_KronSpinOpList() {
-
-    let spin_multiplicity = 2;
-    let max_size = 2;
-
-    let sx_list = KronSpinOpList::new(
-        spin_multiplicity, SpinOp::Sx, max_size).unwrap();
-
-    let sy_list = KronSpinOpList::new(
-        spin_multiplicity, SpinOp::Sy, max_size).unwrap();
-
-    let sz_list = KronSpinOpList::new(
-        spin_multiplicity, SpinOp::Sz, max_size).unwrap();
-
-    let sp_list = KronSpinOpList::new(
-        spin_multiplicity, SpinOp::Sp, max_size).unwrap();
-
-    let sm_list = KronSpinOpList::new(
-        spin_multiplicity, SpinOp::Sm, max_size).unwrap();
-
-    let s2_list = KronSpinOpList::new(
-        spin_multiplicity, SpinOp::S2, max_size).unwrap();
-
-    for n_ops in 1..=max_size{
-      for op_pos in 0..n_ops {
-        let sx = sx_list.get(op_pos,n_ops).unwrap();
-        let sy = sy_list.get(op_pos,n_ops).unwrap();
-        let sz = sz_list.get(op_pos,n_ops).unwrap();
-        let sp = sp_list.get(op_pos,n_ops).unwrap();
-        let sm = sm_list.get(op_pos,n_ops).unwrap();
-        let s2 = s2_list.get(op_pos,n_ops).unwrap();
-
-        assert_eq!(sx.ncols(), spin_multiplicity.pow(n_ops as u32));
-        assert!(check_spin_ops(sx,sy,sz,sp,sm,s2));
-      }
-  }
-
-  }
-  */
-  //----------------------------------------------------------------------------
-  /*
-  #[test]
-  fn test_kron_spin_op() {
-
-    let spin_mults = Vec::<usize>::from([2,2]);
-
-    let xx = kron_spin_op(&spin_mults,&vec![SpinOp::Sx,SpinOp::Sx]).unwrap();
-    let yy = kron_spin_op(&spin_mults,&vec![SpinOp::Sy,SpinOp::Sy]).unwrap();
-    let zz = kron_spin_op(&spin_mults,&vec![SpinOp::Sz,SpinOp::Sz]).unwrap();
-    let pm = kron_spin_op(&spin_mults,&vec![SpinOp::Sp,SpinOp::Sm]).unwrap();
-    let mp = kron_spin_op(&spin_mults,&vec![SpinOp::Sm,SpinOp::Sp]).unwrap();
-
-    assert!(approx_eq(
-          &( &(&xx + &yy) + &zz), 
-          &(&zz + &(&(pm*(0.5*ONE))+&(mp*(0.5*ONE)))),1e-12)
-        );
-  }
-  */
-//------------------------------------------------------------------------------
-  /*
-  #[test]
-  fn test_spin_ops() {
-
-    for spin_multiplicity in 0..14 {
-      let sx = spin_x(spin_multiplicity);
-      let sy = spin_y(spin_multiplicity);
-      let sz = spin_z(spin_multiplicity);
-      let sp = spin_plus(spin_multiplicity);
-      let sm = spin_minus(spin_multiplicity);
-      let s2 = spin_squared(spin_multiplicity);
-
-
-      assert_eq!(sx.ncols(), sx.nrows());
-      assert_eq!(sx.ncols(), spin_multiplicity);
-
-      assert!(check_spin_ops(&sx,&sy,&sz,&sp,&sm,&s2));
-      
-
-    }
-  }
-  */
-  //----------------------------------------------------------------------------
-  
-  fn check_spin_ops(
-      sx: &CxMat,
-      sy: &CxMat,
-      sz: &CxMat,
-      sp: &CxMat,
-      sm: &CxMat,
-      s2: &CxMat,
-      ) -> bool {
-
-    let tol = 1e-12;
-
-    let sx2 = sx.dot(sx);
-    let sy2 = sy.dot(sy);
-    let sz2 = sz.dot(sz);
-    let spin2 = sx2 + sy2 + sz2;
-
-    let mut pass: bool = true;  
-
-    pass &= approx_eq( 
-          &commutator(sx,sy), 
-          &(I*sz), tol ) ; 
-      
-    pass &= approx_eq( 
-          &commutator(sz,sx), 
-          &(I*sy), tol ) ; 
-
-    pass &= approx_eq( 
-          &commutator(sy,sz), 
-          &(I*sx), tol ) ; 
-      
-    pass &= approx_eq( 
-          &sp, 
-          &(sx + I*sy), tol ) ; 
-      
-    pass &= approx_eq( 
-          &sm, 
-          &(sx - I*sy), tol ) ; 
-      
-    pass &= approx_eq( 
-          &s2, 
-          &spin2, tol ) ; 
-      
-      
-    pass 
-  }
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 }

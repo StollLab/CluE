@@ -2,7 +2,6 @@ use clue_oxide::config::{Config,ClusterMethod};
 use clue_oxide::run;
 use clue_oxide::signal::Signal;
 
-const ERROR_THRESHOLD: f64 = 1e-12;
 #[test]
 fn int_test_gcce(){
  let mut config = Config::from_toml_file(

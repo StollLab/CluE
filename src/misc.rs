@@ -1,7 +1,7 @@
 use crate::clue_errors::CluEError;
 
 use num_complex::Complex;
-use ndarray::{arr2,Array2};
+use ndarray::Array2;
 type CxMat = Array2::<Complex<f64>>;
 type Mat = Array2::<f64>;
 type Z64 = Complex<f64>;

@@ -3,7 +3,6 @@ use crate::config::{
   Config,
   SAVE_DIR_AUXILIARY_SIGNALS,
   SAVE_DIR_CLUSTER_SIGNALS,
-  pulse_sequence::PulseSequence,
 };
 use crate::clue_errors::CluEError;
 use crate::cluster::{Cluster,
@@ -15,18 +14,13 @@ use crate::signal::{Signal, load_batch_signals, write_batch_signals};
 use crate::structure::Structure;
 use crate::HamiltonianTensors;
 use crate::math;
-use crate::quantum::spin_hamiltonian::*;
-use crate::quantum::gcce_hamiltonian::{
-  build_spin_hamiltonian,
-  get_cluster_density_matrix,  
-  propagate_custom_pulse_sequence,
-  propagate_pulse_sequence,
-};
-use crate::quantum::pulse_sequences::{
-  get_standard_pulses,
-  generate_pulse_sequence,  
-};
 use crate::quantum::cluster_operators::ClusterSpinOperators;
+use crate::cluster_methods::{
+  cce::{cce,gcce},
+  appa::appa,
+  lce::lce,
+  pca::pca,
+};
 
 use rayon::prelude::*;
 use std::path::Path;
@@ -41,7 +35,7 @@ use std::path::Path;
 /// W. Yang and R.-B. Liu, “Quantum many-body theory of qubit decoherence
 /// in a finite-size spin bath. II. Ensemble dynamics,” Phys. Rev. B 79, 115320
 /// (2009).
-pub fn do_cluster_correlation_expansion(
+pub fn calculate_cluster_signals(
     cluster_set: &mut ClusterSet, spin_ops: &ClusterSpinOperators,
     tensors: &HamiltonianTensors, config: &Config, 
     save_path_opt: &Option<String>,structure: &Structure,
@@ -90,7 +84,9 @@ fn calculate_auxiliary_signals(
     return Err(CluEError::NoRunInParallel);
   };
 
-  let do_gcce = config.cluster_method == Some(ClusterMethod::GCCE);
+  let Some(method) = &config.cluster_method else{
+    return Err(CluEError::NoClusterMethod);
+  }; 
   let clusters = &mut cluster_set.clusters;
   let cluster_indices = &cluster_set.cluster_indices;
 
@@ -131,35 +127,17 @@ fn calculate_auxiliary_signals(
 
       // Calculate cluster signals for batch.
       if run_in_parallel{
-        if !do_gcce{
           clusters[cluster_size].par_iter_mut().skip(idx).take(batch_size)
             .for_each(|cluster| 
-              cluster.signal = calculate_cluster_signal(cluster.vertices(),
-                spin_ops,tensors,config)
+              cluster.signal = evaluate_cluster(cluster.vertices(),
+                spin_ops,tensors,config,method)
           );
-        } else{
-          clusters[cluster_size].par_iter_mut().skip(idx).take(batch_size)
-            .for_each(|cluster| 
-                cluster.signal = calculate_general_cluster_signal(
-                  cluster.vertices(),
-                  spin_ops,tensors,config)
-          );
-      }
       }else{
-        if !do_gcce{
           clusters[cluster_size].iter_mut().skip(idx).take(batch_size)
             .for_each(|cluster| 
-              cluster.signal = calculate_cluster_signal(cluster.vertices(),
-                spin_ops,tensors,config)
+              cluster.signal = evaluate_cluster(cluster.vertices(),
+                spin_ops,tensors,config,method)
           );
-        } else{
-          clusters[cluster_size].iter_mut().skip(idx).take(batch_size)
-            .for_each(|cluster| 
-                cluster.signal = calculate_general_cluster_signal(
-                  cluster.vertices(),
-                  spin_ops,tensors,config)
-          );
-        }
       }
       //
 
@@ -272,98 +250,20 @@ fn calculate_auxiliary_signals(
   Ok(())
 }
 //------------------------------------------------------------------------------
-// This function calculate the cluster signal for the cluster specified by
-// tensor_indices.
-fn calculate_cluster_signal(tensor_indices: &[usize], 
-    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors, 
-    config: &Config) 
-  -> Result<Option<Signal>,CluEError>
+fn evaluate_cluster(
+    tensor_indices: &[usize],
+    spin_ops: &ClusterSpinOperators, 
+    tensors: &HamiltonianTensors,
+    config: &Config,
+    method: &ClusterMethod) -> Result<Option<Signal>,CluEError> 
 {
-
-  if tensor_indices.is_empty(){
-    let number_timepoints = &config.number_timepoints;
-    if number_timepoints.is_empty(){
-      return Err(CluEError::NoTimepoints);
-    }
-    let n_tot = config.get_total_number_timesteps();
-    return Ok(Some(Signal::ones(n_tot)));
+  match method{
+    ClusterMethod::CCE => cce(tensor_indices,spin_ops,tensors,config),
+    ClusterMethod::GCCE => gcce(tensor_indices,spin_ops,tensors,config),
+    ClusterMethod::APPA => appa(tensor_indices,tensors,config),
+    ClusterMethod::LCE => lce(tensor_indices,tensors,config),
+    ClusterMethod::PCA => pca(tensor_indices,tensors,config),
   }
-
-  let hamiltonian = build_block_diag_hamiltonian(
-      tensor_indices,spin_ops, tensors,config)?;
-  let density_matrix = get_density_matrix(&hamiltonian, config)?;
-  let signal = propagate_pulse_sequence_block_diag(
-      &density_matrix, &hamiltonian, config)?;
-  Ok(Some(signal))
-}
-//------------------------------------------------------------------------------
-// This function calculate the cluster signal for the cluster specified by
-// tensor_indices.
-fn calculate_general_cluster_signal(tensor_indices: &Vec::<usize>, 
-    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors, 
-    config: &Config) 
-  -> Result<Option<Signal>,CluEError>
-{
-
-  let mut spin_indices = Vec::<usize>::with_capacity(1 + tensor_indices.len());
-  spin_indices.push(0);
-  for idx in tensor_indices.iter(){
-    spin_indices.push(*idx);
-  }
-
-  let spin_multiplicities: Vec::<usize> =
-      spin_indices.iter().map(|idx| tensors.spin_multiplicities[*idx])
-      .collect();
-
-  let spin_multiplicity = match spin_multiplicities.len(){
-    0 => return Err(CluEError::NoDetectedSpinMultiplicity),
-    1 => spin_multiplicities[0], // TODO: check if this is right.
-    _ => spin_multiplicities[1],
-  };
-
-  let cluster_size = spin_multiplicities.len();
-
-  let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
-      &spin_indices,spin_ops,tensors)?;
-
-  let detected_spin_density_matrix = spin_ops.get_density_matrix(
-      spin_multiplicity, cluster_size)?;  
-
-  let density_matrix = get_cluster_density_matrix(detected_spin_density_matrix,
-      &h_eigvals, &h_eigvecs, config)?;
-
-  let Some(pulse_sequence) = &config.pulse_sequence else{
-    return Err(CluEError::NoPulseSequence);
-  }; 
-
-  let signal = match pulse_sequence{
-    PulseSequence::Custom(pulse_sequence_specifier) =>{
-      let pulse_sequence = generate_pulse_sequence(
-          pulse_sequence_specifier, spin_ops,
-          spin_multiplicity,cluster_size)?;
-
-      propagate_custom_pulse_sequence(
-          &pulse_sequence, &density_matrix,&h_eigvals, &h_eigvecs,config
-      )?
-    }  
-    PulseSequence::CarrPurcell(_) | PulseSequence::RefocusedHahnEcho =>{ 
-      let pulses = get_standard_pulses(
-          spin_ops,spin_multiplicity,cluster_size)?;
-
-      propagate_pulse_sequence(&pulses,&density_matrix,
-          &h_eigvals, &h_eigvecs, config,
-          )?
-    },  
-    PulseSequence::FreeEvolution => {
-      let pulses = get_standard_pulses(
-          spin_ops,spin_multiplicity,cluster_size)?;
-
-      propagate_pulse_sequence(&pulses,&density_matrix,
-          &h_eigvals, &h_eigvecs, config,
-          )?
-    },  
-  };
-  Ok(Some(signal))
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -378,13 +278,14 @@ mod tests{
   use crate::find_clusters;
   use crate::physical_constants::ONE;
   use crate::quantum::tensors::*;
-  use crate::signal::calculate_analytic_restricted_2cluster_signals::*;
+  use crate::cluster_methods::appa;
   use crate::structure::particle::Particle;
   use crate::space_3d::{SymmetricTensor3D,Vector3D};
+  use crate::config::pulse_sequence::PulseSequence;
 
   //----------------------------------------------------------------------------
   #[test]
-  fn test_do_cluster_correlation_expansion(){
+  fn test_calculate_cluster_signals(){
 
     let z0 = 33.0e9;
     let z1 = 80.0e6;
@@ -400,9 +301,10 @@ mod tests{
     let spin_ops = ClusterSpinOperators::new(1,&vec![2],3, &config).unwrap();
 
     let mut config = Config::new();
+    config.cluster_method = Some(ClusterMethod::CCE);
     config.number_timepoints = vec![21];
     let delta_hf = a1 - a2;
-    let freq = hahn_three_spin_modulation_frequency(delta_hf,b);
+    let freq = appa::appa_hahn_frequency(delta_hf,b);
     config.tau_increments = vec![0.05/freq];
     config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
     config.unit_of_clustering = Some(UnitOfClustering::Spin);
@@ -427,13 +329,13 @@ mod tests{
     
     let structure = Structure::new( bath_particles, connections, cell_offsets);
 
-    let order_n_signals = do_cluster_correlation_expansion(&mut cluster_set, 
+    let order_n_signals = calculate_cluster_signals(&mut cluster_set, 
         &spin_ops, &tensors, &config, &None, &structure).unwrap();
 
     let spin_indices = vec![1,2];
 
 
-    let ref_signal_opt = analytic_restricted_2cluster_signal(
+    let ref_signal_opt = appa::appa_hahn(
         &spin_indices,&tensors,&config).unwrap();
     let Some(ref_signal) = ref_signal_opt else{
       panic!("Could not calculate reference signal.");
@@ -443,61 +345,6 @@ mod tests{
       let v0 = ref_signal.data[ii];
       assert!((v-v0*v0).norm() < 1e-12);
       assert!((order_n_signals[0].data[ii]-ONE).norm() < 1e-12);
-    }
-  }
-  //----------------------------------------------------------------------------
-  #[test]
-  fn test_calculate_cluster_signal(){
-
-
-    let z0 = 33.0e9;
-    let z1 = 80.0e6;
-    let a1 = 10.0e6;
-    let a2 = -10.0e6;
-    let b = 10.0e3;
-    let tensors = build_restricted_three_spin_tensors(z0, z1, a1, a2, b);
-  
-    let spin_indices = vec![1,2];
-
-    let mut config = Config::new();
-    config.set_defaults().unwrap();
-    
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],2,&config).unwrap();
-
-    let mut config = Config::new();
-    config.number_timepoints = vec![21];
-    let delta_hf = a1 - a2;
-    let freq = hahn_three_spin_modulation_frequency(delta_hf,b);
-    config.tau_increments = vec![0.05/freq];
-    config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
-
-    config.set_defaults().unwrap();
-    config.set_tau_axis().unwrap();
-  
-    let signal_opt  = calculate_cluster_signal(&vec![1,2], &spin_ops, &tensors, 
-        &config).unwrap();
-
-    let Some(signal) = signal_opt else{
-      panic!("Could not calculate signal.");
-    }; 
-    assert_eq!(signal.data.len(),21);
-
-
-    let ref_signal_opt = analytic_restricted_2cluster_signal(
-        &spin_indices,&tensors,&config).unwrap();
-    let Some(ref_signal) = ref_signal_opt else{
-      panic!("Could not calculate reference signal.");
-    };
-
-    for (ii,v) in signal.data.iter().enumerate(){
-      let v0 = ref_signal.data[ii];
-      let err: f64;
-      if (v+v0).norm() < 1e12{
-        err = (v-v0).norm();
-      }else{
-        err = (2.0+(v-v0)/(v+v0)).norm();
-      }
-      assert!(err < 1e-9);
     }
   }
   //----------------------------------------------------------------------------
