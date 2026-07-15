@@ -12,7 +12,7 @@ pub fn eq_variant<T>(a: &T, b: &T) -> bool
   std::mem::discriminant(a) == std::mem::discriminant(b)
 }
 //------------------------------------------------------------------------------
-pub fn are_all_same_type<T>(array: &Vec::<T>) 
+pub fn are_all_same_type<T>(array: &[T]) 
   -> bool
 {
   if array.len() <= 1 { return true; }
@@ -142,7 +142,7 @@ pub fn vec_f64_from_toml_array(array: Vec::<toml::Value>)
   let mut out = Vec::<f64>::with_capacity(array.len());
   for el in array.iter(){
     match el{
-      toml::Value::Float(x) => out.push({ *x }),
+      toml::Value::Float(x) => out.push(*x),
       _ => return Err(CluEError::ExpectedTOMLFloat(el.type_str().to_string())),
     }
   }

@@ -292,10 +292,15 @@ impl IntegrationGrid{
       data.push(Vec::<f64>::with_capacity(self.len()));
     }
 
+    // Loop over points.
     for ii in  0..self.len(){
-      for ix in 0..self.dim{
-        data[ix].push(self.points[ii + ix]);
+
+      // Loop over dimensions.
+      for (ix, d) in data.iter_mut().enumerate().take(self.dim) { 
+        d.push(self.points[ii + ix]);
       }
+
+      // Record weight.
       data[self.dim].push(self.weights[ii]);
     }
 

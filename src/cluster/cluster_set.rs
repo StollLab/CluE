@@ -103,8 +103,7 @@ impl ClusterSet{
       let mut new_cluster_indices 
         = HashMap::<Vec::<usize>,usize>::with_capacity(clusters_of_size.len());
 
-      let mut idx = 0;
-      for mut vertices in clusters_of_size{
+      for (idx, mut vertices) in clusters_of_size.into_iter().enumerate(){
         if let Some(structure) = structure_opt{
           for n in vertices.iter_mut(){
             *n = structure.get_nth_active_from_reference_index(*n)?;
@@ -113,7 +112,6 @@ impl ClusterSet{
         let cluster = Cluster::from(vertices.clone());
         new_cluster_indices.insert(vertices,idx);
         new_clusters.push(cluster);
-        idx += 1;
       }
 
       cluster_indices.push(new_cluster_indices);

@@ -188,7 +188,7 @@ fn are_klusters_identical(klusters: &[Kluster],klusters0: &[Kluster]) -> bool
   true
 }
 //------------------------------------------------------------------------------
-fn move_kluster_centers(klusters: &mut Vec::<Kluster>, data: &[Vector3D])
+fn move_kluster_centers(klusters: &mut [Kluster], data: &[Vector3D])
 {
   for kluster in klusters.iter_mut(){
     if kluster.elements.is_empty(){
@@ -204,7 +204,7 @@ fn move_kluster_centers(klusters: &mut Vec::<Kluster>, data: &[Vector3D])
   }
 }
 //------------------------------------------------------------------------------
-fn assign_data(klusters: &mut Vec::<Kluster>, data: &[Vector3D])
+fn assign_data(klusters: &mut [Kluster], data: &[Vector3D])
   -> Result<(),CluEError>
 {
 

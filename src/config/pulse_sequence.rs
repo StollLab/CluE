@@ -1,5 +1,6 @@
 use crate::CluEError;
 
+use std::str::FromStr;
 use substring::Substring;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -161,23 +162,25 @@ impl PulseSequence{
     Ok(Self::Custom(pulse_sequence))
   }
   //----------------------------------------------------------------------------
-  pub fn from_str(pulse_seq: &str) -> Result<Self,CluEError>
-  {
-  if pulse_seq.substring(0,3) == "cp-"{
-    let Ok(n_pi) = pulse_seq.substring(3,pulse_seq.len()).parse::<usize>()else{
-      return Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string()));
-    };
-    return Ok(Self::CarrPurcell(n_pi)); 
-  }
-  match pulse_seq{
-    "free_evolution" => Ok(PulseSequence::FreeEvolution),
-    "fid" => Ok(PulseSequence::CarrPurcell(0)),
-    "hahn" => Ok(PulseSequence::CarrPurcell(1)),
-    "refocused_hahn_echo" => Ok(PulseSequence::RefocusedHahnEcho),
-    _ => Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string())),
-  }
-  }  
+}
 
+impl FromStr for PulseSequence {
+  type Err = CluEError;
+  fn from_str(pulse_seq: &str) -> Result<Self, Self::Err> {
+    if pulse_seq.substring(0,3) == "cp-"{
+      let Ok(n_pi) = pulse_seq.substring(3,pulse_seq.len()).parse::<usize>()else{
+        return Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string()));
+      };
+      return Ok(Self::CarrPurcell(n_pi)); 
+    }
+    match pulse_seq{
+      "free_evolution" => Ok(PulseSequence::FreeEvolution),
+      "fid" => Ok(PulseSequence::CarrPurcell(0)),
+      "hahn" => Ok(PulseSequence::CarrPurcell(1)),
+      "refocused_hahn_echo" => Ok(PulseSequence::RefocusedHahnEcho),
+      _ => Err(CluEError::CannotParsePulseSequence(pulse_seq.to_string())),
+    }
+  }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 

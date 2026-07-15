@@ -420,8 +420,8 @@ impl<'a> DetectionSpinOpList {
 
       let mut sop = det_operator.clone();
 
-      for ii in 0..spin_mults.len() {
-        let s = get_spin_operator(spin_mults[ii],&SpinOp::E);
+      for &spin_mult in spin_mults.iter(){  
+        let s = get_spin_operator(spin_mult,&SpinOp::E);
         sop = kron(&sop,&s);
       }
       sop_list.push(sop);

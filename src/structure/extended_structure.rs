@@ -652,8 +652,8 @@ Periodic boudary conditions will not be applied.");
     let n_cells_per_dim = count_extra_cells_per_dim(&cell_edges,config)?;
 
     let mut n_cells = 1;
-    for ix in 0..3{
-      n_cells *= 1 + 2*(n_cells_per_dim[ix] as usize);
+    for &n in n_cells_per_dim.iter(){  
+      n_cells *= 1 + 2*(n as usize);
     }
 
     let mut cell_offsets = Vec::<Vector3D>::with_capacity(n_cells);

@@ -252,7 +252,7 @@ impl ParticleProperties{
           return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
         };
         self.isotopic_distribution.isotope_abundances.push(
-            IsotopeAbundance{isotope: isotope,abundance} );
+            IsotopeAbundance{isotope,abundance} );
       }
 
       if let Some(iso_prop) = self.isotope_properties.get_mut(&iso_str){
