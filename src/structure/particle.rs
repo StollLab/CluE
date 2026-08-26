@@ -2,6 +2,8 @@ use crate::space_3d::Vector3D;
 use crate::elements::Element;
 use crate::isotopes::Isotope;
 
+use num_complex::Complex64;
+
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `Particle` specifies possible particles.
 /// 'Element' specifies a generalized chemical element.
@@ -23,6 +25,9 @@ pub struct Particle{
   pub residue: Option<String>,
   pub residue_sequence_number: Option<u32>,
   pub chain_id: Option<String>,
+
+  //pub state: Vec::<Complex64>,
+
 }
 
 impl Particle{
@@ -42,6 +47,7 @@ impl Particle{
       residue: None,
       residue_sequence_number: None,
       chain_id: None,
+      //state: Vec::<Complex64>::new(),
     }
   }
 }

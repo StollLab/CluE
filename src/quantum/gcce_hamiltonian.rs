@@ -1,7 +1,6 @@
 use crate::CluEError;
 use crate::config::{
   Config,
-  DensityMatrixMethod,
 };
 use crate::config::pulse_sequence::PulseSequence;
 use crate::math::cxmat_pow_n;
@@ -443,7 +442,8 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
 /// for the electron.  
 /// `h_eigvals` and `h_eigvecs` specify the electron--cluster Hamiltonian.
 /// `config` contains user instructions on how to contruct the density matrix.
-pub fn get_cluster_density_matrix(electron_density_matrix: &CxMat, 
+pub fn get_electron_cluster_thermal_density_matrix(
+    electron_density_matrix: &CxMat, 
     h_eigvals: &Array1::<f64>, h_eigvecs: &CxMat, config: &Config)
   -> Result<CxMat,CluEError>
 {
@@ -454,25 +454,16 @@ pub fn get_cluster_density_matrix(electron_density_matrix: &CxMat,
           dim,electron_density_matrix.dim().0));
   }
 
-  let Some(density_matrix_method) = &config.density_matrix else{
-    return Err(CluEError::NoDensityMatrixMethod);
+  let Some(temperature) = config.temperature else {
+    return Err(CluEError::NoTemperature);
   };
+  let beta = I*HBAR/(temperature*BOLTZMANN);
 
-  let mut density_matrix: CxMat = match density_matrix_method{
-    DensityMatrixMethod::Identity => {
-      electron_density_matrix.clone()
-    }
-    DensityMatrixMethod::Thermal(temperature) => {
+  let mut rho_list = get_propagators_complex_time_from_eig(
+      h_eigvals, h_eigvecs, &[-beta])?;
 
-      let beta = I*HBAR/(temperature*BOLTZMANN);
+  let mut density_matrix = rho_list.swap_remove(0);
 
-      let mut rho_list = get_propagators_complex_time_from_eig(
-          h_eigvals, h_eigvecs, &[-beta])?;
-      let rho = rho_list.swap_remove(0);
-
-      electron_density_matrix.dot(&rho)
-    }
-  };
   let Ok(z) = density_matrix.trace() else{
     return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
   };
@@ -528,12 +519,13 @@ mod tests{
     let spin_indices = vec![0,1,2];
     let spin_ops = ClusterSpinOperators::new(1,&vec![2],3,&config).unwrap();
 
-    let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(&spin_indices,&spin_ops, &tensors,
+    let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
+        &spin_indices,&spin_ops, &tensors,
         ).unwrap();
     
     let dim = h_eigvecs.dim().0;
 
-    let density_matrix = get_cluster_density_matrix(
+    let density_matrix = get_electron_cluster_thermal_density_matrix(
         &CxMat::eye(dim),
         &h_eigvals, &h_eigvecs, &config).unwrap();
 
@@ -604,7 +596,7 @@ mod tests{
 
     let dim = h_eigvecs.dim().0;
 
-    let density_matrix = get_cluster_density_matrix(
+    let density_matrix = get_electron_cluster_thermal_density_matrix(
         &CxMat::eye(dim),
         &h_eigvals, &h_eigvecs, &config).unwrap();
 
@@ -728,6 +720,7 @@ mod tests{
                                                            ge, 0.0,
                                                                ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
+      mean_field_couplings: None,
       }
   }
   //----------------------------------------------------------------------------

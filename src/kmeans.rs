@@ -26,23 +26,17 @@ pub fn get_kmeans_partition(
 
   move_kluster_centers(&mut klusters, data);
 
-  let mut klusters0: Vec::<Kluster>;
-
   loop{
-    klusters0 = klusters.clone();
 
-    if do_restricted_kmeans{
-      restricted_assign_data(&mut klusters, data)?;
+    let is_converged = if do_restricted_kmeans{
+      restricted_assign_data(&mut klusters, data)?
     }else{  
-      assign_data(&mut klusters, data)?;
-    }
+      assign_data(&mut klusters, data)?
+    };
+
+    if is_converged{ break; }
 
     move_kluster_centers(&mut klusters, data);
-
-
-    if are_klusters_identical(&klusters,&klusters0){
-      break;
-    }
     
   }
 
@@ -112,10 +106,12 @@ fn restricted_assign_data(
     klusters: &mut[Kluster],
     data: &[Vector3D], 
     ) 
-  -> Result<(),CluEError>
+  -> Result<bool,CluEError>
 { 
   // Clear old assignments.
+  let mut old_elements = Vec::<Vec::<usize>>::with_capacity(klusters.len());
   for kluster in klusters.iter_mut(){
+    old_elements.push(kluster.elements.clone());
     kluster.elements = Vec::<usize>::new();
   }
 
@@ -169,24 +165,18 @@ fn restricted_assign_data(
     klusters[kluster.index].elements.push(datum.index);
   }
 
-  Ok(())
-}
-//------------------------------------------------------------------------------
-fn are_klusters_identical(klusters: &[Kluster],klusters0: &[Kluster]) -> bool
-{
-
-  if klusters.len() != klusters0.len(){
-    return false;
+  for kluster in klusters.iter_mut(){
+    kluster.elements.sort();
   }
 
-  for (hh,kluster) in klusters.iter().enumerate(){
-    if kluster.elements != klusters0[hh].elements{
-      return false;
+  for (ii,kluster) in klusters.iter().enumerate(){
+    if kluster.elements != old_elements[ii] {
+      return Ok(false);
     }
   }
-
-  true
+  Ok(true)
 }
+//------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 fn move_kluster_centers(klusters: &mut [Kluster], data: &[Vector3D])
 {
@@ -205,10 +195,12 @@ fn move_kluster_centers(klusters: &mut [Kluster], data: &[Vector3D])
 }
 //------------------------------------------------------------------------------
 fn assign_data(klusters: &mut [Kluster], data: &[Vector3D])
-  -> Result<(),CluEError>
+  -> Result<bool,CluEError>
 {
 
+  let mut old_elements = Vec::<Vec::<usize>>::with_capacity(klusters.len());
   for kluster in klusters.iter_mut(){
+    old_elements.push(kluster.elements.clone());
     kluster.elements = Vec::<usize>::new();
   }
 
@@ -226,7 +218,13 @@ fn assign_data(klusters: &mut [Kluster], data: &[Vector3D])
     }
     klusters[min_index].elements.push(ii);
   }
-  Ok(())
+
+  for (ii,kluster) in klusters.iter().enumerate(){
+    if kluster.elements != old_elements[ii] {
+      return Ok(false);
+    }
+  }
+  Ok(true)
 }
 //------------------------------------------------------------------------------
 fn initialize_klusters(
@@ -358,41 +356,6 @@ mod tests{
       let err = (&kluster.center - &expected_klusters[ii].center).norm();
       assert!( err < 1e-12 );
     }
-
-  }
-  //----------------------------------------------------------------------------
-  #[test]
-  fn test_assign_data_are_klusters_identical(){
-
-    let (data,expected_klusters) = get_test_kluster_data();
-
-    let mut klusters = vec![
-      Kluster{
-        center: (&data[0] + &(&data[1]+&data[2])).scale(1.0/3.0),
-        elements: vec![0,1,2,3],
-      },
-      Kluster{
-        center: (&data[3] + &(&data[4]+&data[5])).scale(1.0/3.0),
-        elements: vec![4,5],
-      },
-      Kluster{
-        center: (&data[6] + &(&data[7]+&data[8])).scale(1.0/3.0),
-        elements: vec![9,10,11],
-      },
-      Kluster{
-        center: (&data[9] + &(&data[10]+&data[11])).scale(1.0/3.0),
-        elements: vec![6,7,8],
-      },
-    ];
-    
-    assert!(!are_klusters_identical(&klusters, &expected_klusters));
-
-    assign_data(&mut klusters,&data).unwrap();
-    for (ii,kluster) in klusters.iter().enumerate(){
-      assert_eq!(kluster.elements, expected_klusters[ii].elements)
-    }
-
-    assert!(are_klusters_identical(&klusters, &expected_klusters));
 
   }
   //----------------------------------------------------------------------------

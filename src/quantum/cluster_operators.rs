@@ -6,6 +6,7 @@ use crate::quantum::pulse_sequences::{
   PI_OVER_2_PULSE_NAME,
   PI_PULSE_NAME
 };
+use crate::math::commutator;
 
 use std::fmt;
 use std::collections::HashMap;
@@ -625,6 +626,21 @@ pub fn spin_squared(spin_multiplicity: usize) -> CxMat {
 
   op
 }
+//------------------------------------------------------------------------------
+pub fn spin_ist(spin_multiplicity: usize, l: i32, m: i32) -> CxMat{
+
+  let sp = spin_plus(spin_multiplicity);
+  let sm = spin_minus(spin_multiplicity);
+  let mut t = (-SQRT2_INV).powi(l as i32) * ONE * sp;
+
+  for n in 0..2*l{
+    if l - n  == m { break; }
+    let a = ONE/( (l*(l+1) - m*(m-1)) as f64 ).sqrt(); 
+    t = commutator(&sm,&t)*a;
+  }
+
+  t
+}
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
@@ -632,10 +648,7 @@ pub fn spin_squared(spin_multiplicity: usize) -> CxMat {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  use crate::math::commutator;
-
-
+  use ndarray::array;
 
   //----------------------------------------------------------------------------
   #[test]
@@ -800,6 +813,25 @@ mod tests {
           &( &(&xx + &yy) + &zz), 
           &(&zz + &(&(pm*(0.5*ONE))+&(mp*(0.5*ONE)))),1e-12)
         );
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_spin_ist(){
+    let tol = 1e-12;
+    let t = spin_ist(2,1,1);
+    assert!(approx_eq(&t, &(-SQRT2_INV*ONE*spin_plus(2)),tol));
+    let t = spin_ist(2,1,0);
+    assert!(approx_eq(&t, &spin_z(2),tol));
+    let t = spin_ist(2,1,-1);
+    assert!(approx_eq(&t, &(SQRT2_INV*ONE*spin_minus(2)),tol));
+
+    let t = spin_ist(2,2,-2);
+    assert!(approx_eq(&t, &(0.5*ONE*spin_minus(2)*spin_minus(2)),tol));
+    let t = spin_ist(3,2,-2);
+    assert!(approx_eq(&t, &(0.5*ONE*spin_minus(3)*spin_minus(3)),tol));
+    let t = spin_ist(4,2,-2);
+    assert!(approx_eq(&t, &(0.5*ONE*spin_minus(4)*spin_minus(4)),tol));
+    
   }
 //------------------------------------------------------------------------------
   #[test]

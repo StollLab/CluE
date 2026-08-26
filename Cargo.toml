@@ -1,6 +1,6 @@
 [package]
 name = "clue_oxide"
-version = "0.2.3-alpha.4" # on update, ensure to also update src/info/version.rs
+version = "0.2.3-alpha.5" # on update, ensure to also update src/info/version.rs
 edition = "2021"
 authors = ["Samuel M. Jahn <jahn.samuel@gmail.com>"]
 description = "CluE Oxide (Cluster Evolution Oxide) is a spin dynamics simulation program for electron spin decoherence"
@@ -45,8 +45,8 @@ mcmf = "2.0.0"
 [target.'cfg(unix)'.dependencies]
 # To build openblas instead of using the system's openblas, comment this line
 # and uncomment the next.
-ndarray-linalg = { version = "0.17", features = ["openblas-system"] }
-#ndarray-linalg = { version = "0.17", features = ["openblas-static"] }
+#ndarray-linalg = { version = "0.17", features = ["openblas-system"] }
+ndarray-linalg = { version = "0.17", features = ["openblas-static"] }
 
 #[target.'cfg(windows)'.dependencies.ndarray-linalg]
 #version = '0.17.0'

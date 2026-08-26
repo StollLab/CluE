@@ -14,12 +14,14 @@ use crate::signal::{Signal, load_batch_signals, write_batch_signals};
 use crate::structure::Structure;
 use crate::HamiltonianTensors;
 use crate::math;
-use crate::quantum::cluster_operators::ClusterSpinOperators;
+use crate::quantum::{
+  cluster_operators::ClusterSpinOperators,
+  spin_states::SpinStates,  
+};
 use crate::cluster_methods::{
   cce::{cce,gcce},
   appa::appa,
   lce::lce,
-  pca::pca,
 };
 
 use rayon::prelude::*;
@@ -36,14 +38,15 @@ use std::path::Path;
 /// in a finite-size spin bath. II. Ensemble dynamics,” Phys. Rev. B 79, 115320
 /// (2009).
 pub fn calculate_cluster_signals(
-    cluster_set: &mut ClusterSet, spin_ops: &ClusterSpinOperators,
+    cluster_set: &mut ClusterSet, states: &SpinStates,
+    spin_ops: &ClusterSpinOperators,
     tensors: &HamiltonianTensors, config: &Config, 
     save_path_opt: &Option<String>,structure: &Structure,
     ) -> Result<Vec::<Signal>,CluEError>
 {
 
   
-  calculate_auxiliary_signals(cluster_set, spin_ops, tensors, config, 
+  calculate_auxiliary_signals(cluster_set, states, spin_ops, tensors, config, 
       save_path_opt,structure)?; 
 
 
@@ -73,8 +76,9 @@ pub fn calculate_cluster_signals(
 // For each cluster in cluster_set this function replaces cluster.signal
 // with that cluster's auxiliary signal.
 fn calculate_auxiliary_signals(
-    cluster_set: &mut ClusterSet, spin_ops: &ClusterSpinOperators,
-    tensors: &HamiltonianTensors, config: &Config, 
+    cluster_set: &mut ClusterSet, states: &SpinStates,
+    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors, 
+    config: &Config, 
     save_path_opt: &Option<String>, structure: &Structure,
     ) 
   -> Result<(),CluEError>
@@ -130,13 +134,13 @@ fn calculate_auxiliary_signals(
           clusters[cluster_size].par_iter_mut().skip(idx).take(batch_size)
             .for_each(|cluster| 
               cluster.signal = evaluate_cluster(cluster.vertices(),
-                spin_ops,tensors,config,method)
+                states,spin_ops,tensors,config,method)
           );
       }else{
           clusters[cluster_size].iter_mut().skip(idx).take(batch_size)
             .for_each(|cluster| 
               cluster.signal = evaluate_cluster(cluster.vertices(),
-                spin_ops,tensors,config,method)
+                states,spin_ops,tensors,config,method)
           );
       }
       //
@@ -252,17 +256,17 @@ fn calculate_auxiliary_signals(
 //------------------------------------------------------------------------------
 fn evaluate_cluster(
     tensor_indices: &[usize],
+    states: &SpinStates,
     spin_ops: &ClusterSpinOperators, 
     tensors: &HamiltonianTensors,
     config: &Config,
     method: &ClusterMethod) -> Result<Option<Signal>,CluEError> 
 {
   match method{
-    ClusterMethod::CCE => cce(tensor_indices,spin_ops,tensors,config),
-    ClusterMethod::GCCE => gcce(tensor_indices,spin_ops,tensors,config),
+    ClusterMethod::CCE => cce(tensor_indices,states,spin_ops,tensors,config),
+    ClusterMethod::GCCE => gcce(tensor_indices,states,spin_ops,tensors,config),
     ClusterMethod::APPA => appa(tensor_indices,tensors,config),
     ClusterMethod::LCE => lce(tensor_indices,tensors,config),
-    ClusterMethod::PCA => pca(tensor_indices,tensors,config),
   }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -282,6 +286,9 @@ mod tests{
   use crate::structure::particle::Particle;
   use crate::space_3d::{SymmetricTensor3D,Vector3D};
   use crate::config::pulse_sequence::PulseSequence;
+
+  use rand_chacha::ChaCha20Rng;
+  use rand::SeedableRng;
 
   //----------------------------------------------------------------------------
   #[test]
@@ -329,7 +336,9 @@ mod tests{
     
     let structure = Structure::new( bath_particles, connections, cell_offsets);
 
-    let order_n_signals = calculate_cluster_signals(&mut cluster_set, 
+    let mut rng = ChaCha20Rng::from_entropy();
+    let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
+    let order_n_signals = calculate_cluster_signals(&mut cluster_set, &states,
         &spin_ops, &tensors, &config, &None, &structure).unwrap();
 
     let spin_indices = vec![1,2];
@@ -390,6 +399,7 @@ mod tests{
                                                            ge, 0.0,
                                                                 ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
+      mean_field_couplings: None,
       }
   }  
 }

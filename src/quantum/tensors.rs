@@ -3,14 +3,20 @@ use crate::clue_errors::CluEError;
 use crate::config::Config;
 use crate::config::particle_config::{EigSpecifier,TensorSpecifier};
 use crate::isotopes::Isotope;
-use crate::physical_constants::{HBAR, JOULES_TO_HERTZ,
+use crate::math::expectation_value;
+use crate::physical_constants::{BOLTZMANN, HBAR, JOULES_TO_HERTZ,
   MU0,MUB,MUN,PI};
+use crate::quantum::cluster_operators::SpinOp;
+use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::space_3d::{SymmetricTensor3D,UnitSpherePoint,Vector3D};
 use crate::structure::{DetectedSpin,Structure};
 use crate::structure::particle::Particle;
 use crate::structure::exchange_groups::ExchangeGroup;
 use crate::symmetric_list_2d::SymList2D;
 
+use num_complex::Complex64;
+use ndarray::Array2;
+type CxMat = Array2::<Complex64>;
 
 use rand_chacha::ChaCha20Rng;
 
@@ -39,6 +45,7 @@ pub struct HamiltonianTensors{
   pub spin2_tensors: Spin2Tensors, // O(S^2)
   pub detected_gamma_matrix: SymmetricTensor3D,
   pub magnetic_field: Vector3D,
+  pub mean_field_couplings: Option<Vec::<Vec::<Vector3D>>>,
 }
 impl HamiltonianTensors{
   //----------------------------------------------------------------------------
@@ -120,7 +127,6 @@ impl HamiltonianTensors{
       // nuclear Zeeman
       let bath_zeeman = construct_bath_zeeman_tensor(rng,particle_idx0,
           magnetic_field, structure, config)?;
-      //let bath_zeeman = construct_zeeman_tensor(&(gamma0*&zz),magnetic_field);
 
       if bath_zeeman.any_nan(){
         return Err(CluEError::NANTensorBathZeeman(
@@ -240,7 +246,67 @@ impl HamiltonianTensors{
       spin2_tensors,
       detected_gamma_matrix: gamma_matrix.clone(),
       magnetic_field: magnetic_field.clone(),
+      mean_field_couplings: None,
       })
+
+  }
+  //----------------------------------------------------------------------------
+  pub fn get_zeeman_boltzmann_weights(&self,temperature: f64) 
+      -> Vec::<Vec::<f64>>
+  {
+    let beta =  1.0/(JOULES_TO_HERTZ*BOLTZMANN*temperature);
+
+    let mut weights_list = Vec::<Vec::<f64>>::with_capacity(self.len());
+    for n in 0..self.len(){
+
+      let hz = match self.spin1_tensors.get(n){
+        Some(v) => v.z(),
+        None => 0.0,  
+      };
+
+      let mult = self.spin_multiplicities[n];
+
+      let idx_to_spin = |idx, mult| (idx as f64) - 0.5*( (mult as f64) - 1.0);
+
+      let mut weights: Vec::<f64> = (0..mult)
+        .map(|n| (-0.5*hz*beta*idx_to_spin(n,mult)).exp() )
+        .collect();
+
+      let z: f64 = weights.iter().map(|w| w).sum();
+      weights.iter_mut().for_each(|w| *w = &*w/z);
+      weights_list.push(weights);
+    }
+
+    weights_list
+  }
+  //----------------------------------------------------------------------------
+  pub fn set_mean_field_couplings(&mut self, states: &[CxMat],
+      spin_ops: &ClusterSpinOperators)
+  {
+  
+    let n = states.len();
+    let mut mean_field_couplings = Vec::<Vec::<Vector3D>>::with_capacity(n);
+
+    for idx0 in 0..n{
+      mean_field_couplings.push(Vec::<Vector3D>::with_capacity(n));
+
+      for idx1 in 0..n{
+
+        if idx1 == idx0 {  
+          mean_field_couplings[idx0].push(Vector3D::zeros());
+          continue
+        }
+
+        if let Some(ten) = self.spin2_tensors.get(idx0,idx1){
+          let mf_vec = evaluate_mean_field(ten,&states[idx0],spin_ops);
+          mean_field_couplings[idx0].push(Vector3D::zeros());
+        }else{
+          mean_field_couplings[idx0].push(Vector3D::zeros());
+        }
+
+      }
+      
+    }
 
   }
   //----------------------------------------------------------------------------
@@ -777,6 +843,36 @@ fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
   Ok(ten)
 
 }
+//------------------------------------------------------------------------------
+// 
+// <T>_e = sum_e'  <m|I_{e,m}|m> T_{mn}[e][e']
+// `ten` = T_{mn}
+// `state` = |m>
+
+// TODO: Rethink format and then add error checks.
+fn evaluate_mean_field(ten: &SymmetricTensor3D, state: &CxMat,
+    spin_ops: &ClusterSpinOperators)
+  -> Result<Vector3D,CluEError>
+{
+
+  let cluster_size = 1;
+  let sop_idx0 = 0;
+  let spin_mult0 = state.len();
+
+  let sx = spin_ops.get(&SpinOp::Sx,spin_mult0,cluster_size,sop_idx0)?;
+  let sy = spin_ops.get(&SpinOp::Sy,spin_mult0,cluster_size,sop_idx0)?;
+  let sz = spin_ops.get(&SpinOp::Sz,spin_mult0,cluster_size,sop_idx0)?;
+
+  let ex = expectation_value(sx,state)?;
+  let ey = expectation_value(sy,state)?;
+  let ez = expectation_value(sz,state)?;
+
+  let mfx = ten.xx()*ex + ten.xy()*ey + ten.xz()*ez; 
+  let mfy = ten.yx()*ex + ten.yy()*ey + ten.zz()*ez; 
+  let mfz = ten.zx()*ex + ten.zy()*ey + ten.zz()*ez; 
+
+  Ok(Vector3D::from([mfx.re,mfy.re,mfz.re]))
+}
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
@@ -937,6 +1033,12 @@ mod tests{
     }
 
 
+    let weights_list = tensors.get_zeeman_boltzmann_weights(20.0);
+    for weights in weights_list.iter(){
+      for &w in weights.iter(){
+        assert!(!w.is_nan());
+      }
+    }
   }
   //----------------------------------------------------------------------------
   #[test]

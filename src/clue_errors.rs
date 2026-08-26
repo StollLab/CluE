@@ -118,6 +118,7 @@ pub enum CluEError{
   IsotopeAbundancesCannotBeNormalized(usize),
   IsotopeAbundancesMustBeNonnegative(usize),
   LenghMismatchTimepointsIncrements(usize,usize),
+  MeanFieldECCENotImplemented,
   MismatchedGroupNames(String,String),
   MissingFieldInCSVFile(String,String),
   MissingFilter(String),
@@ -150,13 +151,14 @@ pub enum CluEError{
   NoClusterMethod,
   NoClustersOfSize(usize),
   NoClusterSource,
-  NoDensityMatrixMethod,
+  NoClusterDensityMatrixMethod,
   NoDetectedSpinDensityMatrix,
   NoDetectedSpinDetectionOperator,
   NoDetectedSpinIdentity,
   NoDetectedSpinMultiplicity,
   NoDetectedSpinNotSet,
   NoDetectedSpinTransition,
+  NoEnsembleCCE,
   NoExtracellIsotopicDistribution(String),
   NoGMatrixSpecifier,
   NoGMatrixValues,
@@ -164,6 +166,7 @@ pub enum CluEError{
   NoInputFile,
   NoKMeansSize,
   NoMagneticField,
+  NoMeanFields,
   NoModelIndex,
   NoMaxClusterSize,
   NoNeighborCutoffDistance,
@@ -619,6 +622,9 @@ and p0,p1 > 0 are abundances",line_number),
           "there are {} timepoint specifications, but {} time increments",
           n_dts,dts),
 
+      CluEError::MeanFieldECCENotImplemented => write!(f,
+          "mean field averaging is not implemented for ensemble CCE"),
+
       CluEError::MismatchedGroupNames(name0,name1) => write!(f,
           "group names \"{}\" and \"{}\" do not match",name0,name1),
 
@@ -723,7 +729,7 @@ periodic boundary conditions should be applied"),
       CluEError::NoClusterSource => write!(f,
           "no cluster source specified"),
       
-      CluEError::NoDensityMatrixMethod=> write!(f,
+      CluEError::NoClusterDensityMatrixMethod=> write!(f,
           "no density matrix method specified"),
       
       CluEError::NoDetectedSpinDensityMatrix=> write!(f,
@@ -743,6 +749,9 @@ periodic boundary conditions should be applied"),
 
       CluEError::NoDetectedSpinTransition => write!(f,
           "detected_transition is not set"),
+
+      CluEError::NoEnsembleCCE => write!(f,
+          "ensemble_cce: bool is not set"),
 
       CluEError::NoExtracellIsotopicDistribution(label) => write!(f,
           "extracel_isotopic_distribution is not set for {}",label),
@@ -764,6 +773,9 @@ periodic boundary conditions should be applied"),
       
       CluEError::NoMagneticField => write!(f,
           "please specify the applied magnetic field"),
+
+      CluEError::NoMeanFields => write!(f,
+          "please whether or not mean fields should be used"),
 
       CluEError::NoModelIndex => write!(f,
           "PDB model not selected"),

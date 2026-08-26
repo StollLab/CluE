@@ -8,7 +8,7 @@ use crate::HamiltonianTensors;
 use crate::quantum::spin_hamiltonian::*;
 use crate::quantum::gcce_hamiltonian::{
   build_spin_hamiltonian,
-  get_cluster_density_matrix,  
+  get_electron_cluster_thermal_density_matrix,
   propagate_custom_pulse_sequence,
   propagate_pulse_sequence,
 };
@@ -17,7 +17,9 @@ use crate::quantum::pulse_sequences::{
   generate_pulse_sequence,  
 };
 use crate::quantum::cluster_operators::ClusterSpinOperators;
+use crate::quantum::spin_states::SpinStates;
 
+use ndarray::linalg::kron;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// This function calculates the cluster correlation expansion (CCE)
@@ -32,7 +34,7 @@ use crate::quantum::cluster_operators::ClusterSpinOperators;
 //------------------------------------------------------------------------------
 // This function calculate the cluster signal for the cluster specified by
 // tensor_indices.
-pub fn cce(tensor_indices: &[usize], 
+pub fn cce(tensor_indices: &[usize],states: &SpinStates, 
     spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors, 
     config: &Config) 
   -> Result<Option<Signal>,CluEError>
@@ -49,7 +51,12 @@ pub fn cce(tensor_indices: &[usize],
 
   let hamiltonian = build_block_diag_hamiltonian(
       tensor_indices,spin_ops, tensors,config)?;
-  let density_matrix = get_density_matrix(&hamiltonian, config)?;
+
+  let density_matrix = match states.density_matrix_for(tensor_indices)?{
+    None => get_cluster_thermal_density_matrix(&hamiltonian, config)?,
+    Some(rho) => rho,     
+  };
+
   let signal = propagate_pulse_sequence_block_diag(
       &density_matrix, &hamiltonian, config)?;
   Ok(Some(signal))
@@ -57,7 +64,7 @@ pub fn cce(tensor_indices: &[usize],
 //------------------------------------------------------------------------------
 // This function calculate the cluster signal for the cluster specified by
 // tensor_indices.
-pub fn gcce(tensor_indices: &[usize], 
+pub fn gcce(tensor_indices: &[usize], states: &SpinStates, 
     spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors, 
     config: &Config) 
   -> Result<Option<Signal>,CluEError>
@@ -87,8 +94,12 @@ pub fn gcce(tensor_indices: &[usize],
   let detected_spin_density_matrix = spin_ops.get_density_matrix(
       spin_multiplicity, cluster_size)?;  
 
-  let density_matrix = get_cluster_density_matrix(detected_spin_density_matrix,
-      &h_eigvals, &h_eigvecs, config)?;
+  let density_matrix = match states.density_matrix_for(tensor_indices)?{
+    None => get_electron_cluster_thermal_density_matrix(
+        detected_spin_density_matrix,
+      &h_eigvals, &h_eigvecs, config)?,
+    Some(rho) => kron(&detected_spin_density_matrix,&rho),     
+  };
 
   let Some(pulse_sequence) = &config.pulse_sequence else{
     return Err(CluEError::NoPulseSequence);
@@ -135,6 +146,9 @@ mod tests{
   use crate::quantum::tensors::*;
   use crate::space_3d::{SymmetricTensor3D,Vector3D};
   use crate::cluster_methods::appa;
+
+  use rand_chacha::ChaCha20Rng;
+  use rand::SeedableRng;
   //----------------------------------------------------------------------------
   #[test]
   fn test_cce(){
@@ -163,8 +177,11 @@ mod tests{
 
     config.set_defaults().unwrap();
     config.set_tau_axis().unwrap();
+
+    let mut rng = ChaCha20Rng::from_entropy();
+    let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
   
-    let signal_opt  = cce(&vec![1,2], &spin_ops, &tensors, 
+    let signal_opt  = cce(&vec![1,2], &states,&spin_ops, &tensors, 
         &config).unwrap();
 
     let Some(signal) = signal_opt else{
@@ -233,6 +250,7 @@ mod tests{
                                                            ge, 0.0,
                                                                 ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
+      mean_field_couplings: None,
       }
   }  
 }

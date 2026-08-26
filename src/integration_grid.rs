@@ -88,6 +88,48 @@ impl IntegrationGrid{
   }
 
   //----------------------------------------------------------------------------
+  pub fn circle_3d(axis: &Vector3D, num_points: usize) -> Self{
+  
+    let norm = axis.norm();
+
+    let axis = axis.scale(1.0/norm);
+
+    let z = Vector3D::from([0.0,0.0,1.0]);
+    if (axis.dot(&z).abs() -1.0).abs() < 1e-12{
+  
+      let x = Vector3D::from([1.0,0.0,0.0]);
+      let y = Vector3D::from([0.0,1.0,0.0]);
+      return Self::elipse_3d(&x, &y, num_points)
+    }
+
+    let e1 = z.cross(&axis);
+    let e1 = e1.scale(1.0/e1.norm());
+    let e2 = axis.cross(&e1);
+    Self::elipse_3d(&e1, &e2, num_points)
+  }
+  //----------------------------------------------------------------------------
+  pub fn elipse_3d(x: &Vector3D, y: &Vector3D, num_points: usize) -> Self{
+    let dim = 3;
+
+    let mut points = Vec::<f64>::with_capacity(dim*num_points);
+    let w = 1.0/(num_points as f64);
+    let weights = (0..num_points).map(|_| w).collect::<Vec::<f64>>();
+
+    let dtheta = 2.0*PI/num_points as f64;
+
+    for ii in 0..num_points{
+      let theta = dtheta*ii as f64;   
+
+      let r = &x.scale(theta.cos()) + &y.scale(theta.sin());
+      points.push(r.x());
+      points.push(r.y());
+      points.push(r.z());
+
+    }
+
+    IntegrationGrid{dim,points,weights}
+  }
+  //----------------------------------------------------------------------------
   /// This function generates a single point grid one unit in the z-direction.
   pub fn z_3d() -> Self{
     let dim = 3;
@@ -424,6 +466,37 @@ mod tests{
 
     assert_eq!(grid.mean(), vec![0.0,0.0,0.0]);
   } 
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_circle_3d(){
+    let grid = IntegrationGrid::circle_3d(&Vector3D::from([0.0,0.0,1.5]),4);
+    let expected_grid_points = vec![
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        -1.0, 0.0, 0.0,
+        0.0, -1.0, 0.0,
+    ];
+
+    for (ii,p) in grid.points.iter().enumerate(){
+      let q = expected_grid_points[ii];
+      assert!((p-q).abs() < 1e-12);
+    }
+
+    let grid = IntegrationGrid::circle_3d(&Vector3D::from([2.0,0.0,0.0]),4);
+  
+    let expected_grid_points = vec![
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+        0.0, -1.0, 0.0,
+        0.0, 0.0, -1.0,
+    ];
+
+    for (ii,p) in grid.points.iter().enumerate(){
+      let q = expected_grid_points[ii];
+      assert!((p-q).abs() < 1e-12);
+    }
+
+  }
   //----------------------------------------------------------------------------
   #[test]
   fn test_remove_3d_hemisphere(){

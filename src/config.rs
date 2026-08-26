@@ -69,7 +69,7 @@ pub const SAVE_FILE_TENSORS: &str = "tensors";
 pub struct Config{
 
   // Detected Spin
-  pub density_matrix: Option<DensityMatrixMethod>,
+  pub cluster_populations: Option<ClusterPopulations>,
   pub detected_density_matrix: Option<CxMat>,
   pub detected_spin_g_matrix: Option<TensorSpecifier>,
   pub detected_spin_identity: Option<Isotope>,
@@ -79,6 +79,7 @@ pub struct Config{
   pub detection_operator: Option<CxMat>,
   pub detected_spin_zerofield_coupling: Option<TensorSpecifier>,
   pub detected_spin_quadrupole_coupling: Option<TensorSpecifier>,
+  pub mean_fields: Option<bool>,
   pub pulses: HashMap::<String,CxMat>,
 
   // Structure
@@ -90,6 +91,7 @@ pub struct Config{
   pub particles: Vec::<ParticleConfig>,
   pub pdb_model_index: Option<usize>,
   pub radius: Option<f64>,
+  pub temperature: Option<f64>,
   
   // Pair Cutoffs
   pub neighbor_cutoff_coupling_xx_yy: Option<f64>,
@@ -104,6 +106,7 @@ pub struct Config{
   pub cluster_batch_size: Option<usize>, 
   pub cluster_source: Option<ClusterSource>,
   pub cluster_method: Option<ClusterMethod>,
+  pub ensemble_cce: Option<bool>,
   pub connect_exchange_groups: Option<bool>,
   pub min_cell_size: Option<usize>,
   pub max_cell_size: Option<usize>,
@@ -221,6 +224,14 @@ impl Config{
       self.cluster_source = Some(ClusterSource::Structure);
     }
 
+    if self.ensemble_cce.is_none(){
+      self.ensemble_cce = Some(false);
+    }
+
+    if self.mean_fields.is_none(){
+      self.mean_fields = Some(false);
+    }
+
     if self.partitioning.is_none(){
       self.partitioning = Some(PartitioningMethod::Particles);
     }
@@ -232,8 +243,8 @@ impl Config{
       self.run_in_parallel = Some(true);
     }
 
-    if self.density_matrix.is_none(){
-      self.density_matrix = Some(DensityMatrixMethod::Identity);
+    if self.cluster_populations. is_none(){
+      self.cluster_populations = Some(ClusterPopulations::Uniform);
     }
 
     if self.neighbor_cutoff_delta_zeeman.is_none(){
@@ -545,11 +556,12 @@ impl Config{
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-/// `DensityMatrixMethod` specifies different methods for determining the
 #[derive(Debug,Clone,PartialEq)]
-pub enum DensityMatrixMethod{
-  Identity,
-  Thermal(f64),
+pub enum ClusterPopulations{
+  Uniform,
+  Random,
+  Thermal,
+  Zeeman,
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -617,9 +629,9 @@ impl DetectedSpinCoordinates{
               ,a[3].as_float()) else{
             return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
           };
-          points.push(x);
-          points.push(y);
-          points.push(z);
+          points.push(x*ANGSTROM);
+          points.push(y*ANGSTROM);
+          points.push(z*ANGSTROM);
           weights.push(w);
         }
         Ok(Self::ProbabilityDistribution(
@@ -629,7 +641,7 @@ impl DetectedSpinCoordinates{
         let vec: Vec::<f64> = array.iter()
           .filter_map(|v| v.as_float()).collect();
 
-        let vec3d = Vector3D::from_vec(vec)?;
+        let vec3d = Vector3D::from_vec(vec)?.scale(ANGSTROM);
 
         Ok(Self::XYZ(vec3d))
 
@@ -706,7 +718,6 @@ pub enum ClusterMethod{
   GCCE,
   APPA,
   LCE,
-  PCA
 }
 impl ClusterMethod{
   pub fn from(method_str: &str) -> Result<Self,CluEError>{
@@ -716,7 +727,6 @@ impl ClusterMethod{
       "gcce" => Ok(Self::GCCE),
       "appa" => Ok(Self::APPA),
       "lce" => Ok(Self::LCE),
-      "pca" => Ok(Self::PCA),
       _ => Err(CluEError::CannotParseClusterMethod(method_str.to_string())),
     }
   }
@@ -843,6 +853,19 @@ impl OrientationAveraging{
       }));
 
 
+    } else if grid == KEY_ORI_CIRCLE{
+      let Some(v) = ori_toml.vector else{
+        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+      };
+      if v.len() != 3{
+        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+      }
+      let Some(n_ori) = ori_toml.number else{
+        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+      };
+      return Ok(OrientationAveraging::Grid(
+          IntegrationGrid::circle_3d(&Vector3D::from([v[0],v[1],v[2]]), n_ori)
+      ));
     } else if grid == KEY_ORI_VECTORGRID{
       let Some(v_grid) = ori_toml.vector_grid else{
         return Err(CluEError::CannotParseOrientations(grid.to_string()));
@@ -990,6 +1013,9 @@ impl Config{
     
     }
     //E--G
+    if config_toml.ensemble_cce.is_some(){
+      self.ensemble_cce = config_toml.ensemble_cce;
+    }
     if let Some(groups) = config_toml.groups{
       for value in groups.iter(){
         let Some(group) = value.as_table() else{
@@ -1015,6 +1041,10 @@ impl Config{
 
     if config_toml.max_cell_size.is_some(){
       self.max_cell_size = config_toml.max_cell_size;
+    }
+
+    if config_toml.mean_fields.is_some(){
+      self.mean_fields = config_toml.mean_fields;
     }
 
     if config_toml.max_cluster_size.is_some(){
@@ -1164,17 +1194,26 @@ impl Config{
     }
 
     // T--V
+    if config_toml.temperature.is_some(){
+      self.temperature = config_toml.temperature;
+    }
+
     if config_toml.populations 
         == Some(KEY_DENSITY_MATRIX_THERMAL.to_string())
     {
-      let Some(t) = config_toml.temperature else {
-        return Err(CluEError::NoTemperature);
-      };
-      self.density_matrix = Some(DensityMatrixMethod::Thermal(t));  
+      self.cluster_populations = Some(ClusterPopulations::Thermal);
     }else if config_toml.populations 
         == Some(KEY_DENSITY_MATRIX_ID.to_string())
     {
-      self.density_matrix = Some(DensityMatrixMethod::Identity); 
+      self.cluster_populations = Some(ClusterPopulations::Uniform);
+    }else if config_toml.populations 
+        == Some(KEY_DENSITY_MATRIX_RANDOM.to_string())
+    {
+      self.cluster_populations = Some(ClusterPopulations::Random);
+    }else if config_toml.populations 
+        == Some(KEY_DENSITY_MATRIX_ZEEMAN.to_string())
+    {
+      self.cluster_populations = Some(ClusterPopulations::Zeeman);
     }
 
 
@@ -1403,7 +1442,8 @@ mod tests{
         number = 170
 
       [detected_spin]
-      position = [28,29] # centroid over serials
+      #position = [28,29] # centroid over serials
+      position = [1.0, 2.0, 3.0]
       g_matrix.values = [2.0097, 2.0064, 2.0025]
       g_matrix.axes.x = {from = "tempo_c1", to = "tempo_c19"}
       g_matrix.axes.y = [-1.1500, -0.4700, 0.7100]
@@ -1479,7 +1519,6 @@ mod tests{
     let clash_distance_pbc = config.clash_distance_pbc.unwrap();
     assert!( (clash_distance_pbc - 0.1e-10).abs()/(0.1e-10) < 1e-12 );
     assert_eq!(config.cluster_batch_size,Some(20000));
-    assert_eq!(config.density_matrix, Some(DensityMatrixMethod::Thermal(20.0)));
     assert_eq!(config.cluster_method,Some(ClusterMethod::CCE));
 
     let g_matrix = match config.detected_spin_g_matrix.unwrap(){
@@ -1501,8 +1540,12 @@ mod tests{
 
     assert_eq!(config.detected_spin_identity, Some(Isotope::Electron));
     assert_eq!(config.detected_spin_multiplicity, Some(2));
+    //assert_eq!(config.detected_spin_position,
+    //    Some(DetectedSpinCoordinates::CentroidOverSerials(vec![28,29])));
     assert_eq!(config.detected_spin_position,
-        Some(DetectedSpinCoordinates::CentroidOverSerials(vec![28,29])));
+        Some(DetectedSpinCoordinates::XYZ(Vector3D { 
+            elements: [1.0*ANGSTROM, 2.0*ANGSTROM, 3.0*ANGSTROM] }))
+    );
     assert_eq!(config.input_structure_file,
          Some("../../assets/TEMPO_wat_gly_70A.pdb".to_string()));
     assert_eq!(config.cluster_source,

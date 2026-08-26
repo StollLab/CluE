@@ -1,12 +1,14 @@
+use crate::CluEError;
+
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::{Hash,Hasher};
 use std::collections::hash_map::DefaultHasher;
 
-use num_complex::Complex;
+use num_complex::Complex64;
 use ndarray::Array2;
 
-type CxMat = Array2::<Complex<f64>>;
+type CxMat = Array2::<Complex64>;
 
 /// This function compares two lists for equality.
 pub fn are_vecs_equal<T: std::cmp::PartialEq>
@@ -90,11 +92,30 @@ pub fn commutator(mat0: &CxMat, mat1: &CxMat) -> CxMat{
   mat0.dot(mat1) - mat1.dot(mat0)
 }
 //------------------------------------------------------------------------------
-pub fn hilbert_schmidt(a: &CxMat, b: &CxMat) -> Complex::<f64>
+pub fn hilbert_schmidt(a: &CxMat, b: &CxMat) -> Complex64
 {
   let a_star = a.map(|a_ij| a_ij.conj() );
   let it = std::iter::zip(a_star,b);
-  it.map(|(a_ij,b_ij)| a_ij*b_ij).sum::<Complex<f64>>()
+  it.map(|(a_ij,b_ij)| a_ij*b_ij).sum::<Complex64>()
+}
+//------------------------------------------------------------------------------
+// TODO: Rethink format and then add error checks.
+pub fn expectation_value(op: &CxMat, v: &CxMat) -> Result<Complex64,CluEError> 
+{
+  let z = vectran_op_vec(v, op, v)?;
+  Ok(z[[0,0]])
+  
+}
+//------------------------------------------------------------------------------
+// TODO: Rethink format and then add error checks.
+pub fn vectran_op_vec(v0: &CxMat,op: &CxMat, v1: &CxMat) 
+    -> Result<CxMat,CluEError>
+{
+
+  let op_ket = op.dot(v1);
+  let bra = v0.t().map(|u| u.conj() );
+  let z = bra.dot(&op_ket);
+  Ok(z) 
 }
 //------------------------------------------------------------------------------
 // TODO: pending
@@ -199,9 +220,9 @@ mod tests{
     let y = spin_y(2);
     let z = spin_z(2);
     println!("DB: {:?}",hilbert_schmidt(&y,&y));
-    let s2 = Complex::<f64>{re:0.5, im:0.0};
+    let s2 = Complex64{re:0.5, im:0.0};
     assert!( (hilbert_schmidt(&e,&e) 
-          - Complex::<f64>{re: 2.0,im: 0.0}).norm() < 1e-12);  
+          - Complex64{re: 2.0,im: 0.0}).norm() < 1e-12);  
     assert!( (hilbert_schmidt(&x,&x) - s2).norm() < 1e-12);  
     assert!( (hilbert_schmidt(&y,&y) - s2).norm() < 1e-12);  
     assert!( (hilbert_schmidt(&z,&z) - s2).norm() < 1e-12);  

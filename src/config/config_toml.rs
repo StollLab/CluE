@@ -56,36 +56,48 @@ pub struct OrientationsTOML{
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,Default,Serialize,Deserialize)]
 pub struct ConfigTOML{
+
+  // Structure
   pub clash_distance: Option<f64>, 
   pub clash_distance_pbc: Option<f64>,
-  pub cluster_batch_size: Option<usize>, 
-  pub connect_exchange_groups: Option<bool>,
+  pub input_structure_file: Option<String>,
+  pub partitioning: Option<String>, 
+  pub partition_table: Option<toml::Value>,
   pub populations: Option<String>, 
+  pub pdb_model_index: Option<usize>,
+  pub radius: Option<f64>,
+  pub replicate_unit_cell: Option<toml::Value>,
+  pub rng_seed: Option<u64>,
+  pub temperature: Option<f64>,  
+
+  // Experiment
+  pub pulse_sequence: Option<toml::Value>,  
+  pub magnetic_field: Option<f64>,
+  pub number_timepoints: Option<Vec::<usize>>,
+  pub number_timepoints2: Option<Vec::<usize>>,
+  pub tau_increments: Option<Vec::<f64>>,
+  pub tau2_increments: Option<Vec::<f64>>,
+
+  // CCE
+  pub cluster_batch_size: Option<usize>, 
   pub cluster_method: Option<String>,
   pub cluster_source: Option<String>,
-  pub input_structure_file: Option<String>,
+  pub connect_exchange_groups: Option<bool>,
+  pub ensemble_cce: Option<bool>,
   pub kmeans_size: Option::<usize>,
-  pub magnetic_field: Option<f64>,
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
   pub max_spins: Option<usize>,
+  pub mean_fields: Option<bool>,
   pub min_cell_size: Option<usize>,
   pub number_runs: Option<usize>, 
-  pub number_timepoints: Option<Vec::<usize>>,
-  pub number_timepoints2: Option<Vec::<usize>>,
-  pub replicate_unit_cell: Option<toml::Value>,
   pub run_in_parallel: Option<bool>,
-  pub partitioning: Option<String>, 
-  pub partition_table: Option<toml::Value>,
-  pub pdb_model_index: Option<usize>,
-  pub pulse_sequence: Option<toml::Value>,  
-  pub radius: Option<f64>,
-  pub rng_seed: Option<u64>,
+
+  // Output
   pub output_directory: Option<String>,
   pub run_name: Option<String>,
-  pub temperature: Option<f64>,  
-  pub tau_increments: Option<Vec::<f64>>,
-  pub tau2_increments: Option<Vec::<f64>>,
+
+  // Units
   pub unit_of_energy: Option<String>,
   pub unit_of_magnetic_field: Option<String>,
   pub unit_of_distance: Option<String>,

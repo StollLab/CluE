@@ -6,6 +6,8 @@ use crate::isotopes::Isotope;
 use crate::structure::{Structure, particle::Particle};
 use crate::space_3d::Vector3D;
 
+use num_complex::Complex64;
+
 use std::io::BufRead;
 use std::io::BufWriter;
 use std::collections::HashMap;
@@ -311,6 +313,7 @@ fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
       residue,
       residue_sequence_number: residue_sequence_number.ok(),
       chain_id,
+      //state: Vec::<Complex64>::new(),
       })
 }
 //------------------------------------------------------------------------------

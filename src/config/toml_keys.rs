@@ -28,8 +28,10 @@ pub const KEY_OUT_SANS_SPIN_SIGS: &str = "sans_spin_signals";
 pub const KEY_OUT_STRUC_PDB: &str = "structure_pdb";
 pub const KEY_OUT_TENSORS: &str = "tensors";
 
-pub const KEY_DENSITY_MATRIX_ID: &str  = "identity";
+pub const KEY_DENSITY_MATRIX_ID: &str  = "uniform";
+pub const KEY_DENSITY_MATRIX_RANDOM: &str  = "random";
 pub const KEY_DENSITY_MATRIX_THERMAL: &str  = "thermal";
+pub const KEY_DENSITY_MATRIX_ZEEMAN: &str  = "zeeman";
 
 pub const KEY_PARTITION_EX_GROUPS: &str = "exchange_groups";
 pub const KEY_PARTITION_PARTICLE: &str = "singles";
@@ -40,6 +42,7 @@ pub const KEY_ORI_LEBEDEV: &str = "lebedev";
 pub const KEY_ORI_RANDOM: &str = "random";
 pub const KEY_ORI_FILE: &str = "file";
 pub const KEY_ORI_VECTOR: &str = "vector";
+pub const KEY_ORI_CIRCLE: &str = "circle";
 pub const KEY_ORI_VECTORGRID: &str = "vector_grid";
 
 
@@ -135,7 +138,7 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;362] = [
+pub const ALLOWED_KEYS: [&str;364] = [
   "abundance",
   "active",
   "auxiliary_signals",
@@ -173,6 +176,7 @@ pub const ALLOWED_KEYS: [&str;362] = [
   "drop_probability",
   "electric_quadrupole",
   "elements",
+  "ensemble_cce",
   "exchange_coupling",
   "exchange_groups",
   "file",
@@ -197,6 +201,7 @@ pub const ALLOWED_KEYS: [&str;362] = [
   "max_cell_size",
   "max_cluster_size",
   "max_spins",
+  "mean_fields",
   "methyl_partitions",
   "min_cell_size",
   "multiplicity",

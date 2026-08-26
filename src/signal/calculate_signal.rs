@@ -41,6 +41,7 @@ use crate::signal::{
 };
 use crate::Structure;
 use crate::quantum::cluster_operators::ClusterSpinOperators;
+use crate::quantum::spin_states::SpinStates;
 use crate::math;
 use crate::space_3d::UnitSpherePoint;
 
@@ -254,6 +255,22 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
   // Rotate the coupling tensor to the specified orientation.
   tensors.rotate_pasive(&rot_dir);
 
+  let states = SpinStates::generate(rng, &tensors,config)?;
+  
+  let Some(ensemble_cce) = config.ensemble_cce else{
+    return Err(CluEError::NoEnsembleCCE);
+  };
+  let Some(do_mean_field_averaging) = config.mean_fields else{
+    return Err(CluEError::NoMeanFields);
+  };
+  
+  if ensemble_cce && do_mean_field_averaging{
+    return Err(CluEError::MeanFieldECCENotImplemented);
+  }
+
+  if do_mean_field_averaging{
+    tensors.set_mean_field_couplings(&states.states,spin_ops);
+  }
 
   // Determine maximum cluster size.
   let Some(max_cluster_size) = config.max_cluster_size else{
@@ -332,7 +349,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     //  calculate_analytic_restricted_2cluster_signals(&mut cluster_set, &tensors,
     //      config,&save_path_opt,structure)?,
     Some(_cce) => {
-      calculate_cluster_signals(&mut cluster_set, spin_ops, &tensors, 
+      calculate_cluster_signals(&mut cluster_set, &states, spin_ops, &tensors, 
           config,&save_path_opt,structure)?
     },
     None => return Err(CluEError::NoClusterMethod)
