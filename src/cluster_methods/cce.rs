@@ -20,6 +20,7 @@ use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::quantum::spin_states::SpinStates;
 
 use ndarray::linalg::kron;
+use ndarray_linalg::Trace;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// This function calculates the cluster correlation expansion (CCE)
@@ -92,14 +93,21 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
       &spin_indices,spin_ops,tensors)?;
 
   let detected_spin_density_matrix = spin_ops.get_density_matrix(
-      spin_multiplicity, cluster_size)?;  
+      spin_multiplicity, 1)?;  
 
-  let density_matrix = match states.density_matrix_for(tensor_indices)?{
-    None => get_electron_cluster_thermal_density_matrix(
-        detected_spin_density_matrix,
-      &h_eigvals, &h_eigvecs, config)?,
-    Some(rho) => kron(&detected_spin_density_matrix,&rho),     
+  let mut density_matrix = match states.density_matrix_for(tensor_indices)?{
+    None => {
+      get_electron_cluster_thermal_density_matrix(
+          &h_eigvals, &h_eigvecs, config)?},
+    Some(rho) => {
+      kron(&detected_spin_density_matrix,&rho)
+    },     
   };
+
+  let Ok(z) = density_matrix.trace() else{ 
+    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
+  };
+  density_matrix /= z;
 
   let Some(pulse_sequence) = &config.pulse_sequence else{
     return Err(CluEError::NoPulseSequence);

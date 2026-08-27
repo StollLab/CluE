@@ -8,6 +8,7 @@ use crate::physical_constants::{ONE,I,ZERO};
 use num_complex::Complex64;
 use ndarray::{Array1,Array2};
 use ndarray::linalg::kron;
+use ndarray_linalg::Trace;
 
 use rand_chacha::ChaCha20Rng;
 use rand_distr::uniform::SampleRange;
@@ -106,7 +107,13 @@ impl SpinStates{
     }
  
     let psi_t = psi.t().map(|psi_i| psi_i.conj() );
-    Ok(Some(psi.dot(&psi_t)))
+    let mut rho = psi.dot(&psi_t);
+    let Ok(z) = rho.trace() else{
+      return Err(CluEError::CannotTakeTrace(format!("{}",rho)));
+    };
+    rho = (ONE/z)*rho;
+
+    Ok(Some(rho))
   }
   //----------------------------------------------------------------------------
   /// The function returns
@@ -124,9 +131,14 @@ impl SpinStates{
       psi = kron(&psi, &self.states[idx])
     }
  
-    let rho = CxMat::from_diag(&CxVec::from_vec(
+    let mut rho = CxMat::from_diag(&CxVec::from_vec(
         psi.map(|psi_i| psi_i.norm_sqr()*ONE)
         .into_raw_vec()));
+
+    let Ok(z) = rho.trace() else{
+      return Err(CluEError::CannotTakeTrace(format!("{}",rho)));
+    };
+    rho = (ONE/z)*rho;
 
     Ok(Some(rho))
   }
@@ -284,7 +296,7 @@ mod tests{
     let answer = array![
         [ONE,-I],
         [I,ONE],
-    ];
+    ]/2.0;
     assert_eq!(density_matrix, answer);
   }
   //----------------------------------------------------------------------------
@@ -322,7 +334,7 @@ mod tests{
     let answer = array![
         [ONE,ZERO],
         [ZERO,ONE],
-    ];
+    ]/2.0;
     assert_eq!(density_matrix, answer);
   }
   //----------------------------------------------------------------------------

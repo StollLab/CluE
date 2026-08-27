@@ -203,6 +203,11 @@ pub fn propagate_pulse_sequence(
   let (_dus,u_of_taus) = get_free_evolutions_propagators(
       h_eigvals, h_eigvecs, config)?; 
 
+  if u_of_taus[0].shape() != density_matrix.shape(){
+    return Err(CluEError::PropagatorAndDensityNotSameDimension(
+          u_of_taus[0].shape()[0],density_matrix.shape()[0]));
+  }
+
   let (_du2s,u_of_tau2s) = match pulse_sequence_name{
     PulseSequence::RefocusedHahnEcho =>
       get_2nd_free_evolutions_propagators(h_eigvals, h_eigvecs, config)?,
@@ -442,23 +447,10 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
   Ok((eigvals, eigvecs))
 }
 //------------------------------------------------------------------------------
-/// This function builds the density matrix for the electron--cluster.
-///  Assuming the cluster has N nuclei,
-/// `electron_density_matrix` = ρ_e ⊗ 1_N, where ρ_e is the density matrix
-/// for the electron.  
-/// `h_eigvals` and `h_eigvecs` specify the electron--cluster Hamiltonian.
-/// `config` contains user instructions on how to contruct the density matrix.
 pub fn get_electron_cluster_thermal_density_matrix(
-    electron_density_matrix: &CxMat, 
     h_eigvals: &Array1::<f64>, h_eigvecs: &CxMat, config: &Config)
   -> Result<CxMat,CluEError>
 {
-
-  let dim = h_eigvecs.dim().0;
-  if dim != electron_density_matrix.dim().0{
-    return Err(CluEError::HamiltonianAndDensityNotSameDimension(
-          dim,electron_density_matrix.dim().0));
-  }
 
   let Some(temperature) = config.temperature else {
     return Err(CluEError::NoTemperature);
@@ -532,7 +524,6 @@ mod tests{
     let dim = h_eigvecs.dim().0;
 
     let density_matrix = get_electron_cluster_thermal_density_matrix(
-        &CxMat::eye(dim),
         &h_eigvals, &h_eigvecs, &config).unwrap();
 
     let u_pi = (-2.0*I)*spin_ops.get(&SpinOp::Sy,2,3,0).unwrap().clone();
@@ -603,7 +594,6 @@ mod tests{
     let dim = h_eigvecs.dim().0;
 
     let density_matrix = get_electron_cluster_thermal_density_matrix(
-        &CxMat::eye(dim),
         &h_eigvals, &h_eigvecs, &config).unwrap();
 
     let u_pi = (-2.0*I)*spin_ops.get(&SpinOp::Sy,2,3,0).unwrap().clone();

@@ -205,6 +205,7 @@ pub enum CluEError{
   NoUnitOfTime,
   ParticlesClash(usize,String,usize,String,f64,f64),
   ParticleIsNotActive(usize),
+  PropagatorAndDensityNotSameDimension(usize,usize),
   PartitionIsIncomplette,
   SaveNameEmpty,
   SaveNameNotSet,
@@ -901,6 +902,12 @@ clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
 
       CluEError::ParticleIsNotActive(ref_index) => write!(f,
           "particle \"{}\" is not active", ref_index),
+
+      CluEError::PropagatorAndDensityNotSameDimension(h,rho) => write!(f,
+          "the propagator and density matrix are \"{}\" and \"{}\" dimensional\
+respectively: they must have the same dimension",
+          h,rho),
+
 
       CluEError::PartitionIsIncomplette => write!(f,
           "partition table should contain n cells indexed by [0,n-1]"),

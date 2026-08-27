@@ -219,7 +219,6 @@ mod tests{
     let x = spin_x(2);
     let y = spin_y(2);
     let z = spin_z(2);
-    println!("DB: {:?}",hilbert_schmidt(&y,&y));
     let s2 = Complex64{re:0.5, im:0.0};
     assert!( (hilbert_schmidt(&e,&e) 
           - Complex64{re: 2.0,im: 0.0}).norm() < 1e-12);  
