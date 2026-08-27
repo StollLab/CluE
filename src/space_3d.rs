@@ -433,11 +433,15 @@ impl Vector3D{
   //----------------------------------------------------------------------------
   pub fn scale(&self,scale: f64) -> Vector3D {                                   
     let mut out = self.clone();
-    for el in out.elements.iter_mut(){
-      *el *= scale;
-    }
+    out.scale_mut(scale);
     out
   }                                               
+  //----------------------------------------------------------------------------
+  pub fn scale_mut(&mut self,scale: f64){
+    for el in self.elements.iter_mut(){
+      *el *= scale;
+    }
+  }    
   //----------------------------------------------------------------------------
   pub fn normalize(&self) -> Vector3D {                                        
     let r = self.norm();                                                        

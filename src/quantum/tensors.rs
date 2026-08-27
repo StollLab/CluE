@@ -6,7 +6,7 @@ use crate::isotopes::Isotope;
 use crate::math::expectation_value;
 use crate::physical_constants::{BOLTZMANN, HBAR, JOULES_TO_HERTZ,
   MU0,MUB,MUN,PI};
-use crate::quantum::cluster_operators::SpinOp;
+use crate::quantum::cluster_operators::{spin_x,spin_y,spin_z};
 use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::space_3d::{SymmetricTensor3D,UnitSpherePoint,Vector3D};
 use crate::structure::{DetectedSpin,Structure};
@@ -280,8 +280,50 @@ impl HamiltonianTensors{
     weights_list
   }
   //----------------------------------------------------------------------------
-  pub fn set_mean_field_couplings(&mut self, states: &[CxMat],
-      spin_ops: &ClusterSpinOperators)
+  /// This function calculates the mean field contribution to the energy
+  /// of bath spin `index`, from all bath spins not in `exclude`. 
+  /// If `mean_field_couplings` have not been set, this functions
+  /// returns `None`.
+  pub fn get_mean_field_couplings(&self, index: usize, exclude: &[usize]) 
+      -> Option<Vector3D>
+  {
+  
+    let Some(mean_field_couplings) = &self.mean_field_couplings else{
+      return None;
+    };
+
+    if index >= mean_field_couplings.len(){ 
+      return None; 
+    }
+
+    let mut mean_field = Vector3D::zeros();
+
+    let mut n = 0;
+    // The first entry is the detected spin, and so will always be treated
+    // quantum mechanically.
+    for (idx, h) in mean_field_couplings[index].iter().enumerate().skip(1){
+
+      if exclude.contains(&idx){ continue; }
+      // idx should be in exclude, but check just in case.
+      if idx == index { continue; } 
+    
+      mean_field = &mean_field + h; 
+      n += 1;
+    } 
+
+    if n > 0{
+      mean_field.scale_mut( 1.0/(n as f64) );
+    }
+
+    Some(mean_field)
+  
+  }
+  //----------------------------------------------------------------------------
+  /// This function sets `self.mean_field_couplings`, where  
+  /// `self.mean_field_couplings[m][n]` is the coupling of spin m to the 
+  /// magnetic field from spin n.
+  pub fn set_mean_field_couplings(&mut self, states: &[CxMat])
+      -> Result<(),CluEError>
   {
   
     let n = states.len();
@@ -292,14 +334,14 @@ impl HamiltonianTensors{
 
       for idx1 in 0..n{
 
-        if idx1 == idx0 {  
+        if idx1 == idx0 || idx1 == 0{  
           mean_field_couplings[idx0].push(Vector3D::zeros());
           continue
         }
 
         if let Some(ten) = self.spin2_tensors.get(idx0,idx1){
-          let mf_vec = evaluate_mean_field(ten,&states[idx0],spin_ops);
-          mean_field_couplings[idx0].push(Vector3D::zeros());
+          let mf_vec = evaluate_mean_field(ten,&states[idx0])?;
+          mean_field_couplings[idx0].push(mf_vec);
         }else{
           mean_field_couplings[idx0].push(Vector3D::zeros());
         }
@@ -308,6 +350,8 @@ impl HamiltonianTensors{
       
     }
 
+    self.mean_field_couplings = Some(mean_field_couplings);
+    Ok(())
   }
   //----------------------------------------------------------------------------
   /// This function writes the coupling tensors to a text file.
@@ -850,22 +894,21 @@ fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
 // `state` = |m>
 
 // TODO: Rethink format and then add error checks.
-fn evaluate_mean_field(ten: &SymmetricTensor3D, state: &CxMat,
-    spin_ops: &ClusterSpinOperators)
+fn evaluate_mean_field(ten: &SymmetricTensor3D, state: &CxMat)
   -> Result<Vector3D,CluEError>
 {
 
   let cluster_size = 1;
   let sop_idx0 = 0;
-  let spin_mult0 = state.len();
+  let spin_multiplicity = state.len();
 
-  let sx = spin_ops.get(&SpinOp::Sx,spin_mult0,cluster_size,sop_idx0)?;
-  let sy = spin_ops.get(&SpinOp::Sy,spin_mult0,cluster_size,sop_idx0)?;
-  let sz = spin_ops.get(&SpinOp::Sz,spin_mult0,cluster_size,sop_idx0)?;
+  let sx = spin_x(spin_multiplicity);
+  let sy = spin_y(spin_multiplicity);
+  let sz = spin_z(spin_multiplicity);
 
-  let ex = expectation_value(sx,state)?;
-  let ey = expectation_value(sy,state)?;
-  let ez = expectation_value(sz,state)?;
+  let ex = expectation_value(&sx,state)?;
+  let ey = expectation_value(&sy,state)?;
+  let ez = expectation_value(&sz,state)?;
 
   let mfx = ten.xx()*ex + ten.xy()*ey + ten.xz()*ez; 
   let mfy = ten.yx()*ex + ten.yy()*ey + ten.zz()*ez; 
@@ -1190,6 +1233,16 @@ mod tests{
     assert_eq!(zeeman.x(),0.0);
     assert_eq!(zeeman.y(),0.0);
     assert!( (zeeman.z() - 33629941709.0).abs() < 0.1);
+
+    let gmr =  5.5856946893*MUN/HBAR;
+    let gyromagnetic_ratio = SymmetricTensor3D::from([gmr,0.0, 0.0,
+                                                          gmr, 0.0,
+                                                               gmr]); 
+    let magnetic_field = Vector3D::from([0.0, 0.0, 11.7434]);
+    let zeeman = construct_zeeman_tensor(&gyromagnetic_ratio,&magnetic_field);
+    assert_eq!(zeeman.x(),0.0);
+    assert_eq!(zeeman.y(),0.0);
+    assert!( (zeeman.z() + 500.0e6).abs() < 1e6);
 
   }
   //----------------------------------------------------------------------------

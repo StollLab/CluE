@@ -269,7 +269,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
   }
 
   if do_mean_field_averaging{
-    tensors.set_mean_field_couplings(&states.states,spin_ops);
+    tensors.set_mean_field_couplings(&states.states)?;
   }
 
   // Determine maximum cluster size.

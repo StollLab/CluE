@@ -426,6 +426,12 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
       ham0 = ham0 + sz0*vec.z();
     }
 
+    if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,spin_indices){
+      ham0 = ham0 + sx0*vec.x();
+      ham0 = ham0 + sy0*vec.y();
+      ham0 = ham0 + sz0*vec.z();
+    }
+
     // nuclear hyperfine
     if let Some(ten) = tensors.spin2_tensors.get(0,ten_idx0){
       ham_ms = ham_ms + sx0*ten.zx();

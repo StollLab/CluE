@@ -405,6 +405,12 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
       ham = ham + sz0*vec.z();
     }
 
+    if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,spin_indices){
+      ham = ham + sx0*vec.x();
+      ham = ham + sy0*vec.y();
+      ham = ham + sz0*vec.z();
+    }
+
     for (sop_idx1, &ten_idx1) in spin_indices.iter().enumerate().skip(sop_idx0){
 
       let sx1 = spin_ops.get(&SpinOp::Sx,spin_mult0,cluster_size,sop_idx1)?;
