@@ -521,8 +521,7 @@ mod tests {
 
     let mut rng = ChaCha20Rng::from_entropy();
     let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
-    let density_matrix = states.density_matrix_for(&spin_indices).unwrap()
-        .unwrap();
+    let density_matrix = states.density_matrix_for(&spin_indices).unwrap();
 
     let signal = propagate_pulse_sequence_block_diag(
         &density_matrix, &hamiltonian, &config).unwrap();

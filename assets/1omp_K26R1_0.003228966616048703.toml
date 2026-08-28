@@ -3,6 +3,8 @@ input_structure_file = "assets/1omp_K26R1_0.003228966616048703.pdb"
 populations = "thermal"
 
 cluster_method = "cce"
+ensemble_cce = true
+mean_fields = false
 
 magnetic_field = 1.2
 

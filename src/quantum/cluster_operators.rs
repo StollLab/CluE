@@ -1,6 +1,6 @@
 use crate::physical_constants::*;
 use crate::clue_errors::*;
-use crate::config::Config;
+use crate::config::{Config, DetectedPopulation};
 use crate::quantum::pulse_sequences::{
   ideal_pulse,
   PI_OVER_2_PULSE_NAME,
@@ -144,8 +144,14 @@ fn build_detection_operators(det_multiplicity: usize,
     _ => (),
   }
 
-  let Some(density_matrix) = &config.detected_density_matrix else{
+  let Some(detected_population) = &config.detected_population else{
     return Err(CluEError::NoDetectedSpinDensityMatrix);
+  };
+
+  let density_matrix_opt = match detected_population{
+    DetectedPopulation::Matrix(mat) => Some(mat.clone()),
+    DetectedPopulation::S(sop) => Some(get_spin_operator(det_multiplicity,sop)),
+    DetectedPopulation::Thermal => None,   
   };
 
   let Some(det_op) =&config.detection_operator else {
@@ -173,7 +179,7 @@ fn build_detection_operators(det_multiplicity: usize,
 
   for spin_multiplicity in bath_multiplicities.iter() {
     detection_ops.push(DetectionSpinOperators::new(
-        density_matrix,
+        &density_matrix_opt,
         det_op,
         &pulses,    
         det_multiplicity, *spin_multiplicity, max_size,    
@@ -336,14 +342,18 @@ pub struct DetectionSpinOperators {
 
 impl<'a> DetectionSpinOperators {
   pub fn new(
-    density_matrix: &CxMat,
+    density_matrix_opt: &Option<CxMat>,
     detection_operator: &CxMat,
     pulses: &HashMap::<String,CxMat>,    
     det_multiplicity: usize, spin_multiplicity: usize, max_size: usize,    
       ) -> Result<Self,CluEError>
   {
-    let density_matrix_list = DetectionSpinOpList::new(density_matrix,
-        det_multiplicity,spin_multiplicity,max_size)?;
+    let density_matrix_list = match density_matrix_opt{
+      Some(density_matrix) => DetectionSpinOpList::new(density_matrix,
+          det_multiplicity,spin_multiplicity,max_size)?,
+      None => DetectionSpinOpList::new(&CxMat::ones([1,1]),
+          1,spin_multiplicity,max_size)?,
+    };
 
     let detection_list = DetectionSpinOpList::new(detection_operator,
         det_multiplicity,spin_multiplicity,max_size)?;
@@ -496,6 +506,20 @@ impl fmt::Display for SpinOp {
         SpinOp::S2 => write!(f, "S^2"),
       }
     }
+}
+
+impl SpinOp{
+  pub fn from_str(s: &str) -> Result<Self,CluEError>{
+    match s{
+      "sx" | "Sx" => Ok(Self::Sx),  
+      "sy" | "Sy" => Ok(Self::Sy),  
+      "sz" | "Sz" => Ok(Self::Sz),  
+      "s+" | "S+" => Ok(Self::Sp),  
+      "s-" | "S+" => Ok(Self::Sm),  
+      "s^2" | "S^2" => Ok(Self::S2),  
+      _ => Err(CluEError::CannotParseSpinOp(s.to_string())),
+    }
+  }
 }
 //------------------------------------------------------------------------------
 /// This function builds the matrix corresponding to the specified spin operator

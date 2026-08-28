@@ -17,6 +17,8 @@ use crate::space_3d::Vector3D;
 use crate::structure::particle_filter::VectorSpecifier;
 use crate::integration_grid::IntegrationGrid;
 
+use crate::quantum::cluster_operators::SpinOp;
+
 use crate::misc::{
   are_all_same_type,
   cxmat_from_toml_array,  
@@ -70,7 +72,7 @@ pub struct Config{
 
   // Detected Spin
   pub cluster_populations: Option<ClusterPopulations>,
-  pub detected_density_matrix: Option<CxMat>,
+  pub detected_population: Option<DetectedPopulation>,
   pub detected_spin_g_matrix: Option<TensorSpecifier>,
   pub detected_spin_identity: Option<Isotope>,
   pub detected_spin_multiplicity: Option<usize>,
@@ -565,6 +567,15 @@ pub enum ClusterPopulations{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[derive(Debug,Clone,PartialEq)]
+pub enum DetectedPopulation{
+  Matrix(CxMat),
+  S(SpinOp),
+  Thermal  
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `ClusterSource` specifies where to search for clusters
@@ -588,19 +599,22 @@ pub enum DetectedSpinCoordinates{
   ProbabilityDistribution(IntegrationGrid),
 }
 impl DetectedSpinCoordinates{
-  pub fn from_toml_value(value: toml::Value) -> Result<Self,CluEError> 
+  pub fn from_toml_value(value: toml::Value, unit_of_distance: f64) 
+      -> Result<Self,CluEError> 
   {
     match value{
-      Value::Array(array) => Self::from_toml_array(array),
+      Value::Array(array) => Self::from_toml_array(array,unit_of_distance),
       Value::String(filename) => { 
-        let int_grid = IntegrationGrid::read_from_csv(&filename)?;
+        let mut int_grid = IntegrationGrid::read_from_csv(&filename)?;
+        int_grid.scale_mut(unit_of_distance);
         Ok(Self::ProbabilityDistribution(int_grid))
       },
       _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
     }
   }
   //----------------------------------------------------------------------------
-  pub fn from_toml_array(array: Vec::<toml::Value>) -> Result<Self,CluEError>
+  pub fn from_toml_array(array: Vec::<toml::Value>, unit_of_distance: f64) 
+      -> Result<Self,CluEError>
   {
 
     if array.is_empty(){
@@ -629,9 +643,9 @@ impl DetectedSpinCoordinates{
               ,a[3].as_float()) else{
             return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
           };
-          points.push(x*ANGSTROM);
-          points.push(y*ANGSTROM);
-          points.push(z*ANGSTROM);
+          points.push(x*unit_of_distance);
+          points.push(y*unit_of_distance);
+          points.push(z*unit_of_distance);
           weights.push(w);
         }
         Ok(Self::ProbabilityDistribution(
@@ -984,7 +998,8 @@ impl Config{
 
       if let Some(toml_value) = detected_spin.position{
         self.detected_spin_position 
-          = Some(DetectedSpinCoordinates::from_toml_value(toml_value)? );
+          = Some(DetectedSpinCoordinates::from_toml_value(
+                toml_value,unit_of_distance)? );
       }
 
       if detected_spin.transition.is_some(){
@@ -1005,8 +1020,16 @@ impl Config{
         match rho{
           toml::Value::Array(array) => {
             let op = cxmat_from_toml_array(array.clone())?;
-            self.detected_density_matrix = Some(op)
+            self.detected_population = Some(DetectedPopulation::Matrix(op));
           },
+          toml::Value::String(s) => {
+            if s == KEY_DENSITY_MATRIX_THERMAL{
+               self.detected_population = Some(DetectedPopulation::Thermal);
+            }else{
+              let sop = SpinOp::from_str(&s)?;
+              self.detected_population = Some(DetectedPopulation::S(sop));
+            }
+          }
           _ => return Err(CluEError::InvalidDensityMatrix),
         }
       }

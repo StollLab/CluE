@@ -23,7 +23,6 @@ type CxMat = Array2::<Complex64>;
 pub struct SpinStates{
   pub states: Vec::<CxMat>,
   pub pure_states: bool,          
-  pub use_for_density_matrix: bool,
 }
 
 impl SpinStates{
@@ -33,7 +32,6 @@ impl SpinStates{
     Self{
       states: Vec::<CxMat>::new(),
       pure_states: true,
-      use_for_density_matrix: false,
     }
   }
   //----------------------------------------------------------------------------
@@ -66,7 +64,11 @@ impl SpinStates{
         s
       },
       ClusterPopulations::Thermal => {
-        Self::new()
+        let Some(temperature) = config.temperature else{
+          return Err(CluEError::NoTemperature);
+        };
+        let weights = tensors.get_zeeman_boltzmann_weights(temperature);
+        Self::from_weights(weights,!ensemble_cce, Some(rng)) 
       },
       ClusterPopulations::Zeeman => {
         if let Some(temperature) = config.temperature{
@@ -82,7 +84,7 @@ impl SpinStates{
   }
   //----------------------------------------------------------------------------
   pub fn density_matrix_for(&self, indices: &[usize]) 
-      -> Result<Option<CxMat>,CluEError>
+      -> Result<CxMat,CluEError>
   {
     if self.pure_states{
       self.pure_state_density_matrix_for(indices)
@@ -95,12 +97,8 @@ impl SpinStates{
   /// |ψ_idx1> ... |ψ_idxn><ψ_idxn| ... <ψ_idx|
   /// for ind in `indices`.
   pub fn pure_state_density_matrix_for(&self, indices: &[usize]) 
-      -> Result<Option<CxMat>,CluEError>
+      -> Result<CxMat,CluEError>
   {
-    if !self.use_for_density_matrix{
-      return Ok(None);
-    }
-  
     let mut psi = CxMat::ones([1,1]);
     for &idx in indices.iter(){
       psi = kron(&psi, &self.states[idx])
@@ -113,19 +111,15 @@ impl SpinStates{
     };
     rho = (ONE/z)*rho;
 
-    Ok(Some(rho))
+    Ok(rho)
   }
   //----------------------------------------------------------------------------
   /// The function returns
-  /// diag(|ψ_idx1> ... |ψ_idxn><ψ_idxn| ... <ψ_idx|)
+  /// diag(diag(|ψ_idx1> ... |ψ_idxn><ψ_idxn| ... <ψ_idx|))
   /// for ind in `indices`.
   pub fn incoherent_density_matrix_for(&self, indices: &[usize]) 
-      -> Result<Option<CxMat>,CluEError>
+      -> Result<CxMat,CluEError>
   {
-    if !self.use_for_density_matrix{
-      return Ok(None);
-    }
-
     let mut psi = CxMat::ones([1,1]);
     for &idx in indices.iter(){
       psi = kron(&psi, &self.states[idx])
@@ -140,7 +134,7 @@ impl SpinStates{
     };
     rho = (ONE/z)*rho;
 
-    Ok(Some(rho))
+    Ok(rho)
   }
   //----------------------------------------------------------------------------
   pub fn zeros(spin_multiplicities: &[usize],pure_states:bool) -> Self{
@@ -151,7 +145,7 @@ impl SpinStates{
       states.push(CxMat::zeros([s,1]))
     }
 
-    Self{ states,pure_states, use_for_density_matrix: false }
+    Self{ states,pure_states}
   }
   //----------------------------------------------------------------------------
   pub fn uniform(spin_multiplicities: &[usize], pure_states: bool) -> Self{
@@ -163,7 +157,7 @@ impl SpinStates{
       states.push(u0*CxMat::ones([s,1]))
     }
 
-    Self{ states,pure_states, use_for_density_matrix: true }
+    Self{ states,pure_states}
   }
   //----------------------------------------------------------------------------
   pub fn from_weights(weights_list: Vec::<Vec::<f64>>, 
@@ -193,7 +187,7 @@ impl SpinStates{
       }
     }
 
-    Self{ states,pure_states, use_for_density_matrix: true }
+    Self{ states,pure_states}
   }
   //----------------------------------------------------------------------------
   pub fn randomize_state_weighted(&mut self,rng: &mut ChaCha20Rng,
@@ -222,7 +216,6 @@ impl SpinStates{
         break;
       }
     }
-    self.use_for_density_matrix = true;
 
   }
   //----------------------------------------------------------------------------
@@ -247,7 +240,6 @@ impl SpinStates{
         break;
       }
     }
-    self.use_for_density_matrix = true;
   }
   //----------------------------------------------------------------------------
 }
@@ -269,11 +261,10 @@ mod tests{
           array![[ZERO],[I]],
       ],
       pure_states: true,
-      use_for_density_matrix: true,
     };
 
     let density_matrix = states.pure_state_density_matrix_for(&[0,2])
-        .unwrap().unwrap();
+        .unwrap();
     let answer = array![
         [ZERO,ZERO,ZERO,ZERO],
         [ZERO,ONE,ZERO,ZERO],
@@ -288,11 +279,10 @@ mod tests{
           array![[ONE],[I]],
       ],
       pure_states: true,
-      use_for_density_matrix: true,
     };
 
     let density_matrix = states.pure_state_density_matrix_for(&[0])
-        .unwrap().unwrap();
+        .unwrap();
     let answer = array![
         [ONE,-I],
         [I,ONE],
@@ -309,10 +299,9 @@ mod tests{
           array![[ZERO],[I]],
       ],
       pure_states: false,
-      use_for_density_matrix: true,
     };
 
-    let density_matrix = states.density_matrix_for(&[0,2]).unwrap().unwrap();
+    let density_matrix = states.density_matrix_for(&[0,2]).unwrap();
     let answer = array![
         [ZERO,ZERO,ZERO,ZERO],
         [ZERO,ONE,ZERO,ZERO],
@@ -327,10 +316,9 @@ mod tests{
           array![[ONE],[I]],
       ],
       pure_states: false,
-      use_for_density_matrix: true,
     };
 
-    let density_matrix = states.density_matrix_for(&[0]).unwrap().unwrap();
+    let density_matrix = states.density_matrix_for(&[0]).unwrap();
     let answer = array![
         [ONE,ZERO],
         [ZERO,ONE],

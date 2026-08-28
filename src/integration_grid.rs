@@ -166,12 +166,17 @@ impl IntegrationGrid{
   }
   //----------------------------------------------------------------------------
   /// This function scales all the points by a `scale_factor`.
+  pub fn scale_mut(&mut self, scale_factor: f64){
+    for x in self.points.iter_mut(){
+      *x *= scale_factor; 
+    }
+  }
+  //----------------------------------------------------------------------------
+  /// This function scales all the points by a `scale_factor`.
   pub fn scale(&self, scale_factor: f64) -> Self{
-
-    let points = self.points.iter().map(|x| x*scale_factor)
-      .collect::<Vec::<f64>>();
-    IntegrationGrid{dim: self.dim ,points,weights: self.weights.clone()}
-
+    let mut out = self.clone();
+    out.scale_mut(scale_factor);
+    out
   }
   //----------------------------------------------------------------------------
   /// This function pushes a new point to a grid.

@@ -1,5 +1,7 @@
 use crate::config::{
+  ClusterPopulations,
   Config,
+  DetectedPopulation,  
   pulse_sequence::PulseSequence,
 };
 use crate::clue_errors::CluEError;
@@ -53,9 +55,13 @@ pub fn cce(tensor_indices: &[usize],states: &SpinStates,
   let hamiltonian = build_block_diag_hamiltonian(
       tensor_indices,spin_ops, tensors,config)?;
 
-  let density_matrix = match states.density_matrix_for(tensor_indices)?{
-    None => get_cluster_thermal_density_matrix(&hamiltonian, config)?,
-    Some(rho) => rho,     
+  let Some(cluster_populations) = &config.cluster_populations else{
+    return Err(CluEError::NoClusterDensityMatrixMethod);
+  };
+  let density_matrix = match cluster_populations{
+    ClusterPopulations::Thermal  => 
+        get_cluster_thermal_density_matrix(&hamiltonian, config)?,
+    _ => states.density_matrix_for(tensor_indices)?,
   };
 
   let signal = propagate_pulse_sequence_block_diag(
@@ -92,22 +98,63 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
   let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
       &spin_indices,spin_ops,tensors)?;
 
-  let detected_spin_density_matrix = spin_ops.get_density_matrix(
-      spin_multiplicity, 1)?;  
 
+  /*
   let mut density_matrix = match states.density_matrix_for(tensor_indices)?{
     None => {
       get_electron_cluster_thermal_density_matrix(
           &h_eigvals, &h_eigvecs, config)?},
     Some(rho) => {
+      let detected_spin_density_matrix = spin_ops.get_density_matrix(
+          spin_multiplicity, 1)?;  
       kron(&detected_spin_density_matrix,&rho)
     },     
   };
+  */
+  let Some(detected_population) = &config.detected_population else{
+    return Err(CluEError::NoDetectedSpinDensityMatrix);
+  };
+  let Some(cluster_populations) = &config.cluster_populations else{
+    return Err(CluEError::NoClusterDensityMatrixMethod);
+  };
+  let mut density_matrix = match (detected_population,cluster_populations){
+    (DetectedPopulation::Thermal,ClusterPopulations::Thermal) => {
+        get_electron_cluster_thermal_density_matrix(
+            &h_eigvals, &h_eigvecs, config)?
+    },
+    (_, _) => {
+          let rho = states.density_matrix_for(tensor_indices)?;
+          let detected_spin_density_matrix = spin_ops.get_density_matrix(
+              spin_multiplicity, 1)?;  
+          kron(&detected_spin_density_matrix,&rho)
+    },
+  };
 
+  /*
+  let mut density_matrix = match states.density_matrix_for(tensor_indices)?{
+
+    None => get_electron_cluster_thermal_density_matrix(
+          &h_eigvals, &h_eigvecs, config)?,
+
+    Some(rho) => {
+      let detected_spin_density_matrix = match config.detected_population{
+        Some(DetectedPopulation::Thermal) 
+            => states.incoherent_density_matrix_for(&[0])?,
+        Some(_) => spin_ops.get_density_matrix(spin_multiplicity, 1)?,
+        None => return Err(CluEError::DetectedSpinDensityMatrix),
+      };  
+      kron(&detected_spin_density_matrix,&rho)
+    },     
+
+  };
+  */
+
+  /* Normalization is not needed here and will fail for ρ = Sz.
   let Ok(z) = density_matrix.trace() else{ 
     return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
   };
   density_matrix /= z;
+  */
 
   let Some(pulse_sequence) = &config.pulse_sequence else{
     return Err(CluEError::NoPulseSequence);

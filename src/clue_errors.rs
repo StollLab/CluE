@@ -41,6 +41,7 @@ pub enum CluEError{
   CannotParsePulseSequence(String),
   CannotParseRHS(usize),
   CannotParseSecondaryParticleFilter(String),
+  CannotParseSpinOp(String),
   CannotParseUnitOfClustering(usize,String),
   CannotPowTokens,
   CannotPruneClustersMisMatchedSizes,
@@ -361,6 +362,9 @@ impl fmt::Display for CluEError{
 
       CluEError::CannotParseSecondaryParticleFilter(group) => write!(f,
           "cannot parse secondary particle group \"{}\"", group),
+
+      CluEError::CannotParseSpinOp(s) => write!(f,
+          "cannot parse \"{}\" as a spin operator", s),
 
       CluEError::CannotParseUnitOfClustering(line_num, unit) 
           => write!(f, "line {}: cannot parse unit of clustering \"{}\"", 
