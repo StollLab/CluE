@@ -2,8 +2,6 @@ use crate::space_3d::Vector3D;
 use crate::elements::Element;
 use crate::isotopes::Isotope;
 
-use num_complex::Complex64;
-
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `Particle` specifies possible particles.
 /// 'Element' specifies a generalized chemical element.

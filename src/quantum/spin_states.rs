@@ -3,7 +3,7 @@ use crate::config::{ClusterPopulations,Config};
 
 use crate::physical_constants::PI;
 use crate::HamiltonianTensors;
-use crate::physical_constants::{ONE,I,ZERO};
+use crate::physical_constants::ONE;
 
 use num_complex::Complex64;
 use ndarray::{Array1,Array2};
@@ -11,11 +11,8 @@ use ndarray::linalg::kron;
 use ndarray_linalg::Trace;
 
 use rand_chacha::ChaCha20Rng;
-use rand_distr::uniform::SampleRange;
-use rand::Rng;
 use rand::distributions::Uniform;
 use rand_distr::Distribution;
-use ndarray_linalg::Norm;
 
 type CxVec = Array1::<Complex64>;
 type CxMat = Array2::<Complex64>;
@@ -127,7 +124,9 @@ impl SpinStates{
  
     let mut rho = CxMat::from_diag(&CxVec::from_vec(
         psi.map(|psi_i| psi_i.norm_sqr()*ONE)
-        .into_raw_vec()));
+        .into_raw_vec_and_offset().0
+        //.into_raw_vec()
+        ));
 
     let Ok(z) = rho.trace() else{
       return Err(CluEError::CannotTakeTrace(format!("{}",rho)));
@@ -248,7 +247,9 @@ impl SpinStates{
 #[cfg(test)]
 mod tests{
   use super::*;
+  use crate::physical_constants::{I,ZERO};
   use ndarray::array;
+  use ndarray_linalg::Norm;
   use rand::SeedableRng;
 
   //----------------------------------------------------------------------------
@@ -326,6 +327,7 @@ mod tests{
     assert_eq!(density_matrix, answer);
   }
   //----------------------------------------------------------------------------
+  #[allow(non_snake_case)]
   #[test]
   fn test_SpinStates_zeros(){
     let s = SpinStates::zeros(&[2,3],true);
@@ -381,5 +383,9 @@ mod tests{
     x /= n as f64;
     y /= n as f64;
 
+    assert!( x > 0.45);
+    assert!( x < 0.55);
+    assert!( y > 0.28);
+    assert!( y < 0.38);
   }
 }

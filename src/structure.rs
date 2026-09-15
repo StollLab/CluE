@@ -29,6 +29,11 @@ use crate::isotopes::Isotope;
 use crate::space_3d::SymmetricTensor3D;
 
 use rand_chacha::ChaCha20Rng;
+
+use num_complex::Complex64;
+use ndarray::Array2;
+type CxMat = Array2::<Complex64>;
+
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::collections::HashMap;
@@ -48,6 +53,7 @@ pub struct DetectedSpin{
   pub spin_multiplicity: usize,
   //pub transition: [usize;2],
   pub zerofield_tensor: Option<SymmetricTensor3D>,
+  pub zerofield_spherical_coefficients: Vec::<CxMat>,
 }
 //------------------------------------------------------------------------------
 impl DetectedSpin{

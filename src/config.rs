@@ -22,6 +22,7 @@ use crate::quantum::cluster_operators::SpinOp;
 use crate::misc::{
   are_all_same_type,
   cxmat_from_toml_array,  
+  vec_usize_from_toml_array,
 };
 
 
@@ -37,10 +38,10 @@ use std::fmt;
 use std::fs;
 use std::mem;
 
-use num_complex::Complex;
+use num_complex::Complex64;
 use ndarray::Array2;
 
-type CxMat = Array2::<Complex<f64>>;
+type CxMat = Array2::<Complex64>;
 
 pub mod command_line_input;
 pub mod config_toml;
@@ -78,20 +79,21 @@ pub struct Config{
   pub detected_spin_multiplicity: Option<usize>,
   pub detected_spin_position: Option<DetectedSpinCoordinates>,
   pub detected_spin_transition: Option<[usize;2]>,
-  pub detection_operator: Option<CxMat>,
+  pub detection_operator: Option<DetectionOp>,
   pub detected_spin_zerofield_coupling: Option<TensorSpecifier>,
   pub detected_spin_quadrupole_coupling: Option<TensorSpecifier>,
   pub mean_fields: Option<bool>,
   pub pulses: HashMap::<String,CxMat>,
 
   // Structure
-  pub replicate_unit_cell: Option<ReplicateUnitCell>,
   pub clash_distance: Option<f64>, 
   pub clash_distance_pbc: Option<f64>,
   pub extracell_particles: Vec::<ParticleConfig>,
   pub input_structure_file: Option<String>,
+  pub max_spherical_tensor_rank: Option<usize>,
   pub particles: Vec::<ParticleConfig>,
   pub pdb_model_index: Option<usize>,
+  pub replicate_unit_cell: Option<ReplicateUnitCell>,
   pub radius: Option<f64>,
   pub temperature: Option<f64>,
   
@@ -230,6 +232,10 @@ impl Config{
       self.ensemble_cce = Some(false);
     }
 
+    if self.max_spherical_tensor_rank.is_none(){
+      self.max_spherical_tensor_rank = Some(0);
+    }
+
     if self.mean_fields.is_none(){
       self.mean_fields = Some(false);
     }
@@ -319,7 +325,9 @@ impl Config{
         x_axis: Some(VectorSpecifier::Vector(Vector3D::from([1.0, 0.0, 0.0]))),
         y_axis: Some(VectorSpecifier::Vector(Vector3D::from([0.0, 1.0, 0.0]))),
         z_axis: None,
-          }));
+        spherical_tensor_coefficients: Vec::<CxMat>::new(),
+        stevens: false,
+      }));
     }
     if self.detected_spin_multiplicity.is_none() {
       self.detected_spin_multiplicity = match self.detected_spin_identity{
@@ -569,10 +577,19 @@ pub enum ClusterPopulations{
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,PartialEq)]
+pub enum DetectionOp{
+  Matrix(CxMat),
+  S(SpinOp),
+  Transition(usize,usize),  
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[derive(Debug,Clone,PartialEq)]
 pub enum DetectedPopulation{
   Matrix(CxMat),
   S(SpinOp),
-  Thermal  
+  Thermal,  
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -1010,8 +1027,23 @@ impl Config{
       if let Some(det_op) = detected_spin.detection_operator{
         match det_op{
           toml::Value::Array(array) => {
-            let op = cxmat_from_toml_array(array.clone())?;
-            self.detection_operator = Some(op)
+
+            if let toml::Value::Integer(_) = array[0]{
+              if array.len() != 2{
+                return Err(CluEError::InvalidDetectionOperator)
+              }
+              let transition = vec_usize_from_toml_array(array)?;
+              self.detection_operator = Some(
+                  DetectionOp::Transition(transition[0],transition[1]));
+            }
+            else{    
+              let op = cxmat_from_toml_array(array.clone())?;
+              self.detection_operator = Some(DetectionOp::Matrix(op));
+            }
+          },
+          toml::Value::String(s) => {
+            let sop = SpinOp::from_str(&s)?;
+            self.detection_operator = Some(DetectionOp::S(sop));
           },
           _ => return Err(CluEError::InvalidDetectionOperator),
         }
@@ -1029,7 +1061,7 @@ impl Config{
               let sop = SpinOp::from_str(&s)?;
               self.detected_population = Some(DetectedPopulation::S(sop));
             }
-          }
+          },
           _ => return Err(CluEError::InvalidDensityMatrix),
         }
       }
@@ -1076,6 +1108,10 @@ impl Config{
 
     if config_toml.max_spins.is_some(){
       self.max_spins = config_toml.max_spins;
+    }
+
+    if config_toml.max_spherical_tensor_rank.is_some(){
+      self.max_spherical_tensor_rank = config_toml.max_spherical_tensor_rank;
     }
 
     if config_toml.min_cell_size.is_some(){
@@ -1643,6 +1679,8 @@ mod tests{
           x_axis: Some(x.clone()),    
           y_axis: Some(y.clone()),    
           z_axis: None,    
+          spherical_tensor_coefficients: Vec::<CxMat>::new(),
+          stevens: false,
         })));
 
     assert_eq!(nitrogen.electric_quadrupole_coupling,
@@ -1651,6 +1689,8 @@ mod tests{
           x_axis: Some(x.clone()),    
           y_axis: Some(y.clone()),    
           z_axis: None,    
+          spherical_tensor_coefficients: Vec::<CxMat>::new(),
+          stevens: false,
         })));
 
     assert_eq!(groups[3].label, "tempo_o".to_string());

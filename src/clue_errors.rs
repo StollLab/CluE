@@ -1,3 +1,4 @@
+use crate::config::toml_keys::*;
 use serde::Serialize;
 use std::fmt;
 
@@ -9,6 +10,7 @@ pub enum CluEError{
   AtomDoesNotSpecifyElement(usize),
   AllVectorsNotSameLength(String),
   BondsAreNotDefined,
+  BothStevensAndIST,
   CannotAddPointToGrid(usize,usize),
   CannotAddTokens,
   CannontAugmentFilter(usize,String),
@@ -18,6 +20,7 @@ pub enum CluEError{
   CannotConvertToVector(usize),
   CannotCreateDir(String),
   CannotDiagonalizeHamiltonian(String),
+  CannotDiagonalizeOperator(String),
   CannotDivTokens,
   CannotExpandBlockClusters,
   CannotFindCellID(usize),
@@ -28,7 +31,7 @@ pub enum CluEError{
   CannotFindRefIndexFromNthActive(usize),
   CannotInferEigenvalues(usize),
   CannotMatchVertexToIndex(usize),
-  CannotMulTokens,
+  CannotNormalizeVector,
   CannotOpenFile(String),
   CannotParseCellType(String),
   CannotParseClusterMethod(String),
@@ -90,6 +93,7 @@ pub enum CluEError{
   ExpectedTOMLArray(String),
   ExpectedTOMLBool(String),
   ExpectedTOMLFloat(String),
+  ExpectedTOMLUInt(String),
   ExpectedTOMLString(String),
   ExpectedTOMLTable(String),
   FailedKMeans,
@@ -98,6 +102,7 @@ pub enum CluEError{
   FilterNeedsALabel,
   FilterNoMinDistance(String),
   FiltersOverlap(String,String),
+  Generic(String),
   HamiltonianAndDensityNotSameDimension(usize,usize),
   InconsistentExhangeGroupActiveStatus(usize),
   IncorrectFormattingIsotopeAbundances(usize),
@@ -110,17 +115,20 @@ pub enum CluEError{
   InvalidConfigFile(String),
   InvalidDensityMatrix,
   InvalidDetectionOperator,
+  InvalidIST(String),
   InvalidKMeansSize,
   InvalidPulse(String),
   InvalidPulseSequence(usize),
   InvalidSecondaryFilter(usize,String),
   InvalidToken(usize,String),
   InvalidSpinMultiplicity(usize),
+  InvalidStevens(String),
   IsotopeAbundancesCannotBeNormalized(usize),
   IsotopeAbundancesMustBeNonnegative(usize),
   LenghMismatchTimepointsIncrements(usize,usize),
   MeanFieldECCENotImplemented,
   MismatchedGroupNames(String,String),
+  MissingDMatrix(usize),
   MissingFieldInCSVFile(String,String),
   MissingFilter(String),
   MissingFilterArgument(usize,String),
@@ -139,6 +147,7 @@ pub enum CluEError{
   NANTensorExchangeCoupling(usize,String,usize,String),
   NANTensorHyperfine(usize,String),
   NANTensorQuadrupole(usize,String),
+  NANTensorZerofield(usize,String),
   NeighborListAndPartitionTableAreNotCompatible,
   NoApplyPBC,
   NoArgument(usize),
@@ -165,11 +174,13 @@ pub enum CluEError{
   NoGMatrixValues,
   NoHyperfineSpecifier(String,String),
   NoInputFile,
+  NoIndex,
   NoKMeansSize,
   NoMagneticField,
   NoMeanFields,
   NoModelIndex,
   NoMaxClusterSize,
+  NoMaxISTRank,
   NoNeighborCutoffDistance,
   NoNumberSystemInstances,
   NoOrientationGrid,
@@ -185,7 +196,9 @@ pub enum CluEError{
   NoPulseOpWithMultiplicity(String,usize),
   NoSpinOpForClusterSize(usize,usize),
   NoSpinOpWithMultiplicity(usize),
+  NoStevensOp(i32,i32),
   NoStructureFile,
+  NotA3DRotationMatrix(String),
   NotA3DVector(usize),
   NotALebedevGrid(usize),
   NotAnOperator(usize,String),
@@ -266,6 +279,9 @@ impl fmt::Display for CluEError{
       CluEError:: BondsAreNotDefined => write!(f,
           "no chemical bonds are established"),
 
+      CluEError:: BothStevensAndIST => write!(f,
+          "{} and {} are mutually exclusive",KEY_IST_COEF,KEY_STEVENS_COEF),
+
       CluEError::CannotAddPointToGrid(point_dim, grid_dim) => write!(f,
           "cannot add {}D point t0 {}D grid",point_dim, grid_dim),
 
@@ -283,7 +299,10 @@ impl fmt::Display for CluEError{
           "cannot convert serial id, {}, to an index",serial),
 
       CluEError::CannotDiagonalizeHamiltonian(matrix) => write!(f,
-          "cannot diagonalize Hamiltonian,\n {}",matrix),
+          "cannot diagonalize Hamiltonian,\n{}",matrix),
+
+      CluEError::CannotDiagonalizeOperator(matrix) => write!(f,
+          "cannot diagonalize \n{}",matrix),
 
       CluEError::CannotCreateDir(path) => write!(f,
           "cannot create directory \"{}\"",path),
@@ -318,8 +337,8 @@ impl fmt::Display for CluEError{
       CluEError::CannotMatchVertexToIndex(vertex) => write!(f,
           "cannot match vertex {} to an index",vertex),
       
-      CluEError::CannotMulTokens => write!(f,
-          "cannot multiply tokens meaningfully"),
+      CluEError::CannotNormalizeVector => write!(f,
+          "cannot normalize vector"),
 
       CluEError::CannotOpenFile(file) => write!(f,
           "cannot open \"{}\"", file),
@@ -526,6 +545,9 @@ fo nth active"),
       CluEError::ExpectedTOMLFloat(type_str) => write!(f,
           "expected float, but got {}",type_str),
 
+      CluEError::ExpectedTOMLUInt(type_str) => write!(f,
+          "expected int > 0, but got {}",type_str),
+
       CluEError::ExpectedTOMLString(type_str) => write!(f,
           "expected string, but got {}",type_str),
 
@@ -556,6 +578,8 @@ fo nth active"),
       CluEError::FiltersOverlap(label0,label1) => write!(f,
           "groups \"{}\" and \"{}\" overlap: \
 particles must not reside in more than one group",label0,label1),
+
+      CluEError::Generic(s) => write!(f,"{}",s),
 
       CluEError::HamiltonianAndDensityNotSameDimension(h,rho) => write!(f,
           "the Hamiltonian and density matrix are \"{}\" and \"{}\" dimensional\
@@ -599,6 +623,9 @@ and p0,p1 > 0 are abundances",line_number),
       CluEError::InvalidDetectionOperator => write!(f,
           "invalid detection operator"),
 
+      CluEError::InvalidIST(ist) => write!(f,
+          "invalid {} \"{}\"",KEY_IST_COEF,ist),
+
       CluEError::InvalidKMeansSize => write!(f,
           "kmeans_size must be at least 1"),
 
@@ -617,6 +644,9 @@ and p0,p1 > 0 are abundances",line_number),
       CluEError::InvalidSpinMultiplicity(n) => write!(f,
           "invalid spin multiplicity \"{}\"",n),
 
+      CluEError::InvalidStevens(ist) => write!(f,
+          "invalid {} \"{}\"",KEY_STEVENS_COEF,ist),
+
       CluEError::IsotopeAbundancesCannotBeNormalized(line_number) => write!(f,
           "line {}, isotope abundances cannot be normalized",line_number),
 
@@ -632,6 +662,9 @@ and p0,p1 > 0 are abundances",line_number),
 
       CluEError::MismatchedGroupNames(name0,name1) => write!(f,
           "group names \"{}\" and \"{}\" do not match",name0,name1),
+
+      CluEError::MissingDMatrix(l) => write!(f,
+          "no D matrix for l = {}",l),
 
       CluEError::MissingFilter(label) => write!(f,
           "no group with label \"{}\"",label),
@@ -692,6 +725,10 @@ but there are {} headers and {} columns of data.",filename,n_headers,n_cols),
 
       CluEError::NANTensorQuadrupole(idx,isotope) => write!(f,
           "electric quadrupole tensor for particle {} {} contains NANs",
+          idx,isotope),
+
+      CluEError::NANTensorZerofield(idx,isotope) => write!(f,
+          "zerofield tensor for particle {} {} contains NANs",
           idx,isotope),
 
       CluEError::NeighborListAndPartitionTableAreNotCompatible  => write!(f,
@@ -770,6 +807,9 @@ periodic boundary conditions should be applied"),
       CluEError::NoInputFile => write!(f,
           "no input file"),
 
+      CluEError::NoIndex => write!(f,
+          "no bath particle index"),
+
       CluEError::NoKMeansSize => write!(f,
           "k-means requires kmeans_size to be set"),
       
@@ -787,6 +827,9 @@ periodic boundary conditions should be applied"),
 
       CluEError::NoMaxClusterSize => write!(f,
           "maximum cluster size not set"),
+
+      CluEError::NoMaxISTRank => write!(f,
+          "maximum irreducible spherical tensor rank not set"),
 
       CluEError::NoNeighborCutoffDistance => write!(f,
           "neighbor_cutoff_distance is not defined"),
@@ -812,6 +855,10 @@ periodic boundary conditions should be applied"),
       CluEError::NoRelationalOperators(line_number) => write!(f,
           "line {}, no relational operators (=, <, >, in, ...), are present", 
           line_number),
+
+      CluEError::NotA3DRotationMatrix(matrix) => write!(f,
+          "matrix \"\n{}\n\"does not correspond to a valid rotation matrix", 
+          matrix),
 
       CluEError::NotA3DVector(dim) => write!(f,
           "vector is {}-dimensional, not 3-dimensional", 
@@ -896,6 +943,9 @@ periodic boundary conditions should be applied"),
       CluEError::NoSpinOpWithMultiplicity(spin_multiplicity) => write!(f,
           "no spin-{} operators are built", 
           (*spin_multiplicity as f64 - 1.0)/2.0),
+
+      CluEError::NoStevensOp(k,q) => write!(f,
+          "Cannot get Stevens operator O_{}^{}",k,q),
 
       CluEError::NoStructureFile => write!(f,
           "no structure file defined"),

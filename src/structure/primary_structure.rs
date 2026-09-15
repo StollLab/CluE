@@ -16,6 +16,10 @@ use crate::space_3d::Vector3D;
 
 use rand_chacha::ChaCha20Rng;
 
+use num_complex::Complex64;
+use ndarray::Array2;
+type CxMat = Array2::<Complex64>;
+
 impl Structure{
   /// This method uses an input `Config` to set the structure's
   /// spins and exchange groups.  The number of bath particle is unchanged.
@@ -118,8 +122,8 @@ impl Structure{
       return Err(CluEError::NoGMatrixSpecifier);
     };
     
-    let g_matrix = construct_symmetric_tensor_from_tensor_specifier(rng,
-        g_matrix_specifier, None, self,config)?;
+    let (g_matrix,_) = construct_symmetric_tensor_from_tensor_specifier(rng,
+        g_matrix_specifier, None, spin_multiplicity,self,config)?;
     
     let mu: f64 = if isotope == Isotope::Electron{
       -MUB
@@ -128,11 +132,14 @@ impl Structure{
     };
     let gamma_matrix = g_matrix.scale(mu/HBAR);
 
-    let zerofield_tensor = match &config.detected_spin_zerofield_coupling{
-      Some(zerofield_specifier) => 
-          Some(construct_symmetric_tensor_from_tensor_specifier(rng,
-            zerofield_specifier, None, self,config)?),
-      None => None,
+    let (zerofield_tensor,zerofield_spherical_coefficients) 
+        = match &config.detected_spin_zerofield_coupling{
+      Some(zerofield_specifier) => { 
+        let (ten,coef) = construct_symmetric_tensor_from_tensor_specifier(rng,
+            zerofield_specifier, None, spin_multiplicity,self,config)?;
+        (Some(ten),coef)
+      },
+      None => (None,Vec::<CxMat>::new()),
     }; 
 
     self.detected_particle = Some(DetectedSpin{
@@ -142,6 +149,7 @@ impl Structure{
         spin_multiplicity,
         //transition,
         zerofield_tensor, 
+        zerofield_spherical_coefficients,
         });
 
 

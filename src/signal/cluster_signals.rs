@@ -400,6 +400,7 @@ mod tests{
                                                                 ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
       mean_field_couplings: None,
+      spin_spherical_tensors: SpinSphericalTensors::new(),
       }
   }  
 }

@@ -1,7 +1,10 @@
 
 use crate::CluEError;
 use crate::config::config_toml::*;
-use crate::misc::are_all_same_type;
+use crate::misc::{
+  are_all_same_type,
+  vec_cxmat_from_toml_array,
+};
 use crate::structure::particle_filter::{ParticleFilter,VectorSpecifier,
   SecondaryParticleFilter};
 use crate::isotopes::Isotope;
@@ -11,6 +14,9 @@ use crate::space_3d::SymmetricTensor3D;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
+use num_complex::Complex64;
+use ndarray::Array2;
+type CxMat = Array2::<Complex64>;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `ParticleConfig` stores user setting for how to treat particles/
@@ -484,6 +490,8 @@ pub struct EigSpecifier{
   pub x_axis: Option<VectorSpecifier>,
   pub y_axis: Option<VectorSpecifier>,
   pub z_axis: Option<VectorSpecifier>,
+  pub spherical_tensor_coefficients: Vec::<CxMat>,
+  pub stevens: bool,
 }
 
 
@@ -532,11 +540,29 @@ impl EigSpecifier{
       None
     };
 
+    let mut stevens = false;
+
+    let spherical_tensor_coefficients = 
+          match (table.get(KEY_IST_COEF), table.get(KEY_STEVENS_COEF)){
+      (Some(toml::Value::Array(a)),None) => vec_cxmat_from_toml_array(
+          a.clone())?,
+      (None,Some(toml::Value::Array(a))) => {
+        stevens = true;
+        vec_cxmat_from_toml_array(a.clone())?
+      },
+      (Some(v),None) => return Err(CluEError::InvalidIST(v.to_string())),   
+      (None,Some(v)) => return Err(CluEError::InvalidStevens(v.to_string())),   
+      (None,None) => Vec::<CxMat>::new(),
+      (_,_) => return Err(CluEError::BothStevensAndIST),
+    };
+
     Ok(Self{
         values,
         x_axis,
         y_axis,
         z_axis,
+        spherical_tensor_coefficients,
+        stevens,
     })
   }
   //----------------------------------------------------------------------------

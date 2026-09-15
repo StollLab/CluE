@@ -416,6 +416,21 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
       ham = ham + sz0*vec.z();
     }
 
+    if let Some(tens) = tensors.spin_spherical_tensors
+        .get(&(ten_idx0,ten_idx0)){
+
+      for coefs in tens.iter(){
+        let il = coefs.dim().0;
+        let l = il as i32;
+        for (im,&c) in coefs.iter().enumerate(){
+          let m = im as i32 -l;
+          let tlm = spin_ops.get(&SpinOp::T(l,m),spin_mult0,cluster_size,
+              sop_idx0)?;
+          ham = ham + tlm*c;
+        }
+      }
+    }
+
     for (sop_idx1, &ten_idx1) in spin_indices.iter().enumerate().skip(sop_idx0){
 
       let sx1 = spin_ops.get(&SpinOp::Sx,spin_mult0,cluster_size,sop_idx1)?;
@@ -436,6 +451,7 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
         ham = ham + sz0.dot(sy1)*ten.zy();
         ham = ham + sz0.dot(sz1)*ten.zz();
       }
+
     }
   }
 
@@ -521,8 +537,6 @@ mod tests{
         &spin_indices,&spin_ops, &tensors,
         ).unwrap();
     
-    let dim = h_eigvecs.dim().0;
-
     let density_matrix = get_electron_cluster_thermal_density_matrix(
         &h_eigvals, &h_eigvecs, &config).unwrap();
 
@@ -590,8 +604,6 @@ mod tests{
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors).unwrap();
-
-    let dim = h_eigvecs.dim().0;
 
     let density_matrix = get_electron_cluster_thermal_density_matrix(
         &h_eigvals, &h_eigvecs, &config).unwrap();
@@ -717,6 +729,7 @@ mod tests{
                                                                ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
       mean_field_couplings: None,
+      spin_spherical_tensors: SpinSphericalTensors::new(),
       }
   }
   //----------------------------------------------------------------------------

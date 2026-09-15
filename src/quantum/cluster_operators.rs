@@ -1,18 +1,27 @@
 use crate::physical_constants::*;
 use crate::clue_errors::*;
-use crate::config::{Config, DetectedPopulation};
+use crate::config::{Config, DetectedPopulation,DetectionOp};
 use crate::quantum::pulse_sequences::{
   ideal_pulse,
   PI_OVER_2_PULSE_NAME,
   PI_PULSE_NAME
 };
-use crate::math::commutator;
+use crate::math::{
+  anticommutator,
+  commutator,
+  cxmat_pow_n,
+  hilbert_schmidt,
+};
+use crate::space_3d::{UnitSpherePoint,Vector3D};
+
 
 use std::fmt;
 use std::collections::HashMap;
 use ndarray::Array2;
 use ndarray::linalg::kron;
+use ndarray_linalg::{Eigh, UPLO};
 use num_complex::Complex;
+
 
 type CxMat = Array2::<Complex<f64>>;
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -36,9 +45,14 @@ impl<'a> ClusterSpinOperators {
   /// This function builds 'ClusterSpinOperators' for clusters of 
   /// `bath_multiplicities` up to size `max_size`.
   pub fn new(det_multiplicity: usize, 
-      bath_multiplicities: &[usize], max_size: usize,config: &Config) 
-   -> Result<Self, CluEError> {
-    
+      bath_multiplicities: &[usize], max_size: usize,
+      config: &Config) 
+   -> Result<Self, CluEError> 
+  {
+   
+    let Some(ist_max_l) = config.max_spherical_tensor_rank else{
+      return Err(CluEError::NoMaxISTRank);
+    }; 
 
     let n_mults = bath_multiplicities.len();
 
@@ -50,7 +64,7 @@ impl<'a> ClusterSpinOperators {
     for spin_multiplicity in bath_multiplicities.iter() {
 
       let sops = KronSpinOperators::new(det_multiplicity,
-          *spin_multiplicity, max_size)?;
+          *spin_multiplicity, max_size, ist_max_l)?;
 
       cluster_spin_ops.push(sops);
     }
@@ -158,6 +172,18 @@ fn build_detection_operators(det_multiplicity: usize,
     return Err(CluEError::NoDetectedSpinDetectionOperator);
   }; 
 
+  let detection_operator = match det_op{
+    DetectionOp::Matrix(mat) => mat.clone(),
+    DetectionOp::S(sop) => get_spin_operator(det_multiplicity,sop),
+    DetectionOp::Transition(level_0,level_1) => {
+      let mut mat = CxMat::zeros([det_multiplicity,det_multiplicity]);
+      let row = det_multiplicity - *level_0 - 1;
+      let col = det_multiplicity - *level_1 - 1;
+      mat[[row,col]] = ONE;
+      mat
+    }
+  };
+
   let pulses = if config.pulses.is_empty(){
     match &config.detected_spin_transition{
       Some(transition) => {
@@ -180,7 +206,7 @@ fn build_detection_operators(det_multiplicity: usize,
   for spin_multiplicity in bath_multiplicities.iter() {
     detection_ops.push(DetectionSpinOperators::new(
         &density_matrix_opt,
-        det_op,
+        &detection_operator,
         &pulses,    
         det_multiplicity, *spin_multiplicity, max_size,    
         )?);
@@ -201,6 +227,7 @@ pub struct KronSpinOperators {
   sy_list: KronSpinOpList,
   sz_list: KronSpinOpList,
   sp_list: KronSpinOpList,
+  spherical_operators: HashMap::<(i32,i32),KronSpinOpList>,
 }
 
 impl<'a> KronSpinOperators {
@@ -208,7 +235,7 @@ impl<'a> KronSpinOperators {
   /// This function builds `KronSpinOperators` for spin with the input spin 
   /// multiplicity for clusters up to size `max_size`.
   pub fn new(det_multiplicity: usize,
-      spin_multiplicity: usize, max_size: usize) 
+      spin_multiplicity: usize, max_size: usize, ist_max_l: usize) 
     -> Result<KronSpinOperators,CluEError> 
   {
 
@@ -220,12 +247,25 @@ impl<'a> KronSpinOperators {
         spin_multiplicity, SpinOp::Sz, max_size)?;
     let sp_list = KronSpinOpList::new(det_multiplicity,
         spin_multiplicity, SpinOp::Sp, max_size)?;
+    
+    let mut spherical_operators = HashMap::<(i32,i32), KronSpinOpList>::new();
+    for il in 3..=ist_max_l{
+      let l = il as i32;
+      for im in 0..=2*l+1 {
+        let m = im as i32 - l;
+        let tlm_list = KronSpinOpList::new(det_multiplicity,
+          spin_multiplicity, SpinOp::T(l,m), max_size)?;
+        spherical_operators.insert( (l,m), tlm_list);
+      }
+    }
+   
 
     Ok(KronSpinOperators{
       sx_list,  
       sy_list,  
       sz_list,  
       sp_list,  
+      spherical_operators,
     })
   }
   //----------------------------------------------------------------------------
@@ -241,6 +281,13 @@ impl<'a> KronSpinOperators {
        SpinOp::Sy => self.sy_list.get(op_pos,n_ops),
        SpinOp::Sz => self.sz_list.get(op_pos,n_ops),
        SpinOp::Sp => self.sp_list.get(op_pos,n_ops),
+       SpinOp::T(l,m) => {
+         let Some(tlm_list) = self.spherical_operators.get(&(*l,*m)) else{
+           return Err(CluEError::CannotFindSpinOp(sop.to_string()));
+         };
+           
+         tlm_list.get(op_pos,n_ops)
+       },
        _ => Err(CluEError::CannotFindSpinOp(sop.to_string())),
      }
   } 
@@ -492,6 +539,7 @@ pub enum SpinOp{
   Sp,
   Sm,
   S2,
+  T(i32,i32),
 }
 impl fmt::Display for SpinOp {
     // This function translates `SpinOp` to strings.
@@ -504,18 +552,20 @@ impl fmt::Display for SpinOp {
         SpinOp::Sp => write!(f, "S+"),
         SpinOp::Sm => write!(f, "S-"),
         SpinOp::S2 => write!(f, "S^2"),
+        SpinOp::T(l,m) => write!(f, "T[{}][{}]",l,m),
       }
     }
 }
 
 impl SpinOp{
   pub fn from_str(s: &str) -> Result<Self,CluEError>{
+    // TODO: add ISTs 
     match s{
       "sx" | "Sx" => Ok(Self::Sx),  
       "sy" | "Sy" => Ok(Self::Sy),  
       "sz" | "Sz" => Ok(Self::Sz),  
       "s+" | "S+" => Ok(Self::Sp),  
-      "s-" | "S+" => Ok(Self::Sm),  
+      "s-" | "S-" => Ok(Self::Sm),  
       "s^2" | "S^2" => Ok(Self::S2),  
       _ => Err(CluEError::CannotParseSpinOp(s.to_string())),
     }
@@ -533,6 +583,7 @@ pub fn get_spin_operator(spin_multiplicity: usize, sop: &SpinOp) -> CxMat{
     SpinOp::Sp => spin_plus(spin_multiplicity),
     SpinOp::Sm => spin_minus(spin_multiplicity),
     SpinOp::S2 => spin_squared(spin_multiplicity),
+    SpinOp::T(l,m) => spin_ist(spin_multiplicity,*l,*m),
   }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -653,17 +704,254 @@ pub fn spin_squared(spin_multiplicity: usize) -> CxMat {
 //------------------------------------------------------------------------------
 pub fn spin_ist(spin_multiplicity: usize, l: i32, m: i32) -> CxMat{
 
+  assert!( l >= 0 );
+  if l == 0{
+    return CxMat::eye(spin_multiplicity);
+  }
+  if l >= spin_multiplicity as i32{
+    return CxMat::zeros([spin_multiplicity,spin_multiplicity]);
+  }
   let sp = spin_plus(spin_multiplicity);
   let sm = spin_minus(spin_multiplicity);
-  let mut t = (-SQRT2_INV).powi(l as i32) * ONE * sp;
+  let mut t = (-SQRT2_INV).powi(l) * ONE * cxmat_pow_n(&sp,l as usize);
 
   for n in 0..2*l{
-    if l - n  == m { break; }
-    let a = ONE/( (l*(l+1) - m*(m-1)) as f64 ).sqrt(); 
-    t = commutator(&sm,&t)*a;
+    let mm = l-n;
+    if mm  == m { break; }
+    let denominator = ( (l*(l+1) - mm*(mm-1)) as f64 ).sqrt();
+    t = commutator(&sm,&t)*(ONE/denominator);
   }
 
   t
+}
+//------------------------------------------------------------------------------
+pub fn spherical_operator_decomposition(matrix: &CxMat, 
+    zero_threshold: f64)
+    -> Vec::<CxMat>
+{
+
+  let mut coefficients = Vec::<CxMat>::new();
+  let dim  = matrix.dim().0;
+  assert_eq!(matrix.dim().1, dim);
+
+  
+  for l in 0..=(dim as i32){
+    
+    let mut any_nonzero = false;
+    let mut coefs = CxMat::zeros([2*l as usize + 1,1]);
+
+    for (idx,m) in (-l..=l).enumerate(){
+    
+      let tlm = spin_ist(dim,l,m);
+      let c = hilbert_schmidt(&tlm, matrix)*ONE/hilbert_schmidt(&tlm, &tlm);
+      if c.norm() > zero_threshold{
+        coefs[[idx,0]] = c;
+        any_nonzero = true;
+      }
+    }
+    if any_nonzero{
+      coefficients.push(coefs);
+    }
+  }
+  coefficients
+}
+//------------------------------------------------------------------------------
+pub fn expmap_spin(multiplicity: usize, sop: &SpinOp, theta: f64) -> 
+    Result<CxMat,CluEError>
+{
+
+  let s = get_spin_operator(multiplicity, sop);
+
+  let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
+    return Err(CluEError::CannotDiagonalizeOperator(s.to_string()));
+  };
+
+  let inv_eigvecs = eigvecs.t().map(|v| v.conj());
+
+  let u_eig = CxMat::from_diag(&eigvals.map(|nu|
+    { 
+      let i_phase: Complex<f64> = (I*nu)*theta;
+          i_phase.exp()
+    }
+    )
+  );
+
+  let u = eigvecs.dot( &u_eig.dot( &inv_eigvecs) );
+
+  Ok(u)
+}
+//------------------------------------------------------------------------------
+pub fn expmap_spin_axis_angle(multiplicity: usize, axis: &Vector3D, angle: f64) 
+    -> Result<CxMat,CluEError>
+{
+
+  let norm = axis.norm();
+  if norm < 1e-12{
+    return Err(CluEError::CannotNormalizeVector);
+  }
+  let n = axis.scale(1.0/norm);
+
+  let sx = get_spin_operator(multiplicity, &SpinOp::Sx);
+  let sy = get_spin_operator(multiplicity, &SpinOp::Sy);
+  let sz = get_spin_operator(multiplicity, &SpinOp::Sz);
+  let s = n.x()*ONE*sx + n.y()*ONE*sy + n.z()*ONE*sz;
+
+  let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
+    return Err(CluEError::CannotDiagonalizeOperator(s.to_string()));
+  };
+
+  let inv_eigvecs = eigvecs.t().map(|v| v.conj());
+
+  let u_eig = CxMat::from_diag(&eigvals.map(|nu|
+    { 
+      let i_phase: Complex<f64> = (I*nu)*angle;
+          i_phase.exp()
+    }
+    )
+  );
+
+  let u = eigvecs.dot( &u_eig.dot( &inv_eigvecs) );
+
+  Ok(u)
+}
+//------------------------------------------------------------------------------
+pub fn wigner_dir(multiplicity: usize, dir: &UnitSpherePoint) 
+    -> Result<CxMat,CluEError>
+{
+  let theta = dir.theta();
+  let phi = dir.phi();
+
+  let uz = expmap_spin(multiplicity, &SpinOp::Sz, theta)?;
+  let uy = expmap_spin(multiplicity, &SpinOp::Sy, phi)?;
+
+  let d = uz.dot(&uy);
+
+  Ok(d)
+
+}
+//------------------------------------------------------------------------------
+pub fn wigner_euler(multiplicity: usize, angles: &[f64; 3]) 
+    -> Result<CxMat,CluEError>
+{
+  let ua = expmap_spin(multiplicity, &SpinOp::Sz, angles[0])?;
+  let ub = expmap_spin(multiplicity, &SpinOp::Sy, angles[1])?;
+  let uc = expmap_spin(multiplicity, &SpinOp::Sz, angles[2])?;
+
+  let d = ua.dot(&ub.dot(&uc));
+
+  Ok(d)
+
+}
+//------------------------------------------------------------------------------
+pub fn spin_stevens(spin_multiplicity: usize, k: i32, q: i32) 
+    -> Result<CxMat,CluEError>
+{
+  let spin = 0.5*(spin_multiplicity as f64 - 1.0);
+  let s = spin*(spin + 1.0)*ONE;
+  let cp = 0.5*ONE;
+  let cm = -0.5*I;
+
+  let (c,pm) = if q >= 0{
+    (cp,ONE)
+  }else{
+    (cm,-ONE)
+  };
+
+  let e = CxMat::eye(spin_multiplicity);
+  let sz = spin_z(spin_multiplicity);
+  let sp = spin_plus(spin_multiplicity);
+  let sm = spin_minus(spin_multiplicity);
+
+  let a = anticommutator;
+  let pow = cxmat_pow_n;
+  let okq = match (k,q.abs()) {
+    (2,0) => 3.0*ONE*sz.dot(&sz) - spin_squared(spin_multiplicity),
+    (2,1) => c*a(&sz, &(sp + pm*sm)),
+    (2,2) => c*(sp.dot(&sp) + pm*sm.dot(&sm) ),
+    (4,0) => 35.0*ONE*pow(&sz,4) 
+        - (30.0*s - 25.0)*ONE*pow(&sz,2) 
+        + (3.0*s*s - 6.0*s)*e,
+    (4,1) => 0.5*c*a(
+        &(7.0*ONE*pow(&sz,3) - (3.0*s + ONE)*sz),
+        &(sp + pm*sm)),
+    (4,2) => 0.5*c*a(
+        &(7.0*ONE*pow(&sz,2) - (s + 5.0*ONE)*e),
+        &(pow(&sp,2) + pm*pow(&sm,2))),
+    (4,3) => 0.5*c*a(&sz,&(pow(&sp,3) + pm*pow(&sm,3) )),
+    (4,4) => c*(pow(&sp,4) + pm*pow(&sm,4) ),
+    (6,0) => 231.0*ONE*pow(&sz,6) 
+        - (315.0*s - 735.0*ONE)*pow(&sz,4)
+        + (105.0*s*s - 525.0*s + 294.0*ONE)*pow(&sz,2)
+        - (5.0*s*s*s - 40.0*s*s + 60.0*s)*e,
+    (6,1) => 0.5*c*a(
+        &(
+            33.0*ONE*pow(&sz,5) 
+            - (30.0*s - 15.0*ONE)*pow(&sz,3)
+            + (5.0*s*s - 10.0*s + 12.0*ONE)*sz
+         ),
+         &(sp + sm)       
+        ),
+    (6,2) => 0.5*c*a(
+        &(
+            33.0*ONE*pow(&sz,4) 
+            - (18.0*s + 123.0*ONE)*pow(&sz,2)
+            + (s*s + 10.0*s + 102.0*ONE)*e
+         ),    
+        &(pow(&sp,2) + pm*pow(&sm,2))
+        ),
+    (6,3) => 0.5*c*a(
+        &(
+            11.0*ONE*pow(&sz,3) 
+            - (3.0*s + 59.0*ONE)*sz
+         ),    
+        &(pow(&sp,3) + pm*pow(&sm,3))
+        ),
+    (6,4) => 0.5*c*a(
+        &(
+            11.0*ONE*pow(&sz,2) 
+            - (s + 38.0*ONE)*e
+         ),    
+        &(pow(&sp,4) + pm*pow(&sm,4))
+        ),
+    (6,5) => 0.5*c*a(&sz,&(pow(&sp,5) + pm*pow(&sm,5)) ),
+    (6,6) => c*(pow(&sp,6) + pm*pow(&sm,6)),
+    _ => return Err(CluEError::NoStevensOp(k,q)),
+  };
+
+  Ok(okq)
+}  
+//------------------------------------------------------------------------------
+pub fn operator_form_stevens_coefficients(spin_multiplicity: usize,
+    coefficients: &[CxMat]) 
+    -> Result<CxMat,CluEError>
+{
+
+  let mut t = CxMat::zeros([spin_multiplicity,spin_multiplicity]);
+
+  for coefs in coefficients.iter(){
+    let k = (coefs.dim().0 as i32 - 1)/2;
+    if coefs.dim().1 != 1{
+      return Err(CluEError::Generic(
+            "Stevens coeeficients should be a list of k×1 matrices".to_string()));
+    };
+
+    for (ii,bkq) in coefs.iter().enumerate(){
+      let q = -k + ii as i32;
+      let okq = spin_stevens(spin_multiplicity, k, q)?;
+      t = t + *bkq*okq;
+    } 
+  }
+
+  Ok(t)
+}  
+//------------------------------------------------------------------------------
+pub fn stevens_to_spherical_coefficients(spin_multiplicity: usize,
+    coefficients: &[CxMat],tol: f64) 
+    -> Result<Vec::<CxMat>,CluEError>
+{
+  let t = operator_form_stevens_coefficients(spin_multiplicity,coefficients)?;
+  let ist_coefs = spherical_operator_decomposition(&t,tol);
+  Ok(ist_coefs)
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -673,7 +961,233 @@ pub fn spin_ist(spin_multiplicity: usize, l: i32, m: i32) -> CxMat{
 mod tests {
   use super::*;
   use ndarray::array;
+  use ndarray_linalg::Norm;
 
+  
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_stevens_to_spherical_coefficients(){
+  
+    let tol = 1e-12;
+    let mult = 3;
+
+    let stevens = vec![
+      array![[ONE],[ZERO],[ZERO],[ZERO],[ZERO]],
+    ];   
+    let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
+      let expected = vec![
+      array![[I],[ZERO],[ZERO],[ZERO],[-I]],
+    ];   
+    for (ii,c) in coefs.iter().enumerate(){
+      let c0 = &expected[ii];
+      assert_eq!(c.shape(),c0.shape());
+      assert!( (c-c0).norm() < tol );
+    }
+
+    let stevens = vec![
+      array![[ZERO],[ONE],[ZERO],[ZERO],[ZERO]],
+    ];   
+    let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
+      let expected = vec![
+      array![[ZERO],[I],[ZERO],[I],[ZERO]],
+    ];   
+    for (ii,c) in coefs.iter().enumerate(){
+      let c0 = &expected[ii];
+      assert_eq!(c.shape(),c0.shape());
+      assert!( (c-c0).norm() < tol );
+    }
+  
+
+    let stevens = vec![
+      array![[ZERO],[ZERO],[ONE],[ZERO],[ZERO]],
+    ];   
+    let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
+      let expected = vec![
+      array![[ZERO],[ZERO],[SQRT2*SQRT3*ONE],[ZERO],[ZERO]],
+    ];   
+    for (ii,c) in coefs.iter().enumerate(){
+      let c0 = &expected[ii];
+      assert_eq!(c.shape(),c0.shape());
+      assert!( (c-c0).norm() < tol );
+    }
+  
+
+    let stevens = vec![
+      array![[ZERO],[ZERO],[ZERO],[ONE],[ZERO]],
+    ];   
+    let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
+      let expected = vec![
+      array![[ZERO],[ONE],[ZERO],[-ONE],[ZERO]],
+    ];   
+    for (ii,c) in coefs.iter().enumerate(){
+      let c0 = &expected[ii];
+      assert_eq!(c.shape(),c0.shape());
+      assert!( (c-c0).norm() < tol );
+    }
+  
+    let stevens = vec![
+      array![[ZERO],[ZERO],[ZERO],[ZERO],[ONE]],
+    ];   
+    let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
+      let expected = vec![
+      array![[ONE],[ZERO],[ZERO],[ZERO],[ONE]],
+    ];   
+    for (ii,c) in coefs.iter().enumerate(){
+      let c0 = &expected[ii];
+      assert_eq!(c.shape(),c0.shape());
+      assert!( (c-c0).norm() < tol );
+    }
+  
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_stevens_operators(){
+  
+    let tol = 1e-12;
+    let mult = 3;
+    let k = 2;
+
+    let stevens = vec![
+      spin_stevens(mult, k, -2).unwrap(),
+      spin_stevens(mult, k, -1).unwrap(),
+      spin_stevens(mult, k,  0).unwrap(),
+      spin_stevens(mult, k,  1).unwrap(),
+      spin_stevens(mult, k,  2).unwrap(),
+    ];   
+
+    let expected = vec![
+      I*(spin_ist(mult,k, -2) - spin_ist(mult,k,  2)),
+      I*(spin_ist(mult,k, -1) + spin_ist(mult,k,  1)),
+      SQRT2*SQRT3*ONE*spin_ist(mult,k,  0),
+      ONE*(spin_ist(mult,k, -1) - spin_ist(mult,k,  1)),
+      spin_ist(mult,k, -2) + spin_ist(mult,k,  2),
+    ];
+
+    for (ii,o1) in stevens.iter().enumerate(){
+      let o0 = &expected[ii];
+      assert_eq!(o1.shape(),o0.shape());
+      assert!( (o1-o0).norm() < tol );
+    
+    }  
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_spherical_operator_decomposition(){
+  
+    let tol = 1e-12;
+
+    for mult in 2..=3{
+      let e = CxMat::eye(mult);
+      let coefs = spherical_operator_decomposition(&e, tol);
+      let expected = vec![array![[ONE]] ];
+      for (ii,c) in coefs.iter().enumerate(){
+        let c0 = &expected[ii];
+        assert_eq!(c.shape(),c0.shape());
+        assert!( (c-c0).norm() < tol );
+      }
+
+      let sz = spin_z(mult);
+      let coefs = spherical_operator_decomposition(&sz, tol);
+      let expected = vec![array![[ZERO],[ONE],[ZERO]] ];
+      for (ii,c) in coefs.iter().enumerate(){
+        let c0 = &expected[ii];
+        assert_eq!(c.shape(),c0.shape());
+        assert!( (c-c0).norm() < tol );
+      }
+
+      let t = spin_z(mult) + CxMat::eye(mult);
+      let coefs = spherical_operator_decomposition(&t, tol);
+      let expected = vec![
+        array![[ONE]], 
+        array![[ZERO],[ONE],[ZERO]], 
+      ];
+      for (ii,c) in coefs.iter().enumerate(){
+        let c0 = &expected[ii];
+        assert_eq!(c.shape(),c0.shape());
+        assert!( (c-c0).norm() < tol );
+      }
+
+      let mut t = CxMat::zeros([mult,mult]);
+      let mut x = ONE;
+      for l in 0..=(2 as i32){
+        for m in -l..=l{
+          let tlm = spin_ist(mult,l,m);
+          t = t + x*tlm;
+
+          x += ONE;
+        }
+      }
+      let coefs = spherical_operator_decomposition(&t, tol);
+      let expected = vec![
+        array![[ONE]], 
+        array![[2.0*ONE],[3.0*ONE],[4.0*ONE]], 
+        array![[5.0*ONE],[6.0*ONE],[7.0*ONE],[8.0*ONE],[9.0*ONE]], 
+      ];
+      for (ii,c) in coefs.iter().enumerate(){
+        let c0 = &expected[ii];
+        assert_eq!(c.shape(),c0.shape());
+        assert!( (c-c0).norm() < tol );
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_expmap_spin(){
+    let d = expmap_spin(3, &SpinOp::Sz,0.0).unwrap();
+    let u = CxMat::eye(3)*ONE;
+    let err = (d - u).norm();
+    assert!(err < 1e-12);
+
+    let d = expmap_spin(3, &SpinOp::Sx,2.0*PI).unwrap();
+    let u = CxMat::eye(3)*ONE;
+    let err = (d - u).norm();
+    assert!(err < 1e-12);
+
+    let d = expmap_spin(2, &SpinOp::Sy,2.0*PI).unwrap();
+    let u = -CxMat::eye(2)*ONE;
+    let err = (d - u).norm();
+    assert!(err < 1e-12);
+
+    let d = expmap_spin(2, &SpinOp::Sx,4.0*PI).unwrap();
+    let u = CxMat::eye(2)*ONE;
+    let err = (d - u).norm();
+    assert!(err < 1e-12);
+
+    let d = expmap_spin(2, &SpinOp::Sy,-PI).unwrap();
+    let u = array![
+      [ZERO,ONE],
+      [-ONE,ZERO],
+    ];
+    let err = (d - u).norm();
+    assert!(err < 1e-12);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_wigner_dir(){
+    let d = wigner_dir(2, &UnitSpherePoint::new(0.0,0.0)).unwrap();
+    let a = CxMat::eye(2);
+    assert!( (d-a).norm() < 1e-12 );
+
+    let d = wigner_dir(2, &UnitSpherePoint::new(2.0*PI,0.0)).unwrap();
+    let a = -CxMat::eye(2);
+    assert!( (d-a).norm() < 1e-12 );
+
+    let d = wigner_dir(2, &UnitSpherePoint::new(4.0*PI,0.0)).unwrap();
+    let a = CxMat::eye(2);
+    assert!( (d-a).norm() < 1e-12 );
+
+    let d = wigner_dir(2, &UnitSpherePoint::new(0.0,2.0*PI)).unwrap();
+    let a = -CxMat::eye(2);
+    assert!( (d-a).norm() < 1e-12 );
+
+    let d = wigner_dir(2, &UnitSpherePoint::new(0.0,4.0*PI)).unwrap();
+    let a = CxMat::eye(2);
+    assert!( (d-a).norm() < 1e-12 );
+
+    let d = wigner_dir(2, &UnitSpherePoint::new(2.0*PI,2.0*PI)).unwrap();
+    let a = CxMat::eye(2);
+    assert!( (d-a).norm() < 1e-12 );
+  }
   //----------------------------------------------------------------------------
   #[test]
   #[allow(non_snake_case)]
@@ -718,7 +1232,7 @@ mod tests {
   fn test_KronSpinOperators() {
     let spin_multiplicity = 2;
     let max_size = 2;
-    let sops = KronSpinOperators::new(1,spin_multiplicity, max_size).unwrap();
+    let sops = KronSpinOperators::new(1,spin_multiplicity, max_size,3).unwrap();
 
     for n_ops in 1..=max_size{
       for op_pos in 0..n_ops {
@@ -842,19 +1356,56 @@ mod tests {
   #[test]
   fn test_spin_ist(){
     let tol = 1e-12;
-    let t = spin_ist(2,1,1);
-    assert!(approx_eq(&t, &(-SQRT2_INV*ONE*spin_plus(2)),tol));
-    let t = spin_ist(2,1,0);
-    assert!(approx_eq(&t, &spin_z(2),tol));
-    let t = spin_ist(2,1,-1);
-    assert!(approx_eq(&t, &(SQRT2_INV*ONE*spin_minus(2)),tol));
 
-    let t = spin_ist(2,2,-2);
-    assert!(approx_eq(&t, &(0.5*ONE*spin_minus(2)*spin_minus(2)),tol));
-    let t = spin_ist(3,2,-2);
-    assert!(approx_eq(&t, &(0.5*ONE*spin_minus(3)*spin_minus(3)),tol));
-    let t = spin_ist(4,2,-2);
-    assert!(approx_eq(&t, &(0.5*ONE*spin_minus(4)*spin_minus(4)),tol));
+    for mult in 2..=3{
+      let sz = spin_z(mult);
+      let sp = spin_plus(mult);
+      let sm = spin_minus(mult);
+
+      let t = spin_ist(mult,1,0);
+      let err = t - sz.clone();
+      assert!( hilbert_schmidt(&err,&err).norm() < tol );
+
+      let t = spin_ist(mult,1,-1);
+      let err = t - SQRT2_INV*ONE*sm.clone();
+      assert!( hilbert_schmidt(&err,&err).norm() < tol );
+
+      let t = spin_ist(mult,1,1);
+      let err = t - -SQRT2_INV*ONE*sp.clone();
+      assert!( hilbert_schmidt(&err,&err).norm() < tol );
+
+      let t = spin_ist(mult,2,0);
+      let a = SQRT2*SQRT3_INV*ONE*(
+          sz.dot(&sz) - 0.25*ONE*(sm.dot(&sp) + sp.dot(&sm)));
+      let err = t - a;
+      let eta = hilbert_schmidt(&err,&err).norm();
+      assert!( eta < tol );
+
+      let t = spin_ist(mult,2,1);
+      let a = -0.5*ONE*(sz.dot(&sp) + sp.dot(&sz));
+      let err = t - a;
+      let eta = hilbert_schmidt(&err,&err).norm();
+      assert!( eta < tol );
+
+      let t = spin_ist(mult,2,-1);
+      let a = 0.5*ONE*(sz.dot(&sm) + sm.dot(&sz));
+      let err = t - a;
+      let eta = hilbert_schmidt(&err,&err).norm();
+      assert!( eta < tol );
+
+      let t = spin_ist(mult,2,2);
+      let a = 0.5*ONE*sp.dot(&sp);
+      let err = t - a;
+      let eta = hilbert_schmidt(&err,&err).norm();
+      assert!( eta < tol );
+
+      let t = spin_ist(mult,2,-2);
+      let a = 0.5*ONE*sm.dot(&sm);
+      let err = t - a;
+      let eta = hilbert_schmidt(&err,&err).norm();
+      assert!( eta < tol );
+
+    }
     
   }
 //------------------------------------------------------------------------------

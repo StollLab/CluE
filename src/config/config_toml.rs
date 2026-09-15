@@ -88,6 +88,7 @@ pub struct ConfigTOML{
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
   pub max_spins: Option<usize>,
+  pub max_spherical_tensor_rank: Option<usize>,
   pub mean_fields: Option<bool>,
   pub min_cell_size: Option<usize>,
   pub number_runs: Option<usize>, 

@@ -6,8 +6,10 @@ use std::hash::{Hash,Hasher};
 use std::collections::hash_map::DefaultHasher;
 
 use num_complex::Complex64;
-use ndarray::Array2;
+use ndarray::{array,Array1,Array2,s};
+use ndarray_linalg::{Eig, Norm,Trace};
 
+type Mat = Array2::<f64>;
 type CxMat = Array2::<Complex64>;
 
 /// This function compares two lists for equality.
@@ -88,6 +90,10 @@ pub fn cxmat_pow_n(m: &CxMat, n: usize) -> CxMat
   a
 }
 //------------------------------------------------------------------------------
+pub fn anticommutator(mat0: &CxMat, mat1: &CxMat) -> CxMat{
+  mat0.dot(mat1) + mat1.dot(mat0)
+}
+//------------------------------------------------------------------------------
 pub fn commutator(mat0: &CxMat, mat1: &CxMat) -> CxMat{
   mat0.dot(mat1) - mat1.dot(mat0)
 }
@@ -150,6 +156,68 @@ pub fn vec_vec_transpose<T: Clone>(mat: &Vec::<Vec::<T>>)
   Ok(mat_t)
 }
 */
+//------------------------------------------------------------------------------
+
+pub fn rotation_matrix_to_axis_angle(r: &Mat) 
+    -> Result<(Array1::<f64>,f64),CluEError>
+{
+
+  if r.dim() != (3,3){
+    return Err(CluEError::NotA3DRotationMatrix(r.to_string()));
+  }
+
+  let (eigvals, eigvecs) = r.eig().unwrap();
+  let imag = eigvals.map(|z| z.im);
+
+  let Some((idx,en0)) = imag.abs().into_iter().enumerate().fold(None,
+      |min, x| match min {
+    None => Some(x),
+    Some(y) => Some(if x.1 < y.1 { x } else { y }),
+  })else{
+    return Err(CluEError::NotA3DRotationMatrix(r.to_string()));
+  };
+
+  if en0 > 1e-12{
+    return Err(CluEError::NotA3DRotationMatrix(r.to_string()));
+  }
+
+  let axis = eigvecs.slice(s![..,idx]).into_iter().map(|z| z.re)
+      .collect::<Array1::<f64>>();
+
+  let Ok(tr_r) = r.trace() else {
+    return Err(CluEError::NotA3DRotationMatrix(r.to_string()));
+  };
+  let cos_phi = 0.5*(tr_r - 1.0);
+  let phi: f64 = cos_phi.acos();
+
+  let r_reconstruction = axis_angle(&axis,phi);
+
+  let err = (r-r_reconstruction).norm();
+  if err > 1e-12{
+    return Ok( (-axis,phi) );
+  }
+  Ok( (axis,phi) )
+}
+
+fn axis_angle(n: &Array1::<f64>, phi: f64) -> Mat{
+
+  let x = n[0];
+  let y = n[1];
+  let z = n[2];
+  let c = phi.cos();
+  let s = phi.sin();
+  let e = 1.0;
+  let x2 = x*x;
+  let y2 = y*y;
+  let z2 = z*z;
+
+  array![
+    [ c   + x2*(e - c),  x*y*(e-c) - z*s,  x*z*(e-c) + y*s],
+    [  y*x*(e-c) + z*s,     c + y2*(e-c),  y*z*(e-c) - x*s],
+    [  z*x*(e-c) - y*s,  z*y*(e-c) + x*s,     c + z2*(e-c)],
+  ]
+}
+
 //------------------------------------------------------------------------------
 
 

@@ -22,7 +22,6 @@ use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::quantum::spin_states::SpinStates;
 
 use ndarray::linalg::kron;
-use ndarray_linalg::Trace;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// This function calculates the cluster correlation expansion (CCE)
@@ -99,28 +98,28 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
       &spin_indices,spin_ops,tensors)?;
 
 
-  /*
-  let mut density_matrix = match states.density_matrix_for(tensor_indices)?{
-    None => {
-      get_electron_cluster_thermal_density_matrix(
-          &h_eigvals, &h_eigvecs, config)?},
-    Some(rho) => {
-      let detected_spin_density_matrix = spin_ops.get_density_matrix(
-          spin_multiplicity, 1)?;  
-      kron(&detected_spin_density_matrix,&rho)
-    },     
-  };
-  */
   let Some(detected_population) = &config.detected_population else{
     return Err(CluEError::NoDetectedSpinDensityMatrix);
   };
   let Some(cluster_populations) = &config.cluster_populations else{
     return Err(CluEError::NoClusterDensityMatrixMethod);
   };
-  let mut density_matrix = match (detected_population,cluster_populations){
+  if *cluster_populations == ClusterPopulations::Thermal && 
+      config.ensemble_cce != Some(true){
+    return Err(CluEError::Generic(
+        "thermal cluster populations only is implemented for ensemble CCE"
+        .to_string()));
+  }
+  let density_matrix = match (detected_population,cluster_populations){
     (DetectedPopulation::Thermal,ClusterPopulations::Thermal) => {
         get_electron_cluster_thermal_density_matrix(
             &h_eigvals, &h_eigvecs, config)?
+    },
+    (DetectedPopulation::Thermal, _) => {
+          let rho = states.density_matrix_for(tensor_indices)?;
+          let detected_spin_density_matrix = 
+              states.incoherent_density_matrix_for(&[0])?;  
+          kron(&detected_spin_density_matrix,&rho)
     },
     (_, _) => {
           let rho = states.density_matrix_for(tensor_indices)?;
@@ -130,31 +129,6 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
     },
   };
 
-  /*
-  let mut density_matrix = match states.density_matrix_for(tensor_indices)?{
-
-    None => get_electron_cluster_thermal_density_matrix(
-          &h_eigvals, &h_eigvecs, config)?,
-
-    Some(rho) => {
-      let detected_spin_density_matrix = match config.detected_population{
-        Some(DetectedPopulation::Thermal) 
-            => states.incoherent_density_matrix_for(&[0])?,
-        Some(_) => spin_ops.get_density_matrix(spin_multiplicity, 1)?,
-        None => return Err(CluEError::DetectedSpinDensityMatrix),
-      };  
-      kron(&detected_spin_density_matrix,&rho)
-    },     
-
-  };
-  */
-
-  /* Normalization is not needed here and will fail for ρ = Sz.
-  let Ok(z) = density_matrix.trace() else{ 
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
-  };
-  density_matrix /= z;
-  */
 
   let Some(pulse_sequence) = &config.pulse_sequence else{
     return Err(CluEError::NoPulseSequence);
@@ -306,6 +280,7 @@ mod tests{
                                                                 ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
       mean_field_couplings: None,
+      spin_spherical_tensors: SpinSphericalTensors::new(),
       }
   }  
 }

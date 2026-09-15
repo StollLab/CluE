@@ -1,10 +1,9 @@
 use crate::clue_errors::CluEError;
 
-use num_complex::Complex;
+use num_complex::Complex64;
 use ndarray::Array2;
-type CxMat = Array2::<Complex<f64>>;
+type CxMat = Array2::<Complex64>;
 type Mat = Array2::<f64>;
-type Z64 = Complex<f64>;
 
 //------------------------------------------------------------------------------
 pub fn eq_variant<T>(a: &T, b: &T) -> bool
@@ -50,15 +49,36 @@ pub fn cxmat_from_toml_array(array: Vec::<toml::Value>)
   Ok(out)
 } 
 //------------------------------------------------------------------------------
+// [x,y,z], [[x],[y],[z]] -> [[x],[y],[z]]
+// [[x,y,z]]] -> [[x,y,z]]] 
+// [[ [a,b], [c,d] ],[ [e,f], [g,h]]] -> [ [a+bi, c,di], [e+fi, g+hi] ]
 pub fn vec_vec_complex_f64_from_toml_array(array: Vec::<toml::Value>) 
-    -> Result<Vec::<Vec::<Z64>>,CluEError>
+    -> Result<Vec::<Vec::<Complex64>>,CluEError>
 {
 
-  let mut out = Vec::<Vec::<Z64>>::with_capacity(array.len());
+  let mut out = Vec::<Vec::<Complex64>>::with_capacity(array.len());
 
   for row in array{
     match row{
       toml::Value::Array(arr) => out.push(vec_complex_f64_from_toml_array(arr)?),
+      toml::Value::Float(x) => out.push(vec![Complex64{re: x, im:0.0}]),
+      _ => return Err(CluEError::ExpectedTOMLArray(row.type_str().to_string())),
+    }
+  }
+  Ok(out)
+}    
+//------------------------------------------------------------------------------
+pub fn vec_cxmat_from_toml_array(array: Vec::<toml::Value>) 
+    -> Result<Vec::<CxMat>,CluEError>
+{
+
+  let mut out = Vec::<CxMat>::with_capacity(array.len());
+
+  for row in array{
+    match row{
+      toml::Value::Array(arr) => {
+        out.push(cxmat_from_toml_array(arr)?)
+      },
       _ => return Err(CluEError::ExpectedTOMLArray(row.type_str().to_string())),
     }
   }
@@ -66,12 +86,12 @@ pub fn vec_vec_complex_f64_from_toml_array(array: Vec::<toml::Value>)
 }    
 //------------------------------------------------------------------------------
 pub fn vec_complex_f64_from_toml_array(array: Vec::<toml::Value>) 
-    -> Result<Vec::<Z64>,CluEError>
+    -> Result<Vec::<Complex64>,CluEError>
 {
-  let mut out = Vec::<Z64>::with_capacity(array.len());
+  let mut out = Vec::<Complex64>::with_capacity(array.len());
   for el in array{
     match el{
-      toml::Value::Float(x) => out.push(Z64{re: x, im:0.0}),
+      toml::Value::Float(x) => out.push(Complex64{re: x, im:0.0}),
       toml::Value::Array(arr) => out.push(complex_f64_from_toml_array(arr)?),
       _ => return Err(CluEError::ExpectedTOMLFloat(el.type_str().to_string())),
     }
@@ -80,7 +100,7 @@ pub fn vec_complex_f64_from_toml_array(array: Vec::<toml::Value>)
 }    
 //------------------------------------------------------------------------------
 pub fn complex_f64_from_toml_array(array: Vec::<toml::Value>) 
-    -> Result<Z64,CluEError>
+    -> Result<Complex64,CluEError>
 {
   if array.len() > 2{
     return Err(CluEError::TOMLArrayIsNotAComplexNumber);
@@ -93,7 +113,7 @@ pub fn complex_f64_from_toml_array(array: Vec::<toml::Value>)
       _ => return Err(CluEError::ExpectedTOMLArray(el.type_str().to_string())),
     }
   }
-  Ok(Z64{re: z[0], im: z[1]})
+  Ok(Complex64{re: z[0], im: z[1]})
 }
 //------------------------------------------------------------------------------
 pub fn mat_from_toml_array(array: Vec::<toml::Value>) 
@@ -149,6 +169,24 @@ pub fn vec_f64_from_toml_array(array: Vec::<toml::Value>)
   Ok(out)
 }    
 //------------------------------------------------------------------------------
+pub fn vec_usize_from_toml_array(array: Vec::<toml::Value>) 
+    -> Result<Vec::<usize>,CluEError>
+{
+  let mut out = Vec::<usize>::with_capacity(array.len());
+  for el in array.iter(){
+    match el{
+      toml::Value::Integer(x) => {
+        if *x < 0 {
+          return Err(CluEError::ExpectedTOMLUInt(el.type_str().to_string()));
+        }
+        out.push(*x as usize)
+      },
+      _ => return Err(CluEError::ExpectedTOMLUInt(el.type_str().to_string())),
+    }
+  }
+  Ok(out)
+}    
+//------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests{
@@ -167,8 +205,8 @@ mod tests{
 
     let result = cxmat_from_toml_array(matrix.clone()).unwrap();
     assert_eq!(result, arr2(&[
-          [Z64{re: 1.0, im: 0.0} ,Z64{re: 2.0,im: 0.0}],
-          [Z64{re: 3.0, im: 0.0}, Z64{re: 4.0, im: 0.0}]
+          [Complex64{re: 1.0, im: 0.0} ,Complex64{re: 2.0,im: 0.0}],
+          [Complex64{re: 3.0, im: 0.0}, Complex64{re: 4.0, im: 0.0}]
     ]));
     
     let toml::Value::Array(matrix) = &table["cx_matrix"]else{
@@ -176,8 +214,8 @@ mod tests{
     };
     let result = cxmat_from_toml_array(matrix.clone()).unwrap();
     assert_eq!(result, arr2(&[
-        [Z64{re: 1.0, im: 0.0} ,Z64{re: 2.0, im: 1.0} ],
-        [Z64{re: 3.0, im: 2.0} ,Z64{re: 4.0, im: 3.0}]
+        [Complex64{re: 1.0, im: 0.0} ,Complex64{re: 2.0, im: 1.0} ],
+        [Complex64{re: 3.0, im: 2.0} ,Complex64{re: 4.0, im: 3.0}]
     ]));
   }  
   //----------------------------------------------------------------------------
@@ -189,8 +227,8 @@ mod tests{
     };
     let result = vec_vec_complex_f64_from_toml_array(matrix.clone()).unwrap();
     assert_eq!(result, vec![
-        vec![Z64{re: 1.0, im: 0.0} ,Z64{re: 2.0, im: 1.0} ],
-        vec![Z64{re: 3.0, im: 2.0} ,Z64{re: 4.0, im: 3.0}]
+        vec![Complex64{re: 1.0, im: 0.0} ,Complex64{re: 2.0, im: 1.0} ],
+        vec![Complex64{re: 3.0, im: 2.0} ,Complex64{re: 4.0, im: 3.0}]
     ]);
   }  
   //----------------------------------------------------------------------------
@@ -201,7 +239,7 @@ mod tests{
       panic!("failure");
     };
     let result = vec_complex_f64_from_toml_array(z.clone()).unwrap();
-    assert_eq!(result, vec![ Z64{re: 1.0, im: 0.0}, Z64{ re: 2.0, im: 1.0}] );
+    assert_eq!(result, vec![ Complex64{re: 1.0, im: 0.0}, Complex64{ re: 2.0, im: 1.0}] );
 
   }
   //----------------------------------------------------------------------------
@@ -212,7 +250,7 @@ mod tests{
       panic!("failure");
     };
     let result = complex_f64_from_toml_array(z.clone()).unwrap(); 
-    assert_eq!(result, Z64{ re: 1.0, im: 2.0} );
+    assert_eq!(result, Complex64{ re: 1.0, im: 2.0} );
   }
   //----------------------------------------------------------------------------
   #[test]

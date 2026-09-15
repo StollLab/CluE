@@ -384,7 +384,7 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
   };
 
   let s = (central_spin_mult as f64 - 1.0)/2.0;
-  let spin_ms: Vec::<f64> = (0..central_spin_mult).map(|n| (n as f64 - s))
+  let spin_ms: Vec::<f64> = (0..central_spin_mult).map(|n| n as f64 - s)
     .collect();
 
   let Some(transition) = config.detected_spin_transition else {
@@ -635,6 +635,7 @@ mod tests {
                                                                ge]),
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
       mean_field_couplings: None,
+      spin_spherical_tensors: SpinSphericalTensors::new(),
       } 
   }
   //----------------------------------------------------------------------------

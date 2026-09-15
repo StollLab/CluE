@@ -6,8 +6,6 @@ use crate::isotopes::Isotope;
 use crate::structure::{Structure, particle::Particle};
 use crate::space_3d::Vector3D;
 
-use num_complex::Complex64;
-
 use std::io::BufRead;
 use std::io::BufWriter;
 use std::collections::HashMap;

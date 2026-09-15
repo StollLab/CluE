@@ -46,11 +46,14 @@ pub const KEY_ORI_CIRCLE: &str = "circle";
 pub const KEY_ORI_VECTORGRID: &str = "vector_grid";
 
 
-pub const KEY_EIG_VALUES: &str = "values";                                           
-pub const KEY_EIG_AXES: &str = "axes";                                               
-pub const KEY_EIG_X_AXIS: &str = "x";                                                
-pub const KEY_EIG_Y_AXIS: &str = "y";                                                
+pub const KEY_EIG_VALUES: &str = "values";
+pub const KEY_EIG_AXES: &str = "axes";
+pub const KEY_EIG_X_AXIS: &str = "x";
+pub const KEY_EIG_Y_AXIS: &str = "y";
 pub const KEY_EIG_Z_AXIS: &str = "z";
+
+pub const KEY_IST_COEF: &str = "spherical_coefficients";
+pub const KEY_STEVENS_COEF: &str = "stevens_coefficients";
 
 // Group Keys
 pub const KEY_NAME: &str = "name";
@@ -138,7 +141,7 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;364] = [
+pub const ALLOWED_KEYS: [&str;367] = [
   "abundance",
   "active",
   "auxiliary_signals",
@@ -201,6 +204,7 @@ pub const ALLOWED_KEYS: [&str;364] = [
   "max_cell_size",
   "max_cluster_size",
   "max_spins",
+  "max_spherical_tensor_rank",
   "mean_fields",
   "methyl_partitions",
   "min_cell_size",
@@ -255,6 +259,8 @@ pub const ALLOWED_KEYS: [&str;364] = [
   "selection",
   "serials",
   "singles",
+  "spherical_coefficients",
+  "stevens_coefficients",
   "structure_pdb",
   "tau_increments",
   "tau2_increments",

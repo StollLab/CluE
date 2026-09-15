@@ -8,6 +8,8 @@ pub const ZERO: Complex<f64> = Complex::<f64>{re: 0.0, im: 0.0};
 pub const PI: f64 = std::f64::consts::PI;
 pub const SQRT2: f64 = std::f64::consts::SQRT_2;
 pub const SQRT2_INV: f64 = std::f64::consts::FRAC_1_SQRT_2;
+pub const SQRT3: f64 = 1.7320508075688772;
+pub const SQRT3_INV: f64 = 0.5773502691896257;
 
 // Units
 pub const METER: f64 = 1.0;
@@ -98,6 +100,9 @@ pub const BARN: f64 = 100.0 * FEMTOMETER * FEMTOMETER;
 // 2025 https://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 pub const BOHR_RADIUS: f64 = 5.29177210544e-11 * METER;
 
+// 2026 https://physics.nist.gov/cgi-bin/cuu/Value?c
+pub const C: f64 = 299792458.0 * METER/SECOND ; 
+
 // Conversions
 pub const JOULES_TO_HERTZ: f64 = 1.0/PLANCK * HERTZ/JOULE;
 pub const RAD_PER_S_TO_HZ: f64 = 0.5/PI;
@@ -123,6 +128,7 @@ pub fn energy_unit_to_hertz(unit: &str) -> Result<f64,CluEError>
     "cal/mol" => Ok(CALORIE_PER_MOLE*JOULES_TO_HERTZ),
     "cal" => Ok(CALORIE*JOULES_TO_HERTZ),
     "kcal" => Ok(KILOCALORIE*JOULES_TO_HERTZ),
+    "cm^-1" => Ok(C/CENTIMETER ),
     _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
   }
 }

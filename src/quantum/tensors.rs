@@ -3,11 +3,17 @@ use crate::clue_errors::CluEError;
 use crate::config::Config;
 use crate::config::particle_config::{EigSpecifier,TensorSpecifier};
 use crate::isotopes::Isotope;
-use crate::math::expectation_value;
+use crate::math::{expectation_value,rotation_matrix_to_axis_angle};
 use crate::physical_constants::{BOLTZMANN, HBAR, JOULES_TO_HERTZ,
   MU0,MUB,MUN,PI};
-use crate::quantum::cluster_operators::{spin_x,spin_y,spin_z};
-use crate::quantum::cluster_operators::ClusterSpinOperators;
+use crate::quantum::cluster_operators::{
+  expmap_spin_axis_angle,
+  spin_x,
+  spin_y,
+  spin_z,
+  stevens_to_spherical_coefficients,
+  wigner_dir,
+};
 use crate::space_3d::{SymmetricTensor3D,UnitSpherePoint,Vector3D};
 use crate::structure::{DetectedSpin,Structure};
 use crate::structure::particle::Particle;
@@ -15,7 +21,7 @@ use crate::structure::exchange_groups::ExchangeGroup;
 use crate::symmetric_list_2d::SymList2D;
 
 use num_complex::Complex64;
-use ndarray::Array2;
+use ndarray::{array,Array2};
 type CxMat = Array2::<Complex64>;
 
 use rand_chacha::ChaCha20Rng;
@@ -23,10 +29,13 @@ use rand_chacha::ChaCha20Rng;
 //use std::fs;
 //use std::fs::File;
 //use std::io::{Error, Write};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Write;
 
+
+pub type SpinSphericalTensors = HashMap::<(usize,usize),Vec::<CxMat>>;
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `HamiltonianTensors` contians the information needed to write the spin
 /// Hamiltonian a the sum of spin operators times coupling tensors.
@@ -43,6 +52,7 @@ pub struct HamiltonianTensors{
   pub spin_multiplicities: Vec::<usize>,
   pub spin1_tensors: Spin1Tensors, // O(S)
   pub spin2_tensors: Spin2Tensors, // O(S^2)
+  pub spin_spherical_tensors: SpinSphericalTensors, // O(S^n), n >= 3
   pub detected_gamma_matrix: SymmetricTensor3D,
   pub magnetic_field: Vector3D,
   pub mean_field_couplings: Option<Vec::<Vec::<Vector3D>>>,
@@ -80,6 +90,7 @@ impl HamiltonianTensors{
     let mut spin_multiplicities = Vec::<usize>::with_capacity(n_spins);
     let mut spin1_tensors = Spin1Tensors::new(n_spins);
     let mut spin2_tensors = Spin2Tensors::new(n_spins);
+    let mut spin_spherical_tensors = SpinSphericalTensors::new();
 
     let Some(magnetic_field) = &config.magnetic_field else{
       return Err(CluEError::NoMagneticField);
@@ -99,8 +110,20 @@ impl HamiltonianTensors{
     }
     spin1_tensors.add(0, det_zeeman);
 
-    if let Some(zf_ten) = &detected_particle.zerofield_tensor{
-      spin2_tensors.add(0,0, zf_ten.clone());
+    if let Some(zerofield_specifier) = &config.detected_spin_zerofield_coupling{
+    
+      let (tensor,spherical_tensor_coefficients) 
+          = construct_symmetric_tensor_from_tensor_specifier(rng,
+          zerofield_specifier, None, detected_particle.spin_multiplicity(),
+          &structure,config)?;
+      if tensor.any_nan(){
+        return Err(CluEError::NANTensorZerofield(
+          0,detected_particle.isotope.to_string()));
+      }
+      spin2_tensors.add(0,0, tensor.clone());
+      spin_spherical_tensors.insert((0usize ,0usize),
+          spherical_tensor_coefficients);
+
     }
 
     let eye = SymmetricTensor3D::eye();
@@ -151,11 +174,14 @@ impl HamiltonianTensors{
       }
 
       // zero-field coupling
-      let zerofield_opt = construct_bath_zerofield_tensor(rng,particle0, 
-          particle_idx0, structure, config)?;
+      if let Some( (zerofield_ten,zerofield_sphr_coef)) 
+          = construct_bath_zerofield_tensor(rng,particle0, 
+          particle_idx0, structure, config)?{
 
-      if let Some(zerofield_ten) = zerofield_opt{
         spin2_tensors.add(idx0,idx0, zerofield_ten);
+        spin_spherical_tensors.insert((idx0 ,idx0),
+            zerofield_sphr_coef);
+          
       }
 
 
@@ -244,6 +270,7 @@ impl HamiltonianTensors{
       spin_multiplicities,
       spin1_tensors,
       spin2_tensors,
+      spin_spherical_tensors,
       detected_gamma_matrix: gamma_matrix.clone(),
       magnetic_field: magnetic_field.clone(),
       mean_field_couplings: None,
@@ -627,8 +654,11 @@ fn construct_bath_zeeman_tensor(rng: &mut ChaCha20Rng,
   let gamma_matrix = if let Some(tensor_specifier) = structure
     .extract_g_matrix_specifier(particle_index,config)
   {
-    let g_matrix = construct_symmetric_tensor_from_tensor_specifier(rng,
-        tensor_specifier, Some(particle_index),structure, config)?;
+    let spin_multiplicity = structure.bath_particles[particle_index]
+      .isotope.spin_multiplicity();
+    let (g_matrix,_) = construct_symmetric_tensor_from_tensor_specifier(rng,
+        tensor_specifier, Some(particle_index),spin_multiplicity,
+        structure, config)?;
      
     let mu: f64 = if particle.isotope == Isotope::Electron{
       -MUB
@@ -663,8 +693,11 @@ fn construct_bath_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
   match structure.extract_electric_quadrupole_specifier(particle_index,config)
   {
     Some(tensor_specifier) => {
-      let tensor = construct_symmetric_tensor_from_tensor_specifier(rng,
-        tensor_specifier, Some(particle_index),structure, config)?;
+      let spin_multiplicity = structure.bath_particles[particle_index]
+        .isotope.spin_multiplicity();
+      let (tensor,_) = construct_symmetric_tensor_from_tensor_specifier(rng,
+        tensor_specifier, Some(particle_index),spin_multiplicity,
+        structure, config)?;
 
       if tensor.any_nan(){
         return Err(CluEError::NANTensorQuadrupole(
@@ -679,7 +712,7 @@ fn construct_bath_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
 fn construct_bath_zerofield_tensor(rng: &mut ChaCha20Rng,
     particle0: &Particle,particle_index: usize,
     structure: &Structure, config: &Config)
-  -> Result<Option<SymmetricTensor3D>, CluEError>
+  -> Result<Option<(SymmetricTensor3D,Vec::<CxMat>)>, CluEError>
 {
   if particle0.isotope.spin_multiplicity() < 3 {
     return Ok(None);
@@ -688,14 +721,18 @@ fn construct_bath_zerofield_tensor(rng: &mut ChaCha20Rng,
   match structure.extract_zerofield_specifier(particle_index,config)
   {
     Some(tensor_specifier) => {
-      let tensor = construct_symmetric_tensor_from_tensor_specifier(rng,
-        tensor_specifier, Some(particle_index),structure, config)?;
+      let spin_multiplicity = structure.bath_particles[particle_index]
+        .isotope.spin_multiplicity();
+      let (tensor,spherical_tensor_coefficients) 
+          = construct_symmetric_tensor_from_tensor_specifier(rng,
+        tensor_specifier, Some(particle_index),spin_multiplicity,
+        structure, config)?;
 
       if tensor.any_nan(){
-        return Err(CluEError::NANTensorQuadrupole(
+        return Err(CluEError::NANTensorZerofield(
           particle_index,particle0.isotope.to_string()));
       }
-      Ok(Some(tensor))
+      Ok(Some((tensor,spherical_tensor_coefficients)))
     },
     None => Ok(None),
   }
@@ -712,8 +749,11 @@ fn construct_hyperfine_tensor(rng: &mut ChaCha20Rng,
   if let Some(tensor_specifier) = structure
     .extract_hyperfine_specifier(particle_index,config)
   {
-    tensor = construct_symmetric_tensor_from_tensor_specifier(rng,
-        tensor_specifier, Some(particle_index),structure, config)?;
+    let spin_multiplicity = structure.bath_particles[particle_index]
+      .isotope.spin_multiplicity();
+    (tensor,_) = construct_symmetric_tensor_from_tensor_specifier(rng,
+        tensor_specifier, Some(particle_index),spin_multiplicity,structure, 
+        config)?;
 
   }else{
 
@@ -794,22 +834,25 @@ pub fn construct_symmetric_tensor_from_values_and_vectors(
 /// required, which is supplied by the other arguments.
 pub fn construct_symmetric_tensor_from_tensor_specifier(rng: &mut ChaCha20Rng,
     tensor_specifier: &TensorSpecifier, particle_index_opt: Option<usize>,
+    spin_multiplicity: usize,
     structure: &Structure, config: &Config) 
-  -> Result<SymmetricTensor3D, CluEError>
+  -> Result<(SymmetricTensor3D,Vec::<CxMat>), CluEError>
 {
   match tensor_specifier{
     TensorSpecifier::Unspecified => Err(CluEError::NoTensorSpecifier),
     TensorSpecifier::Eig(eig_specifier) 
         => construct_symmetric_tensor_from_eig_specifier(rng,eig_specifier,
-            particle_index_opt, structure, config),
-    TensorSpecifier::SymmetricTensor3D(tensor) => Ok(tensor.clone()),
+            particle_index_opt, spin_multiplicity,structure, config),
+    TensorSpecifier::SymmetricTensor3D(tensor) 
+        => Ok((tensor.clone(),Vec::<CxMat>::new())),
   }
 }
 //------------------------------------------------------------------------------
 fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
     tensor_specifier: &EigSpecifier, particle_index_opt: Option<usize>,
+    spin_multiplicity: usize,
     structure: &Structure, config: &Config) 
-  -> Result<SymmetricTensor3D, CluEError>
+  -> Result<(SymmetricTensor3D,Vec::<CxMat>), CluEError>
 {
   let Some(values) = tensor_specifier.values else{
     return Err(CluEError::NoTensorValues);
@@ -881,10 +924,36 @@ fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
     _ => return Err(CluEError::InvalidAxes),
   }
 
+  let rot_mat = array![
+    [all_3_axes[0].x(),all_3_axes[1].x(),all_3_axes[2].x()],
+    [all_3_axes[0].y(),all_3_axes[1].y(),all_3_axes[2].y()],
+    [all_3_axes[0].z(),all_3_axes[1].z(),all_3_axes[2].z()],
+  ];
+    
+
+  let mut spherical_tensor_coefficients = tensor_specifier
+      .spherical_tensor_coefficients.clone(); 
+
+  if !spherical_tensor_coefficients.is_empty(){
+
+    if tensor_specifier.stevens{
+      spherical_tensor_coefficients = stevens_to_spherical_coefficients(
+          spin_multiplicity,&spherical_tensor_coefficients,1e-12)?;    
+    }
+  
+    let (axis,angle) = rotation_matrix_to_axis_angle(&rot_mat)?;
+    let axis = Vector3D::from([ axis[0],axis[1],axis[2] ]); 
+  
+    for coefs in spherical_tensor_coefficients.iter_mut(){
+      let d_mat = expmap_spin_axis_angle(coefs.dim().0, &axis, angle)?;
+      *coefs = d_mat.dot(coefs);
+    }
+  }
+
   let ten = construct_symmetric_tensor_from_values_and_vectors(
       &values, &all_3_axes);
 
-  Ok(ten)
+  Ok((ten,spherical_tensor_coefficients))
 
 }
 //------------------------------------------------------------------------------
@@ -898,8 +967,6 @@ fn evaluate_mean_field(ten: &SymmetricTensor3D, state: &CxMat)
   -> Result<Vector3D,CluEError>
 {
 
-  let cluster_size = 1;
-  let sop_idx0 = 0;
   let spin_multiplicity = state.len();
 
   let sx = spin_x(spin_multiplicity);
@@ -918,6 +985,99 @@ fn evaluate_mean_field(ten: &SymmetricTensor3D, state: &CxMat)
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/*
+#[derive(Debug,Clone,PartialEq)] 
+pub struct SpinSphericalTensors{
+  tensors: HashMap::<(usize,usize),Vec::<CxMat>>,
+}
+
+impl SpinSphericalTensors{
+  //----------------------------------------------------------------------------
+  pub fn len(&self) -> usize{
+    self.tensors.len()
+  }
+  //----------------------------------------------------------------------------
+  pub fn new() -> Self{
+    Self { tensors: HashMap::<(usize,usize),Vec::<CxMat>>::new() }
+  }
+  //----------------------------------------------------------------------------
+  pub fn get(&self, m: usize,n: usize) -> Option< &Vec::<CxMat> >
+  {
+    self.tensors.get(&(m,n))
+    /*
+    if m != n { return None;} 
+
+    if n >= self.len() { return None; }
+
+    Some(&self.tensors[n])
+    */
+  }
+  //----------------------------------------------------------------------------
+  pub fn rotate_passive(&mut self, 
+      dir: &UnitSpherePoint,
+      ) -> Result<(),CluEError>
+  {
+  
+    let mut d_matrices = HashMap::<usize,CxMat>::new();
+
+    for ( (_m,_n),particle_tensors) in self.tensors.iter_mut(){
+    
+      for coeficients in particle_tensors.iter_mut(){
+        let l = coeficients.dim().0;
+
+        if !d_matrices.contains_key(&l){
+          let d_mat = wigner_dir(l, dir)?;
+          d_matrices.insert(l, d_mat);
+        }
+
+        let Some(d_mat) = d_matrices.get(&l) else {
+          return Err(CluEError::MissingDMatrix(l));
+        };
+
+        *coeficients = d_mat.dot(coeficients);
+
+      }
+    }
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+}
+*/
+//----------------------------------------------------------------------------
+pub fn spherical_tensors_rotate_passive(
+    spherical_tensors: &mut SpinSphericalTensors, 
+    dir: &UnitSpherePoint,
+    ) -> Result<(),CluEError>
+{
+
+  let mut d_matrices = HashMap::<usize,CxMat>::new();
+
+  for ( (_m,_n),particle_tensors) in spherical_tensors.iter_mut(){
+  
+    for coeficients in particle_tensors.iter_mut(){
+      let l = coeficients.dim().0;
+
+      if !d_matrices.contains_key(&l){
+        let d_mat = wigner_dir(l, dir)?;
+        d_matrices.insert(l, d_mat);
+      }
+
+      let Some(d_mat) = d_matrices.get(&l) else {
+        return Err(CluEError::MissingDMatrix(l));
+      };
+
+      *coeficients = d_mat.dot(coeficients);
+
+    }
+  }
+
+  Ok(())
+}
+//----------------------------------------------------------------------------
+
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[cfg(test)]
@@ -935,6 +1095,8 @@ mod tests{
   //use crate::config::lexer::get_tokens_from_line;
   use crate::io::FromTOMLString;
 
+  use ndarray::array;
+  use ndarray_linalg::Norm;
   use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
   //----------------------------------------------------------------------------
@@ -1159,10 +1321,12 @@ mod tests{
       x_axis: Some(vector_specifier_no),
       y_axis: Some(vector_specifier_cc),
       z_axis: None,
+      spherical_tensor_coefficients: Vec::<CxMat>::new(),
+      stevens: false,
     });
 
-    let tensor = construct_symmetric_tensor_from_tensor_specifier(&mut rng,
-        &tensor_specifier, Some(particle_index),&structure, &config).unwrap();
+    let (tensor,_) = construct_symmetric_tensor_from_tensor_specifier(&mut rng,
+        &tensor_specifier, Some(particle_index),1,&structure, &config).unwrap();
 
     let x = r_no.normalize();
     let y = (&r_cc - &x.scale(x.dot(&r_cc))).normalize();
@@ -1369,6 +1533,71 @@ mod tests{
         idx += 1;
       }
     }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  #[allow(non_snake_case)]
+  fn test_SpinSphericalTensors_rotate_passive() {
+    let mut s3tens = SpinSphericalTensors::from([
+         ( (0,0),vec![
+           array![
+             [ONE],
+             [ZERO],
+             [ZERO],
+             [ZERO],
+           ]
+         ]),
+    ]);
+
+    let dir = UnitSpherePoint::new(0.5*PI,0.5);
+    let s3tens0 = s3tens.clone();
+    spherical_tensors_rotate_passive(&mut s3tens,
+        &UnitSpherePoint::new(0.0,0.0)).unwrap();
+    assert!(approx_spin3uptensors(&s3tens,&s3tens0,1e-12));
+
+
+    let a = SpinSphericalTensors::from([
+         ( (0,0),vec![
+           array![
+             [-ONE],
+             [ZERO],
+             [ZERO],
+             [ZERO],
+           ]
+         ],
+        ),
+    ]);
+    spherical_tensors_rotate_passive(&mut s3tens,
+        &UnitSpherePoint::new(2.0*PI,0.0)).unwrap();
+    assert!(approx_spin3uptensors(&s3tens,&a,1e-12));
+
+    spherical_tensors_rotate_passive(&mut s3tens,
+        &UnitSpherePoint::new(0.0,2.0*PI)).unwrap();
+    assert!(approx_spin3uptensors(&s3tens,&s3tens0,1e-12));
+  }
+  //----------------------------------------------------------------------------
+  fn approx_spin3uptensors(
+      tens0: &SpinSphericalTensors,
+      tens1: &SpinSphericalTensors,
+      thr: f64,
+      ) -> bool
+  {
+    
+    if tens0.len() != tens1.len(){ return false; }
+
+    for (mn,part0) in tens0.iter(){
+      let part1 = &tens1.get(mn).unwrap();
+    
+      if part0.len() != part1.len(){ return false; }
+
+      for (jj,coef0) in part0.iter().enumerate(){
+        let coef1 = &part1[jj];
+        let err = (coef1 - coef0).norm();
+
+        if err >= thr { return  false; }
+      }
+    }
+    true
   }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
