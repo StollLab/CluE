@@ -29,6 +29,12 @@ pub fn find_clusters( adjacency_list: &AdjacencyList, max_size: usize)
   let mut one_clusters = Vec::<Cluster>::with_capacity(n_one_clusters); 
   let mut one_cluster_indices = HashMap::new(); 
 
+  if max_size == 0 {
+    return Ok(ClusterSet{
+        clusters,
+        cluster_indices,
+    }); 
+  }
   // Identify all 1-clusters, as those with adjacency_matrix[[ii,ii]] == true.
   for vertex in vertices.into_iter(){
 

@@ -23,7 +23,6 @@ use crate::cluster::methyl_clusters::partition_cluster_set_by_exchange_groups;
 use crate::cluster::{
   cluster_set::ClusterSet, 
   read_clusters::read_cluster_file,
-  unit_of_clustering::UnitOfClustering,
 };
 use crate::cluster::partition::{
   expand_block_clusters,
@@ -86,7 +85,7 @@ pub fn calculate_signals(rng: &mut ChaCha20Rng, config: &Config,
   }
 
   for sig in signals.iter_mut(){
-    sig.mut_scale(ONE/(number_runs as f64));
+    sig.scale_mut(ONE/(number_runs as f64));
   }
   Ok(signals)
 }
@@ -148,34 +147,25 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
     let spin_multiplicity_set =
         math::unique(tensors.spin_multiplicities.clone());
 
-    match config.unit_of_clustering{
-    Some(UnitOfClustering::Spin) 
-        => ClusterSpinOperators::new(det_spin_matrix_dim,
-            &spin_multiplicity_set,max_cluster_size,config)?,
-
-    Some(UnitOfClustering::Set) => {
-      let max_spins_per_cluster_unit = match config.partitioning{
-        Some(PartitioningMethod::Particles) => 1,
-        Some(PartitioningMethod::ExchangeGroupsAndParticles) => 3,
-        Some(PartitioningMethod::KMeans(kmeans_size)) => kmeans_size,
-        Some(PartitioningMethod::RestrictedKMeans(kmeans_size)) => kmeans_size,
-        None => return Err(CluEError::NoPartitioningMethod),
-      };
+   let max_spins_per_cluster_unit = match config.partitioning{
+     Some(PartitioningMethod::Particles) => 1,
+     Some(PartitioningMethod::ExchangeGroupsAndParticles) => 3,
+     Some(PartitioningMethod::KMeans(kmeans_size)) => kmeans_size,
+     Some(PartitioningMethod::RestrictedKMeans(kmeans_size)) => kmeans_size,
+     None => return Err(CluEError::NoPartitioningMethod),
+   };
 
 
-      let potential_max_order = n_electron 
-          + max_cluster_size*max_spins_per_cluster_unit;
-      
-      let max_spins = match config.max_spins{
-        Some(s) => s + n_electron,
-        None => potential_max_order,
-      };
+   let potential_max_order = n_electron 
+       + max_cluster_size*max_spins_per_cluster_unit;
+   
+   let max_spins = match config.max_spins{
+     Some(s) => s + n_electron,
+     None => potential_max_order,
+   };
 
-      ClusterSpinOperators::new(det_spin_matrix_dim,&spin_multiplicity_set,
-        max_spins,config)?
-    },
-    None => return Err(CluEError::NoUnitOfClustering),
-    }
+   ClusterSpinOperators::new(det_spin_matrix_dim,&spin_multiplicity_set,
+     max_spins,config)?
   };
 
 
@@ -219,7 +209,7 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
     let weight = Complex::<f64>{ re: integration_grid.weight(iori), im: 0.0};
 
     for size_idx in 0..=max_cluster_size{
-      ori_sigs[size_idx].mut_scale(weight);
+      ori_sigs[size_idx].scale_mut(weight);
       order_n_signals[size_idx] 
         = &order_n_signals[size_idx] + &ori_sigs[size_idx];
     }
@@ -253,7 +243,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     = get_orientation_save_dir(&rot_dir,config,path_opt)?;
 
   // Rotate the coupling tensor to the specified orientation.
-  tensors.rotate_pasive(&rot_dir);
+  tensors.rotate_pasive(&rot_dir)?;
 
   let states = SpinStates::generate(rng, &tensors,config)?;
   
@@ -288,11 +278,6 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     },
     Some(ClusterSource::Structure) => {
 
-      // Pull out unit_of_clustering early, before more expensive calculations.
-      let Some(unit_of_clustering) = &config.unit_of_clustering else{
-        return Err(CluEError::NoUnitOfClustering);
-      };
-
       // Determine spin adjacencies.
       let spin_adjacency_list 
           = build_adjacency_list(&tensors, structure, config)?;
@@ -317,8 +302,8 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
           = find_clusters(&block_adjacency_list, max_cluster_size)?;
 
       // Expand block clusters out to spin clusters.
-      let mut clu_set = expand_block_clusters(block_cluster_set,&partition_table,
-          unit_of_clustering)?;
+      let mut clu_set = expand_block_clusters(
+            block_cluster_set,&partition_table)?;
 
       if let Some(max_spins) = config.max_spins{
         clu_set.prune_large_clusters(max_spins)?;

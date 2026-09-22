@@ -6,13 +6,13 @@ use crate::cluster::Cluster;
 use crate::structure::Structure;
 
 use std::ops::{Add,Sub,Mul,Div};
-use num_complex::Complex;
+use num_complex::Complex64;
 use std::error::Error;
 
 /// `Signal` is used to hold a calculated signal. 
 #[derive(PartialEq,Debug,Clone,Default)]
 pub struct Signal{
-  pub data: Vec::<Complex<f64>>,
+  pub data: Vec::<Complex64>,
 }
 impl Signal{
   //----------------------------------------------------------------------------
@@ -32,10 +32,10 @@ impl Signal{
   /// This function creates a new instance of `Signal` with `n` data points,
   /// all equal to one.
   pub fn ones(n: usize) -> Self {
-    let mut data = Vec::<Complex<f64>>::with_capacity(n);
+    let mut data = Vec::<Complex64>::with_capacity(n);
 
     for _ii in 0..n{
-      data.push(Complex::<f64>{re:1.0,im: 0.0});
+      data.push(Complex64{re:1.0,im: 0.0});
     }
     Signal{data}
   }
@@ -43,10 +43,10 @@ impl Signal{
   /// This function creates a new instance of `Signal` with `n` data points,
   /// all equal to zero.
   pub fn zeros(n: usize) -> Self {
-    let mut data = Vec::<Complex<f64>>::with_capacity(n);
+    let mut data = Vec::<Complex64>::with_capacity(n);
 
     for _ii in 0..n{
-      data.push(Complex::<f64>{re:0.0,im: 0.0});
+      data.push(Complex64{re:0.0,im: 0.0});
     }
     Signal{data}
   }
@@ -56,7 +56,7 @@ impl Signal{
   }
   //----------------------------------------------------------------------------
   /// This function scales every element by `scale_factor`.
-  pub fn mut_scale(&mut self, scale_factor: Complex<f64>){
+  pub fn scale_mut(&mut self, scale_factor: Complex64){
 
     for z in self.data.iter_mut(){
       *z *= scale_factor;
@@ -65,11 +65,11 @@ impl Signal{
   }
   //----------------------------------------------------------------------------
   /// This function returns a scaled `Signal`.
-  pub fn scale(&self, scale_factor: Complex<f64>) -> Self{
+  pub fn scale(&self, scale_factor: Complex64) -> Self{
 
     let mut out_signal = self.clone();
     
-    out_signal.mut_scale(scale_factor);
+    out_signal.scale_mut(scale_factor);
 
     out_signal
 
@@ -219,7 +219,7 @@ pub fn load_csv_to_vec_signals(filename: &str)
       };
 
       for (isig,entry) in record.iter().enumerate(){
-        let Ok(v) = entry.parse::<Complex<f64>>() else{
+        let Ok(v) = entry.parse::<Complex64>() else{
           return Err(CluEError::CannotOpenFile(filename.to_string()));
         };
         signals[isig].data[idata] = v;
@@ -316,7 +316,7 @@ impl Add for &Signal{
   // The implementation of "+" is elementi-wise.
   fn add(self,rhs: &Signal) -> Signal{
     assert_eq!(self.len(), rhs.len());
-    let mut data = Vec::<Complex<f64>>::with_capacity(self.len());
+    let mut data = Vec::<Complex64>::with_capacity(self.len());
     for (ii,v) in self.data.iter().enumerate(){
       data.push(v + rhs.data[ii]);
     }
@@ -330,7 +330,7 @@ impl Sub for &Signal{
   // The implementation of "-" is elementi-wise.
   fn sub(self,rhs: &Signal) -> Signal{
     assert_eq!(self.len(), rhs.len());
-    let mut data = Vec::<Complex<f64>>::with_capacity(self.len());
+    let mut data = Vec::<Complex64>::with_capacity(self.len());
     for (ii,v) in self.data.iter().enumerate(){
       data.push(v - rhs.data[ii]);
     }
@@ -345,7 +345,7 @@ impl Mul for &Signal{
  
   fn mul(self, rhs: &Signal) -> Signal{
     assert_eq!(self.len(), rhs.len());
-    let mut data = Vec::<Complex<f64>>::with_capacity(self.len());
+    let mut data = Vec::<Complex64>::with_capacity(self.len());
     for (ii,v) in self.data.iter().enumerate(){
       data.push(v*rhs.data[ii]);
     }
@@ -358,7 +358,7 @@ impl Div for &Signal{
   // The implementation of "/" is elementi-wise.
   fn div(self,rhs: &Signal) -> Signal{
     assert_eq!(self.len(), rhs.len());
-    let mut data = Vec::<Complex<f64>>::with_capacity(self.len());
+    let mut data = Vec::<Complex64>::with_capacity(self.len());
     for (ii,v) in self.data.iter().enumerate(){
       data.push(v/rhs.data[ii]);
     }
@@ -372,7 +372,7 @@ mod tests{
 
   #[test]
   fn test_signal_ops(){
-    const ONE: Complex<f64> = Complex::<f64>{re:1.0,im:0.0};
+    const ONE: Complex64 = Complex64{re:1.0,im:0.0};
     let signal0 = Signal{ data: vec![ONE,ONE],};
     let signal1 = Signal{ data: vec![ONE,0.5*ONE],};
 
@@ -397,22 +397,22 @@ mod tests{
 
     let ref_signals = vec![
       Signal{data: vec![
-        Complex::<f64>{re: 1.0, im: 0.0},  
-        Complex::<f64>{re: 0.99, im: 0.01},
-        Complex::<f64>{re: 0.8, im: 0.2},
-        Complex::<f64>{re: 0.7, im: 0.3}
+        Complex64{re: 1.0, im: 0.0},  
+        Complex64{re: 0.99, im: 0.01},
+        Complex64{re: 0.8, im: 0.2},
+        Complex64{re: 0.7, im: 0.3}
       ]},
       Signal{data: vec![
-        Complex::<f64>{re: 1.0, im: 0.0},  
-        Complex::<f64>{re: 0.9, im: 0.1},
-        Complex::<f64>{re: 0.5, im: 0.5},
-        Complex::<f64>{re: 0.6, im: 0.4}
+        Complex64{re: 1.0, im: 0.0},  
+        Complex64{re: 0.9, im: 0.1},
+        Complex64{re: 0.5, im: 0.5},
+        Complex64{re: 0.6, im: 0.4}
       ]},
       Signal{data: vec![
-        Complex::<f64>{re: 1.0, im: 0.0},  
-        Complex::<f64>{re: 0.999, im: 0.001},
-        Complex::<f64>{re: 0.98, im: 0.02},
-        Complex::<f64>{re: 0.97, im: 0.03}
+        Complex64{re: 1.0, im: 0.0},  
+        Complex64{re: 0.999, im: 0.001},
+        Complex64{re: 0.98, im: 0.02},
+        Complex64{re: 0.97, im: 0.03}
       ]},
     ];
 

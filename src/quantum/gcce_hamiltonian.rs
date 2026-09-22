@@ -4,7 +4,7 @@ use crate::config::{
 };
 use crate::config::pulse_sequence::PulseSequence;
 use crate::math::cxmat_pow_n;
-use crate::physical_constants::{BOLTZMANN,HBAR,I,ZERO};
+use crate::physical_constants::{BOLTZMANN,HALF,HBAR,I,ZERO};
 use crate::quantum::spin_hamiltonian::{
   get_propagators_from_eig,
   get_propagators_complex_time_from_eig,
@@ -421,7 +421,10 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
 
       for coefs in tens.iter(){
         let il = coefs.dim().0;
-        let l = il as i32;
+        let l = (il as i32 -1)/2;
+        if l > tensors.max_spherical_tensor_rank{
+          continue;
+        }
         for (im,&c) in coefs.iter().enumerate(){
           let m = im as i32 -l;
           let tlm = spin_ops.get(&SpinOp::T(l,m),spin_mult0,cluster_size,
@@ -454,6 +457,10 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
 
     }
   }
+
+  // Remove any floating point errors that break Hermiticity.
+  let ham_dag = ham.t().map(|u_ij| u_ij.conj() );
+  ham = HALF*(ham + ham_dag);
 
   let Ok((eigvals, eigvecs)) = ham.eigh(UPLO::Lower) else{
     return Err(
@@ -730,6 +737,7 @@ mod tests{
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
       mean_field_couplings: None,
       spin_spherical_tensors: SpinSphericalTensors::new(),
+      max_spherical_tensor_rank: 0,
       }
   }
   //----------------------------------------------------------------------------

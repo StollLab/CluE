@@ -13,7 +13,6 @@ pub mod read_clusters;
 pub mod get_subclusters;
 pub mod methyl_clusters;
 pub mod partition;
-pub mod unit_of_clustering;
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `Cluster` contains both the vertices of the cluster and the simulated 
 /// signal. 

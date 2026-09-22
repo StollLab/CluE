@@ -2,7 +2,6 @@ use crate::clue_errors::*;
 
 use crate::cluster::{
   partition::PartitioningMethod,
-  unit_of_clustering::UnitOfClustering,
 };
 use crate::config::config_toml::*;
 use crate::config::particle_config::set_particle_configs_from_toml_table;
@@ -120,7 +119,6 @@ pub struct Config{
   pub partition_table: Option<PartitionTableConfig>,
   pub rng_seed: Option<u64>,
   pub run_in_parallel: Option<bool>,
-  pub unit_of_clustering: Option<UnitOfClustering>,
 
   // Experimental Details
   pub magnetic_field: Option<Vector3D>,
@@ -270,9 +268,6 @@ impl Config{
       self.tau2_increments = vec![0.0];
     }
 
-    if self.unit_of_clustering.is_none(){
-      self.unit_of_clustering = Some(UnitOfClustering::Set);
-    }
     if self.write_bath.is_none(){
       self.write_bath = Some(true);
     }

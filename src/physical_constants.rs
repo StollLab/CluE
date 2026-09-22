@@ -6,6 +6,7 @@ pub const I: Complex<f64> = Complex::<f64>{re: 0.0, im: 1.0};
 pub const ONE: Complex<f64> = Complex::<f64>{re: 1.0, im: 0.0};
 pub const ZERO: Complex<f64> = Complex::<f64>{re: 0.0, im: 0.0};
 pub const PI: f64 = std::f64::consts::PI;
+pub const HALF: Complex<f64> = Complex::<f64>{re: 0.5, im: 0.0};
 pub const SQRT2: f64 = std::f64::consts::SQRT_2;
 pub const SQRT2_INV: f64 = std::f64::consts::FRAC_1_SQRT_2;
 pub const SQRT3: f64 = 1.7320508075688772;

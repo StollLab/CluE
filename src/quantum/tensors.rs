@@ -52,7 +52,8 @@ pub struct HamiltonianTensors{
   pub spin_multiplicities: Vec::<usize>,
   pub spin1_tensors: Spin1Tensors, // O(S)
   pub spin2_tensors: Spin2Tensors, // O(S^2)
-  pub spin_spherical_tensors: SpinSphericalTensors, // O(S^n), n >= 3
+  pub spin_spherical_tensors: SpinSphericalTensors, 
+  pub max_spherical_tensor_rank: i32,
   pub detected_gamma_matrix: SymmetricTensor3D,
   pub magnetic_field: Vector3D,
   pub mean_field_couplings: Option<Vec::<Vec::<Vector3D>>>,
@@ -71,12 +72,16 @@ impl HamiltonianTensors{
   }
   //----------------------------------------------------------------------------
   /// This function performs a passive rotation with respect to the system.
-  pub fn rotate_pasive(&mut self, dir: &UnitSpherePoint){
+  pub fn rotate_pasive(&mut self, dir: &UnitSpherePoint)
+    -> Result<(),CluEError>
+  {
     let gamma_matrix = self.detected_gamma_matrix.rotate_pasive(dir);
     self.spin1_tensors.set(0,
         construct_zeeman_tensor(&gamma_matrix,&self.magnetic_field));
 
     self.spin2_tensors.rotate_pasive(dir);
+    spherical_tensors_rotate_passive(&mut self.spin_spherical_tensors,dir)?;
+    Ok(())
   }
   //----------------------------------------------------------------------------
   /// This function builds the spin Hamiltonian from the input structure
@@ -86,6 +91,11 @@ impl HamiltonianTensors{
     -> Result<Self,CluEError>
   {
 
+    let Some(max_spherical_tensor_rank) = config.max_spherical_tensor_rank
+        else{
+      return Err(CluEError::NoMaxISTRank);      
+    };
+    let max_spherical_tensor_rank = max_spherical_tensor_rank as i32;
     let n_spins = structure.number_active() + 1;
     let mut spin_multiplicities = Vec::<usize>::with_capacity(n_spins);
     let mut spin1_tensors = Spin1Tensors::new(n_spins);
@@ -271,6 +281,7 @@ impl HamiltonianTensors{
       spin1_tensors,
       spin2_tensors,
       spin_spherical_tensors,
+      max_spherical_tensor_rank,
       detected_gamma_matrix: gamma_matrix.clone(),
       magnetic_field: magnetic_field.clone(),
       mean_field_couplings: None,

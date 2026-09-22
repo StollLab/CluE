@@ -8,7 +8,6 @@ use crate::clue_errors::CluEError;
 use crate::cluster::{Cluster,
   get_subclusters::build_subclusters,
   cluster_set::ClusterSet,
-  unit_of_clustering::UnitOfClustering,
 };
 use crate::signal::{Signal, load_batch_signals, write_batch_signals};
 use crate::structure::Structure;
@@ -200,6 +199,9 @@ fn calculate_auxiliary_signals(
           }
 
 
+          let start_idx = 0;
+          let end_idx = std::cmp::min(subcluster_num_spins-1,cluster_size-1);
+          /*
           let (start_idx,end_idx) = match config.unit_of_clustering{
             Some(UnitOfClustering::Spin) 
                 => (subcluster_num_spins-1,subcluster_num_spins-1),
@@ -207,6 +209,7 @@ fn calculate_auxiliary_signals(
               => (0,std::cmp::min(subcluster_num_spins-1,cluster_size-1)),
             None => return Err(CluEError::NoUnitOfClustering),
           };
+          */
           
 
           for subcluster_size_idx in start_idx..=end_idx{
@@ -314,7 +317,6 @@ mod tests{
     let freq = appa::appa_hahn_frequency(delta_hf,b);
     config.tau_increments = vec![0.05/freq];
     config.pulse_sequence = Some(PulseSequence::CarrPurcell(1));
-    config.unit_of_clustering = Some(UnitOfClustering::Spin);
 
     config.set_defaults().unwrap();
     config.set_tau_axis().unwrap();
@@ -401,6 +403,7 @@ mod tests{
       magnetic_field: Vector3D::from([0.0,0.0,1.2]),
       mean_field_couplings: None,
       spin_spherical_tensors: SpinSphericalTensors::new(),
+      max_spherical_tensor_rank: 0,
       }
   }  
 }

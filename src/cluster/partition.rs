@@ -2,7 +2,6 @@ use crate::cluster::{
   adjacency::AdjacencyList,
   Cluster,
   cluster_set::ClusterSet,
-  unit_of_clustering::UnitOfClustering,
 };
 use crate::clue_errors::CluEError;
 use crate::config::Config;
@@ -545,22 +544,8 @@ pub fn partition_system(
 /// as defined by a `PartitionTable` that maps individual elements to blocks,
 /// this function takes a `ClusterSet` of block clusters and a `&PartitionTable`,
 /// and retturns `ClusterSet` of element clusters.
-pub fn expand_block_clusters(
-    block_cluster_set: ClusterSet, 
-    partition_table: &PartitionTable,
-    unit_of_clustering: &UnitOfClustering,
-    ) -> Result<ClusterSet,CluEError>
-{
-  match unit_of_clustering{
-    UnitOfClustering::Spin => 
-      expand_block_clusters_and_sort(block_cluster_set,partition_table),
-
-    UnitOfClustering::Set => 
-      expand_block_clusters_no_sort(block_cluster_set,partition_table),
-  }
-}
 //------------------------------------------------------------------------------
-fn expand_block_clusters_no_sort(
+pub fn expand_block_clusters(
     mut block_cluster_set: ClusterSet, 
     partition_table: &PartitionTable)
   -> Result<ClusterSet,CluEError>
@@ -598,75 +583,6 @@ fn expand_block_clusters_no_sort(
   block_cluster_set.cluster_indices = cluster_indices;
 
   Ok(block_cluster_set) 
-}
-//------------------------------------------------------------------------------
-fn expand_block_clusters_and_sort(
-    block_cluster_set: ClusterSet, 
-    partition_table: &PartitionTable)
-  -> Result<ClusterSet,CluEError>
-{
-  
-  // Determine how many clusters there are of each size.
-  let n_clusters = count_expanded_clusters(&block_cluster_set,
-      partition_table);
-
-  // Assumption: the block_clusters have as many cluster sizes as specified
-  // by the user in the config file.  
-  // This max_cluster_size is the "n" in n-CCE, and since this function
-  // is only called when n refers to the number of spin, clusters with more
-  // spins than n can be discarded.  
-  let max_cluster_size = block_cluster_set.clusters.len();
-
-  // Initialize clusters.
-  let mut clusters = Vec::<Vec::<Cluster>>::with_capacity(max_cluster_size+1);
-
-  // Initialize cluster indices.
-  let mut cluster_indices 
-      = Vec::<HashMap::<Vec::<usize>,usize>>::with_capacity(max_cluster_size+1);
-
-  // Loop through cluster sizes, an reserve the required space.
-  for &n in n_clusters.iter(){
-    clusters.push(Vec::<Cluster>::with_capacity(n));
-    cluster_indices.push(HashMap::<Vec::<usize>,usize>::with_capacity(n));
-  }
-
-  // Loop through cluster sizes.
-  for block_clusters in block_cluster_set.clusters.iter(){
-
-    // Loop through all cluster of the given size.
-    for block_cluster in block_clusters.iter(){
-
-      // Expand the cluster from block indices to spin indices.
-      let cluster = expand_block_cluster(block_cluster.clone(),
-          partition_table); 
-
-      // The number of spins in the cluster matches the cluster size.
-      let size = cluster.len();
-
-      // Skip clusters that are too large.
-      if size > max_cluster_size{
-        continue;
-      }
-
-      // Since we are going to push out cluster to `clusters[size - 1]`,
-      // the `index` that that will retrieve the cluster from
-      // `clusters[size - 1]` is the length of `clusters[size - 1]` 
-      // before appending our cluster.
-      let index = clusters[size].len();
-
-      // Record where to find this cluster for future reference.
-      cluster_indices[size].insert(cluster.vertices.clone(),index);
-
-      // Push the cluster.
-      clusters[size].push(cluster);
-    }
-  }
-
- 
- Ok(ClusterSet{
-   clusters,
-   cluster_indices,
- }) 
 }
 //------------------------------------------------------------------------------
 // This function counts the number of clusters of each size that a `ClusterSet`
@@ -785,101 +701,6 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   #[test]
-  fn test_partition_system_tempo(){
-
-    let (spin_adjacency_list,tensors,structure,config) = get_tempo();
-
-
-    // Define reference clusters in PDB indices.
-    let mut ref_clusters: Vec::<Vec::<Vec::<usize>>> = vec![
-      vec![vec![]],
-      vec![
-        vec![11],
-        vec![12],
-        vec![14],
-        vec![15],
-        vec![17],
-        vec![18],
-        vec![28],
-      ],  
-      vec![
-        vec![11,14],
-        vec![11,15],
-        vec![11,18],
-        vec![12,14],
-        vec![12,17],
-        vec![14,15],
-        vec![14,17],
-        vec![14,18],
-        vec![15,18],
-      ],
-      vec![
-        vec![11,14,15],
-        vec![11,14,18],
-        vec![11,12,14],
-        vec![11,14,17],
-        vec![11,15,18],
-        vec![12,14,17],
-        vec![12,14,15],
-        vec![12,14,18],
-        vec![14,15,17],
-        vec![14,15,18],
-        vec![14,17,18],
-        vec![21,22,23],
-        vec![25,26,27],
-      ],
-    ];
-
-    assert_eq!(ref_clusters.len() , 4);
-    let ref_number_clusters: Vec::<usize> 
-        = ref_clusters.iter().map(|v| v.len()).collect();
-
-    assert_eq!(ref_number_clusters.len() , 4);
-    assert_eq!(ref_number_clusters[0] , 1);
-
-    // Convert PDB indices to internal indices.
-    for (size,n) in ref_number_clusters.iter().enumerate(){
-      for clu_idx in 0..*n{
-          for p_idx in 0..size{
-            let bath_idx = ref_clusters[size][clu_idx][p_idx] - 1;
-            ref_clusters[size][clu_idx][p_idx] 
-              = structure.bath_indices_to_active_indices[bath_idx].unwrap();
-          }
-      }
-    }
-
-
-    let mut rng = ChaCha20Rng::seed_from_u64(0);
-    let partition_table = get_partition_table(&mut rng, &spin_adjacency_list,
-        &tensors, &structure, &config).unwrap();
-
-    let block_adjacency_list 
-        = partition_system(&spin_adjacency_list,&partition_table).unwrap();
-
-    let max_cluster_size = 3;
-
-    let block_cluster_set 
-      = find_clusters(&block_adjacency_list, max_cluster_size).unwrap();
-
-    let cluster_set = expand_block_clusters(block_cluster_set,&partition_table,
-        &UnitOfClustering::Spin).unwrap();
-
-    for (size,n) in ref_number_clusters.iter().enumerate(){
-      assert_eq!(*n,cluster_set.clusters[size].len());
-    }
-
-    for (size,n) in ref_number_clusters.iter().enumerate(){
-      for clu_idx in 0..*n{
-        assert!(
-            ref_clusters[size].contains(
-                cluster_set.clusters[size][clu_idx].vertices())
-        );
-      }
-    }
-
-  }
-  //----------------------------------------------------------------------------
-  #[test]
   fn test_partition_system(){
     let (neighbor_list, partition_table) = get_neighbor_list_for_tests();
 
@@ -906,29 +727,8 @@ mod tests{
     let block_list = partition_system(&neighbor_list, &partition_table).unwrap();
     let block_cluster_set = find_clusters(&block_list,2).unwrap();
 
-    let cluster_set = expand_block_clusters(block_cluster_set.clone(), 
-        &partition_table, &UnitOfClustering::Spin).unwrap();
-
-    assert_eq!(cluster_set.clusters[0].len(), 1);
-    assert_eq!(cluster_set.clusters[1].len(), 2);
-    assert_eq!(cluster_set.clusters[2].len(), 1);
-
-    assert_eq!(cluster_set.clusters[0][0].vertices, vec![]);
-
-    assert_eq!(cluster_set.clusters[1][0].vertices, vec![6]);
-    assert_eq!(cluster_set.clusters[1][1].vertices, vec![9]);
-
-    assert_eq!(cluster_set.clusters[2][0].vertices, vec![7,8]);
-
-    assert_eq!(cluster_set.cluster_indices[0][&vec![]],0);
-
-    assert_eq!(cluster_set.cluster_indices[1][&vec![6]],0);
-    assert_eq!(cluster_set.cluster_indices[1][&vec![9]],1);
-
-    assert_eq!(cluster_set.cluster_indices[2][&vec![7,8]],0);
-
-    let cluster_set = expand_block_clusters(block_cluster_set, &partition_table,
-        &UnitOfClustering::Set).unwrap();
+    let cluster_set = expand_block_clusters(
+        block_cluster_set, &partition_table).unwrap();
 
     assert_eq!(cluster_set.clusters[1][0].vertices, vec![0,1,2]);
     assert_eq!(cluster_set.clusters[1][1].vertices, vec![3,4,5]);

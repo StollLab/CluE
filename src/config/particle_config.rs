@@ -3,12 +3,15 @@ use crate::CluEError;
 use crate::config::config_toml::*;
 use crate::misc::{
   are_all_same_type,
-  vec_cxmat_from_toml_array,
+  scaled_vec_cxmat_from_toml_array,
 };
 use crate::structure::particle_filter::{ParticleFilter,VectorSpecifier,
   SecondaryParticleFilter};
 use crate::isotopes::Isotope;
-use crate::physical_constants::C3_TUNNEL_SPLITTING_TO_EXCHANGE_COUPLING;
+use crate::physical_constants::{
+  C3_TUNNEL_SPLITTING_TO_EXCHANGE_COUPLING,
+  ONE,
+};
 use crate::space_3d::SymmetricTensor3D;
 
 use std::collections::HashMap;
@@ -544,11 +547,12 @@ impl EigSpecifier{
 
     let spherical_tensor_coefficients = 
           match (table.get(KEY_IST_COEF), table.get(KEY_STEVENS_COEF)){
-      (Some(toml::Value::Array(a)),None) => vec_cxmat_from_toml_array(
-          a.clone())?,
+      (Some(toml::Value::Array(a)),None) => 
+        scaled_vec_cxmat_from_toml_array(
+          a.clone(), units*ONE)?,
       (None,Some(toml::Value::Array(a))) => {
         stevens = true;
-        vec_cxmat_from_toml_array(a.clone())?
+        scaled_vec_cxmat_from_toml_array(a.clone(),units*ONE)?
       },
       (Some(v),None) => return Err(CluEError::InvalidIST(v.to_string())),   
       (None,Some(v)) => return Err(CluEError::InvalidStevens(v.to_string())),   

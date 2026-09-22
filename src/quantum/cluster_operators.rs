@@ -20,10 +20,10 @@ use std::collections::HashMap;
 use ndarray::Array2;
 use ndarray::linalg::kron;
 use ndarray_linalg::{Eigh, UPLO};
-use num_complex::Complex;
+use num_complex::Complex64;
 
 
-type CxMat = Array2::<Complex<f64>>;
+type CxMat = Array2::<Complex64>;
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// 'ClusterSpinOperators' contains the spin operators used for clusters of 
 /// spins of the form 'S⊗I⊗...I'.
@@ -249,7 +249,7 @@ impl<'a> KronSpinOperators {
         spin_multiplicity, SpinOp::Sp, max_size)?;
     
     let mut spherical_operators = HashMap::<(i32,i32), KronSpinOpList>::new();
-    for il in 3..=ist_max_l{
+    for il in 0..=ist_max_l{
       let l = il as i32;
       for im in 0..=2*l+1 {
         let m = im as i32 - l;
@@ -770,7 +770,7 @@ pub fn expmap_spin(multiplicity: usize, sop: &SpinOp, theta: f64) ->
 
   let u_eig = CxMat::from_diag(&eigvals.map(|nu|
     { 
-      let i_phase: Complex<f64> = (I*nu)*theta;
+      let i_phase: Complex64 = (I*nu)*theta;
           i_phase.exp()
     }
     )
@@ -804,7 +804,7 @@ pub fn expmap_spin_axis_angle(multiplicity: usize, axis: &Vector3D, angle: f64)
 
   let u_eig = CxMat::from_diag(&eigvals.map(|nu|
     { 
-      let i_phase: Complex<f64> = (I*nu)*angle;
+      let i_phase: Complex64 = (I*nu)*angle;
           i_phase.exp()
     }
     )
@@ -965,6 +965,30 @@ mod tests {
 
   
   //----------------------------------------------------------------------------
+  fn assemble_spherical_tensor(mult: usize, coefficients: &CxMat)
+      -> CxMat
+  {
+  
+    let l = (coefficients.dim().0 as i32 - 1)/2;
+    let mut out = CxMat::eye(mult);
+    for (im,&c) in coefficients.iter().enumerate(){
+      let m = im as i32 - l;
+      let tlm = spin_ist(mult,l,m);
+      out = out + tlm*c; 
+    }
+    out
+  }
+  //----------------------------------------------------------------------------
+  fn assert_hermitian(h: &CxMat, tol: f64){
+    let h_dag = h.t().map(|u_ij| u_ij.conj() );
+    assert!((h-h_dag).norm() < tol);
+  }
+  //----------------------------------------------------------------------------
+  fn check_spherical_coefficients(mult: usize, coefs: &CxMat){
+    let h = assemble_spherical_tensor(mult, coefs);
+    assert_hermitian(&h, 1e-12);
+  }
+  //----------------------------------------------------------------------------
   #[test]
   fn test_stevens_to_spherical_coefficients(){
   
@@ -982,6 +1006,7 @@ mod tests {
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
       assert!( (c-c0).norm() < tol );
+      check_spherical_coefficients(mult,c);
     }
 
     let stevens = vec![
@@ -995,6 +1020,7 @@ mod tests {
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
       assert!( (c-c0).norm() < tol );
+      check_spherical_coefficients(mult,c);
     }
   
 
@@ -1009,6 +1035,7 @@ mod tests {
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
       assert!( (c-c0).norm() < tol );
+      check_spherical_coefficients(mult,c);
     }
   
 
@@ -1023,6 +1050,7 @@ mod tests {
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
       assert!( (c-c0).norm() < tol );
+      check_spherical_coefficients(mult,c);
     }
   
     let stevens = vec![
@@ -1036,6 +1064,7 @@ mod tests {
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
       assert!( (c-c0).norm() < tol );
+      check_spherical_coefficients(mult,c);
     }
   
   }
@@ -1067,8 +1096,17 @@ mod tests {
       let o0 = &expected[ii];
       assert_eq!(o1.shape(),o0.shape());
       assert!( (o1-o0).norm() < tol );
-    
+      let o2 = o1.t().map(|u_ij| u_ij.conj() );
+      assert!( (o1-o2).norm() < tol );
     }  
+
+    for k in [4,6]{
+      for q in-k..=k{
+        let okq = spin_stevens(mult, k, -2).unwrap();
+        let okq_dag = okq.t().map(|u_ij| u_ij.conj() );
+        assert!( (okq-okq_dag).norm() < tol );
+      }
+    }
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -1080,6 +1118,7 @@ mod tests {
       let e = CxMat::eye(mult);
       let coefs = spherical_operator_decomposition(&e, tol);
       let expected = vec![array![[ONE]] ];
+      assert_eq!(coefs.len(),expected.len());
       for (ii,c) in coefs.iter().enumerate(){
         let c0 = &expected[ii];
         assert_eq!(c.shape(),c0.shape());
@@ -1089,6 +1128,7 @@ mod tests {
       let sz = spin_z(mult);
       let coefs = spherical_operator_decomposition(&sz, tol);
       let expected = vec![array![[ZERO],[ONE],[ZERO]] ];
+      assert_eq!(coefs.len(),expected.len());
       for (ii,c) in coefs.iter().enumerate(){
         let c0 = &expected[ii];
         assert_eq!(c.shape(),c0.shape());
@@ -1101,6 +1141,7 @@ mod tests {
         array![[ONE]], 
         array![[ZERO],[ONE],[ZERO]], 
       ];
+      assert_eq!(coefs.len(),expected.len());
       for (ii,c) in coefs.iter().enumerate(){
         let c0 = &expected[ii];
         assert_eq!(c.shape(),c0.shape());
@@ -1118,15 +1159,32 @@ mod tests {
         }
       }
       let coefs = spherical_operator_decomposition(&t, tol);
-      let expected = vec![
+      let mut expected = vec![
         array![[ONE]], 
         array![[2.0*ONE],[3.0*ONE],[4.0*ONE]], 
-        array![[5.0*ONE],[6.0*ONE],[7.0*ONE],[8.0*ONE],[9.0*ONE]], 
       ];
+      if mult >= 3{
+        expected.push(
+            array![[5.0*ONE],[6.0*ONE],[7.0*ONE],[8.0*ONE],[9.0*ONE]]
+        );
+      }
+      assert_eq!(coefs.len(),expected.len());
       for (ii,c) in coefs.iter().enumerate(){
         let c0 = &expected[ii];
         assert_eq!(c.shape(),c0.shape());
         assert!( (c-c0).norm() < tol );
+      }
+    }
+
+    for mult in 2..8{
+      for k in [4,6]{
+        for q in-k..=k{
+          let okq = spin_stevens(mult, k, -2).unwrap();
+          let coefs = spherical_operator_decomposition(&okq, tol);
+          for (ii,c) in coefs.iter().enumerate(){
+            check_spherical_coefficients(mult,c);
+          }
+        }
       }
     }
   }

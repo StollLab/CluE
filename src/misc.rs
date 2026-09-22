@@ -68,7 +68,8 @@ pub fn vec_vec_complex_f64_from_toml_array(array: Vec::<toml::Value>)
   Ok(out)
 }    
 //------------------------------------------------------------------------------
-pub fn vec_cxmat_from_toml_array(array: Vec::<toml::Value>) 
+pub fn scaled_vec_cxmat_from_toml_array(array: Vec::<toml::Value>,
+    scale: Complex64) 
     -> Result<Vec::<CxMat>,CluEError>
 {
 
@@ -77,7 +78,8 @@ pub fn vec_cxmat_from_toml_array(array: Vec::<toml::Value>)
   for row in array{
     match row{
       toml::Value::Array(arr) => {
-        out.push(cxmat_from_toml_array(arr)?)
+        let a = scale*cxmat_from_toml_array(arr)?;
+        out.push(a)
       },
       _ => return Err(CluEError::ExpectedTOMLArray(row.type_str().to_string())),
     }
