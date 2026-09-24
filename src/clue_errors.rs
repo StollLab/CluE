@@ -114,6 +114,7 @@ pub enum CluEError{
   InvalidClusterPartitionKey,
   InvalidConfigFile(String),
   InvalidDensityMatrix,
+  InvalidDetectionFrame,
   InvalidDetectionOperator,
   InvalidIST(String),
   InvalidKMeansSize,
@@ -162,6 +163,7 @@ pub enum CluEError{
   NoClustersOfSize(usize),
   NoClusterSource,
   NoClusterDensityMatrixMethod,
+  NoDetectionFrame,
   NoDetectedSpinDensityMatrix,
   NoDetectedSpinDetectionOperator,
   NoDetectedSpinIdentity,
@@ -620,6 +622,9 @@ and p0,p1 > 0 are abundances",line_number),
       CluEError::InvalidDensityMatrix => write!(f,
           "invalid density matrix"),
 
+      CluEError::InvalidDetectionFrame => write!(f,
+          "invalid detection frame"),
+
       CluEError::InvalidDetectionOperator => write!(f,
           "invalid detection operator"),
 
@@ -773,6 +778,9 @@ periodic boundary conditions should be applied"),
       
       CluEError::NoClusterDensityMatrixMethod=> write!(f,
           "no density matrix method specified"),
+      
+      CluEError::NoDetectionFrame=> write!(f,
+          "no frame for the detected spin"),
       
       CluEError::NoDetectedSpinDensityMatrix=> write!(f,
           "no density matrix for the detected spin"),

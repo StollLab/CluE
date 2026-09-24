@@ -1,14 +1,13 @@
 use crate::config::{
   ClusterPopulations,
   Config,
-  DetectedPopulation,  
   pulse_sequence::PulseSequence,
 };
 use crate::clue_errors::CluEError;
 use crate::signal::Signal;
 use crate::HamiltonianTensors;
-use crate::quantum::spin_hamiltonian::*;
-use crate::quantum::gcce_hamiltonian::{
+use crate::quantum::block_diagonal_spin_hamiltonian::*;
+use crate::quantum::general_spin_hamiltonian::{
   build_spin_hamiltonian,
   get_electron_cluster_thermal_density_matrix,
   propagate_custom_pulse_sequence,
@@ -97,36 +96,20 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
   let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
       &spin_indices,spin_ops,tensors)?;
 
-
-  let Some(detected_population) = &config.detected_population else{
-    return Err(CluEError::NoDetectedSpinDensityMatrix);
-  };
-  let Some(cluster_populations) = &config.cluster_populations else{
-    return Err(CluEError::NoClusterDensityMatrixMethod);
-  };
-  if *cluster_populations == ClusterPopulations::Thermal && 
+  if config.thermalize_cluster_populations == Some(true) && 
       config.ensemble_cce != Some(true){
     return Err(CluEError::Generic(
-        "thermal cluster populations only is implemented for ensemble CCE"
+        "thermalilizing cluster populations only is implemented for ensemble CCE"
         .to_string()));
   }
-  let density_matrix = match (detected_population,cluster_populations){
-    (DetectedPopulation::Thermal,ClusterPopulations::Thermal) => {
-        get_electron_cluster_thermal_density_matrix(
-            &h_eigvals, &h_eigvecs, config)?
-    },
-    (DetectedPopulation::Thermal, _) => {
-          let rho = states.density_matrix_for(tensor_indices)?;
-          let detected_spin_density_matrix = 
-              states.incoherent_density_matrix_for(&[0])?;  
-          kron(&detected_spin_density_matrix,&rho)
-    },
-    (_, _) => {
-          let rho = states.density_matrix_for(tensor_indices)?;
-          let detected_spin_density_matrix = spin_ops.get_density_matrix(
-              spin_multiplicity, 1)?;  
-          kron(&detected_spin_density_matrix,&rho)
-    },
+  let density_matrix = if config.thermalize_cluster_populations == Some(true){
+      get_electron_cluster_thermal_density_matrix(
+          &h_eigvals, &h_eigvecs, config)?
+    }else{
+      let rho = states.density_matrix_for(tensor_indices)?;
+      let detected_spin_density_matrix = spin_ops.get_density_matrix(
+          spin_multiplicity, 1)?;  
+      kron(&detected_spin_density_matrix,&rho)
   };
 
 
@@ -178,6 +161,11 @@ mod tests{
 
   use rand_chacha::ChaCha20Rng;
   use rand::SeedableRng;
+
+
+  use num_complex::Complex64;
+  use ndarray::{Array1,Array2};
+  type CxMat = Array2::<Complex64>;
   //----------------------------------------------------------------------------
   #[test]
   fn test_cce(){
@@ -195,7 +183,8 @@ mod tests{
     let mut config = Config::new();
     config.set_defaults().unwrap();
     
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],2,&config).unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],2,&config).unwrap();
 
     let mut config = Config::new();
     config.number_timepoints = vec![21];

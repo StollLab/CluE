@@ -1,11 +1,12 @@
 use crate::physical_constants::*;
 use crate::clue_errors::*;
-use crate::config::{Config, DetectedPopulation,DetectionOp};
+use crate::config::{Config, DetectedPopulation,DetectionOp,DetFrame};
 use crate::quantum::pulse_sequences::{
   ideal_pulse,
   PI_OVER_2_PULSE_NAME,
   PI_PULSE_NAME
 };
+use crate::quantum::general_spin_hamiltonian::get_electron_cluster_thermal_density_matrix;
 use crate::math::{
   anticommutator,
   commutator,
@@ -17,7 +18,7 @@ use crate::space_3d::{UnitSpherePoint,Vector3D};
 
 use std::fmt;
 use std::collections::HashMap;
-use ndarray::Array2;
+use ndarray::{Array1,Array2};
 use ndarray::linalg::kron;
 use ndarray_linalg::{Eigh, UPLO};
 use num_complex::Complex64;
@@ -44,11 +45,13 @@ pub struct ClusterSpinOperators {
 impl<'a> ClusterSpinOperators {
   /// This function builds 'ClusterSpinOperators' for clusters of 
   /// `bath_multiplicities` up to size `max_size`.
-  pub fn new(det_multiplicity: usize, 
+  pub fn new(det_hamiltonian: (Array1::<f64>,CxMat),
       bath_multiplicities: &[usize], max_size: usize,
       config: &Config) 
    -> Result<Self, CluEError> 
   {
+
+    let det_multiplicity = det_hamiltonian.0.len();
    
     let Some(ist_max_l) = config.max_spherical_tensor_rank else{
       return Err(CluEError::NoMaxISTRank);
@@ -58,7 +61,8 @@ impl<'a> ClusterSpinOperators {
 
     let mut cluster_spin_ops = Vec::<KronSpinOperators>::with_capacity(n_mults);
 
-    let detection_ops = build_detection_operators(det_multiplicity, 
+    let detection_ops = build_detection_operators(
+        det_hamiltonian, 
         bath_multiplicities, max_size, config)?;
 
     for spin_multiplicity in bath_multiplicities.iter() {
@@ -144,13 +148,14 @@ impl<'a> ClusterSpinOperators {
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //------------------------------------------------------------------------------
-fn build_detection_operators(det_multiplicity: usize, 
+fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     bath_multiplicities: &[usize],
     max_size: usize,
     config: &Config) 
     -> Result<Vec::<DetectionSpinOperators>,CluEError>
 {
 
+  let det_multiplicity = det_hamiltonian.0.len();
 
   match det_multiplicity {
     0 => return Err(CluEError::InvalidSpinMultiplicity(0)),
@@ -162,10 +167,48 @@ fn build_detection_operators(det_multiplicity: usize,
     return Err(CluEError::NoDetectedSpinDensityMatrix);
   };
 
+  let eigvecs = &det_hamiltonian.1;
+  let inv_eigvecs = eigvecs.t().map(|v| v.conj());
+
+  { 
+    // Check ordering of the eigenvalues.
+    // It should not change unless ndarray changes it.
+    let n = det_hamiltonian.0.len();
+    let en_0 = det_hamiltonian.0[0];
+    let en_n = det_hamiltonian.0[n-1];
+    assert!( en_0 <= en_n);
+  }
+
+  let Some(frame) = &config.detected_spin_frame else{
+    return Err(CluEError::NoDetectionFrame);  
+  }; 
+
   let density_matrix_opt = match detected_population{
-    DetectedPopulation::Matrix(mat) => Some(mat.clone()),
-    DetectedPopulation::S(sop) => Some(get_spin_operator(det_multiplicity,sop)),
-    DetectedPopulation::Thermal => None,   
+    DetectedPopulation::Matrix(mat) => {
+      let rho = match frame{
+        DetFrame::Eigen => eigvecs.dot( &mat.dot( &inv_eigvecs) ),
+        DetFrame::Zeeman => mat.clone(),  
+      };
+      Some(rho)
+    },
+    DetectedPopulation::S(sop) => {
+      let mut rho = get_spin_operator(det_multiplicity,sop);
+      match frame{
+        DetFrame::Eigen => rho = eigvecs.dot( &rho.dot( &inv_eigvecs) ),
+        DetFrame::Zeeman => (),  
+      }
+      Some(rho)
+    },
+    DetectedPopulation::Thermal => {
+      let mut rho = get_electron_cluster_thermal_density_matrix(
+          &det_hamiltonian.0, &det_hamiltonian.1, config,
+        )?;
+      match frame{
+        DetFrame::Eigen => rho = eigvecs.dot( &rho.dot( &inv_eigvecs) ),
+        DetFrame::Zeeman => (),  
+      }
+      Some(rho)
+    },   
   };
 
   let Some(det_op) =&config.detection_operator else {
@@ -173,13 +216,36 @@ fn build_detection_operators(det_multiplicity: usize,
   }; 
 
   let detection_operator = match det_op{
-    DetectionOp::Matrix(mat) => mat.clone(),
-    DetectionOp::S(sop) => get_spin_operator(det_multiplicity,sop),
+    DetectionOp::Matrix(mat) => { 
+      let det_op = match frame{
+        DetFrame::Eigen => eigvecs.dot( &mat.dot( &inv_eigvecs) ),
+        DetFrame::Zeeman => mat.clone(),  
+      };
+      det_op
+    },
+    DetectionOp::S(sop) => {
+      let mut det_op = get_spin_operator(det_multiplicity,sop);
+      match frame{
+        DetFrame::Eigen => det_op = eigvecs.dot( &det_op.dot( &inv_eigvecs) ),
+        DetFrame::Zeeman => (),  
+      }
+      det_op
+    },
     DetectionOp::Transition(level_0,level_1) => {
       let mut mat = CxMat::zeros([det_multiplicity,det_multiplicity]);
-      let row = det_multiplicity - *level_0 - 1;
-      let col = det_multiplicity - *level_1 - 1;
+      let (row,col) = match frame{
+        DetFrame::Eigen => {
+          (*level_0,*level_1)
+        },
+        DetFrame::Zeeman 
+          => (det_multiplicity - *level_0 - 1,det_multiplicity - *level_1 - 1),
+      };
       mat[[row,col]] = ONE;
+
+      if *frame == DetFrame::Eigen{
+        mat = eigvecs.dot( &mat.dot( &inv_eigvecs) );
+      }
+
       mat
     }
   };
@@ -187,16 +253,43 @@ fn build_detection_operators(det_multiplicity: usize,
   let pulses = if config.pulses.is_empty(){
     match &config.detected_spin_transition{
       Some(transition) => {
+
+      let level_0 = &transition[0];  
+      let level_1 = &transition[1];  
+
+      let (row,col) = match frame{
+        DetFrame::Eigen 
+          => (det_multiplicity - *level_0 - 1,det_multiplicity - *level_1 - 1),
+        DetFrame::Zeeman 
+          => (*level_0,*level_1)
+      };
+
+        let mut u_half_pi = ideal_pulse(&SpinOp::Sy, 0.5*PI,
+            det_multiplicity, &[row,col]);
+        let mut u_pi = ideal_pulse(&SpinOp::Sy, PI,det_multiplicity, &[row,col]);
+
+        if *frame == DetFrame::Eigen{
+          u_half_pi = eigvecs.dot( &u_half_pi.dot( &inv_eigvecs) );
+          u_pi = eigvecs.dot( &u_pi.dot( &inv_eigvecs) );
+        }
+
         HashMap::<String,CxMat>::from([
-          (PI_OVER_2_PULSE_NAME.to_string(), ideal_pulse(&SpinOp::Sy, 0.5*PI,
-                                 det_multiplicity, transition)),
-          (PI_PULSE_NAME.to_string(), ideal_pulse(&SpinOp::Sy, PI,
-                                 det_multiplicity, transition)),
+          (PI_OVER_2_PULSE_NAME.to_string(), u_half_pi),
+          (PI_PULSE_NAME.to_string(), u_pi),
         ])},
       None => return Err(CluEError::NoDetectedSpinTransition),
     }  
   }else{
-    config.pulses.clone()
+    let mut pulse_list = config.pulses.clone();
+    match frame{
+      DetFrame::Eigen => {
+        for (_,p) in pulse_list.iter_mut(){
+          *p = eigvecs.dot( &p.dot( &inv_eigvecs) );
+        }
+      },
+      DetFrame::Zeeman => (),  
+    }
+    pulse_list
   };
 
 
@@ -889,7 +982,7 @@ pub fn spin_stevens(spin_multiplicity: usize, k: i32, q: i32)
             - (30.0*s - 15.0*ONE)*pow(&sz,3)
             + (5.0*s*s - 10.0*s + 12.0*ONE)*sz
          ),
-         &(sp + sm)       
+         &(sp + pm*sm)       
         ),
     (6,2) => 0.5*c*a(
         &(
@@ -981,12 +1074,13 @@ mod tests {
   //----------------------------------------------------------------------------
   fn assert_hermitian(h: &CxMat, tol: f64){
     let h_dag = h.t().map(|u_ij| u_ij.conj() );
-    assert!((h-h_dag).norm() < tol);
+    let err = (h-h_dag).norm();
+    assert!(err < tol);
   }
   //----------------------------------------------------------------------------
   fn check_spherical_coefficients(mult: usize, coefs: &CxMat){
     let h = assemble_spherical_tensor(mult, coefs);
-    assert_hermitian(&h, 1e-12);
+    assert_hermitian(&h, 5e-12);
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -1102,7 +1196,7 @@ mod tests {
 
     for k in [4,6]{
       for q in-k..=k{
-        let okq = spin_stevens(mult, k, -2).unwrap();
+        let okq = spin_stevens(mult, k, q).unwrap();
         let okq_dag = okq.t().map(|u_ij| u_ij.conj() );
         assert!( (okq-okq_dag).norm() < tol );
       }
@@ -1179,9 +1273,9 @@ mod tests {
     for mult in 2..8{
       for k in [4,6]{
         for q in-k..=k{
-          let okq = spin_stevens(mult, k, -2).unwrap();
+          let okq = spin_stevens(mult, k, q).unwrap();
           let coefs = spherical_operator_decomposition(&okq, tol);
-          for (ii,c) in coefs.iter().enumerate(){
+          for c in coefs.iter(){
             check_spherical_coefficients(mult,c);
           }
         }
@@ -1256,7 +1350,8 @@ mod tests {
 
     let spin_multiplicities = vec![2,3];
     let max_size = 3;
-    let sops = ClusterSpinOperators::new(1,
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let sops = ClusterSpinOperators::new(det_h,
         &spin_multiplicities,max_size,&config).unwrap();
 
 

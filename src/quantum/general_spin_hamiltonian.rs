@@ -5,7 +5,7 @@ use crate::config::{
 use crate::config::pulse_sequence::PulseSequence;
 use crate::math::cxmat_pow_n;
 use crate::physical_constants::{BOLTZMANN,HALF,HBAR,I,ZERO};
-use crate::quantum::spin_hamiltonian::{
+use crate::quantum::block_diagonal_spin_hamiltonian::{
   get_propagators_from_eig,
   get_propagators_complex_time_from_eig,
 };
@@ -15,6 +15,10 @@ use crate::quantum::pulse_sequences::{
 use crate::quantum::cluster_operators::{
   ClusterSpinOperators,
   SpinOp,
+  spin_x,
+  spin_y,
+  spin_z,
+  spin_ist,
 };
 use crate::signal::Signal;
 use crate::quantum::tensors::HamiltonianTensors;
@@ -470,6 +474,80 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
   Ok((eigvals, eigvecs))
 }
 //------------------------------------------------------------------------------
+pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
+  -> Result<(Array1::<f64>,CxMat),CluEError>
+{
+
+  let ten_idx0 = 0;
+
+  let spin_multiplicity: usize = tensors.spin_multiplicities[ten_idx0];
+
+  // Initialize Hamiltonian.
+  let mut ham = CxMat::zeros((spin_multiplicity,spin_multiplicity));
+
+  let sx = spin_x(spin_multiplicity);
+  let sy = spin_y(spin_multiplicity);
+  let sz = spin_z(spin_multiplicity);
+
+  // Zeeman
+  if let Some(vec) = tensors.spin1_tensors.get(ten_idx0){
+    ham = ham + &sx*vec.x();
+    ham = ham + &sy*vec.y();
+    ham = ham + &sz*vec.z();
+  }
+
+  if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,&[]){
+    ham = ham + &sx*vec.x();
+    ham = ham + &sy*vec.y();
+    ham = ham + &sz*vec.z();
+  }
+
+  if let Some(tens) = tensors.spin_spherical_tensors
+      .get(&(ten_idx0,ten_idx0)){
+
+    for coefs in tens.iter(){
+      let il = coefs.dim().0;
+      let l = (il as i32 -1)/2;
+      if l > tensors.max_spherical_tensor_rank{
+        continue;
+      }
+      for (im,&c) in coefs.iter().enumerate(){
+        let m = im as i32 -l;
+        let tlm = spin_ist(spin_multiplicity,l,m);
+        ham = ham + tlm*c;
+      }
+    }
+  }
+
+  // zero-field
+  if let Some(ten) = tensors.spin2_tensors.get(ten_idx0,ten_idx0){
+    ham = ham + sx.dot(&sx)*ten.xx();
+    ham = ham + sx.dot(&sy)*ten.xy();
+    ham = ham + sx.dot(&sz)*ten.xz();
+
+    ham = ham + sy.dot(&sx)*ten.yx();
+    ham = ham + sy.dot(&sy)*ten.yy();
+    ham = ham + sy.dot(&sz)*ten.yz();
+
+    ham = ham + sz.dot(&sx)*ten.zx();
+    ham = ham + sz.dot(&sy)*ten.zy();
+    ham = ham + sz.dot(&sz)*ten.zz();
+  }
+
+  
+
+  // Remove any floating point errors that break Hermiticity.
+  let ham_dag = ham.t().map(|u_ij| u_ij.conj() );
+  ham = HALF*(ham + ham_dag);
+
+  let Ok((eigvals, eigvecs)) = ham.eigh(UPLO::Lower) else{
+    return Err(
+        CluEError::CannotDiagonalizeHamiltonian(ham.to_string()));
+  };
+
+  Ok((eigvals, eigvecs))
+}
+//------------------------------------------------------------------------------
 pub fn get_electron_cluster_thermal_density_matrix(
     h_eigvals: &Array1::<f64>, h_eigvecs: &CxMat, config: &Config)
   -> Result<CxMat,CluEError>
@@ -507,7 +585,7 @@ mod tests{
   use crate::physical_constants::{SQRT2_INV};
   use crate::space_3d::{Vector3D,SymmetricTensor3D};
   use crate::quantum::tensors::*;
-  use crate::quantum::spin_hamiltonian::{
+  use crate::quantum::block_diagonal_spin_hamiltonian::{
     build_block_diag_hamiltonian,
   };
   use crate::cluster_methods::appa::appa_hahn;
@@ -538,7 +616,8 @@ mod tests{
     let tensors = build_restricted_three_spin_tensors(z0, z1, a1, a2, b);
 
     let spin_indices = vec![0,1,2];
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],3,&config).unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3,&config).unwrap();
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors,
@@ -607,7 +686,8 @@ mod tests{
     let tensors = build_restricted_three_spin_tensors(z0, z1, a1, a2, b);
     
     let spin_indices = vec![0,1,2];
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],3, &config).unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3, &config).unwrap();
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors).unwrap();
@@ -665,7 +745,8 @@ mod tests{
     config.set_defaults().unwrap();
 
     let spin_indices = vec![0,1,2];
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],3,&config).unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3,&config).unwrap();
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors).unwrap();

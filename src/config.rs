@@ -73,6 +73,8 @@ pub struct Config{
   // Detected Spin
   pub cluster_populations: Option<ClusterPopulations>,
   pub detected_population: Option<DetectedPopulation>,
+  pub thermalize_cluster_populations: Option<bool>,
+  pub detected_spin_frame: Option<DetFrame>,
   pub detected_spin_g_matrix: Option<TensorSpecifier>,
   pub detected_spin_identity: Option<Isotope>,
   pub detected_spin_multiplicity: Option<usize>,
@@ -253,6 +255,10 @@ impl Config{
       self.cluster_populations = Some(ClusterPopulations::Uniform);
     }
 
+    if self.detected_spin_frame.is_none(){
+      self.detected_spin_frame = Some(DetFrame::Eigen);
+    }
+
     if self.neighbor_cutoff_delta_zeeman.is_none(){
       self.neighbor_cutoff_delta_zeeman = Some(1e-12);
     }
@@ -268,6 +274,9 @@ impl Config{
       self.tau2_increments = vec![0.0];
     }
 
+    if self.thermalize_cluster_populations.is_none(){
+      self.thermalize_cluster_populations = Some(false);
+    }
     if self.write_bath.is_none(){
       self.write_bath = Some(true);
     }
@@ -693,6 +702,14 @@ impl DetectedSpinCoordinates{
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,PartialEq)]
+pub enum DetFrame{
+  Eigen,
+  Zeeman,  
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[derive(Debug,Clone,PartialEq)]
 pub enum ReplicateUnitCell{
   No,
   Auto,
@@ -986,6 +1003,16 @@ impl Config{
 
     // D
     if let Some(mut detected_spin) = config_toml.detected_spin{
+
+      if let Some(frame) = detected_spin.frame{
+        match frame.as_str(){
+          KEY_DET_FRAME_EIGEN 
+              => self.detected_spin_frame = Some(DetFrame::Eigen),
+          KEY_DET_FRAME_ZEEMAN 
+              => self.detected_spin_frame = Some(DetFrame::Zeeman),
+          _ => return Err(CluEError::InvalidDetectionFrame),
+        }
+      }
       if let Some(toml_value) = detected_spin.g_matrix{
         self.detected_spin_g_matrix 
           = Some(TensorSpecifier::from_toml_value(toml_value,1.0)?);
@@ -1283,6 +1310,11 @@ impl Config{
       }
       mem::swap(&mut self.tau2_increments, tau2_increments);
     }
+    
+    if config_toml.thermalize_cluster_populations.is_some(){
+      self.thermalize_cluster_populations 
+          = config_toml.thermalize_cluster_populations;
+    } 
 
     // W--Z
     if let Some(output) = config_toml.output{

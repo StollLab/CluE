@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::config::pulse_sequence::PulseSequence;
 use crate::HamiltonianTensors;
 use crate::signal::Signal;
-use crate::quantum::gcce_hamiltonian::{
+use crate::quantum::general_spin_hamiltonian::{
   get_free_evolutions_propagators,
   get_2nd_free_evolutions_propagators,
 };
@@ -504,7 +504,8 @@ mod tests {
     let mut config = Config::new();
     config.set_defaults().unwrap();
 
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],2,&config).unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],2,&config).unwrap();
 
     let nt = 21;
     config.number_timepoints = vec![nt];
@@ -562,7 +563,8 @@ mod tests {
     config.set_defaults().unwrap();
 
     let spin_indices = vec![1,2];
-    let spin_ops = ClusterSpinOperators::new(1,&vec![2],2,&config).unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],2,&config).unwrap();
     let mut config = Config::new();
     config.set_defaults().unwrap();
 

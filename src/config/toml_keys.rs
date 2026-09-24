@@ -33,6 +33,9 @@ pub const KEY_DENSITY_MATRIX_RANDOM: &str  = "random";
 pub const KEY_DENSITY_MATRIX_THERMAL: &str  = "thermal";
 pub const KEY_DENSITY_MATRIX_ZEEMAN: &str  = "zeeman";
 
+pub const KEY_DET_FRAME_EIGEN: &str  = "eigen";
+pub const KEY_DET_FRAME_ZEEMAN: &str  = "zeeman";
+
 pub const KEY_PARTITION_EX_GROUPS: &str = "exchange_groups";
 pub const KEY_PARTITION_PARTICLE: &str = "singles";
 pub const KEY_PARTITION_KMEANS: &str = "kmeans";
@@ -141,7 +144,7 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;367] = [
+pub const ALLOWED_KEYS: [&str;369] = [
   "abundance",
   "active",
   "auxiliary_signals",
@@ -183,6 +186,7 @@ pub const ALLOWED_KEYS: [&str;367] = [
   "exchange_coupling",
   "exchange_groups",
   "file",
+  "frame",
   "from",
   "from_bonded_to",
   "from_same_molecule_as",
@@ -267,6 +271,7 @@ pub const ALLOWED_KEYS: [&str;367] = [
   "temperature",
   "tensors",
   "thermal",
+  "thermalize_cluster_populations",
   "to",
   "to_bonded_to",
   "to_same_molecule_as",

@@ -39,12 +39,17 @@ use crate::signal::{
   cluster_signals::calculate_cluster_signals,
 };
 use crate::Structure;
-use crate::quantum::cluster_operators::ClusterSpinOperators;
-use crate::quantum::spin_states::SpinStates;
+use crate::quantum::{
+  general_spin_hamiltonian::build_detected_spin_hamiltonian,
+  cluster_operators::ClusterSpinOperators,
+  spin_states::SpinStates,
+};
 use crate::math;
 use crate::space_3d::UnitSpherePoint;
 
-use num_complex::Complex;
+use num_complex::Complex64;
+use ndarray::{Array1,Array2};
+type CxMat = Array2::<Complex64>;
 use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use rand_distr::{Distribution,Uniform};
 
@@ -115,17 +120,6 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
   // Build input structure.
   let structure = Structure::build_structure(rng,config)?;
 
-  let det_spin_matrix_dim = match config.cluster_method{
-    Some(ClusterMethod::GCCE) => {
-      let Some(det_spin) = & structure.detected_particle else{
-        return Err(CluEError::NoCentralSpin);
-      };
-      det_spin.spin_multiplicity
-    },
-    _ => 1,  
-  };
-
-
   // Generate coupling tensors.
   let tensors = HamiltonianTensors::generate(rng, &structure, config)?;
 
@@ -164,7 +158,13 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
      None => potential_max_order,
    };
 
-   ClusterSpinOperators::new(det_spin_matrix_dim,&spin_multiplicity_set,
+   let det_hamiltonian = if config.cluster_method == Some(ClusterMethod::GCCE){
+     build_detected_spin_hamiltonian(&tensors)?
+   }else{
+     (Array1::<f64>::zeros(1) ,CxMat::eye(1))
+   };
+
+   ClusterSpinOperators::new(det_hamiltonian,&spin_multiplicity_set,
      max_spins,config)?
   };
 
@@ -206,7 +206,7 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
     let mut ori_sigs = calculate_signal_at_orientation(rng,rot_dir,
         &spin_ops,tensors.clone(), &structure,config, &save_dir_opt )?;
 
-    let weight = Complex::<f64>{ re: integration_grid.weight(iori), im: 0.0};
+    let weight = Complex64{ re: integration_grid.weight(iori), im: 0.0};
 
     for size_idx in 0..=max_cluster_size{
       ori_sigs[size_idx].scale_mut(weight);

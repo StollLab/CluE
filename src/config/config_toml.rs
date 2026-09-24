@@ -16,6 +16,7 @@ pub struct DetectedSpinTOML{
   pub zerofield: Option<toml::Value>,
   pub density_matrix: Option<toml::Value>,
   pub detection_operator: Option<toml::Value>,
+  pub frame: Option<String>,
   //pub g_values: Option<Vec::<f64>>,
   //pub gx: Option<toml::Value>,
   //pub gy: Option<toml::Value>,
@@ -93,6 +94,7 @@ pub struct ConfigTOML{
   pub min_cell_size: Option<usize>,
   pub number_runs: Option<usize>, 
   pub run_in_parallel: Option<bool>,
+  pub thermalize_cluster_populations: Option<bool>,
 
   // Output
   pub output_directory: Option<String>,
