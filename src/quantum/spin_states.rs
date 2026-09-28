@@ -32,6 +32,21 @@ impl SpinStates{
     }
   }
   //----------------------------------------------------------------------------
+  /// Config contributes via `cluster_populations` and `ensemble_cce`.
+  /// Let Ω be the multiplicity, T the temperature a Z the partition function.
+  /// The following table shows how the density is calculated.
+  /// | populations | CCE            | ensemble CCE        |
+  /// | uniform     | ones(Ω)/Ω      | eye(Ω)/Ω            |
+  /// | random, T   | Zeeman random  | diag Zeeman random  |
+  /// | thermal, T  | NA             | exp(-βH)/Z          |
+  /// | zeeman, T   | Zeeman weights | diag Zeeman weights |
+  ///
+  /// "Zeeman random" means that each spin has a random state sampled so
+  /// that the average population will match the thermal expectation at T,
+  /// under Zeeman splitting only.  
+  /// "Zeeman weights" means that each spin in a state where its population
+  /// match the thermal expectation under Zeeman splitting only.  
+  // TODO: If T is unspecified, assume that T = ∞?
   pub fn generate(
       rng: &mut ChaCha20Rng,
       tensors: &HamiltonianTensors,

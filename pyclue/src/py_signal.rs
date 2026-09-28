@@ -57,8 +57,8 @@ impl PySignal{
     self.signal.len()
   }
   //----------------------------------------------------------------------------
-  pub fn mut_scale(&mut self, value: Complex::<f64>){
-    self.signal.mut_scale(value)
+  pub fn scale_mut(&mut self, value: Complex::<f64>){
+    self.signal.scale_mut(value)
   }
   //----------------------------------------------------------------------------
   pub fn scale(&self, value: Complex::<f64>) -> Self{

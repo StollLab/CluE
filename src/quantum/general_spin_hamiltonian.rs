@@ -496,7 +496,7 @@ pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
     ham = ham + &sz*vec.z();
   }
 
-  if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,&[]){
+  if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,&[ten_idx0]){
     ham = ham + &sx*vec.x();
     ham = ham + &sy*vec.y();
     ham = ham + &sz*vec.z();

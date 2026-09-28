@@ -105,8 +105,8 @@ impl PyConfig{
       info::license::print_license();
     }
 
-    if input.show_warrenty{
-      info::warrenty::print_warrenty();
+    if input.show_warranty{
+      info::warranty::print_warranty();
     }
 
     if input.show_version{
@@ -121,7 +121,7 @@ impl PyConfig{
 
     config.set_defaults()?;
 
-    config.construct_time_axis()?;
+    config.set_tau_axis()?;
 
     let rng = match config.rng_seed{
       Some(seed) => ChaCha20Rng::seed_from_u64(seed),

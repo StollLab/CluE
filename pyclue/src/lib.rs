@@ -1,8 +1,8 @@
-pub mod analytic_restricted_2cluster;
 pub mod clue_toml;
 pub mod io;
 pub mod lebedev;
 pub mod py_adjacency;
+pub mod py_appa;
 pub mod py_clue_errors;
 pub mod py_cluster;
 pub mod py_config;
@@ -15,11 +15,11 @@ pub mod py_structure;
 pub mod py_tensors;
 pub mod run_clue;
 
-use analytic_restricted_2cluster::*;
 use clue_toml::*;
 use io::*;
 use lebedev::*;
 use py_adjacency::PyAdjacencyList;
+use py_appa::*;
 use py_cluster::PyCluster;
 use py_config::*;
 use py_exchange_groups::*;
@@ -69,10 +69,9 @@ fn clue_odide(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function( wrap_pyfunction!(load_time_axis,m)? )?;
     m.add_function( wrap_pyfunction!(load_signal,m)? )?;
     m.add_function( wrap_pyfunction!(load_auxiliary_signals,m)? )?;
-    m.add_function( wrap_pyfunction!(hahn_three_spin_modulation_depth,m)? )?;
-    m.add_function( wrap_pyfunction!(hahn_three_spin_modulation_frequency,m)? )?;
-    m.add_function( 
-        wrap_pyfunction!(hahn_three_spin_fourth_order_coefficient,m)? )?;
+    m.add_function( wrap_pyfunction!(appa_hahn_modulation_depth,m)? )?;
+    m.add_function( wrap_pyfunction!(appa_hahn_frequency,m)? )?;
+    m.add_function( wrap_pyfunction!(appa_hahn_fourth_order_coefficient,m)? )?;
     m.add_function( wrap_pyfunction!(spin_x,m)? )?;
     m.add_function( wrap_pyfunction!(spin_y,m)? )?;
     m.add_function( wrap_pyfunction!(spin_z,m)? )?;

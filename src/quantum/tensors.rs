@@ -336,22 +336,16 @@ impl HamiltonianTensors{
 
     let mut mean_field = Vector3D::zeros();
 
-    let mut n = 0;
     // The first entry is the detected spin, and so will always be treated
     // quantum mechanically.
     for (idx, h) in mean_field_couplings[index].iter().enumerate().skip(1){
 
       if exclude.contains(&idx){ continue; }
-      // idx should be in exclude, but check just in case.
+      // idx may be be in exclude, but check just in case.
       if idx == index { continue; } 
     
       mean_field = &mean_field + h; 
-      n += 1;
     } 
-
-    if n > 0{
-      mean_field.scale_mut( 1.0/(n as f64) );
-    }
 
     Some(mean_field)
   
