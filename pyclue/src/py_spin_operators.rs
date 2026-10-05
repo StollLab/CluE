@@ -81,6 +81,28 @@ pub fn spin_squared(spin_multiplicity: usize)
 }
 //------------------------------------------------------------------------------
 #[pyfunction]
+pub fn spin_spherical(spin_multiplicity: usize,l: i32,m: i32) 
+  -> Py<PyArray<Complex::<f64>,Ix2>>
+{
+  let s = clue_spin::spin_ist(spin_multiplicity,l,m);
+
+  Python::with_gil(|py|{
+      PyArray::from_owned_array(py, s).unbind() 
+  })
+}
+//------------------------------------------------------------------------------
+#[pyfunction]
+pub fn spin_stevens(spin_multiplicity: usize,k: i32,q: i32) 
+  -> Result< Py<PyArray<Complex::<f64>,Ix2>>, PyCluEError>
+{
+  let s = clue_spin::spin_stevens(spin_multiplicity,k,q)?;
+
+  Ok(Python::with_gil(|py|{
+      PyArray::from_owned_array(py, s).unbind() 
+  }))
+}
+//------------------------------------------------------------------------------
+#[pyfunction]
 pub fn nuclear_quadrupole_tensor_operator(
     spin_multiplicity: usize, 
     quadrupole_moment: f64
@@ -97,6 +119,35 @@ pub fn nuclear_quadrupole_tensor_operator(
     }
   }
   Ok(tensor)
+}
+//------------------------------------------------------------------------------
+#[pyfunction]
+pub fn wigner(spin_multiplicity: usize, angles: Vec::<f64>) 
+  -> Result< Py<PyArray<Complex::<f64>,Ix2>>, PyCluEError>
+{
+  let alpha = if angles.len() >= 1{
+    angles[0]
+  }else{
+    0.0
+  }; 
+
+  let beta = if angles.len() >= 2{
+    angles[1]
+  }else{
+    0.0
+  }; 
+
+  let gamma = if angles.len() >= 3{
+    angles[2]
+  }else{
+    0.0
+  }; 
+
+  let s = clue_spin::wigner_euler(spin_multiplicity,&[alpha,beta,gamma])?;
+
+  Ok(Python::with_gil(|py|{
+      PyArray::from_owned_array(py, s).unbind() 
+  }))
 }
 //------------------------------------------------------------------------------
 fn get_nuclear_quadrupole_tensor_component(

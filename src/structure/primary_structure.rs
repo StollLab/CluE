@@ -135,8 +135,10 @@ impl Structure{
     let (zerofield_tensor,zerofield_spherical_coefficients) 
         = match &config.detected_spin_zerofield_coupling{
       Some(zerofield_specifier) => { 
+        println!("DB: ps0");
         let (ten,coef) = construct_symmetric_tensor_from_tensor_specifier(rng,
             zerofield_specifier, None, spin_multiplicity,self,config)?;
+        println!("DB: ps1");
         (Some(ten),coef)
       },
       None => (None,Vec::<CxMat>::new()),

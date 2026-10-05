@@ -122,10 +122,12 @@ impl HamiltonianTensors{
 
     if let Some(zerofield_specifier) = &config.detected_spin_zerofield_coupling{
     
+      println!("DB: generate 0");
       let (tensor,spherical_tensor_coefficients) 
           = construct_symmetric_tensor_from_tensor_specifier(rng,
           zerofield_specifier, None, detected_particle.spin_multiplicity(),
           &structure,config)?;
+      println!("DB: generate 1");
       if tensor.any_nan(){
         return Err(CluEError::NANTensorZerofield(
           0,detected_particle.isotope.to_string()));
@@ -869,6 +871,7 @@ fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
   const X: usize = 0;
   const Y: usize = 1;
   const Z: usize = 2;
+  println!("DB: ax0 {:?}",particle_index_opt);
   if let Some(axis_specifier) = &tensor_specifier.z_axis{
     let mut axis = axis_specifier.to_vector3d(rng,particle_index_opt,structure,
         config)?;
@@ -876,6 +879,7 @@ fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
     axes.push(axis);
     axis_dims.push(Z);
   }
+  println!("DB: ax1");
 
   if let Some(axis_specifier) = &tensor_specifier.x_axis{
     let mut axis = axis_specifier.to_vector3d(rng,particle_index_opt,structure,

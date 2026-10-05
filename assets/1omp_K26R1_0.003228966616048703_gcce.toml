@@ -1,6 +1,7 @@
 input_structure_file = "assets/1omp_K26R1_0.003228966616048703.pdb"
 
 populations = "thermal"
+thermalize_cluster_populations = true
 
 cluster_method = "gcce"
 ensemble_cce = true

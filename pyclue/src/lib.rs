@@ -78,6 +78,9 @@ fn clue_odide(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function( wrap_pyfunction!(spin_plus,m)? )?;
     m.add_function( wrap_pyfunction!(spin_minus,m)? )?;
     m.add_function( wrap_pyfunction!(spin_squared,m)? )?;
+    m.add_function( wrap_pyfunction!(spin_spherical,m)? )?;
+    m.add_function( wrap_pyfunction!(spin_stevens,m)? )?;
+    m.add_function( wrap_pyfunction!(wigner,m)? )?;
     Ok(())
 }
 }

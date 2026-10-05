@@ -855,6 +855,7 @@ pub fn expmap_spin(multiplicity: usize, sop: &SpinOp, theta: f64) ->
 
   let s = get_spin_operator(multiplicity, sop);
 
+  // TODO: This only works for Hermitian spinoperators.
   let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
     return Err(CluEError::CannotDiagonalizeOperator(s.to_string()));
   };
@@ -959,7 +960,7 @@ pub fn spin_stevens(spin_multiplicity: usize, k: i32, q: i32)
   let pow = cxmat_pow_n;
   let okq = match (k,q.abs()) {
     (2,0) => 3.0*ONE*sz.dot(&sz) - spin_squared(spin_multiplicity),
-    (2,1) => c*a(&sz, &(sp + pm*sm)),
+    (2,1) => 0.5*c*a(&sz, &(sp + pm*sm)),
     (2,2) => c*(sp.dot(&sp) + pm*sm.dot(&sm) ),
     (4,0) => 35.0*ONE*pow(&sz,4) 
         - (30.0*s - 25.0)*ONE*pow(&sz,2) 
@@ -1108,7 +1109,7 @@ mod tests {
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
       let expected = vec![
-      array![[ZERO],[I],[ZERO],[I],[ZERO]],
+      array![[ZERO],[0.5*I],[ZERO],[0.5*I],[ZERO]],
     ];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
@@ -1138,7 +1139,7 @@ mod tests {
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
       let expected = vec![
-      array![[ZERO],[ONE],[ZERO],[-ONE],[ZERO]],
+      array![[ZERO],[0.5*ONE],[ZERO],[-0.5*ONE],[ZERO]],
     ];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
@@ -1180,9 +1181,9 @@ mod tests {
 
     let expected = vec![
       I*(spin_ist(mult,k, -2) - spin_ist(mult,k,  2)),
-      I*(spin_ist(mult,k, -1) + spin_ist(mult,k,  1)),
+      0.5*I*(spin_ist(mult,k, -1) + spin_ist(mult,k,  1)),
       SQRT2*SQRT3*ONE*spin_ist(mult,k,  0),
-      ONE*(spin_ist(mult,k, -1) - spin_ist(mult,k,  1)),
+      0.5*ONE*(spin_ist(mult,k, -1) - spin_ist(mult,k,  1)),
       spin_ist(mult,k, -2) + spin_ist(mult,k,  2),
     ];
 

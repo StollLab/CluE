@@ -962,6 +962,8 @@ impl VectorSpecifier{
             structure, config)?;
 
 
+        println!("DB: idx0 = {:#?}",indices_0);
+        println!("DB: idx1 = {:#?}",indices_1);
         if indices_0.len() == 2 && indices_1.len() == 2{
           indices_0.append(&mut indices_1);
           indices_0 = math::unique(indices_0);
@@ -969,7 +971,7 @@ impl VectorSpecifier{
           
           if indices_0.len() != 2 {
             return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...diff({}..., {}...",
+                format!("...from ' \"{}\", to = \"{}\"...",
                   sec_fltr_0, sec_fltr_1, )));
           }
 
@@ -980,19 +982,21 @@ impl VectorSpecifier{
 
         if indices_0.len() != 1 {
           return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...diff({}...",sec_fltr_0 )));
+                format!("...from = \"{}\"...",
+                sec_fltr_0 )));
         }
         let idx0 = indices_0[0]; 
 
         if indices_1.len() != 1 {
           return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...diff(..., {}...",sec_fltr_1 )));
+                format!("...to = \"{}\"...",
+                sec_fltr_1 )));
         }
         let idx1 = indices_1[0]; 
 
         if idx0 == idx1{
           return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...diff({}..., {}...",
+                format!("...from ' \"{}\", to = \"{}\"...",
                   sec_fltr_0, sec_fltr_1, )));
         }
 

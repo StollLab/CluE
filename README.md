@@ -2,7 +2,6 @@
 CluE (Cluester Evolution) is a quantum spin dynamics program to simulate central spin decoherence,  CluE implements Yang and Liu's cluster correlation expansion [1,2].  For usage information please refer to the manual.
 
 ### Installation
-The installation process has been tested on several Linux distributions and on Windows 10, but not macOS.
 Before installing, make sure you have the latest version of
 [Rust](https://www.rust-lang.org/)[3]
 installed.
