@@ -45,13 +45,12 @@ mcmf = "2.0.0"
 [target.'cfg(unix)'.dependencies]
 # To build openblas instead of using the system's openblas, comment this line
 # and uncomment the next.
-#ndarray-linalg = { version = "0.17", features = ["openblas-system"] }
-ndarray-linalg = { version = "0.17", features = ["openblas-static"] }
+ndarray-linalg = { version = "0.17", features = ["openblas-system"] }
+#ndarray-linalg = { version = "0.17", features = ["openblas-static"] }
 
 #[target.'cfg(windows)'.dependencies.ndarray-linalg]
 #version = '0.17.0'
 #features = ['intel-mkl']
-
 
 #[target.'cfg(windows)'.dev-dependencies]
 #criterion = '0.3.0'

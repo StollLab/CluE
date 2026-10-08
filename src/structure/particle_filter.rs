@@ -962,8 +962,6 @@ impl VectorSpecifier{
             structure, config)?;
 
 
-        println!("DB: idx0 = {:#?}",indices_0);
-        println!("DB: idx1 = {:#?}",indices_1);
         if indices_0.len() == 2 && indices_1.len() == 2{
           indices_0.append(&mut indices_1);
           indices_0 = math::unique(indices_0);

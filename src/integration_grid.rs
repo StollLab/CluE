@@ -413,7 +413,9 @@ impl IntegrationGrid{
       let y = self.y(ii);
       let z = self.z(ii); 
       
-      if (z < 0.0) || (z < thr && y < 0.0) || (z < thr && y < thr && x < 0.0){ 
+      if (z < -thr) 
+          || (z.abs() < thr && y < -thr) 
+          || (z.abs() < thr && y.abs() < thr && x < -thr){ 
         continue; 
       }
 
@@ -458,7 +460,7 @@ mod tests{
   fn test_lebedev(){
     let grid = IntegrationGrid::lebedev(6).unwrap();
     let norm: f64 = grid.weights.iter().sum();
-    assert!( (norm- 1.0).abs() <1e12);
+    assert!( (norm- 1.0).abs() <1e-12);
 
     assert_eq!(grid.points, vec![
         1.0, 0.0, 0.0,
@@ -508,7 +510,7 @@ mod tests{
     let grid = IntegrationGrid::lebedev(6).expect("not a Lebedev grid")
       .remove_3d_hemisphere();
     let norm: f64 = grid.weights.iter().sum();
-    assert!( (norm- 1.0).abs() <1e12);
+    assert!( (norm- 1.0).abs() <1e-12);
     assert_eq!(grid.points, vec![
         1.0, 0.0, 0.0,
         0.0, 1.0, 0.0,

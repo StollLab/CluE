@@ -76,14 +76,17 @@ pub fn propagate_pulse_sequence_block_diag(
     let u: CxMat;
     match pulse_sequence{
       PulseSequence::CarrPurcell(0) => // FID
+        // U = Uα† Uβ 
         u = u_alpha_dag.dot(u_beta),
 
       PulseSequence::CarrPurcell(1) => // Hahn echo
+        // U = Uα† Uβ† Uα Uβ 
         u = u_alpha_dag.dot(&u_beta_dag.dot(&u_alpha.dot(u_beta))),  
       
       PulseSequence::CarrPurcell(2) => // CP-2
-        u = u_beta_dag.dot(&u_alpha_dag.dot(&u_alpha_dag.dot(&u_beta_dag
-              .dot(&u_alpha.dot(&u_beta.dot(&u_alpha.dot(u_beta))))))),
+        // U = (Uα† Uβ† Uβ† Uα†)  (Uβ Uα Uα Uβ) 
+        u = u_alpha_dag.dot(&u_beta_dag.dot(&u_beta_dag.dot(&u_alpha_dag
+              .dot(&u_beta.dot(&u_alpha.dot(&u_alpha.dot(u_beta))))))),
       
       PulseSequence::CarrPurcell(n_pi) => { // CP-n
         let u_aa = u_alpha.dot(u_alpha);
@@ -136,8 +139,8 @@ pub fn propagate_pulse_sequence_block_diag(
             = u_alpha_dag.dot(&u_beta_dag.dot(&u2_beta_dag.dot(&u2_alpha_dag)));
   
           let u_re = u_abba_dag.dot(&u_baab);
-          let it = std::iter::zip(density_matrix,&u_re);
-          let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+          let it = std::iter::zip(density_matrix.t(),&u_re);
+          let v = it.map(|(rho_ji,u_ij)| rho_ji*u_ij).sum::<Complex<f64>>();
           signal.push(v);
         }
       },
@@ -154,8 +157,8 @@ pub fn propagate_pulse_sequence_block_diag(
     }
 
     if *pulse_sequence == PulseSequence::RefocusedHahnEcho { continue; }
-    let it = std::iter::zip(density_matrix,&u);
-    let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+    let it = std::iter::zip(density_matrix.t(),&u);
+    let v = it.map(|(rho_ji,u_ij)| rho_ji*u_ij).sum::<Complex<f64>>();
     signal.push(v);
   }
 

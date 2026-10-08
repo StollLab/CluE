@@ -552,9 +552,6 @@ impl Structure{
 
         // Loop through particle that should be changed together.
         for particle_idx0 in cosubstitution_group.iter(){
-
-          // Only substutute active particles.
-          if !self.bath_particles[*particle_idx0].active {continue;}
         
           let Some(particle_idx) 
             = self.cell_indices[*particle_idx0][unit_cell_id] else{continue;};

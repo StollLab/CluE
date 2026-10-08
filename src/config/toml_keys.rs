@@ -97,7 +97,7 @@ pub const KEY_SELE_NOT_RESIDUES: &str = "not_residues";
 pub const KEY_SELE_RES_SEQ_NUMS: &str = "residue_sequence_numbers";
 pub const KEY_SELE_NOT_RES_SEQ_NUMS: &str = "not_residue_sequence_numbers";
 
-pub const KEY_SELE_ISOTOPES: &str = "isotpes";
+pub const KEY_SELE_ISOTOPES: &str = "isotopes";
 pub const KEY_SELE_NOT_ISOTOPES: &str = "not_isotopes";
 
 pub const KEY_SELE_BONDED_INDICES: &str = "bonded_indices";
@@ -200,7 +200,7 @@ pub const ALLOWED_KEYS: [&str;369] = [
   "indices",
   "info",
   "input_structure_file",
-  "isotpes",
+  "isotopes",
   "kmeans_size",
   "lebedev",
   "magnetic_field",
