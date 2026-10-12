@@ -245,13 +245,15 @@ pub fn propagate_pulse_sequence(
 
       // U(2n𝜏) = ( U0(𝜏) Upi U0(𝜏) )^n
       PulseSequence::CarrPurcell(n_pi) => { // CP-n
-        let u_seg = u_of_tau.dot(&u_pi.dot(u_of_tau));
-        u_sequence = cxmat_pow_n(&u_seg,*n_pi);
+        let mut u_seg = u_of_tau.dot(&u_pi.dot(u_of_tau));
+        u_seg = cxmat_pow_n(&u_seg,*n_pi);
+        u_sequence = u_seg.dot(&u_sequence);
       }
 
       PulseSequence::RefocusedHahnEcho =>{
         let u_seg1 = u_of_tau.dot(&u_pi.dot(u_of_tau));
         for u_of_tau2 in u_of_tau2s.iter(){
+          let mut u_sequence = u_half_pi.clone();
           let u_seg2 = u_of_tau2.dot(&u_pi.dot(u_of_tau2));
           u_sequence = u_seg2.dot(&u_seg1.dot(&u_sequence));
           
@@ -261,8 +263,8 @@ pub fn propagate_pulse_sequence(
           // D(T) = U(T)^* D U(T). 
           let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
 
-          let it = std::iter::zip(density_matrix,&detection_op);
-          let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+          let it = std::iter::zip(density_matrix.t(),&detection_op);
+          let v = it.map(|(rho_ji,u_ij)| rho_ji*u_ij).sum::<Complex<f64>>();
           signal.push(v);
         }
       },
@@ -319,7 +321,8 @@ pub fn get_free_evolutions_propagators(//hamiltonian: &CxMat,
   for (idt,_dt) in tau_increments.iter().enumerate(){
     let n_timepoints = number_timepoints[idt];
     for ii in 1..n_timepoints{
-      u_of_taus.push( dus[idt].dot(&u_of_taus[ii-1]));
+      let idx_u = u_of_taus.len() - 1;
+      u_of_taus.push( dus[idt].dot(&u_of_taus[idx_u]));
     }
   }
 
@@ -349,7 +352,8 @@ pub fn get_2nd_free_evolutions_propagators(//hamiltonian: &CxMat,
   for (idt,_dt) in tau_increments.iter().enumerate(){
     let n_timepoints = number_timepoints[idt];
     for ii in 1..n_timepoints{
-      u_of_taus.push( dus[idt].dot(&u_of_taus[ii-1]));
+      let idx_u = u_of_taus.len() - 1;
+      u_of_taus.push( dus[idt].dot(&u_of_taus[idx_u]));
     }
   }
 

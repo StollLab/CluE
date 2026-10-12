@@ -195,8 +195,12 @@ impl SpinStates{
           states[ii][[jj,0]] *= Complex64{re: phi.cos(), im: phi.sin()};
         }
 
-        let sum_sqr: f64 = states[ii]
-            .iter().map(|z| z.norm_sqr()).sum();
+      }
+
+      let sum_sqr: f64 = states[ii]
+          .iter().map(|z| z.norm_sqr()).sum();
+
+      for (jj,w) in weights.iter().enumerate(){
         states[ii][[jj,0]] *= Complex64{re: 1.0/sum_sqr.sqrt(), im: 0.0};
       }
     }
@@ -233,6 +237,11 @@ impl SpinStates{
 
   }
   //----------------------------------------------------------------------------
+  /// This functton randomizes the quantum spin states = {Ψ}.
+  /// Each spin will be assigned Ψ = [z1,..,zm], where m is the multiplicity 
+  /// and z is a complex number s.t. |z| <= 1 and sum{|z|^2} = 1.
+  /// The z values are sampled so that |z|^2 is uniform in [0,1]
+  /// and arg(z) is uniform in [0,2π]. 
   pub fn randomize_state(&mut self,rng: &mut ChaCha20Rng){
     let range = Uniform::new(0.0f64, 1.0);
     for psi in self.states.iter_mut(){
@@ -387,7 +396,9 @@ mod tests{
     let mut y = 0.0;
     let n = 1000;
     for _ in 0..n{
+      // Get a random state.
       s.randomize_state(&mut rng);
+
       x += s.states[0][[0,0]].norm_sqr();
       y += s.states[1][[0,0]].norm_sqr();
       for psi in s.states.iter(){

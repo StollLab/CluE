@@ -106,6 +106,7 @@ pub struct Config{
   pub neighbor_cutoff_3_spin_hahn_mod_depth: Option<f64>,
   pub neighbor_cutoff_3_spin_hahn_taylor_4: Option<f64>,
   pub neighbor_cutoff_delta_zeeman: Option<f64>,
+  pub neighbor_cutoff_average_zeeman: Option<f64>,
 
   // CCE
   pub cluster_batch_size: Option<usize>, 
@@ -261,6 +262,10 @@ impl Config{
 
     if self.neighbor_cutoff_delta_zeeman.is_none(){
       self.neighbor_cutoff_delta_zeeman = Some(1e-12);
+    }
+
+    if self.neighbor_cutoff_average_zeeman.is_none(){
+      self.neighbor_cutoff_average_zeeman = Some(0.0);
     }
 
     if self.number_runs.is_none(){

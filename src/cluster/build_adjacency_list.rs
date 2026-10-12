@@ -72,6 +72,12 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
       return Ok(false);
     }
   }
+  if let Some(cutoff_ave_zeeman) = &config.neighbor_cutoff_average_zeeman{
+    let ave_zeeman = 0.5*(zeeman1 + zeeman0).norm();
+    if ave_zeeman <= *cutoff_ave_zeeman {
+      return Ok(false);
+    }
+  }
 
   let Some(dipdip) = tensors.spin2_tensors.get(idx0,idx1) else {
     return Ok(false);
@@ -89,10 +95,10 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
   let b = ( -dipdip.xx() - dipdip.yy() ).abs();
 
   if let Some(cutoff) = &config.neighbor_cutoff_delta_hyperfine_zz{
-    if delta_hf < *cutoff {return Ok(false);}
+    if !(delta_hf >= *cutoff) {return Ok(false);}
   }
   if let Some(cutoff) = &config.neighbor_cutoff_coupling_xx_yy{
-    if b < *cutoff {return Ok(false);}
+    if !(b >= *cutoff) {return Ok(false);}
   }
   if let Some(cutoff) = &config.neighbor_cutoff_point_dipole_perpendicular{
     let structure_index0 = structure.get_bath_index_of_nth_active(idx0)?;
@@ -110,16 +116,16 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
 
     let b_perp = get_perpendicular_dipole_dipole_frequency(
         gamma_0, gamma_1, delta_r);
-    if b_perp < *cutoff {return Ok(false);}
+    if !(b_perp >= *cutoff) {return Ok(false);}
   }
 
   if let Some(cutoff) = &config.neighbor_cutoff_3_spin_hahn_mod_depth{
     let k = appa_hahn_modulation_depth(delta_hf,b);
-    if k < *cutoff {return Ok(false);}
+    if !(k >= *cutoff) {return Ok(false);}
   }
   if let Some(cutoff) = &config.neighbor_cutoff_3_spin_hahn_taylor_4{
     let kom4 = appa_hahn_fourth_order_coefficient(delta_hf,b);
-    if kom4 < *cutoff {return Ok(false);}
+    if !(kom4 >= *cutoff) {return Ok(false);}
   }
 
   if let Some(cutoff) = &config.neighbor_cutoff_distance{
@@ -131,7 +137,7 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
 
     let delta_r = (r1 - r0).norm();
 
-    if delta_r > *cutoff { return Ok(false); } 
+    if !(delta_r <= *cutoff) { return Ok(false); } 
   }
 
   Ok(true)

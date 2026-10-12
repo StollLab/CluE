@@ -304,7 +304,7 @@ impl HamiltonianTensors{
 
       let mult = self.spin_multiplicities[n];
 
-      let idx_to_spin = |idx, mult| (idx as f64) - 0.5*( (mult as f64) - 1.0);
+      let idx_to_spin = |idx, mult| - (idx as f64) + 0.5*( (mult as f64) - 1.0);
 
       let mut weights: Vec::<f64> = (0..mult)
         .map(|n| (-0.5*hz*beta*idx_to_spin(n,mult)).exp() )
@@ -372,7 +372,7 @@ impl HamiltonianTensors{
         }
 
         if let Some(ten) = self.spin2_tensors.get(idx0,idx1){
-          let mf_vec = evaluate_mean_field(ten,&states[idx0])?;
+          let mf_vec = evaluate_mean_field(ten,&states[idx1])?;
           mean_field_couplings[idx0].push(mf_vec);
         }else{
           mean_field_couplings[idx0].push(Vector3D::zeros());
@@ -983,7 +983,7 @@ fn evaluate_mean_field(ten: &SymmetricTensor3D, state: &CxMat)
   let ez = expectation_value(&sz,state)?;
 
   let mfx = ten.xx()*ex + ten.xy()*ey + ten.xz()*ez; 
-  let mfy = ten.yx()*ex + ten.yy()*ey + ten.zz()*ez; 
+  let mfy = ten.yx()*ex + ten.yy()*ey + ten.yz()*ez; 
   let mfz = ten.zx()*ex + ten.zy()*ey + ten.zz()*ez; 
 
   Ok(Vector3D::from([mfx.re,mfy.re,mfz.re]))

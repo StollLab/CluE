@@ -54,7 +54,7 @@ fn parse_cell(filename: &str) -> Result<Vec::<Vector3D>,CluEError>
      let Ok(line) = line_result else{
        return Err(CluEError::CannotOpenFile(filename.to_string()));
      };
-     if line.contains("CRYST1"){
+     if line.starts_with("CRYST1"){
        cell_offsets = parse_crystal_line(&line)?;
        break;
      }
@@ -87,7 +87,7 @@ fn parse_connections(filename: &str ,
        return Err(CluEError::CannotOpenFile(filename.to_string()));
      };
 
-     if line.contains("CONECT"){
+     if line.starts_with("CONECT"){
        let bonds_serial = parse_connections_line(&line)?;
 
        let mut bonds_index =  Vec::<usize>::with_capacity(bonds_serial.len());
@@ -147,7 +147,7 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
        return Err(CluEError::CannotOpenFile(filename.to_string()));
      };
 
-     if line.contains("ENDMDL"){
+     if line.starts_with("ENDMDL"){
        model_idx += 1;
        if model_idx > target_model{
          break;
@@ -156,7 +156,7 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
      }
 
      if model_idx != target_model
-       || !(line.contains("ATOM") || line.contains("HETATM")) {
+       || !(line.starts_with("ATOM") || line.starts_with("HETATM")) {
        continue;
      }
 
@@ -180,8 +180,10 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
      };
 
      if let Some(serial) = particle.serial{
-       serial_to_index.entry(serial)
-         .or_insert_with(|| Some(bath_particles.len()));
+       if serial_to_index.contains_key(&serial) {
+         return Err(CluEError::DuplicateSerial(serial));
+       }
+       serial_to_index.insert(serial, Some(bath_particles.len()));
      }
 
      bath_particles.push(particle);
@@ -296,7 +298,13 @@ fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
     return Err((CluEError::CannotParseLine(line.to_string()),0));
   }
 
-  let element: Element = match Element::from(line[76..=77].trim()) {
+  let elmt_str = if line.len() >= 77{
+    line[76..=77].trim()
+  }else{
+    return Err((CluEError::CannotParseLine(line.to_string()),0));
+  };
+
+  let element: Element = match Element::from(elmt_str) {
     Ok(elmt) => elmt,
     Err(err) => return Err((err,serial))
   };
@@ -371,11 +379,11 @@ fn count_pdb_atoms(filename: &str) -> Result<(usize,usize),CluEError> {
      let Ok(line) = line_result else{
        return Err(CluEError::CannotOpenFile(filename.to_string()));
      };
-     if line.contains("MODEL"){
+     if line.starts_with("MODEL"){
        model_count += 1;
-     }else if line.contains("ENDMDL"){
+     }else if line.starts_with("ENDMDL"){
        increment = 0;
-     }else if line.contains("ATOM") || line.contains("HETATM") {
+     }else if line.starts_with("ATOM") || line.starts_with("HETATM") {
        count += increment;
      }
    }

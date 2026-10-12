@@ -50,6 +50,7 @@ pub enum CluEError{
   ClusterTOMLNoNumberClusters,
   PulseSequenceNotSupported(String,String),
   DetectedSpinDoesNotHaveAnActiveIndex,
+  DuplicateSerial(u32),
   Error(String),
   ExpectedClusterSetWithNSizes(usize,usize),
   ExpectedTOMLArray(String),
@@ -326,6 +327,9 @@ size n.", file),
 
       CluEError::PulseSequenceNotSupported(fun,seq) => write!(f,
         "\"{}\" does not support {}",fun,seq),
+
+      CluEError::DuplicateSerial(srl) => write!(f,
+          "seial \"{}\" has multiple entries", srl),
 
       CluEError::Error(error_message) => write!(f,
           "{}", error_message),
