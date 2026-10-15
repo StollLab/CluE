@@ -1,0 +1,45 @@
+# rustfmt configuration approximating the existing CluE Oxide code style.
+#
+# Options marked (nightly) are unstable and are only honored by
+# `cargo +nightly fmt`; stable rustfmt warns about them and ignores them.
+#
+# Known gaps: rustfmt cannot reproduce some of this project's conventions:
+#   - no space before `{`            (`impl Foo{`, `fn f() -> T{`, `else{`)
+#   - no space after `,`             (`HashMap::<usize,usize>`, `f(a,b)`)
+#   - turbofish in type position     (`Vec::<T>` is rewritten to `Vec<T>`)
+#   - `{` on its own line after a multi-line fn signature
+#   - `=` leading the continuation line of a long `let`
+# Running `cargo fmt` over the whole crate will therefore produce a large
+# diff. Treat this file as a reference, or format only new code with it.
+
+edition = "2021"
+
+# Layout
+max_width = 80
+tab_spaces = 2
+hard_tabs = false
+newline_style = "Auto"        # repo stores LF; Windows checkouts use CRLF
+use_small_heuristics = "Max"  # dense code, keep short constructs on one line
+
+# Functions
+fn_params_layout = "Compressed"   # pack params onto as few lines as possible
+fn_single_line = true             # (nightly) `pub fn len(&self) -> usize{ self.n }`
+where_single_line = true          # (nightly)
+
+# Lists and matches
+trailing_comma = "Vertical"
+match_block_trailing_comma = true # `Err(e) => { ... },`
+
+# Imports: one `use` per item, groups and order kept as written
+reorder_imports = false
+imports_granularity = "Item"      # (nightly)
+group_imports = "Preserve"        # (nightly)
+
+# Blank lines: up to two consecutive blank lines are used to separate blocks
+blank_lines_upper_bound = 2       # (nightly)
+
+# Comments: doc comments and `//----` separators are wrapped at 80 columns
+comment_width = 80                # (nightly)
+wrap_comments = false             # (nightly) don't reflow hand-written text
+normalize_comments = false        # (nightly)
+format_strings = false            # (nightly)

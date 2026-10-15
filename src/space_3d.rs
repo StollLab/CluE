@@ -596,45 +596,6 @@ impl std::fmt::Display for Vector3D {
         self.elements[2])
   }
 }
-//------------------------------------------------------------------------------
-//
-// Let n be an integer and v,v0,v1, and step be real-valued vectors,
-// This function returns the v1 := v + n*step founds by
-//
-//     v1 = argmin(|v0-v1|) = argmin( |v0 - (v + n*step)| ).
-//
-pub fn minimize_absolute_difference_for_vector3d_step(
-    v: &Vector3D, v0: &Vector3D, step: &Vector3D,) -> Vector3D    
-{
-
-
-  let mut v1 = v.clone();
-
-  let mut err0 = (&v1-v0).norm();
-  let mut err = (&v1-&(v0 + step)).norm();
-
-  let delta_v: Vector3D = if err < err0{
-    step.clone()
-  }else{
-    -step.clone()
-  };
-
-  
-  loop{
-  
-    let v2 = &v1 + &delta_v;
-    err0 = err;
-    err =  (&v2-v0).norm();
-    if err <= err0{
-      v1 = v2;
-    }else{
-      break;
-    }
-  
-  }
-
-  v1
-}
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 

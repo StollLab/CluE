@@ -210,6 +210,31 @@ impl IntegrationGrid{
     r
   }
   //----------------------------------------------------------------------------
+  /// This function returns the weighted mean of the points, 
+  /// sum_i w_i r_i / sum_i w_i, where w_i are the weights.
+  /// Negative weights are allowed, but it returns `None` if the sum of the 
+  /// weights is not a positive, finite number.
+  pub fn weighted_mean(&self) -> Option<Vec::<f64>>{
+    let total = self.weights.iter().fold(0.0, |sum, w| sum + w);
+    if !(total.is_finite() && total > 0.0){
+      return None;
+    }
+
+    let mut r: Vec::<f64> = (0..self.dim).map(|_| 0.0).collect();
+    for (ii,x) in self.points.iter().enumerate(){
+      r[ii%self.dim] += self.weights[ii/self.dim]*x;
+    }
+
+    Some(r.into_iter().map(|x| x/total).collect())
+  }
+  //----------------------------------------------------------------------------
+  /// This function scales all the points by a `scale_factor`.
+  pub fn scale_mut(&mut self, scale_factor: f64){
+    for x in self.points.iter_mut(){
+      *x *= scale_factor; 
+    }
+  }
+  //----------------------------------------------------------------------------
   /// This function translates all the points in the grid by `vector`.
   /// The function will panic if the vector is of a different dimension than
   /// the grid.
@@ -400,6 +425,35 @@ mod tests{
                                  0.0,0.0,1.0]);
     assert_eq!(grid.weights, vec![0.3333,0.3333,0.3333]);
 
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_weighted_mean(){
+    let mut grid = IntegrationGrid::new(3);
+    grid.push(vec![1.0, 0.0, 0.0], 0.25).unwrap();
+    grid.push(vec![-1.0, 0.0, 0.0], 0.25).unwrap();
+    grid.push(vec![0.0, 2.0, 0.0], 0.5).unwrap();
+    assert_eq!(grid.weighted_mean(), Some(vec![0.0, 1.0, 0.0]));
+    // The unweighted mean differs.
+    let mean = grid.mean();
+    assert!((mean[1] - 2.0/3.0).abs() < 1e-15);
+
+    // Weights that do not sum to one give the same mean.
+    let mut scaled = grid.clone();
+    scaled.weights = grid.weights.iter().map(|w| 4.0*w).collect();
+    assert_eq!(scaled.weighted_mean(), Some(vec![0.0, 1.0, 0.0]));
+
+    // Negative weights are allowed if the sum is positive.
+    let mut grid = IntegrationGrid::new(3);
+    grid.push(vec![1.0, 0.0, 0.0], 1.2).unwrap();
+    grid.push(vec![2.0, 0.0, 0.0], -0.2).unwrap();
+    let mean = grid.weighted_mean().unwrap();
+    assert!((mean[0] - 0.8).abs() < 1e-15);
+
+    // Weights without a positive sum have no mean.
+    grid.weights = vec![1.0, -1.0];
+    assert_eq!(grid.weighted_mean(), None);
+    assert_eq!(IntegrationGrid::new(3).weighted_mean(), None);
   }
   //----------------------------------------------------------------------------
   #[test]

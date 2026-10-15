@@ -1,0 +1,86 @@
+input_structure_file = "water_gly_20pc_vol.pdb"
+
+magnetic_field = 1.2
+pulse_sequence = "hahn"
+tau_increments = [5e-2]
+number_timepoints = [301]
+temperature = 50
+
+radius = 60
+run_name = "system"
+number_runs = 1
+
+
+populations = "thermal"
+cluster_method = "cce"
+max_cluster_size = 2
+max_spins = 2
+partitioning = "singles"
+
+[detected_spin]
+  position = [25.0,25.0,25.0]
+  g_matrix.values = [2.00841, 2.00604, 2.00223]
+  g_matrix.axes.x = "random"
+  g_matrix.axes.y = "random"
+
+  
+  
+[orientations]
+grid = "random"
+number = 1
+
+[output]
+  auxiliary_signals = false
+  bath = true
+  clusters = false
+  info = true
+  exchange_groups = true
+  structure_pdb = true
+  orientation_signals = false
+
+
+[[groups]]
+name = "CLOSE_H"
+selection.within_distance = 4.0
+1H.active = false
+  
+[[groups]]
+name = "WATER_H"
+selection.residues = ["SOL"]
+selection.elements = ["H"]
+selection.not_within_distance = 4.0
+
+drop_probability = 0.99
+
+2H.electric_quadrupole.values = [-0.2134,-0.2134,0.4268]
+2H.electric_quadrupole.axes.x = "random"
+2H.electric_quadrupole.axes.y = "random"
+
+[[groups]]
+name = "GLYCEROL_OH"
+selection.residues = ["GLY"]
+selection.elements = ["H"]
+selection.bonded_elements = ["O"]
+selection.not_within_distance = 4.0
+
+drop_probability = 0.99
+
+2H.electric_quadrupole.values = [-0.2134,-0.2134,0.4268]
+2H.electric_quadrupole.axes.x = "random"
+2H.electric_quadrupole.axes.y = "random"
+
+[[groups]]
+name = "GLYCEROL_CH"
+selection.residues = ["GLY"]
+selection.elements = ["H"]
+selection.bonded_elements = ["C"]
+selection.not_within_distance = 4.0
+
+cosubstitute = "same_molecule"
+
+drop_probability = 0.99
+
+2H.electric_quadrupole.values = [-0.1945,-0.1945,0.389]
+2H.electric_quadrupole.axes.x = "random"
+2H.electric_quadrupole.axes.y = "random"
+

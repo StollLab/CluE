@@ -8,7 +8,7 @@ use crate::config::config_toml::*;
 use crate::config::particle_config::set_particle_configs_from_toml_table;
 use crate::config::command_line_input::CommandLineInput;
 use crate::config::particle_config::{
-  CellType, ParticleConfig,EigSpecifier,TensorSpecifier
+  CellType, ParticleConfig,EigSpecifier,TensorSpecifier,
 };
 use crate::isotopes::Isotope;
 use crate::physical_constants::*;
@@ -63,6 +63,7 @@ pub struct Config{
   pub detected_spin_identity: Option<Isotope>,
   pub detected_spin_multiplicity: Option<usize>,
   pub detected_spin_position: Option<DetectedSpinCoordinates>,
+  pub detected_spin_weight_tolerance: Option<f64>,
   pub detected_spin_transition: Option<[usize;2]>,
 
   // Structure
@@ -128,6 +129,10 @@ pub struct Config{
   pub unit_of_time_to_seconds: Option<f64>,
 }
 
+
+/// The default allowed difference between one and the sum of the weights of 
+/// a detected spin probability grid.
+pub const DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 
 impl FromTOMLString for Config{
   fn from_toml_string(toml_str: &str) -> Result<Self,CluEError>{
@@ -268,6 +273,65 @@ impl Config{
     }
     if self.detected_spin_transition.is_none(){
       self.detected_spin_transition = Some([0,1]);
+    }
+
+    self.check_particle_configs()?;
+
+    self.check_detected_spin_grid()?;
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function checks that the weights of a detected spin probability
+  // grid sum to one within detected_spin.weight_tolerance, and normalizes
+  // them.
+  // A message is printed when normalizing changes the weights by more 
+  // than floating point rounding.
+  fn check_detected_spin_grid(&mut self) -> Result<(),CluEError>{
+    let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid)) 
+      = &mut self.detected_spin_position else{
+      return Ok(());
+    };
+
+    let tolerance = self.detected_spin_weight_tolerance
+      .unwrap_or(DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE);
+    if !(0.0..1.0).contains(&tolerance){
+      return Err(CluEError::InvalidSpinGridWeightTolerance(tolerance));
+    }
+
+    let sum = grid.weights.iter().fold(0.0, |sum, w| sum + w);
+    if !((sum - 1.0).abs() <= tolerance){
+      return Err(CluEError::SpinGridWeightsDoNotSumToOne(sum, tolerance));
+    }
+
+    if sum == 1.0{ return Ok(()); }
+    for weight in grid.weights.iter_mut(){
+      *weight /= sum;
+    }
+
+    // Differences up to this size are floating point rounding.
+    const ROUNDING: f64 = 1e-12;
+    if (sum - 1.0).abs() > ROUNDING{
+      println!("The weights of the detected spin grid sum to {}; \
+they were normalized to sum to one.", sum);
+    }
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function checks that the drop probability of each group lies in 
+  // the interval [0, 1].
+  fn check_particle_configs(&self) -> Result<(),CluEError>{
+    for particle_config in self.particles.iter()
+      .chain(self.extracell_particles.iter())
+    {
+      let Some(properties) = &particle_config.properties else{ continue; };
+
+      if let Some(p) = properties.isotopic_distribution.void_probability{
+        if !(0.0..=1.0).contains(&p){
+          return Err(CluEError::InvalidDropProbability(
+                particle_config.label.clone(), p));
+        }
+      }
     }
     Ok(())
   }
@@ -449,19 +513,22 @@ pub enum DetectedSpinCoordinates{
   ProbabilityDistribution(IntegrationGrid),
 }
 impl DetectedSpinCoordinates{
-  pub fn from_toml_value(value: toml::Value) -> Result<Self,CluEError> 
+  pub fn from_toml_value(value: toml::Value, unit_of_distance: f64) 
+      -> Result<Self,CluEError> 
   {
     match value{
-      Value::Array(array) => Self::from_toml_array(array),
+      Value::Array(array) => Self::from_toml_array(array,unit_of_distance),
       Value::String(filename) => { 
-        let int_grid = IntegrationGrid::read_from_csv(&filename)?;
+        let mut int_grid = IntegrationGrid::read_from_csv(&filename)?;
+        int_grid.scale_mut(unit_of_distance);
         Ok(Self::ProbabilityDistribution(int_grid))
       },
       _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
     }
   }
   //----------------------------------------------------------------------------
-  pub fn from_toml_array(array: Vec::<toml::Value>) -> Result<Self,CluEError>
+  pub fn from_toml_array(array: Vec::<toml::Value>, unit_of_distance: f64) 
+      -> Result<Self,CluEError>
   {
 
     if array.is_empty(){
@@ -490,9 +557,9 @@ impl DetectedSpinCoordinates{
               ,a[3].as_float()) else{
             return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
           };
-          points.push(x);
-          points.push(y);
-          points.push(z);
+          points.push(x*unit_of_distance);
+          points.push(y*unit_of_distance);
+          points.push(z*unit_of_distance);
           weights.push(w);
         }
         Ok(Self::ProbabilityDistribution(
@@ -502,7 +569,7 @@ impl DetectedSpinCoordinates{
         let vec: Vec::<f64> = array.iter()
           .filter_map(|v| v.as_float()).collect();
 
-        let vec3d = Vector3D::from_vec(vec)?;
+        let vec3d = Vector3D::from_vec(vec)?.scale(unit_of_distance);
 
         Ok(Self::XYZ(vec3d))
 
@@ -524,6 +591,7 @@ impl DetectedSpinCoordinates{
   }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -842,7 +910,12 @@ impl Config{
 
       if let Some(toml_value) = detected_spin.position{
         self.detected_spin_position 
-          = Some(DetectedSpinCoordinates::from_toml_value(toml_value)? );
+          = Some(DetectedSpinCoordinates::from_toml_value(
+                toml_value,unit_of_distance)? );
+      }
+
+      if detected_spin.weight_tolerance.is_some(){
+        self.detected_spin_weight_tolerance = detected_spin.weight_tolerance;
       }
 
       if detected_spin.transition.is_some(){
@@ -1280,8 +1353,8 @@ mod tests{
         
         cosubstitute = "same_molecule"
 
-        1H.abundace = 0.5
-        2H.abundace = 0.5
+        1H.abundance = 0.5
+        2H.abundance = 0.5
 
         [groups.selection]
           elements = ["H"]
@@ -1436,9 +1509,134 @@ mod tests{
     assert_eq!(filter.bonded_elements, vec![Element::Carbon]);
     let properties = groups[6].properties.clone().unwrap();
     assert_eq!(properties.cosubstitute,
-        Some(SecondaryParticleFilter::SameMolecule));
+        Some(crate::config::particle_config::Cosubstitute::SameMolecule));
 
 
+  }
+  //----------------------------------------------------------------------------
+  // This function reads a config with one group "g" with the settings 
+  // `settings`.
+  fn config_with_group(settings: &str) -> Result<Config,CluEError>{
+    Config::from_toml_string(&format!(r##"
+        [[groups]]
+        name = "g"
+        selection.elements = ["C"]
+        {}
+        "##, settings))
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_detected_spin_grid_weights(){
+    let config_with_grid = |weights: [&str;2], tolerance: &str|{
+      Config::from_toml_string(&format!(r##"
+          [detected_spin]
+          position = [[0.0, 0.0, 0.0, {}], [1.0, 0.0, 0.0, {}]]
+          {}
+          "##, weights[0], weights[1], tolerance))
+    };
+    let weights_of = |config: &Config| -> Vec::<f64>{
+      let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid))
+        = &config.detected_spin_position else{ panic!("no grid"); };
+      grid.weights.clone()
+    };
+
+    // Weights that sum to one, including negative weights, are accepted.
+    let config = config_with_grid(["0.5","0.5"],"").unwrap();
+    assert_eq!(weights_of(&config), vec![0.5, 0.5]);
+    let config = config_with_grid(["1.2","-0.2"],"").unwrap();
+    assert_eq!(weights_of(&config), vec![1.2, -0.2]);
+
+    // Weights that do not sum to one are errors, 
+    // unless they are within the tolerance, which normalizes them.
+    assert_eq!(config_with_grid(["0.45","0.45"],"").err(),
+        Some(CluEError::SpinGridWeightsDoNotSumToOne(0.9, 1e-9)));
+    let config = config_with_grid(["0.45","0.45"],"weight_tolerance = 0.2")
+      .unwrap();
+    for w in weights_of(&config){
+      assert!((w - 0.5).abs() < 1e-15);
+    }
+    assert_eq!(config.detected_spin_weight_tolerance, Some(0.2));
+
+    for tolerance in ["-1.0", "1.0", "nan"]{
+      assert!(matches!(config_with_grid(["0.5","0.5"],
+            &format!("weight_tolerance = {}",tolerance)),
+            Err(CluEError::InvalidSpinGridWeightTolerance(_))), "{}",
+          tolerance);
+    }
+
+    // Positions that are not grids ignore the tolerance.
+    let config = Config::from_toml_string(r##"
+        [detected_spin]
+        position = [1.0, 2.0, 3.0]
+        weight_tolerance = 1.5
+        "##).unwrap();
+    assert!(matches!(config.detected_spin_position,
+          Some(DetectedSpinCoordinates::XYZ(_))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_detected_spin_position_unit_of_distance(){
+    // Coordinates are in unit_of_distance, as grid points are.
+    let config = Config::from_toml_string(r##"
+        unit_of_distance = "nm"
+        detected_spin.position = [1.0, 2.0, 3.0]
+        "##).unwrap();
+    assert_eq!(config.detected_spin_position,
+        Some(DetectedSpinCoordinates::XYZ(
+            Vector3D::from([10.0, 20.0, 30.0]).scale(ANGSTROM))));
+
+    let config = Config::from_toml_string(r##"
+        unit_of_distance = "nm"
+        detected_spin.position = [[1.0, 2.0, 3.0, 1.0]]
+        "##).unwrap();
+    let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid))
+      = config.detected_spin_position else{ panic!("no grid"); };
+    assert_eq!(grid.xyz(0).unwrap(),
+        Vector3D::from([10.0, 20.0, 30.0]).scale(ANGSTROM));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_drop_probability_range(){
+    for p in ["1.5", "-0.5", "nan"]{
+      assert!(matches!(config_with_group(&format!("drop_probability = {}",p)),
+            Err(CluEError::InvalidDropProbability(group,_)) if group == "g"),
+          "{}", p);
+    }
+    for p in ["0.0", "1.0", "0.5"]{
+      assert!(config_with_group(&format!("drop_probability = {}",p)).is_ok());
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_cosubstitute(){
+    use crate::config::particle_config::Cosubstitute;
+    for (value, expected) in [("group", Cosubstitute::Group),
+        ("filter", Cosubstitute::Group), ("particle", Cosubstitute::Particle),
+        ("same_molecule", Cosubstitute::SameMolecule)]
+    {
+      assert_eq!(Cosubstitute::from(value,"methyl"), Ok(expected.clone()));
+      let config = Config::from_toml_string(&format!(r##"
+          [[groups]]
+          name = "methyl"
+          selection.elements = ["H"]
+          cosubstitute = "{}"
+          "##, value)).unwrap();
+      assert_eq!(config.particles[0].properties.as_ref().unwrap().cosubstitute,
+          Some(expected));
+    }
+
+    // "bonded" is not supported for cosubstitution, 
+    // and the error names the group.
+    for value in ["bonded", "nonsense"]{
+      let result = Config::from_toml_string(&format!(r##"
+          [[groups]]
+          name = "methyl"
+          selection.elements = ["H"]
+          cosubstitute = "{}"
+          "##, value));
+      assert_eq!(result.err(), Some(CluEError::CannotParseCosubstitute(
+              "methyl".to_string(), value.to_string())));
+    }
   }
   //----------------------------------------------------------------------------
   #[test]

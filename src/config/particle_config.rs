@@ -2,8 +2,7 @@
 use crate::CluEError;
 use crate::config::config_toml::*;
 use crate::misc::are_all_same_type;
-use crate::structure::particle_filter::{ParticleFilter,VectorSpecifier,
-  SecondaryParticleFilter};
+use crate::structure::particle_filter::{ParticleFilter,VectorSpecifier};
 use crate::isotopes::Isotope;
 use crate::physical_constants::C3_TUNNEL_SPLITTING_TO_EXCHANGE_COUPLING;
 use crate::space_3d::SymmetricTensor3D;
@@ -129,6 +128,12 @@ impl ParticleConfig{
         self.cell_type = CellType::from(&cell_type_str)?;
       }
 
+      // D and T are read as hydrogen.
+      for (key, symbol) in hydrogen_isotope_symbols_in_selection(selection){
+        println!("Group \"{}\": \"{}\" in selection.{} is read as \
+hydrogen, so it applies to all hydrogens.", self.label, symbol, key);
+      }
+
       if let Some(filter) = &mut self.filter {
         filter.set_from_toml_table(selection.clone(),unit_of_distance)?;
       }else{
@@ -137,10 +142,10 @@ impl ParticleConfig{
       }
     }
     if let Some(properties) = &mut self.properties {
-      properties.set_from_toml_table(&table,unit_of_energy)?;
+      properties.set_from_toml_table(&table,unit_of_energy,&self.label)?;
     }else{
       self.properties = Some(ParticleProperties::from_toml_table(
-            &table,unit_of_energy)?);
+            &table,unit_of_energy,&self.label)?);
     }
 
     Ok(())
@@ -190,6 +195,57 @@ impl CellType{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+//------------------------------------------------------------------------------
+// This function returns the element selections in `selection` that contain 
+// the symbols "D" or "T", which are read as hydrogen, as (key, symbol) pairs.
+fn hydrogen_isotope_symbols_in_selection(selection: &toml::Table)
+  -> Vec::<(&'static str, String)>
+{
+  let mut found = Vec::<(&'static str, String)>::new();
+  for key in [KEY_SELE_ELEMENTS, KEY_SELE_NOT_ELEMENTS, 
+      KEY_SELE_BONDED_ELEMENTS, KEY_SELE_NOT_BONDED_ELEMENTS]
+  {
+    let Some(array) = selection.get(key).and_then(|v| v.as_array()) else{
+      continue;
+    };
+    for symbol in array.iter().filter_map(|v| v.as_str()){
+      if symbol == "D" || symbol == "T"{
+        found.push((key, symbol.to_string()));
+      }
+    }
+  }
+  found
+}
+//------------------------------------------------------------------------------
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/// `Cosubstitute` selects the particles that are cosubstituted with a 
+/// particle, that is, that get the same random isotope and are kept or 
+/// dropped together:
+/// `Group` selects all particles of its group,
+/// `Particle` selects only the particle itself,
+/// and `SameMolecule` selects the particles of its group in the same molecule.
+#[derive(Debug,Clone,PartialEq)]
+pub enum Cosubstitute{
+  Group,
+  Particle,
+  SameMolecule,
+}
+impl Cosubstitute{
+  /// This function converts the value of "cosubstitute" in group `group`
+  /// to a `Cosubstitute`.
+  pub fn from(cosubstitute: &str, group: &str) -> Result<Self,CluEError>{
+    match cosubstitute{
+      "group" | "filter" => Ok(Self::Group),
+      "particle" => Ok(Self::Particle),
+      "same_molecule" => Ok(Self::SameMolecule),
+      _ => Err(CluEError::CannotParseCosubstitute(group.to_string(),
+            cosubstitute.to_string())),
+    }
+  }
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `ParticleProperties` specifies custom particle properties.
 /// 'cosubstitute` selects the set of particles that should always be the same
@@ -198,7 +254,7 @@ impl CellType{
 /// `isotope_properties` defines some physical properties of the spin.
 #[derive(Debug,Clone,PartialEq,Default)]
 pub struct ParticleProperties{
-  pub cosubstitute: Option<SecondaryParticleFilter>,
+  pub cosubstitute: Option<Cosubstitute>,
   // TODO: move the fields of isotopic_distribution to ParticleProperties,
   // to avoid the subtable.
   pub isotopic_distribution:  IsotopeDistribution,
@@ -211,23 +267,27 @@ impl ParticleProperties{
     Default::default()
   }
   //----------------------------------------------------------------------------
-  pub fn from_toml_table(table: &toml::Table, unit_of_energy: f64) 
+  /// This function reads the properties of the group `group` 
+  /// from a TOML table.
+  pub fn from_toml_table(table: &toml::Table, unit_of_energy: f64,
+      group: &str) 
       -> Result<Self,CluEError>
   {
     let mut properties = Self::new();  
-    properties.set_from_toml_table(table,unit_of_energy)?;
+    properties.set_from_toml_table(table,unit_of_energy,group)?;
 
     Ok(properties)
   }
   //----------------------------------------------------------------------------
-  fn set_from_toml_table(&mut self, table: &toml::Table, unit_of_energy: f64) 
+  fn set_from_toml_table(&mut self, table: &toml::Table, unit_of_energy: f64,
+      group: &str) 
     -> Result<(),CluEError>
   {
     if let Some(value) = table.get(KEY_ISO_COSUBSTITUTE){
       let Some(cosubstitute) = value.as_str() else{
         return Err(CluEError::ExpectedTOMLString(value.type_str().to_string() ));
       };
-      self.cosubstitute = Some(SecondaryParticleFilter::from(cosubstitute)?);
+      self.cosubstitute = Some(Cosubstitute::from(cosubstitute,group)?);
     }
 
     if let Some(value) = table.get(KEY_DROP_PROB){
@@ -369,8 +429,7 @@ impl IsotopeProperties{
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `IsotopeDistribution` determine how isotopes are assigned to elements.
 /// `isotope_abundances` lists the possible isotope and propabilities.
-/// 'void_probability' is the probability that the particle will be included
-/// at all.
+/// 'void_probability' is the probability that the particle will be removed.
 #[derive(Debug,Clone,PartialEq,Default)]
 pub struct IsotopeDistribution{
   // TODO: can isotope_abundances be a HashMap::<Isotope,f64> instead?
@@ -538,5 +597,28 @@ impl EigSpecifier{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+#[cfg(test)]
+mod tests{
+  use super::*;
+  use crate::elements::Element;
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_hydrogen_isotope_symbols_in_selection(){
+    let selection: toml::Table = toml::from_str(r##"
+        elements = ["D", "C"]
+        not_elements = ["O"]
+        bonded_elements = ["T"]
+        "##).unwrap();
+    assert_eq!(hydrogen_isotope_symbols_in_selection(&selection), vec![
+        (KEY_SELE_ELEMENTS, "D".to_string()),
+        (KEY_SELE_BONDED_ELEMENTS, "T".to_string()),
+    ]);
 
-
+    // The selection still treats D and T as hydrogen.
+    let filter = ParticleFilter::from_toml_table(selection, 1.0).unwrap();
+    assert_eq!(filter.elements, vec![Element::Hydrogen, Element::Carbon]);
+    assert_eq!(filter.bonded_elements, vec![Element::Hydrogen]);
+  }
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

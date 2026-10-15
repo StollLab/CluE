@@ -23,26 +23,43 @@ pub fn parse_pdb(filename: &str,target_model: usize)
    let (n_atoms, _n_models) = count_pdb_atoms(filename)?;
    
    let particle_map = parse_atoms(filename, n_atoms, target_model)?;
-   let ParticleMap{ particles: bath_particles, map : serial_to_index} 
-     = particle_map;
+   let ParticleMap{ particles: bath_particles, map : serial_to_index,
+     hydrogen_symbol_counts} = particle_map;
+
+   // D and T are read as hydrogen.
+   for (n, symbol, isotope, name) in [
+       (hydrogen_symbol_counts[0], "D", "2H", "deuterium"),
+       (hydrogen_symbol_counts[1], "T", "3H", "tritium")]
+   {
+     if n > 0{
+       println!("{} atoms with element symbol \"{}\" were read as hydrogen, \
+starting as 1H; to make them {}, put them in a group with {}.abundance = 1.0.",
+           n, symbol, name, isotope);
+     }
+   }
 
    let connections = parse_connections(filename,serial_to_index)?;
 
-   let cell_offsets = parse_cell(filename)?;
+   let (cell_offsets, space_group) = parse_cell(filename)?;
    
-   Ok( Structure::new(
+   let mut structure = Structure::new(
       bath_particles,
       connections,
-      cell_offsets)
-    )
+      cell_offsets);
+   structure.space_group = space_group;
+
+   Ok(structure)
 }
 //------------------------------------------------------------------------------
-// This function tries to parse the crystallographic data.
+// This function tries to parse the crystallographic data, and returns 
+// the unit cell edges and the space group.
 // If it cannot it will err.
-fn parse_cell(filename: &str) -> Result<Vec::<Vector3D>,CluEError>
+fn parse_cell(filename: &str) 
+  -> Result<(Vec::<Vector3D>,Option<String>),CluEError>
 {
 
    let mut cell_offsets = Vec::<Vector3D>::new();
+   let mut space_group: Option<String> = None;
 
    let Ok(file) = std::fs::File::open(filename) else{
      return Err(CluEError::CannotOpenFile(filename.to_string()));
@@ -55,12 +72,12 @@ fn parse_cell(filename: &str) -> Result<Vec::<Vector3D>,CluEError>
        return Err(CluEError::CannotOpenFile(filename.to_string()));
      };
      if line.contains("CRYST1"){
-       cell_offsets = parse_crystal_line(&line)?;
+       (cell_offsets, space_group) = parse_crystal_line(&line)?;
        break;
      }
    }
     
-  Ok(cell_offsets)
+  Ok((cell_offsets, space_group))
 }
 //------------------------------------------------------------------------------
 // This function tries to parse the connections data.
@@ -118,9 +135,12 @@ fn parse_connections(filename: &str ,
 //------------------------------------------------------------------------------
 // `ParticleMap` contains a list of particles and a map from the PDB ID to 
 // the list index.
+// `hydrogen_symbol_counts` counts the atoms with element symbol "D" and "T",
+// which are read as hydrogen.
 struct ParticleMap{
   particles: Vec::<Particle>,
-  map: HashMap::<u32,Option<usize>>
+  map: HashMap::<u32,Option<usize>>,
+  hydrogen_symbol_counts: [usize;2],
 }
 //------------------------------------------------------------------------------
 // This function tries to parse the atom data.
@@ -130,6 +150,8 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
 {
    let mut serial_to_index = HashMap::<u32,Option<usize>>::new(); 
    let mut unknown_elements = HashMap::<String,usize>::new(); 
+   let mut n_elements_from_names = 0;
+   let mut hydrogen_symbol_counts = [0,0];
 
    let mut bath_particles = Vec::<Particle>::with_capacity(n_atoms);
 
@@ -165,6 +187,11 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
 
        Err((CluEError::CannotParseElement(unk_el),serial)) => {
          
+         // Skipped atoms keep their serial, so that CONECT records 
+         // to them can be dropped, and it must not be repeated either.
+         if serial_to_index.contains_key(&serial) {
+           return Err(CluEError::DuplicateSerial(serial));
+         }
          serial_to_index.insert(serial,None);
 
          if let Some(value) = unknown_elements.get_mut(&unk_el){
@@ -179,9 +206,23 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
        Err((err,_)) => return Err(err),
      };
 
+     // Count the elements read from atom names, and the symbols D and T.
+     if let Ok((symbol, from_name)) = element_symbol_of_atom_line(&line){
+       if from_name{
+         n_elements_from_names += 1;
+       }
+       match symbol.as_deref(){
+         Some("D") => hydrogen_symbol_counts[0] += 1,
+         Some("T") => hydrogen_symbol_counts[1] += 1,
+         _ => (),
+       }
+     }
+
      if let Some(serial) = particle.serial{
-       serial_to_index.entry(serial)
-         .or_insert_with(|| Some(bath_particles.len()));
+       if serial_to_index.contains_key(&serial) {
+         return Err(CluEError::DuplicateSerial(serial));
+       }
+       serial_to_index.insert(serial, Some(bath_particles.len()));
      }
 
      bath_particles.push(particle);
@@ -191,13 +232,21 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
      println!("Could not parse {} instances of element \"{}\".",
          unk_count, unk_el);
    }
-
+   if n_elements_from_names > 0{
+     println!("Element symbols were taken from the atom names for {} atoms.",
+         n_elements_from_names);
+   }
    Ok( ParticleMap{
      particles: bath_particles,
-     map: serial_to_index})
+     map: serial_to_index,
+     hydrogen_symbol_counts})
 }
 //------------------------------------------------------------------------------
-// This function tries to parse the crystallographic data line.
+// This function tries to parse the crystallographic data line, and returns
+// the unit cell edges and the space group.
+// The unit cell is empty for the placeholder 1 A cubic cell that PDB files 
+// use for structures without a unit cell, and for cells without volume.
+// The space group is `None` if it is blank.
 // If it cannot it will err.
 // The expected format is as follows.
 // https://www.wwpdb.org/documentation/file-format-content/format33/sect8.html
@@ -215,15 +264,33 @@ COLUMNS       DATA  TYPE    FIELD          DEFINITION
 67 - 70       Integer       z              Z value.
 */
 fn parse_crystal_line(line: &str) 
-  -> Result<Vec::<Vector3D>,CluEError>
+  -> Result<(Vec::<Vector3D>,Option<String>),CluEError>
 {
+  // The numbers are required and must be complete.
+  let parse_columns = |first: usize, last: usize| -> Result<f64,CluEError>{
+    if line.len() < last{
+      return Err(CluEError::CannotParseLine(line.to_string()));
+    }
+    match pdb_columns(line, first, last)?.map(|s| s.trim().parse::<f64>()){
+      Some(Ok(x)) => Ok(x),
+      _ => Err(CluEError::CannotParseLine(line.to_string())),
+    }
+  };
   if let (Ok(a),Ok(b),Ok(c),Ok(mut alpha),Ok(mut beta),Ok(mut gamma)) = (
-      line[6..=14].trim().parse::<f64>(),
-      line[15..=23].trim().parse::<f64>(),
-      line[24..=32].trim().parse::<f64>(),
-      line[33..=39].trim().parse::<f64>(),
-      line[40..=46].trim().parse::<f64>(),
-      line[47..=53].trim().parse::<f64>() ){
+      parse_columns(7,15),
+      parse_columns(16,24),
+      parse_columns(25,33),
+      parse_columns(34,40),
+      parse_columns(41,47),
+      parse_columns(48,54) ){
+
+    let space_group = pdb_columns(line, 56, 66)?
+      .map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+
+    // Placeholder cell for structures without a unit cell.
+    if [a,b,c] == [1.0,1.0,1.0] && [alpha,beta,gamma] == [90.0,90.0,90.0]{
+      return Ok((Vec::<Vector3D>::new(), space_group));
+    }
 
     alpha *= PI/180.0;
     beta *= PI/180.0;
@@ -240,8 +307,12 @@ fn parse_crystal_line(line: &str)
     let cz = f64::sqrt( c*c -cx*cx - cy*cy);
     let c_vec = Vector3D::from([cx, cy, cz]);
   
+    let cell_edges = vec![a_vec,b_vec,c_vec];
+    if crate::structure::reciprocal_vectors(&cell_edges).is_none(){
+      return Ok((Vec::<Vector3D>::new(), space_group));
+    }
 
-    return Ok(vec![a_vec,b_vec,c_vec]);
+    return Ok((cell_edges, space_group));
   }
   Err(CluEError::CannotParseLine(line.to_string() ))
 }
@@ -271,33 +342,52 @@ COLUMNS        DATA  TYPE    FIELD        DEFINITION
 */
 fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
 
-  let serial_result = line[6..=10].trim().parse::<u32>();
-  let name = Some(line[12..=15].trim().to_string());
-  let x_coor = line[30..=37].trim().parse::<f64>();
-  let y_coor = line[38..=45].trim().parse::<f64>();
-  let z_coor = line[46..=53].trim().parse::<f64>();
-  let residue = Some(line[17..=19].trim().to_string());
-  let residue_sequence_number = line[22..=25].trim().parse::<u32>();
+  let cannot_parse = || (CluEError::CannotParseLine(line.to_string()),0);
+  let columns = |first: usize, last: usize| -> Result<Option<&str>,_>{
+    pdb_columns(line, first, last).map_err(|_| cannot_parse())
+  };
+  // Required fields must be complete.
+  let required_columns = |first: usize, last: usize| -> Result<&str,_>{
+    if line.len() < last{
+      return Err(cannot_parse());
+    }
+    columns(first,last)?.ok_or_else(cannot_parse)
+  };
 
-
-
-  let coordinates: Vector3D;
-  if let (Ok(x),Ok(y), Ok(z)) = (x_coor, y_coor, z_coor) {
-    coordinates = Vector3D::from([x*ANGSTROM,y*ANGSTROM,z*ANGSTROM]);
-  }else{
-    return Err((CluEError::CannotParseLine(line.to_string()),0));
+  // Required fields.
+  let mut xyz = [0.0; 3];
+  for (ii, first) in [31, 39, 47].into_iter().enumerate(){
+    let Ok(x) = required_columns(first, first + 7)?.trim().parse::<f64>()
+    else{
+      return Err(cannot_parse());
+    };
+    xyz[ii] = x;
   }
+  let coordinates = Vector3D::from(xyz).scale(ANGSTROM);
 
-  let serial: u32;
-  if let Ok(ser) = serial_result{
-    serial = ser;
-  }else{
-    return Err((CluEError::CannotParseLine(line.to_string()),0));
-  }
+  let Ok(serial) = required_columns(7,11)?.trim().parse::<u32>() else{
+    return Err(cannot_parse());
+  };
 
-  let element: Element = match Element::from(line[76..=77].trim()) {
-    Ok(elmt) => elmt,
-    Err(err) => return Err((err,serial))
+  // Optional fields.
+  let name_columns = columns(13,16)?;
+  let name = name_columns.map(|s| s.trim().to_string());
+  let residue = columns(18,20)?.map(|s| s.trim().to_string());
+  let residue_sequence_number = columns(23,26)?
+    .and_then(|s| s.trim().parse::<u32>().ok());
+
+  // The element is in columns 77-78; if those are missing or blank,
+  // it is read from the atom name.
+  let (symbol, from_name) = element_symbol_of_atom_line(line)
+    .map_err(|_| cannot_parse())?;
+  let Some(Ok(element)) = symbol.as_deref().map(Element::from) else{
+    // Report the symbol as written.
+    let written = if from_name{
+      name_columns.unwrap_or("").trim()
+    }else{
+      columns(77,78)?.unwrap_or("").trim()
+    };
+    return Err((CluEError::CannotParseElement(written.to_string()), serial));
   };
 
   Ok(Particle{
@@ -308,8 +398,89 @@ fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
       serial: Some(serial),
       name,
       residue,
-      residue_sequence_number: residue_sequence_number.ok(),
+      residue_sequence_number,
       })
+}
+//------------------------------------------------------------------------------
+// This function returns the text in columns `first` to `last` (1-based, 
+// inclusive, as in the PDB format specification) of `line`.
+// It returns `Ok(None)` if the line does not reach column `first`, 
+// and an error if the columns do not fall on character boundaries.
+fn pdb_columns(line: &str, first: usize, last: usize) 
+  -> Result<Option<&str>,CluEError>
+{
+  if line.len() < first{
+    return Ok(None);
+  }
+  match line.get(first - 1..usize::min(last, line.len())){
+    Some(s) => Ok(Some(s)),
+    None => Err(CluEError::CannotParseLine(line.to_string())),
+  }
+}
+//------------------------------------------------------------------------------
+// This function writes an element symbol with an upper case first letter and
+// lower case other letters, since PDB files write symbols in upper case,
+// for example "FE" for "Fe".
+fn capitalize_element_symbol(symbol: &str) -> String{
+  let mut chars = symbol.chars();
+  match chars.next(){
+    Some(first) => first.to_uppercase().chain(chars.flat_map(|c| 
+          c.to_lowercase())).collect(),
+    None => String::new(),
+  }
+}
+//------------------------------------------------------------------------------
+// This function infers the element from the atom name (columns 13-16), 
+// for PDB files without element columns.
+// In the PDB format, the element symbol is right-justified in columns 13-14:
+// if column 13 is blank or a digit, column 14 is the element (" CA " is 
+// carbon, "1HB " is hydrogen); a name of at most two letters starting in 
+// column 13 is a two-letter element ("CA  " is calcium, "FE  " is iron);
+// otherwise column 13 is the element ("HG21" and "HW1 " are hydrogen).
+// It returns the element symbol, or `None` if no element is found.
+fn element_symbol_from_atom_name(name: &str) -> Option<String>{
+  let chars = name.chars().collect::<Vec::<char>>();
+  let col13 = *chars.first()?;
+  let valid = |symbol: String| -> Option<String>{
+    Element::from(&symbol).ok().map(|_| symbol)
+  };
+
+  if col13 == ' ' || col13.is_ascii_digit(){
+    let col14 = *chars.get(1)?;
+    return valid(capitalize_element_symbol(&col14.to_string()));
+  }
+  if !col13.is_ascii_alphabetic(){
+    return None;
+  }
+
+  let rest_is_blank = chars.iter().skip(2).all(|c| *c == ' ');
+  if let Some(&col14) = chars.get(1){
+    if col14.is_ascii_alphabetic() && rest_is_blank{
+      let symbol = capitalize_element_symbol(&format!("{}{}",col13,col14));
+      if let Some(symbol) = valid(symbol){
+        return Some(symbol);
+      }
+    }
+  }
+  valid(capitalize_element_symbol(&col13.to_string()))
+}
+//------------------------------------------------------------------------------
+// This function returns the element symbol of an ATOM or HETATM line, 
+// capitalized as in "Fe", and whether it was read from the atom name.
+// The symbol is read from columns 77-78, or from the atom name (columns 
+// 13-16) if those are missing or blank; it is `None` if the atom name gives 
+// no element.  A symbol from columns 77-78 is returned even if it is not an 
+// element.
+fn element_symbol_of_atom_line(line: &str) 
+  -> Result<(Option<String>, bool),CluEError>
+{
+  if let Some(symbol) = pdb_columns(line,77,78)?.map(|s| s.trim())
+    .filter(|s| !s.is_empty())
+  {
+    return Ok((Some(capitalize_element_symbol(symbol)), false));
+  }
+  let name = pdb_columns(line,13,16)?.unwrap_or("");
+  Ok((element_symbol_from_atom_name(name), true))
 }
 //------------------------------------------------------------------------------
 // This function tries to parse a connections data line.
@@ -326,7 +497,10 @@ COLUMNS       DATA  TYPE      FIELD        DEFINITION
 27 - 31        Integer        serial       Serial number of bonded atom
 */
 fn parse_connections_line(conect_line: &str) -> Result<Vec::<u32>,CluEError>{
-  let line = conect_line[6..].trim_end();
+  let Some(line) = conect_line.get(6..) else{
+    return Err(CluEError::CannotParseLine(conect_line.to_string() ));
+  };
+  let line = line.trim_end();
 
   let num = line.len();
   let n = 5;
@@ -338,7 +512,8 @@ fn parse_connections_line(conect_line: &str) -> Result<Vec::<u32>,CluEError>{
     
     let connect: u32;
     
-    if let Ok(serial) = line[idx .. idx_end].trim().parse::<u32>(){
+    if let Some(Ok(serial)) = line.get(idx .. idx_end)
+      .map(|s| s.trim().parse::<u32>()){
       connect = serial;
     }else{
       return Err(CluEError::CannotParseLine(conect_line.to_string() ));
@@ -449,7 +624,10 @@ fn get_detected_particle_pdb_string(&self)
     let chain_id = "  ".to_string();
     let res_seq = format!("{: >4}",0);
     let icode = "    ".to_string();
-    let r = detected_particle.weighted_coordinates.mean();
+    let Some(r) = detected_particle.weighted_coordinates.weighted_mean() else{
+      return Err(CluEError::InvalidSpinGridWeights(
+            detected_particle.weighted_coordinates.weights.iter().fold(0.0, |sum, w| sum + w)));
+    };
     let r0 = &self.pdb_origin;
     let x = format!("{: >8}",
       ((r[0] -r0.x())/ANGSTROM).to_string().substring(0,7));
@@ -525,6 +703,324 @@ fn set_bath_particle_pdb_string(&self, line: &mut String, particle: &Particle,
 #[cfg(test)]
 mod tests {
   use super::*;
+  //----------------------------------------------------------------------------
+  // This function writes a CRYST1 line in the PDB format.
+  fn cryst1_line(edges: [f64;3], angles: [f64;3], space_group: &str) 
+    -> String
+  {
+    format!("CRYST1{:9.3}{:9.3}{:9.3}{:7.2}{:7.2}{:7.2} {:<11}{:>4}",
+        edges[0], edges[1], edges[2], angles[0], angles[1], angles[2],
+        space_group, 1)
+  }
+  //----------------------------------------------------------------------------
+  // This function writes an ATOM line in the PDB format, with the atom name 
+  // `name` (columns 13-16) and the element `element` (columns 77-78).
+  fn atom_line(name: &str, element: &str) -> String{
+    assert_eq!(name.len(),4);
+    assert_eq!(element.len(),2);
+    format!("ATOM  {:>5} {}{}{:>3} {}{:>4}{}   {:>8.3}{:>8.3}{:>8.3}\
+{:>6.2}{:>6.2}          {}",
+        7, name, " ", "SOL", "A", 12, " ", 1.0, -2.5, 30.25, 1.0, 0.0, element)
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_atom_line_columns(){
+    let line = atom_line(" OW ", " O");
+    assert_eq!(line.len(),78);
+    let particle = parse_atom_line(&line).unwrap();
+    assert_eq!(particle.element, Element::Oxygen);
+    assert_eq!(particle.serial, Some(7));
+    assert_eq!(particle.name, Some("OW".to_string()));
+    assert_eq!(particle.residue, Some("SOL".to_string()));
+    assert_eq!(particle.residue_sequence_number, Some(12));
+    assert_eq!(particle.coordinates, 
+        Vector3D::from([1.0, -2.5, 30.25]).scale(ANGSTROM));
+
+    // The element is in column 77 and trailing spaces are removed.
+    let line = atom_line(" CA ", "C ");
+    let line = line.trim_end();
+    assert_eq!(line.len(),77);
+    assert_eq!(parse_atom_line(line).unwrap().element, Element::Carbon);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_lines_that_are_too_short(){
+    // Lines that are too short are errors rather than panics.
+    let line = atom_line(" OW ", " O");
+    for n in [10, 30, 50]{
+      assert!(matches!(parse_atom_line(&line[..n]),
+            Err((CluEError::CannotParseLine(_),_))));
+    }
+    let line = cryst1_line([50.0, 60.0, 70.0], [90.0, 90.0, 90.0], "P 1");
+    assert!(matches!(parse_crystal_line(&line[..40]),
+          Err(CluEError::CannotParseLine(_))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_lines_with_non_ascii_characters(){
+    // Fixed columns that split characters are errors rather than panics.
+    // The two-byte character Å replaces column 12, so that the atom name 
+    // (columns 13-16) starts in the middle of it.
+    let line = atom_line(" OW ", " O");
+    let line = format!("{}Å{}",&line[..11],&line[12..]);
+    assert!(parse_atom_line(&line).is_err());
+    // Å replaces column 15, so that the edge a (columns 7-15) ends in the 
+    // middle of it.
+    let line = cryst1_line([50.0, 60.0, 70.0], [90.0, 90.0, 90.0], "P 1");
+    let line = format!("{}Å{}",&line[..14],&line[15..]);
+    assert!(parse_crystal_line(&line).is_err());
+    // The second serial (columns 12-16) ends in the middle of Å.
+    assert!(parse_connections_line("CONECT    1    Å").is_err());
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_atom_line_upper_case_elements(){
+    // PDB files write element symbols in upper case.
+    for (symbol, element) in [(" C", Element::Carbon), ("FE", Element::Iron),
+        ("NA", Element::Sodium), ("CL", Element::Chlorine), 
+        ("ZN", Element::Zinc), ("Fe", Element::Iron)]
+    {
+      let line = atom_line(" X  ", symbol);
+      assert_eq!(parse_atom_line(&line).unwrap().element, element);
+    }
+    // Virtual sites are not elements.
+    for symbol in ["Mw","MW"," M"]{
+      let line = atom_line("MW  ", symbol);
+      assert!(matches!(parse_atom_line(&line),
+            Err((CluEError::CannotParseElement(_),7))));
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_atom_line_element_from_name(){
+    // Without element columns, the element is read from the atom name, 
+    // where it is right-justified in columns 13-14.
+    for (name, element) in [(" CA ", Element::Carbon), ("CA  ", Element::Calcium),
+        ("FE  ", Element::Iron), ("1HB ", Element::Hydrogen), 
+        (" HW1", Element::Hydrogen), ("HW1 ", Element::Hydrogen),
+        (" OW ", Element::Oxygen), ("HG21", Element::Hydrogen),
+        ("HD11", Element::Hydrogen)]
+    {
+      let line = atom_line(name, "  ");
+      assert_eq!(parse_atom_line(&line[..66]).unwrap().element, element,
+          "{}", name);
+      assert_eq!(parse_atom_line(&line).unwrap().element, element,
+          "{}", name);
+    }
+    let line = atom_line("MW  ", "  ");
+    assert!(matches!(parse_atom_line(&line[..66]),
+          Err((CluEError::CannotParseElement(_),7))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_detected_particle_pdb_string_at_weighted_mean(){
+    // The detected spin is written at the weighted mean of its grid,
+    // in the frame of the structure file.
+    use crate::config::{Config, DetectedSpinCoordinates};
+    use crate::integration_grid::IntegrationGrid;
+    use rand::SeedableRng;
+    let mut grid = IntegrationGrid::new(3);
+    grid.push(vec![36.0e-10, 37.0e-10, 38.0e-10], 0.9).unwrap();
+    grid.push(vec![46.0e-10, 37.0e-10, 38.0e-10], 0.1).unwrap();
+    let mut config = Config::new();
+    config.detected_spin_position = Some(
+        DetectedSpinCoordinates::ProbabilityDistribution(grid));
+    config.set_defaults().unwrap();
+    let mut structure = parse_pdb("./assets/TEMPO.pdb",0).unwrap();
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+    structure.build_primary_structure(&mut rng,&config).unwrap();
+
+    let line = structure.get_detected_particle_pdb_string().unwrap();
+    let xyz = [&line[30..38], &line[38..46], &line[46..54]].map(|s| 
+        s.trim().parse::<f64>().unwrap());
+    for (x, expected) in xyz.iter().zip([37.0, 37.0, 38.0]){
+      assert!((x - expected).abs() < 1e-3, "{}", line);
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_hydrogen_isotope_symbols(){
+    // D and T are read as hydrogen, starting as 1H, and are counted.
+    let text = std::fs::read_to_string("./assets/TEMPO.pdb").unwrap();
+    let mut n_h = 0;
+    let lines = text.lines().map(|line|{
+      if line.starts_with("ATOM") && line.len() >= 78 
+        && line[76..78].trim() == "H"
+      {
+        n_h += 1;
+        let symbol = if n_h == 1 {" T"} else {" D"};
+        format!("{}{}{}", &line[..76], symbol, &line[78..])
+      }else{
+        line.to_string()
+      }
+    }).collect::<Vec::<String>>();
+    assert_eq!(n_h, 18);
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_tempo_dt_{}.pdb", std::process::id()));
+    std::fs::write(&filename, lines.join("\n")).unwrap();
+    let filename = filename.to_str().unwrap().to_string();
+
+    let particle_map = parse_atoms(&filename, 29, 0).unwrap();
+    assert_eq!(particle_map.hydrogen_symbol_counts, [17,1]);
+    let structure = parse_pdb(&filename,0).unwrap();
+    std::fs::remove_file(&filename).unwrap();
+    let hydrogens = structure.bath_particles.iter()
+      .filter(|p| p.element == Element::Hydrogen).collect::<Vec::<_>>();
+    assert_eq!(hydrogens.len(), 18);
+    assert!(hydrogens.iter().all(|p| p.isotope == Isotope::Hydrogen1));
+
+    // A deuteron named in the atom name, without element columns.
+    let line = atom_line(" D1 ", "  ");
+    assert_eq!(element_symbol_of_atom_line(&line[..66]),
+        Ok((Some("D".to_string()), true)));
+    assert_eq!(parse_atom_line(&line[..66]).unwrap().element, 
+        Element::Hydrogen);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_filter_missing_residue_sequence_number(){
+    // A residue sequence number that is not a number, as in hybrid-36, 
+    // is missing, so it is not selected by residue_sequence_numbers.
+    use crate::structure::particle_filter::ParticleFilter;
+    let line = atom_line(" OW ", " O");
+    let line = format!("{}A000{}", &line[..22], &line[26..]);
+    let particle = parse_atom_line(&line).unwrap();
+    assert_eq!(particle.residue_sequence_number, None);
+
+    let mut structure = Structure::new(vec![particle], 
+        AdjacencyList::with_capacity(1), Vec::<Vector3D>::new());
+    structure.primary_cell_indices = vec![0];
+    structure.cell_indices = vec![vec![Some(0)]];
+    structure.cell_ids = vec![0];
+
+    let mut filter = ParticleFilter::new();
+    filter.residue_sequence_numbers = vec![1];
+    assert!(filter.filter(&structure).is_empty());
+
+    let mut filter = ParticleFilter::new();
+    filter.not_residue_sequence_numbers = vec![1];
+    assert_eq!(filter.filter(&structure), vec![0]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_pdb_fields_unchanged(){
+    // Files with element columns are read as the columns specify.
+    for filename in ["./assets/TEMPO.pdb", "./assets/water_gly_20pc_vol.pdb"]{
+      let structure = parse_pdb(filename,0).unwrap();
+      let text = std::fs::read_to_string(filename).unwrap();
+      let lines = text.lines()
+        .filter(|l| l.starts_with("ATOM") || l.starts_with("HETATM"))
+        .filter(|l| Element::from(l[76..78].trim()).is_ok())
+        .collect::<Vec::<&str>>();
+      assert_eq!(lines.len(), structure.bath_particles.len());
+      for (line, particle) in lines.iter().zip(structure.bath_particles.iter()){
+        assert_eq!(particle.element, Element::from(line[76..78].trim()).unwrap());
+        assert_eq!(particle.serial, line[6..11].trim().parse::<u32>().ok());
+        assert_eq!(particle.name.as_deref(), Some(line[12..16].trim()));
+        assert_eq!(particle.residue.as_deref(), Some(line[17..20].trim()));
+        assert_eq!(particle.residue_sequence_number, 
+            line[22..26].trim().parse::<u32>().ok());
+        let r = Vector3D::from([
+            line[30..38].trim().parse::<f64>().unwrap(),
+            line[38..46].trim().parse::<f64>().unwrap(),
+            line[46..54].trim().parse::<f64>().unwrap()]).scale(ANGSTROM);
+        assert_eq!(particle.coordinates, r);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_crystal_line_space_group(){
+    let edges = [50.0, 60.0, 70.0];
+    let angles = [90.0, 90.0, 90.0];
+    for (space_group, expected) in [("P 21 21 21", Some("P 21 21 21")),
+        ("P 1", Some("P 1")), ("", None)]
+    {
+      let line = cryst1_line(edges, angles, space_group);
+      let (cell_edges, sg) = parse_crystal_line(&line).unwrap();
+      assert_eq!(sg, expected.map(|s| s.to_string()));
+      assert_eq!(cell_edges, vec![
+          Vector3D::from([50.0, 0.0, 0.0]).scale(ANGSTROM),
+          Vector3D::from([0.0, 60.0, 0.0]).scale(ANGSTROM),
+          Vector3D::from([0.0, 0.0, 70.0]).scale(ANGSTROM),
+      ]);
+    }
+
+    let structure = parse_pdb("./assets/TEMPO.pdb",0).unwrap();
+    assert_eq!(structure.space_group, Some("P 1".to_string()));
+    let structure = parse_pdb("./assets/water_gly_20pc_vol.pdb",0).unwrap();
+    assert_eq!(structure.space_group, None);
+    assert_eq!(structure.cell_offsets.len(), 3);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_crystal_line_without_unit_cell(){
+    // The placeholder cell of structures without a unit cell, 
+    // and cells without volume, are ignored.
+    for (edges, angles) in [
+      ([1.0, 1.0, 1.0], [90.0, 90.0, 90.0]),
+      ([0.0, 0.0, 0.0], [90.0, 90.0, 90.0]),
+      ([10.0, 10.0, 10.0], [90.0, 90.0, 180.0]),
+    ]{
+      let line = cryst1_line(edges, angles, "P 1");
+      let (cell_edges, space_group) = parse_crystal_line(&line).unwrap();
+      assert!(cell_edges.is_empty(), "{}", line);
+      assert_eq!(space_group, Some("P 1".to_string()));
+    }
+  }
+  //----------------------------------------------------------------------------
+  // This function writes TEMPO with the atom lines changed by `change`
+  // to a temporary file, reads it with `parse_pdb`, and removes the file.
+  fn parse_changed_tempo(label: &str, change: &dyn Fn(usize,&str) -> String)
+    -> Result<Structure,CluEError>
+  {
+    let text = std::fs::read_to_string("./assets/TEMPO.pdb").unwrap();
+    let mut n_atoms = 0;
+    let lines = text.lines().map(|line|{
+      if line.starts_with("ATOM") || line.starts_with("HETATM"){
+        n_atoms += 1;
+        change(n_atoms, line)
+      }else{
+        line.to_string()
+      }
+    }).collect::<Vec::<String>>();
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_tempo_{}_{}.pdb", label, std::process::id()));
+    std::fs::write(&filename, lines.join("\n")).unwrap();
+    let result = parse_pdb(filename.to_str().unwrap(),0);
+    std::fs::remove_file(&filename).unwrap();
+    result
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_pdb_duplicate_serial(){
+    // A repeated serial, as in files whose numbering restarts after 99999,
+    // is an error, since CONECT records and serial selections could not 
+    // tell the atoms apart.
+    let with_serial = |line: &str, serial: u32| 
+      format!("{}{:>5}{}", &line[..6], serial, &line[11..]);
+    let result = parse_changed_tempo("dup", &|n, line| 
+        if n == 29 { with_serial(line, 3) } else { line.to_string() });
+    assert_eq!(result.err(), Some(CluEError::DuplicateSerial(3)));
+
+    // This also applies to atoms that are skipped because their element 
+    // cannot be read, such as virtual sites, before or after the atom.
+    let virtual_site = |line: &str| 
+      format!("{}{}{}", &line[..76], "Mw", &line[78..]);
+    let result = parse_changed_tempo("dup_vs_after", &|n, line| 
+        if n == 29 { virtual_site(&with_serial(line, 3)) } 
+        else { line.to_string() });
+    assert_eq!(result.err(), Some(CluEError::DuplicateSerial(3)));
+    let result = parse_changed_tempo("dup_vs_before", &|n, line| 
+        if n == 1 { virtual_site(&with_serial(line, 3)) } 
+        else { line.to_string() });
+    assert_eq!(result.err(), Some(CluEError::DuplicateSerial(3)));
+
+    // Without repeated serials, the file reads as before.
+    let structure = parse_changed_tempo("unique", &|_, line| line.to_string())
+      .unwrap();
+    assert_eq!(structure.bath_particles.len(), 29);
+  }
   #[test]
   fn test_parse_pdb_water(){
     let filename = "./assets/water.pdb";

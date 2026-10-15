@@ -1,10 +1,12 @@
 use crate::clue_errors::CluEError;
 use crate::io::FromTOMLString;
+use crate::isotopes::Isotope;
 
 use std::fmt;
 use std::collections::HashMap;
 
 use serde::{Serialize,Deserialize};
+use strum::IntoEnumIterator;
 
 const ALLOWED_KEYS: [&str;121] = [
   "abundance",
@@ -54,7 +56,7 @@ const ALLOWED_KEYS: [&str;121] = [
   "indices",
   "info",
   "input_structure_file",
-  "isotpes",
+  "isotopes",
   "lebedev",
   "magnetic_field",
   "max_cell_size",
@@ -62,6 +64,7 @@ const ALLOWED_KEYS: [&str;121] = [
   "max_spins",
   "methyl_partitions",
   "min_cell_size",
+  "multiplicity",
   "name",
   "names",
   "not_bonded_elements",
@@ -103,11 +106,9 @@ const ALLOWED_KEYS: [&str;121] = [
   "rng_seed",
   "run_name",
   "sans_spin_signals",
-  "save_dir",
   "selection",
   "serials",
   "singles",
-  "spin_multiplicity",
   "structure_pdb",
   "tau_increments",
   "temperature",
@@ -123,6 +124,7 @@ const ALLOWED_KEYS: [&str;121] = [
   "unit_of_time",
   "values",
   "vector",
+  "weight_tolerance",
   "vector_grid",
   "within_distance",
   "x",
@@ -211,7 +213,7 @@ pub const KEY_SELE_NOT_RESIDUES: &str = "not_residues";
 pub const KEY_SELE_RES_SEQ_NUMS: &str = "residue_sequence_numbers";
 pub const KEY_SELE_NOT_RES_SEQ_NUMS: &str = "not_residue_sequence_numbers";
 
-pub const KEY_SELE_ISOTOPES: &str = "isotpes";
+pub const KEY_SELE_ISOTOPES: &str = "isotopes";
 pub const KEY_SELE_NOT_ISOTOPES: &str = "not_isotopes";
 
 pub const KEY_SELE_BONDED_INDICES: &str = "bonded_indices";
@@ -271,6 +273,7 @@ pub struct DetectedSpinTOML{
   //pub position: Option<VectorSpecifierTOML>,
   pub position: Option<toml::Value>,
   pub transition: Option<[usize;2]>,
+  pub weight_tolerance: Option<f64>,
   pub identity: Option<String>,
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -375,15 +378,37 @@ fn check_toml_table(config: &toml::Table, depth: usize) -> Result<(),CluEError>{
   assert!(depth <= MAX_DEPTH);
 
   for (key, value) in config.iter(){
-    if !ALLOWED_KEYS.contains( &&key[..] ){
+    if !ALLOWED_KEYS.contains( &&key[..] ) && !is_isotope_key(key){
       return Err(CluEError::CannotReadTOMLFile(format!("invalid key {}",key))); 
     }
 
     if let toml::Value::Table(table) = value{
       check_toml_table(table,depth +1)?;
-    } 
+    }
+    if let toml::Value::Array(array) = value{
+      check_toml_array(array,depth +1)?;
+    }
   }
 
+  Ok(())
+}
+//------------------------------------------------------------------------------
+// Isotope tables in groups, such as `1H.abundance`, use the isotope as the key.
+fn is_isotope_key(key: &str) -> bool{
+  Isotope::iter().any(|isotope| isotope.to_string() == key)
+}
+//------------------------------------------------------------------------------
+fn check_toml_array(config: &[toml::Value], depth: usize) -> Result<(),CluEError>
+{
+  assert!(depth <= MAX_DEPTH);
+
+  for el in config.iter(){
+    match el{
+      toml::Value::Table(table) => check_toml_table(table,depth +1)?,
+      toml::Value::Array(array) => check_toml_array(array,depth +1)?,
+      _ => (),
+    }
+  }
   Ok(())
 }
 //------------------------------------------------------------------------------
@@ -450,7 +475,7 @@ mod tests{
 
         radius = 80
         rng_seed = 0
-        save_dir = "save_directory"
+        output_directory = "save_directory"
 
         number_timepoints = [40,60]
         tau_increments = [1, 500] # ns
@@ -472,7 +497,7 @@ mod tests{
         #vector = [1,0,0]
 
         [detected_spin]
-        spin_multiplicity = 2
+        multiplicity = 2
         transition = [0,1]
         g_matrix.values = [2.0097, 2.0064, 2.0025]
         g_matrix.axes.x = [-1.1500, -0.4700, 0.7100]
@@ -547,17 +572,17 @@ mod tests{
         15N.abundance = 0.1
 
 
-        14N.hyperfine_coupling.values = [14.7,14.7,101.4]
-        14N.hyperfine_coupling.axes.x = { from = "self", to_bonded_to = "r1m_o" }
-        14N.hyperfine_coupling.axes.y = { from_bonded_to = "r1m_c1", to_bonded_to = "r1m_c19" }
+        14N.hyperfine.values = [14.7,14.7,101.4]
+        14N.hyperfine.axes.x = { from = "self", to_bonded_to = "r1m_o" }
+        14N.hyperfine.axes.y = { from_bonded_to = "r1m_c1", to_bonded_to = "r1m_c19" }
 
-        14N.electric_quadrupole_coupling.values = [
+        14N.electric_quadrupole.values = [
           -0.6714,  0.4899, 1.4813, 
           0.4899,  1.1125, -0.1011, 
           1.4813, -0.1011, -0.4411
         ]
-        14N.electric_quadrupole_coupling.axes.x = [1,0,0] 
-        14N.electric_quadrupole_coupling.axes.y = [0,1,0] 
+        14N.electric_quadrupole.axes.x = [1,0,0] 
+        14N.electric_quadrupole.axes.y = [0,1,0] 
 
 
       "##;

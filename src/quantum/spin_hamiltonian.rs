@@ -355,7 +355,7 @@ pub fn build_hamiltonian(spin_indices: &[usize],
 
   let central_spin_mult = central_spin.spin_multiplicity();
   let s = (central_spin_mult as f64 - 1.0)/2.0;
-  let spin_ms: Vec::<f64> = (0..central_spin_mult).map(|n| (n as f64 - s))
+  let spin_ms: Vec::<f64> = (0..central_spin_mult).map(|n| n as f64 - s)
     .collect();
 
   let Some(transition) = config.detected_spin_transition else {

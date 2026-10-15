@@ -63,22 +63,17 @@ impl DetectedSpin{
     self.spin_multiplicity
   }
   //----------------------------------------------------------------------------
+  /// This function returns the weighted mean position of the detected spin.
   pub fn get_average_spin_position(&self) -> Result<Vector3D,CluEError>{
-
-    let mut r_ave = Vector3D::zeros();
-    for ii in 0..self.weighted_coordinates.len(){
-      let Ok(mut r) = self.weighted_coordinates.xyz(ii) else{
-        return Err(CluEError::NoCentralSpinCoor);
-      };
-
-      let w = self.weighted_coordinates.weight(ii);
-      
-      r = r.scale(w);
-
-      r_ave = &r_ave + &r;
+    if self.weighted_coordinates.dim() != 3{
+      return Err(CluEError::NoCentralSpinCoor);
     }
+    let Some(r_ave) = self.weighted_coordinates.weighted_mean() else{
+      return Err(CluEError::InvalidSpinGridWeights(
+            self.weighted_coordinates.weights.iter().fold(0.0, |sum, w| sum + w)));
+    };
 
-    Ok(r_ave)
+    Ok(Vector3D::from([r_ave[0], r_ave[1], r_ave[2]]))
   }
   //----------------------------------------------------------------------------
 }
@@ -94,6 +89,7 @@ impl DetectedSpin{
 /// `cell_indices` is a set of lists of all periodic copies of each particle 
 /// from the primary cell 
 /// `cell_offsets` is the set of displacements for periodic boundary conditions.
+/// `cell_ids` lists the unit cell that each particle is in.
 /// `connections` lists chemical bonds.
 /// `molecules` is the set of molecules in the system.
 /// `molecule_ids` is a list specifing which molecule each particle belongs to.
@@ -102,9 +98,16 @@ impl DetectedSpin{
 /// `exchange_groups` contains information on methyls.
 /// `particle_config_ids` lists indices for which config.particle corresponds 
 /// to each particle
-/// `extracell_particle_config_ids` is a list of indices for which 
-/// `config.extracell_particle` corresponds to each particle.
+/// `extracell_particle_config_ids` lists, for each distinct set of groups 
+/// outside the primary cell (see `extracell_group_index()`), indices for which
+/// `config.extracell_particle` corresponds to each primary cell particle.
+/// `extracell_cosubstitution_groups` lists, for each distinct set of groups, 
+/// the cosubstitution groups of primary cell indices outside the primary cell.
+/// `extracell_group_indices` lists, for each unit cell, the index of its set
+/// of groups in `extracell_particle_config_ids` and 
+/// `extracell_cosubstitution_groups`.
 /// `pdb_origin` is the origin of the pdb frame.
+/// `space_group` is the space group of the unit cell, if one is specified.
 /// `primary_cell_indices` lists indices indicating the particle that each 
 /// particle is a periodic boundary condition copy of  
 /// `nth_active_to_reference_index` lists indices for display and output files.
@@ -116,14 +119,18 @@ pub struct Structure{
   //bath_spins_indices: Vec::<usize>,
   pub cell_indices: Vec::<Vec::<Option<usize>>>,
   pub cell_offsets: Vec::<Vector3D>,
+  cell_ids: Vec::<usize>,
   pub connections: AdjacencyList,
   molecules: Vec::<Vec::<usize>>,
   molecule_ids: Vec::<usize>,
   cosubstitution_groups: Vec::< Vec::<usize> >,
   pub exchange_groups: Option<ExchangeGroupManager>,
   particle_config_ids: Vec::<Option<usize>>,
-  extracell_particle_config_ids: Vec::<Option<usize>>,
+  extracell_particle_config_ids: Vec::<Vec::<Option<usize>>>,
+  extracell_cosubstitution_groups: Vec::<Vec::< Vec::<usize> >>,
+  extracell_group_indices: Vec::<usize>,
   pub pdb_origin: Vector3D,
+  pub space_group: Option<String>,
   primary_cell_indices: Vec::<usize>,
   pub nth_active_to_reference_index: Vec::<usize>,
   pub active_indices: Vec::<usize>,
@@ -146,14 +153,18 @@ impl Structure{
       //bath_spins_indices: Vec::<usize>::new(),
       cell_indices: Vec::<Vec::<Option<usize>>>::new(),
       cell_offsets,
+      cell_ids: Vec::<usize>::new(),
       connections,
-      extracell_particle_config_ids: Vec::<Option<usize>>::new(),
+      extracell_particle_config_ids: Vec::<Vec::<Option<usize>>>::new(),
+      extracell_cosubstitution_groups: Vec::<Vec::<Vec::<usize>>>::new(),
+      extracell_group_indices: Vec::<usize>::new(),
       molecules: Vec::<Vec::<usize>>::new(),
       molecule_ids: Vec::<usize>::new(),
       cosubstitution_groups: Vec::<Vec::<usize>>::new(),
       exchange_groups: None,
       particle_config_ids: Vec::<Option<usize>>::new(),
       pdb_origin: Vector3D::zeros(),
+      space_group: None,
       primary_cell_indices: Vec::<usize>::new(),
       nth_active_to_reference_index: Vec::<usize>::new(),
       active_indices: Vec::<usize>::new(),
@@ -222,14 +233,7 @@ impl Structure{
   /// `particle_particle` with index `idx` resides in.
   pub fn cell_id(&self, idx: usize) -> Result<usize,CluEError>
   {
-    if idx >= self.primary_cell_indices.len(){
-      return Err(CluEError::CannotFindCellID(idx));
-    }
-
-    let idx0 = self.primary_cell_indices[idx];
-    let cell_indices = &self.cell_indices[idx0];
-    let Some(cell_id) = cell_indices.iter().position(|&x| {
-        match x{ Some(id) => id == idx, None => false,} }) else{
+    let Some(&cell_id) = self.cell_ids.get(idx) else{
       return Err(CluEError::CannotFindCellID(idx));
     };
 
@@ -315,7 +319,12 @@ impl Structure{
     for (bath_idx, particle) in self.bath_particles.iter().enumerate(){
       let cell_id = self.cell_id(bath_idx)?;
       if let Some(serial) = particle.serial{
-        self.map_serial_id_to_bath_index.insert((serial,cell_id),bath_idx);
+        // Serials are unique within a unit cell, as in the structure file.
+        if self.map_serial_id_to_bath_index.insert((serial,cell_id),bath_idx)
+          .is_some()
+        {
+          return Err(CluEError::DuplicateSerial(serial));
+        }
       }
     }
     Ok(())
@@ -398,8 +407,9 @@ impl Structure{
     self.centroid_over_groups(&[&filter])
   }
   //----------------------------------------------------------------------------
-  /// This function finds the centroid over all particles that are in the
-  /// group defined by 
+  /// This function finds the centroid over all particles that pass any of
+  /// `filters`.
+  /// It returns an error if no particle passes.
   pub fn centroid_over_groups(&self, filters: &[&ParticleFilter])
     -> Result<Vector3D,CluEError>
   {
@@ -414,6 +424,9 @@ impl Structure{
         r_ave = &r_ave + r;
         count += 1.0;
       }
+    }
+    if count == 0.0{
+      return Err(CluEError::CentroidOfNoParticles);
     }
     r_ave = r_ave.scale(1.0/count);
 
@@ -476,11 +489,9 @@ impl Structure{
       config: &'a Config)
     -> Option<&'a IsotopeProperties>
   {
-    let particle_index_0 = self.primary_cell_indices[particle_index];
+    let particle_config = self.particle_config_for(particle_index,config)?;
 
-    let p_cfg_id = self.particle_config_ids[particle_index_0]?;
-
-    let properties = &config.particles[p_cfg_id].properties.as_ref()?;
+    let properties = particle_config.properties.as_ref()?;
 
     let key = self.bath_particles[particle_index].isotope.to_string();
     
@@ -488,16 +499,84 @@ impl Structure{
 
   }
   //----------------------------------------------------------------------------
+  /// This function returns the index into `extracell_particle_config_ids` and
+  /// `extracell_cosubstitution_groups` for unit cell `cell_id`.
+  /// Unit cells with the same groups share an index; 
+  /// when no extracell filter depends on the cell, all unit cells share 
+  /// index 0.
+  /// The primary cell uses `particle_config_ids` and `cosubstitution_groups`
+  /// instead.
+  pub fn extracell_group_index(&self, cell_id: usize) -> usize{
+    self.extracell_group_indices.get(cell_id).copied().unwrap_or(0)
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns the `ParticleConfig` that applies to particle 
+  /// `particle_index`, taking into account which unit cell the particle is in.
+  pub fn particle_config_for<'a>(&self, particle_index: usize,
+      config: &'a Config)
+    -> Option<&'a ParticleConfig>
+  {
+    let particle_index_0 = self.primary_cell_indices[particle_index];
+
+    let cell_id = self.cell_id(particle_index).ok()?;
+
+    if cell_id == 0{
+      let p_cfg_id = self.particle_config_ids[particle_index_0]?;
+      return Some(&config.particles[p_cfg_id]);
+    }
+
+    let group_idx = self.extracell_group_index(cell_id);
+    let p_cfg_id 
+      = self.extracell_particle_config_ids[group_idx][particle_index_0]?;
+    Some(&config.extracell_particles[p_cfg_id])
+  }
+  //----------------------------------------------------------------------------
+  // This function returns the largest spin multiplicity that primary cell 
+  // particle `particle_index0` can have, when it is paired to 
+  // `particle_configs` by `config_ids`.
+  // This is the largest multiplicity in the isotopic distribution of the 
+  // group, if the group has one, and the multiplicity of the current isotope
+  // otherwise.
+  fn max_spin_multiplicity_for_particle(&self, particle_index0: usize,
+      config_ids: &[Option<usize>], particle_configs: &[ParticleConfig])
+    -> usize
+  {
+    if let Some(id) = config_ids[particle_index0]{
+      if let Some(mult) = particle_configs[id].max_possible_spin_multiplicity()
+      {
+        return mult;
+      }
+    }
+    self.bath_particles[particle_index0].isotope.spin_multiplicity()
+  }
+  //----------------------------------------------------------------------------
+  // This function returns `true` if any particle in `cosubstitution_group`
+  // can have a spin when paired to `particle_configs` by `config_ids`.
+  fn group_can_have_spin(&self, cosubstitution_group: &[usize],
+      config_ids: &[Option<usize>], particle_configs: &[ParticleConfig])
+    -> bool
+  {
+    cosubstitution_group.iter().any(|&idx0| 
+        self.max_spin_multiplicity_for_particle(idx0, config_ids,
+          particle_configs) > 1)
+  }
+  //----------------------------------------------------------------------------
   // This function searches the user specified particle configuration (if any),
   // and determines which one each particle goes with.
+  // If `cell` is `Some(cell_id)`, the pairing is for the copies of the
+  // primary cell particles in cell `cell_id`.
   // This function returns a error if multiple filter cover by the same 
   // particle. 
-  fn pair_particle_configs(&self, particle_configs: &[ParticleConfig]) 
+  fn pair_particle_configs(&self, particle_configs: &[ParticleConfig],
+      cell: Option<usize>) 
     -> Result< Vec::<Option<usize>>,CluEError>
   {
   
     // Initialize pairings.
-    let n_particles = self.bath_particles.len();
+    let n_particles = match cell{
+      Some(_) => self.cell_indices.len(),
+      None => self.bath_particles.len(),
+    };
 
     let mut particle_config_ids = (0..n_particles).map(|_| None).
       collect::<Vec::<Option<usize>>>();
@@ -505,7 +584,10 @@ impl Structure{
     // Pair particles with configs.
     for (id,particle_config) in particle_configs.iter().enumerate(){
       if let Some(filter) = &particle_config.filter{
-        let indices = filter.filter(self);
+        let indices = match cell{
+          Some(cell_id) => filter.filter_in_cell(self,cell_id),
+          None => filter.filter(self),
+        };
 
         for idx in indices{
           if let Some(prev_id) = particle_config_ids[idx]{
@@ -521,6 +603,32 @@ impl Structure{
     }
     
     Ok(particle_config_ids)
+  }
+  //----------------------------------------------------------------------------
+  // This function checks that the particles span at most two unit cells 
+  // along each cell edge, where `reciprocal_vectors` are the reciprocal 
+  // vectors of the unit cell.
+  // A periodic structure cannot be much larger than its own unit cell, 
+  // so a larger span means that the unit cell does not describe 
+  // the structure.
+  fn check_structure_fits_cell(&self, reciprocal_vectors: &[Vector3D;3])
+    -> Result<(),CluEError>
+  {
+    const MAX_SPAN: f64 = 2.0;
+    for (axis, g) in ["a","b","c"].iter().zip(reciprocal_vectors.iter()){
+      let mut f_min = f64::INFINITY;
+      let mut f_max = f64::NEG_INFINITY;
+      for particle in self.bath_particles.iter(){
+        let f = g.dot(&particle.coordinates);
+        f_min = f64::min(f_min,f);
+        f_max = f64::max(f_max,f);
+      }
+      if f_max - f_min > MAX_SPAN{
+        return Err(CluEError::StructureLargerThanCell(axis.to_string(),
+              f_max - f_min));
+      }
+    }
+    Ok(())
   }
   //----------------------------------------------------------------------------
   /// This function saves the bath particles in csv format.
@@ -554,18 +662,9 @@ impl Structure{
 
       let cell_id = self.cell_id(ii)?;
 
-      let particle_index_0 = self.primary_cell_indices[ii];
-
-      let group_label = if cell_id == 0{
-        match self.particle_config_ids[particle_index_0]{
-          Some(cfg_idx) => &config.particles[cfg_idx].label,
-          None => "none",
-        }
-      }else{
-        match self.extracell_particle_config_ids[particle_index_0]{
-          Some(cfg_idx) => &config.extracell_particles[cfg_idx].label,
-          None => "none",
-        }
+      let group_label = match self.particle_config_for(ii,config){
+        Some(particle_config) => &particle_config.label,
+        None => "none",
       };
 
       let line = format!("{},{},{},{},{},{},{},{}\n",
@@ -584,6 +683,31 @@ impl Structure{
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+//------------------------------------------------------------------------------
+// This function returns the reciprocal vectors g_i of the unit cell with 
+// edges `cell_edges`, defined by g_i·a_j = δ_ij, so that g_i·r is the 
+// fractional coordinate of r along a_i, and 1/|g_i| is the thickness of the
+// unit cell normal to the plane of the other two edges.
+// It returns `None` if the unit cell has no volume.
+pub(crate) fn reciprocal_vectors(cell_edges: &[Vector3D]) 
+  -> Option<[Vector3D;3]>
+{
+  if cell_edges.len() != 3{
+    return None;
+  }
+  let [a,b,c] = [&cell_edges[0], &cell_edges[1], &cell_edges[2]];
+  let volume = a.dot(&b.cross(c));
+  if volume == 0.0 || !volume.is_finite(){
+    return None;
+  }
+  Some([
+    b.cross(c).scale(1.0/volume),
+    c.cross(a).scale(1.0/volume),
+    a.cross(b).scale(1.0/volume),
+  ])
+}
+//------------------------------------------------------------------------------
+
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[cfg(test)]
 mod tests{
@@ -592,6 +716,29 @@ mod tests{
   //use crate::config::lexer::get_tokens_from_line;
   use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
   use crate::io::FromTOMLString;
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_set_serials_duplicate_serial(){
+    // The serial map uses the same rule as the structure file parser:
+    // a repeated serial in the same unit cell is an error.
+    let mut particles = (0..3).map(|ii| crate::structure::particle::Particle
+        ::new(crate::elements::Element::Hydrogen, ii as f64, 0.0, 0.0))
+      .collect::<Vec::<_>>();
+    for (particle, serial) in particles.iter_mut().zip([7,8,7]){
+      particle.serial = Some(serial);
+    }
+    let mut structure = Structure::new(particles, AdjacencyList::with_capacity(3), 
+        Vec::<Vector3D>::new());
+    structure.primary_cell_indices = vec![0,1,2];
+    structure.cell_indices = vec![vec![Some(0)],vec![Some(1)],vec![Some(2)]];
+    structure.cell_ids = vec![0,0,0];
+    assert_eq!(structure.set_serials(), Err(CluEError::DuplicateSerial(7)));
+
+    structure.bath_particles[2].serial = Some(9);
+    structure.set_serials().unwrap();
+    assert_eq!(structure.map_serial_id_to_bath_index.get(&(7,0)), Some(&0));
+    assert_eq!(structure.map_serial_id_to_bath_index.get(&(9,0)), Some(&2));
+  }
   //----------------------------------------------------------------------------
   #[test]
   fn test_build_structure(){
