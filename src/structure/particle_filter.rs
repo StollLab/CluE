@@ -1281,7 +1281,10 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   // This function builds TEMPO with periodic copies of the unit cell.
+  // All copies are stored, also beyond the radius, so that the tests can 
+  // compare every copy with its primary cell particle.
   fn build_periodic_tempo() -> (Structure,Config){
+    crate::structure::extended_structure::set_store_all_copies(true);
     let config = Config::from_toml_string(r##"
         input_structure_file = "assets/TEMPO.pdb"
         radius = 20

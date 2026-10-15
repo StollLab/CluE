@@ -619,6 +619,14 @@ for structures without a unit cell, and unit cells without volume,
 are ignored.
 If the structure spans more than two unit cells along a cell edge,
 the unit cell cannot describe it and CluE Oxide reports an error.
+Periodic copies that cannot be within the radius are not stored.
+The particles of an exchange group, such as a methyl, are kept 
+if the center of the group is within the radius plus the largest
+distance of a group member from the center of its group;
+other particles are kept if they are within the radius.
+The bath output file therefore lists only these copies,
+and the indices of periodic copies in output files, such as the bath,
+cluster, and partition table files, differ from those of earlier versions.
 \subsubsection{ClusterDensityMatrix} % -----------------------------------------
 If no \textit{cluster\_density\_matrix} is specified, the infinite temperature
 limit is assumed for the bath spin, so that the density matrix is proportional

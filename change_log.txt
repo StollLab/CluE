@@ -79,6 +79,16 @@ CHANGED:
   unit cells with the same groups share them, and the unit cell of each 
   particle is stored instead of searched for.
 
+  Periodic copies that cannot be within the radius are no longer stored,
+  which reduces the memory used for large periodic systems (from about
+  1.06 GB to about 0.15 GB for a 7 nm box with 125 unit cells) and makes
+  building the structure faster. Exchange groups, such as methyls, are
+  kept or skipped as a whole. The spin system and the signals are
+  unchanged, but periodic copies have different indices: the bath output
+  file lists fewer particles, and cluster files and partition tables
+  written by earlier versions for replicated structures do not match
+  structures built by this version.
+
   PDB element symbols in upper case, as the PDB format writes them (for 
   example FE, NA, CL), are now read. Previously atoms with two-letter 
   elements in upper case were skipped. If the element columns are missing 

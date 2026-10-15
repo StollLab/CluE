@@ -94,7 +94,8 @@ impl DetectedSpin{
 /// `bath_particles` contains all particles that are not directly detected.
 /// `bath_spins_indices` is a list of which bath_particles have spin.
 /// `cell_indices` is a set of lists of all periodic copies of each particle 
-/// from the primary cell 
+/// from the primary cell; an entry is `None` if the copy is not stored,
+/// because it was dropped, cannot have a spin, or cannot be within the radius.
 /// `cell_offsets` is the set of displacements for periodic boundary conditions.
 /// `cell_ids` lists the unit cell that each particle is in.
 /// `connections` lists chemical bonds.

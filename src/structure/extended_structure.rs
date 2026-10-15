@@ -222,6 +222,14 @@ impl Structure{
             particle_configs)
       ).collect::<Vec::<BTreeMap::<u64, Vec::<usize>>>>();
 
+    // Copies that cannot be within the radius are not stored
+    // (see `copy_can_be_active()`).
+    let Some(radius) = config.radius else {
+      return Err(CluEError::NoRadius);
+    };
+    let delta = self.max_distance_from_exchange_group_center();
+    let store_all = store_all_copies();
+
     // Loop through each unit cell other than the primary cell.
     for cell_id in 1..self.cell_offsets.len(){
       let offset = self.cell_offsets[cell_id].clone();
@@ -287,6 +295,12 @@ impl Structure{
             if self.max_spin_multiplicity_for_particle(*particle_idx0,
                 &self.extracell_particle_config_ids[group_idx],
                 particle_configs) < 2 { continue; }
+
+            // Copies that can never be active are not stored.
+            // The random numbers above are drawn per cosubstitution group,
+            // so skipping a copy does not change them.
+            if !store_all && !self.copy_can_be_active(*particle_idx0, &offset,
+                radius, delta) { continue; }
 
             // Copy the equivalent particle from the primary cell.
             let mut new_particle = self.bath_particles[*particle_idx0].clone();
@@ -615,6 +629,9 @@ impl Structure{
         let indices_0 = exchange_group_0.indices();
         let mut indices = Vec::<usize>::with_capacity(indices_0.len());
 
+        // A group is only copied if all of its members are stored;
+        // members are dropped, spinless, or beyond the radius 
+        // (`copy_can_be_active()`) together.
         for &idx0 in indices_0.iter(){
           let Some(idx) = self.cell_indices[idx0][icell] else{
             break;
@@ -866,6 +883,62 @@ Periodic boudary conditions will not be applied.");
     }
     max_distance
   }
+  //----------------------------------------------------------------------------
+  // This function returns `false` if `trim_system()` would deactivate the
+  // copy of primary cell particle `idx0` displaced by `offset`, whatever
+  // its isotope, and `true` otherwise.
+  // Coordinates are relative to the detected spin.
+  // `trim_system()` measures a particle in an exchange group from the
+  // centroid of the group, and any other particle from its own position.
+  // A periodic copy of an exchange group only forms if all of its members
+  // are stored and have the same isotope (`update_exhange_groups()`),
+  // so the members of an exchange group are kept or skipped together:
+  // they are kept if the centroid is within `radius + delta`, where `delta`
+  // is the largest distance of a member from the centroid of its group
+  // (`max_distance_from_exchange_group_center()`).
+  // This keeps every group that is trimmed by its centroid, and every member
+  // within `radius` of a group that does not form because of mixed isotopes.
+  // A small margin makes sure rounding errors can only keep more copies.
+  // Other particles use the same coordinates and comparison as
+  // `trim_system()`.
+  fn copy_can_be_active(&self, idx0: usize, offset: &Vector3D, radius: f64,
+      delta: f64) -> bool
+  {
+    if let Some(exchange_group_manager) = &self.exchange_groups{
+      if let Some(id) = exchange_group_manager.exchange_group_ids[idx0]{
+        let r = exchange_group_manager.exchange_groups[id].centroid()
+          + offset;
+        return r.norm() <= radius + delta + 1e-6*ANGSTROM;
+      }
+    }
+
+    let r = &self.bath_particles[idx0].coordinates + offset;
+    r.norm() <= radius
+  }
+}
+//------------------------------------------------------------------------------
+#[cfg(test)]
+thread_local!{
+  // Tests can set this to store every periodic copy, as `extend_structure()`
+  // did before it skipped copies that cannot be within the radius.
+  static STORE_ALL_COPIES: std::cell::Cell<bool>
+    = const { std::cell::Cell::new(false) };
+}
+//------------------------------------------------------------------------------
+// This function returns `true` if `extend_structure()` should store every
+// periodic copy; this is only possible in tests.
+fn store_all_copies() -> bool{
+  #[cfg(test)]
+  { STORE_ALL_COPIES.with(|store_all| store_all.get()) }
+  #[cfg(not(test))]
+  { false }
+}
+//------------------------------------------------------------------------------
+// This function sets whether `extend_structure()` stores every periodic copy
+// in the calling thread.
+#[cfg(test)]
+pub(crate) fn set_store_all_copies(store_all: bool){
+  STORE_ALL_COPIES.with(|store_all_copies| store_all_copies.set(store_all));
 }
   //----------------------------------------------------------------------------
   // This function returns the cubic bin, with edge `bin_size`, 
@@ -1062,6 +1135,8 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_build_extended_structure_tempo_wat_gly_7nm(){
+    // This test checks copies in every unit cell, also beyond the radius.
+    set_store_all_copies(true);
     // n    : Molecules    : Hydrons 
     // 1    : TEMPO        :    18
     // 1500 : glycerols    : 12000
@@ -1226,6 +1301,8 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_build_extended_structure_tempo_3gly_1npr(){
+    // This test checks copies in every unit cell, also beyond the radius.
+    set_store_all_copies(true);
 
     let config = Config::from_toml_string(r##"
       input_structure_file = "./assets/TEMPO_3gly_1npr_50A.pdb"
@@ -1420,6 +1497,8 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_build_extended_structure_solvent_box_isotopes(){
+    // This test checks copies in every unit cell, also beyond the radius.
+    set_store_all_copies(true);
     // 3224 waters and 250 glycerols in a 50.146 A cubic box.
     let mut config = Config::from_toml_file("./assets/solvent_box.toml")
       .unwrap();
@@ -1729,6 +1808,8 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_build_structure_extracell_only_group(){
+    // This test checks copies in every unit cell, also beyond the radius.
+    set_store_all_copies(true);
     // A group that only applies outside the primary cell must be used
     // regardless of the order of the groups.
     let c_primary = r##"
@@ -2142,6 +2223,8 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_build_structure_same_molecule_group_with_spinless_first_member(){
+    // This test checks copies in every unit cell, also beyond the radius.
+    set_store_all_copies(true);
     // The first particle of TEMPO is a carbon without spin; the molecule
     // must still be copied, but only the particles that can have a spin.
     let structure = build_periodic_tempo(r##"
@@ -2161,6 +2244,8 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_drop_same_molecule_group_with_spinless_first_member(){
+    // This test checks copies in every unit cell, also beyond the radius.
+    set_store_all_copies(true);
     // Whole molecules are dropped, also when the first particle 
     // of the molecule cannot have a spin.
     let structure = build_periodic_tempo(r##"
@@ -2228,6 +2313,166 @@ mod tests{
       if kept[0]{ n_kept += 1; }
     }
     assert_binomial(n_kept, n_waters, 0.5, "waters");
+  }
+  //----------------------------------------------------------------------------
+  // This function lists the active particles in bath order, and the exchange
+  // groups that have an active member, by primary cell index and unit cell,
+  // so that structures with different bath indices can be compared.
+  fn active_set(structure: &Structure)
+    -> (Vec::<(usize,usize,Isotope,Vector3D)>,
+        Vec::<(Vec::<(usize,usize)>,Vector3D,f64)>)
+  {
+    let label = |idx: usize|
+      (structure.primary_cell_indices[idx], structure.cell_id(idx).unwrap());
+
+    let particles = structure.bath_particles.iter().enumerate()
+      .filter(|(_idx,p)| p.active)
+      .map(|(idx,p)| {
+        let (idx0,cell) = label(idx);
+        (idx0, cell, p.isotope, p.coordinates.clone())
+      }).collect::<Vec::<_>>();
+
+    let mut exchange_groups = Vec::<(Vec::<(usize,usize)>,Vector3D,f64)>::new();
+    if let Some(manager) = &structure.exchange_groups{
+      for (id,group) in manager.exchange_groups.iter().enumerate(){
+        let indices = group.indices();
+        if !indices.iter().any(|&idx| structure.bath_particles[idx].active){
+          continue;
+        }
+        exchange_groups.push((indices.iter().map(|&idx| label(idx)).collect(),
+            group.centroid().clone(), manager.exchange_couplings[id]));
+      }
+    }
+    (particles, exchange_groups)
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_skipped_copies_do_not_change_active_set(){
+    // Skipping periodic copies that cannot be within the radius must not
+    // change the active particles, their order, or the exchange groups.
+    // The radii cut through the methyls of the nearest copies of TEMPO
+    // (72.57 Å away), and the random hydrogen isotopes give methyls
+    // with mixed isotopes, which do not form exchange groups.
+    let groups = r##"
+        [[groups]]
+        name = "methyl_h"
+        selection.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        1H.abundance = 0.5
+        2H.abundance = 0.5
+
+        [[groups]]
+        name = "other_h"
+        selection.elements = ["H"]
+        selection.not_serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        drop_probability = 0.3
+        "##;
+
+    let mut n_cut_groups = 0;
+    let mut n_mixed_groups = 0;
+    for radius in [68,70,71,72,73,74,75,76,78]{
+      let config = Config::from_toml_string(&format!(r##"
+          input_structure_file = "assets/TEMPO.pdb"
+          radius = {}
+          detected_spin.position = [28,29]
+          replicate_unit_cell = true
+          {}
+          "##,radius,groups)).unwrap();
+      let radius = config.radius.unwrap();
+
+      for seed in 0..4{
+        set_store_all_copies(true);
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let reference = Structure::build_structure(&mut rng,&config).unwrap();
+
+        set_store_all_copies(false);
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let structure = Structure::build_structure(&mut rng,&config).unwrap();
+
+        assert!(structure.number() < reference.number());
+        assert_eq!(active_set(&structure), active_set(&reference),
+            "radius {} Å, seed {}",radius/ANGSTROM,seed);
+
+        // Count the methyl copies that the radius cuts through, and the
+        // ones that do not form exchange groups because of mixed isotopes.
+        let manager = reference.exchange_groups.as_ref().unwrap();
+        let delta = 1.1*ANGSTROM;
+        for group in manager.exchange_groups.iter(){
+          if (group.centroid().norm() - radius).abs() < delta{
+            n_cut_groups += 1;
+          }
+        }
+        for cell in 1..reference.cell_offsets.len(){
+          for &idx0 in [2,6,20,24].iter(){
+            let indices = (0..3).filter_map(|ii|
+                reference.cell_indices[idx0+ii][cell])
+              .collect::<Vec::<usize>>();
+            if indices.len() != 3 { continue; }
+            let isotopes = indices.iter()
+              .map(|&idx| reference.bath_particles[idx].isotope)
+              .collect::<Vec::<Isotope>>();
+            let r = reference.bath_particles[indices[0]].coordinates.norm();
+            if (r - radius).abs() < delta
+              && isotopes.iter().any(|iso| *iso != isotopes[0]){
+              n_mixed_groups += 1;
+            }
+          }
+        }
+      }
+    }
+    assert!(n_cut_groups > 0);
+    assert!(n_mixed_groups > 0);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_copy_can_be_active(){
+    // Members of an exchange group are kept if the centroid of the group
+    // is within the radius plus the largest member distance from the
+    // centroid, and other particles if they are within the radius.
+    let config = Config::from_toml_string(r##"
+        input_structure_file = "assets/TEMPO.pdb"
+        radius = 20
+        detected_spin.position = [28,29]
+        replicate_unit_cell = false
+        "##).unwrap();
+    let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    structure.build_primary_structure(&mut rng,&config).unwrap();
+    let radius = config.radius.unwrap();
+    let delta = structure.max_distance_from_exchange_group_center();
+    assert!(delta > 0.9*ANGSTROM && delta < 1.2*ANGSTROM);
+
+    // Returns the offset that moves `r0` to distance `distance`
+    // along `r0`.
+    let offset_to = |r0: &Vector3D, distance: f64| -> Vector3D{
+      &r0.scale(distance/r0.norm()) - r0
+    };
+
+    // A methyl: all members get the answer of the centroid.
+    let manager = structure.exchange_groups.as_ref().unwrap();
+    let group = &manager.exchange_groups[0];
+    let centroid = group.centroid().clone();
+    for (distance, expected) in [(radius + 0.99*delta, true),
+        (radius + 1.01*delta, false)]
+    {
+      let offset = offset_to(&centroid, distance);
+      for idx0 in group.indices(){
+        assert_eq!(structure.copy_can_be_active(idx0,&offset,radius,delta),
+            expected);
+      }
+    }
+
+    // The nitrogen is not in an exchange group.
+    let idx_n = (0..structure.number()).find(|&idx|
+        structure.bath_particles[idx].element == Element::Nitrogen).unwrap();
+    assert!(manager.exchange_group_ids[idx_n].is_none());
+    let r_n = structure.bath_particles[idx_n].coordinates.clone();
+    for (distance, expected) in [(radius*(1.0 - 1e-6), true),
+        (radius*(1.0 + 1e-6), false)]
+    {
+      let offset = offset_to(&r_n, distance);
+      assert_eq!(structure.copy_can_be_active(idx_n,&offset,radius,delta),
+          expected);
+    }
   }
   //----------------------------------------------------------------------------
 
