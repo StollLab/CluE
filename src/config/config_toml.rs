@@ -24,6 +24,7 @@ pub struct DetectedSpinTOML{
   //pub position: Option<VectorSpecifierTOML>,
   pub position: Option<toml::Value>,
   pub transition: Option<[usize;2]>,
+  pub weight_tolerance: Option<f64>,
   pub identity: Option<String>,
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

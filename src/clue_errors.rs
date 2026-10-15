@@ -32,7 +32,7 @@ pub enum CluEError{
   CannotParseOrientations(String),
   CannotParsePartitioningMethod(usize,String),
   CannotParsePulseSequence(String),
-  CannotParseSecondaryParticleFilter(String),
+  CannotParseCosubstitute(String,String),
   CannotParseSpinOp(String),
   CannotPruneClustersMisMatchedSizes,
   CannotReadGrid(String),
@@ -41,6 +41,8 @@ pub enum CluEError{
   CannotSampleBinomialDistribution(usize,f64),
   CannotTakeTrace(String),
   CannotWriteFile(String),
+  CentroidGroupHasDistanceSelection(String),
+  CentroidOfNoParticles,
   ClusterFileContainsNoHeader(String),
   ClusterHasNoSignal(String),
   ClusterLineFormatError(String),
@@ -50,6 +52,8 @@ pub enum CluEError{
   ClusterTOMLNoNumberClusters,
   PulseSequenceNotSupported(String,String),
   DetectedSpinDoesNotHaveAnActiveIndex,
+  DetectedSpinPositionNotFinite(String),
+  DetectedSpinSelectsNoParticles(String),
   DuplicateSerial(u32),
   Error(String),
   ExpectedClusterSetWithNSizes(usize,usize),
@@ -74,7 +78,13 @@ pub enum CluEError{
   InvalidIST(String),
   InvalidKMeansSize,
   InvalidPulse(String),
+  InvalidAbundanceTolerance(String,f64),
+  InvalidDropProbability(String,f64),
+  InvalidIsotopeAbundance(String,String,f64),
+  InvalidSpinGridWeights(f64),
+  InvalidSpinGridWeightTolerance(f64),
   InvalidSpinMultiplicity(usize),
+  IsotopeAbundancesDoNotSumToOne(String,String,f64,f64),
   InvalidStevens(String),
   LenghMismatchTimepointsIncrements(usize,usize),
   MeanFieldECCENotImplemented,
@@ -153,9 +163,12 @@ pub enum CluEError{
   PropagatorAndDensityNotSameDimension(usize,usize),
   PartitionIsIncomplette,
   SecondaryFilterRequiresAnIndex(String),
+  SpaceGroupNotP1(String),
+  SpinGridWeightsDoNotSumToOne(f64,f64),
   SpinAlreadyPartitioned(usize,i32),
   SpinPropertiesNeedsALabel,
   SpinPropertiesNeedsAnIsotope(String),
+  StructureLargerThanCell(String,f64),
   StructurePropertiesNeedsALabel,
   StructurePropertiesDoesNotNeedAnIsotope(String),
   TensorNotSet(usize),
@@ -271,8 +284,10 @@ impl fmt::Display for CluEError{
       CluEError::CannotParsePulseSequence(seq) => write!(f,
           "cannot parse \"{}\" as a pulse sequence", seq),
 
-      CluEError::CannotParseSecondaryParticleFilter(group) => write!(f,
-          "cannot parse secondary particle group \"{}\"", group),
+      CluEError::CannotParseCosubstitute(group,cosubstitute) => write!(f,
+          "group \"{}\": cannot parse cosubstitute = \"{}\"; the options \
+are \"same_molecule\", \"group\", and \"particle\" (\"bonded\" is not \
+supported)", group, cosubstitute),
 
       CluEError::CannotParseSpinOp(s) => write!(f,
           "cannot parse \"{}\" as a spin operator", s),
@@ -325,6 +340,14 @@ size n.", file),
       CluEError::CannotWriteFile(file) => write!(f,
           "cannot write to \"{}\"", file),
 
+      CluEError::CentroidOfNoParticles => write!(f,
+          "cannot find the centroid of an empty set of particles"),
+
+      CluEError::CentroidGroupHasDistanceSelection(label) => write!(f,
+          "group \"{}\" is used to place the detected spin and cannot use \
+\"within_distance\" or \"not_within_distance\", since distances are \
+measured from the detected spin",label),
+
       CluEError::PulseSequenceNotSupported(fun,seq) => write!(f,
         "\"{}\" does not support {}",fun,seq),
 
@@ -337,6 +360,14 @@ size n.", file),
       CluEError::DetectedSpinDoesNotHaveAnActiveIndex => write!(f,
           "the detected spin is always active and so does have an index \
 fo nth active"),
+
+      CluEError::DetectedSpinPositionNotFinite(position) => write!(f,
+          "the detected spin position, {} angstroms, is not finite; check \
+detected_spin.position and the coordinates in the structure file",
+          position),
+
+      CluEError::DetectedSpinSelectsNoParticles(selection) => write!(f,
+          "the detected spin position is the centroid of {}", selection),
 
       CluEError::ExpectedClusterSetWithNSizes(n_exp,n_act) => write!(f,
           "expected a cluster set with {} sizes, but got {} sizes",
@@ -404,6 +435,33 @@ particles must not reside in more than one group",label0,label1),
 
       CluEError::InvalidPulse(pulse) => write!(f,
           "invalid {}",pulse),
+
+      CluEError::InvalidAbundanceTolerance(group,tolerance) => write!(f,
+          "group \"{}\": abundance_tolerance = {} must be at least 0 and \
+less than 1", group, tolerance),
+
+      CluEError::InvalidDropProbability(group,p) => write!(f,
+          "group \"{}\": drop_probability = {} is outside the interval \
+[0, 1]", group, p),
+
+      CluEError::InvalidIsotopeAbundance(group,isotope,abundance) => write!(f,
+          "group \"{}\": {}.abundance = {} is not a non-negative number",
+          group, isotope, abundance),
+
+      CluEError::IsotopeAbundancesDoNotSumToOne(group,abundances,sum,tol) 
+        => write!(f,
+          "group \"{}\": the isotope abundances ({}) sum to {}, which \
+differs from 1 by more than abundance_tolerance = {}; list every isotope, \
+for example 1H.abundance = 0.7 and 2H.abundance = 0.3", 
+          group, abundances, sum, tol),
+
+      CluEError::InvalidSpinGridWeights(sum) => write!(f,
+          "the weights of the detected spin grid sum to {}, but they must \
+sum to a positive number", sum),
+
+      CluEError::InvalidSpinGridWeightTolerance(tolerance) => write!(f,
+          "detected_spin.weight_tolerance = {} must be at least 0 and less \
+than 1", tolerance),
 
       CluEError::InvalidSpinMultiplicity(n) => write!(f,
           "invalid spin multiplicity \"{}\"",n),
@@ -666,6 +724,15 @@ respectively: they must have the same dimension",
           "secondary particle group, \"{}\", requires a particle index",
           group),
 
+      CluEError::SpaceGroupNotP1(space_group) => write!(f,
+          "the structure has space group \"{}\", but replicate_unit_cell \
+only applies lattice translations; expand the structure to space group P 1 \
+or set replicate_unit_cell = false",space_group),
+
+      CluEError::SpinGridWeightsDoNotSumToOne(sum,tolerance) => write!(f,
+          "the weights of the detected spin grid sum to {}, which differs \
+from 1 by more than detected_spin.weight_tolerance = {}", sum, tolerance),
+
       CluEError::SpinAlreadyPartitioned(idx,blk) => write!(f,
           "spin {} already partitioned into block {}", idx,blk),
 
@@ -676,6 +743,11 @@ respectively: they must have the same dimension",
       CluEError::SpinPropertiesNeedsAnIsotope(label) => write!(f,
           "spin_properties requires an isotope to be set: 
 #[spin_properties(label = {}, isotope = ISOTOPE)]",label),
+
+      CluEError::StructureLargerThanCell(axis,span) => write!(f,
+          "the structure spans {:.2} unit cells along cell edge {}, \
+so the unit cell in the structure file does not describe its periodicity; \
+correct or remove the unit cell (CRYST1) record",span,axis),
 
       CluEError::StructurePropertiesNeedsALabel => write!(f,
           "structure_properties requires a label to be set: 

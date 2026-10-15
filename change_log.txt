@@ -1,4 +1,153 @@
 --------------------------------------------------------------------------------
+CluE Oxide: 1.0.0-dev
+
+ADDED:
+  The key detected_spin.weight_tolerance (default 1e-9) sets how far the 
+  sum of the weights of a detected spin probability grid may differ from 
+  one.
+
+  The group key abundance_tolerance (default 1e-9) sets how far the sum 
+  of a group's isotope abundances may differ from one.
+
+CHANGED:
+  Group distance selections (selection.within_distance and
+  selection.not_within_distance) are now measured from the detected spin.
+  Previously they were measured from the origin of the structure file.
+
+  Groups outside the primary cell are now assigned per unit cell, so
+  distance and cell ID selections are evaluated for each periodic copy.
+  Cosubstitution groups outside the primary cell are built from these
+  per-cell groups, and spin properties of periodic copies come from the
+  group of the copy rather than the group of the primary cell particle.
+
+  A group used to place the detected spin (a centroid over groups) can no 
+  longer use a distance selection, and such configs now report an error.
+
+  Tensor axes that refer to groups (from/to, from_bonded_to/to_bonded_to, 
+  from_same_molecule_as/to_same_molecule_as) are now resolved within the 
+  unit cell of the particle, so periodic copies get the same axes as the 
+  primary cell particle. Previously bonded and same-molecule references 
+  crashed for periodic copies, and group references could match particles 
+  in other unit cells. The selections bonded_indices and not_bonded_indices 
+  now also apply to periodic copies.
+
+  Structures are now reproducible for a fixed rng_seed when several 
+  drop_probability values are used. Previously the order of the random 
+  draws could change from run to run. The random draws for such configs 
+  differ from earlier versions.
+
+  Groups with cell_type = "primary_cell" or "extracells" now decide 
+  whether a particle can carry a spin from the group that applies in its 
+  own unit cell. Previously the result depended on the order of the 
+  groups, and an "extracells" group could be ignored entirely.
+
+  Cosubstitution groups (for example cosubstitute = "same_molecule") are 
+  now copied to other unit cells and dropped with drop_probability 
+  whenever any of their particles can have a spin. Previously only the 
+  first particle of the group was checked, so a molecule whose first atom 
+  has no spin (for example the oxygen of a water) was never copied and 
+  never dropped. In the primary cell, whether a group can be dropped is 
+  now decided from the groups rather than from the sampled isotopes. 
+  Particles without spin are still not copied to other unit cells.
+
+  Molecules that are split across the unit cell boundary are now made 
+  whole using the bonds in the structure file before the unit cell is 
+  replicated, which also works for oblique cells. Previously this step 
+  never ran, so methyl rotors, same_molecule groups, and bond-based 
+  selections could combine atoms from different periodic copies. 
+  Structures whose molecules are already whole are unchanged. A message 
+  reports bonds that are still longer than 3 angstroms afterwards, such as 
+  those of structures bonded to their own periodic copies.
+
+  With replicate_unit_cell = true, the number of unit cells is now the 
+  number needed to include every periodic image within the radius, which 
+  accounts for oblique unit cells and for atoms outside the unit cell. It 
+  is never less than in earlier versions, so results for rectangular cells 
+  with the atoms inside the cell are unchanged. If the number of unit 
+  cells is given explicitly and is too small, a message is printed.
+
+  Replicating a unit cell whose space group is not P 1 is now an error, 
+  since only lattice translations are applied. The placeholder 1x1x1 A 
+  unit cell that PDB files use for structures without a unit cell, and 
+  unit cells without volume, are now ignored. A structure that spans more 
+  than two unit cells along a cell edge is now an error, since the unit 
+  cell cannot describe it.
+
+  Building the structure is faster and uses less memory for large 
+  periodic systems, with identical results: the clash checks 
+  (clash_distance and clash_distance_pbc) only compare nearby particles, 
+  unit cells with the same groups share them, and the unit cell of each 
+  particle is stored instead of searched for.
+
+  PDB element symbols in upper case, as the PDB format writes them (for 
+  example FE, NA, CL), are now read. Previously atoms with two-letter 
+  elements in upper case were skipped. If the element columns are missing 
+  or blank, the element is now read from the atom name, with a message; 
+  previously this was an error. Lines that are too short or contain 
+  non-ASCII characters in fixed columns are now reported as errors 
+  instead of crashing CluE Oxide.
+
+  Isotopes drawn for a fixed rng_seed can differ from earlier versions for 
+  configs with isotope abundances, since particles that are not 
+  cosubstituted no longer reserve an extra, empty cosubstitution group. 
+  The isotope statistics are unchanged.
+
+  Selections of serials, names, residues, chain IDs, and residue sequence 
+  numbers no longer select particles without that field, such as atoms 
+  whose residue sequence number is not a number. Previously such particles
+  passed every one of these selections. A message reports how many 
+  particles of each group lack a selected field. "not_" selections are 
+  unchanged.
+
+  The detected spin position now reports an error if a group or serial 
+  number used to place it matches no atom, or if the position is not 
+  finite. Previously an empty selection gave NaN coordinates without an 
+  error, and an empty group or missing serial among several was ignored.
+
+  Isotope abundances of a group, when given, must now list every isotope 
+  and sum to one within abundance_tolerance; they are then normalized, with
+  a message if this changes them by more than rounding. Negative 
+  abundances are errors. Previously abundances that summed to less than 
+  one left the remaining particles with the structure file isotope, and 
+  abundances that summed to more than one depended on the order of the 
+  isotopes. Existing configs that list only a minor isotope, such as 
+  2H.abundance = 0.3 alone, now fail to load and must list every isotope.
+
+  drop_probability must now lie in the interval [0, 1]; other values are 
+  errors.
+
+  The element symbols D and T, in structure files and in element 
+  selections, are still read as hydrogen, but a message now reports this.
+
+  For a detected spin given as a probability grid, the bath is now 
+  centered on the weighted mean of the grid instead of the unweighted mean 
+  of its points; the system radius, distance selections, the number of unit
+  cells, and the detected spin in the output PDB file use this center.
+  Hyperfine couplings are unchanged.
+
+  The weights of a detected spin probability grid must now sum to one 
+  within detected_spin.weight_tolerance; they are then normalized, with a 
+  message if this changes them by more than rounding. Previously the 
+  weights were used as given, so weights that did not sum to one scaled the
+  point-dipole hyperfine couplings.
+
+  A detected spin position given as coordinates, [x, y, z], is now read 
+  in unit_of_distance, as grid positions and all other distances are. 
+  Previously it was always read in angstroms. A position given as three 
+  integers, which is read as serial numbers, now prints a message.
+
+REMOVED:
+  cosubstitute = "bonded", which did not group particles as intended, is 
+  now an error that names the group. The options are "same_molecule", 
+  "group" (or "filter"), and "particle". Tensor axes can still use 
+  from_bonded_to and to_bonded_to.
+
+  SecondaryParticleFilter::from(), which only parsed cosubstitute, and the
+  error CluEError::CannotParseSecondaryParticleFilter, which only it used.
+
+  space_3d::minimize_absolute_difference_for_vector3d_step(), which moved 
+  vectors in the wrong direction and is no longer used.
+--------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.5
 
 ADDED:

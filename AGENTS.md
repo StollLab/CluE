@@ -16,6 +16,59 @@ bath into clusters, and computes pulse-sequence signals (e.g. Hahn echo).
 - Python bindings (pyCluE) live in `pyclue/`, a separate crate built with
   maturin and PyO3.
 
+
+## Task Execution Policies
+
+### Scope, Accuracy, and Communication
+
+* **Follow Instructions and Verify Completion:** Do everything the user asks, 
+  producing every requested file, function, section, and other output exactly 
+  as specified. Do not ignore any part of the request, cut off the output, 
+  or stop early. If in doubt, ask the user for clarification. Before finishing, 
+  double-check the output against every user instruction and the guidelines 
+  above, and evaluate its correctness and academic, software-engineering, and 
+  numerical-efficiency quality. Continue working until nothing is missing, 
+  incomplete, incorrect, non-compliant, or low-quality.
+
+* **No Hallucinations, no Lies, no Errors:** You must not lie and must not 
+fabricate information, code, or documentation. All content you generate must be 
+accurate and supported by the *CluE* codebase or user instructions. If you are 
+unsure about something, refer to the existing code or ask the user for 
+clarification. Above all, do not make mistakes.
+
+* **No uninformative output:** You must not produce uiseless or uninformative 
+output. If you are unsure about something, you must read the existing *Clue* 
+code and find missing information to make sure that your output is useful and 
+informative. Generic placeholder phrases must be removed from your output if 
+they appear. Avoid cosmetic churn unless explicitly requested and clearly 
+beneficial.
+
+* **Wait Option** When suggesting actions, always include a wait and do nothing
+now choice as option 1.
+
+### Preservation and Scientific Correctness
+
+* **Preserve content:** Before proposing a code or documentation rewrite or 
+updating the agent skill or knowledge base, run an information-preservation 
+gate: compare proposed content against existing content and flag content-drop 
+risks. Block removal of substantial existing code or documentation, or useful 
+existing skill or knowledge-base records, unless the user explicitly approves 
+that removal.
+
+* **Preserve correct physics:** When making code changes, do not break the 
+physics behind the code. Before making an edit or a refactor, understand the 
+physical meaning of the code you are touching and confirm that the edit you are 
+about to make is appropriate and correct from the physics point of view. 
+Run a direct function-load/call check for every changed function after you 
+touch that function's structure. Do not treat compact probes as acceptance.
+
+  
+## Confession After Work is Done
+
+After returning the result to the user, you must generate a confession report. 
+Include all aspects of the work that you have skipped, ignored, bypassed, swept 
+under the rug, hallucinated, or did not complete.
+
 ## Repository layout
 
 ```
@@ -111,6 +164,7 @@ code is not rustfmt-formatted and a reformat would produce large diffs):
 - Unit tests live in `#[cfg(test)] mod tests` at the bottom of each module and
   frequently use files from `assets/`.
 - Keep the code free of compiler warnings (recent commits cleaned these up).
+  Cite the literature (DOI and equation number) when you implement equations from a paper.
 
 ## Versioning and releases
 
@@ -129,3 +183,7 @@ REMOVED items for user-visible changes.
 default settings can break this test; do not regenerate the reference data
 unless the change in results is intended and explained.
 
+## Comits
+  Do not automatically commit anything.
+
+  

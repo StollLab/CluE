@@ -62,6 +62,7 @@ pub const KEY_STEVENS_COEF: &str = "stevens_coefficients";
 pub const KEY_NAME: &str = "name";
 
 pub const KEY_DROP_PROB: &str = "drop_probability";
+pub const KEY_ABUNDANCE_TOL: &str = "abundance_tolerance";
 
 pub const KEY_ISO_COSUBSTITUTE: &str = "cosubstitute";
 
@@ -144,8 +145,9 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;369] = [
+pub const ALLOWED_KEYS: [&str;371] = [
   "abundance",
+  "abundance_tolerance",
   "active",
   "auxiliary_signals",
   "axes",
@@ -283,6 +285,7 @@ pub const ALLOWED_KEYS: [&str;369] = [
   "values",
   "vector",
   "vector_grid",
+  "weight_tolerance",
   "within_distance",
   "x",
   "y",

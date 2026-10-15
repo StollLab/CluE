@@ -7,7 +7,8 @@ use crate::config::config_toml::*;
 use crate::config::particle_config::set_particle_configs_from_toml_table;
 use crate::config::command_line_input::CommandLineInput;
 use crate::config::particle_config::{
-  CellType, ParticleConfig,EigSpecifier,TensorSpecifier
+  CellType, ParticleConfig,EigSpecifier,TensorSpecifier,
+  IsotopeAbundance, DEFAULT_ABUNDANCE_TOLERANCE
 };
 use crate::config::pulse_sequence::*;
 use crate::isotopes::Isotope;
@@ -79,6 +80,7 @@ pub struct Config{
   pub detected_spin_identity: Option<Isotope>,
   pub detected_spin_multiplicity: Option<usize>,
   pub detected_spin_position: Option<DetectedSpinCoordinates>,
+  pub detected_spin_weight_tolerance: Option<f64>,
   pub detected_spin_transition: Option<[usize;2]>,
   pub detection_operator: Option<DetectionOp>,
   pub detected_spin_zerofield_coupling: Option<TensorSpecifier>,
@@ -159,6 +161,10 @@ pub struct Config{
   pub unit_of_time_to_seconds: Option<f64>,
 }
 
+
+/// The default allowed difference between one and the sum of the weights of 
+/// a detected spin probability grid.
+pub const DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 
 impl FromTOMLString for Config{
   fn from_toml_string(toml_str: &str) -> Result<Self,CluEError>{
@@ -352,6 +358,113 @@ impl Config{
 
       if s == 2{
         self.detected_spin_transition = Some([s/2 - 1,s/2]);
+      }
+    }
+
+    self.check_particle_configs()?;
+
+    self.check_detected_spin_grid()?;
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function checks that the weights of a detected spin probability
+  // grid sum to one within detected_spin.weight_tolerance, and normalizes
+  // them.
+  // A message is printed when normalizing changes the weights by more 
+  // than floating point rounding.
+  fn check_detected_spin_grid(&mut self) -> Result<(),CluEError>{
+    let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid)) 
+      = &mut self.detected_spin_position else{
+      return Ok(());
+    };
+
+    let tolerance = self.detected_spin_weight_tolerance
+      .unwrap_or(DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE);
+    if !(0.0..1.0).contains(&tolerance){
+      return Err(CluEError::InvalidSpinGridWeightTolerance(tolerance));
+    }
+
+    let sum = grid.weights.iter().fold(0.0, |sum, w| sum + w);
+    if !((sum - 1.0).abs() <= tolerance){
+      return Err(CluEError::SpinGridWeightsDoNotSumToOne(sum, tolerance));
+    }
+
+    if sum == 1.0{ return Ok(()); }
+    for weight in grid.weights.iter_mut(){
+      *weight /= sum;
+    }
+
+    // Differences up to this size are floating point rounding.
+    const ROUNDING: f64 = 1e-12;
+    if (sum - 1.0).abs() > ROUNDING{
+      println!("The weights of the detected spin grid sum to {}; \
+they were normalized to sum to one.", sum);
+    }
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function checks the isotope abundances and drop probabilities of 
+  // the groups, and normalizes isotope abundances that sum to one within
+  // the group's abundance_tolerance.
+  // A message is printed when normalizing changes the abundances by more 
+  // than floating point rounding.
+  fn check_particle_configs(&mut self) -> Result<(),CluEError>{
+    // Groups that apply to all unit cells are in both lists, 
+    // so messages are printed once per group.
+    let mut reported = std::collections::HashSet::<String>::new();
+
+    for particle_config in self.particles.iter_mut()
+      .chain(self.extracell_particles.iter_mut())
+    {
+      let label = particle_config.label.clone();
+      let Some(properties) = &mut particle_config.properties else{ continue; };
+      let distribution = &mut properties.isotopic_distribution;
+
+      if let Some(p) = distribution.void_probability{
+        if !(0.0..=1.0).contains(&p){
+          return Err(CluEError::InvalidDropProbability(label, p));
+        }
+      }
+
+      let abundances = &mut distribution.isotope_abundances;
+      if abundances.is_empty(){ continue; }
+
+      let tolerance = distribution.abundance_tolerance
+        .unwrap_or(DEFAULT_ABUNDANCE_TOLERANCE);
+      if !(0.0..1.0).contains(&tolerance){
+        return Err(CluEError::InvalidAbundanceTolerance(label, tolerance));
+      }
+
+      for isotope_abundance in abundances.iter(){
+        let abundance = isotope_abundance.abundance;
+        if !abundance.is_finite() || abundance < 0.0{
+          return Err(CluEError::InvalidIsotopeAbundance(label,
+                isotope_abundance.isotope.to_string(), abundance));
+        }
+      }
+
+      let list = |abundances: &[IsotopeAbundance]| abundances.iter()
+        .map(|a| format!("{} {}", a.isotope, a.abundance))
+        .collect::<Vec::<String>>().join(", ");
+
+      let sum = abundances.iter().map(|a| a.abundance).sum::<f64>();
+      if (sum - 1.0).abs() > tolerance{
+        return Err(CluEError::IsotopeAbundancesDoNotSumToOne(label,
+              list(abundances), sum, tolerance));
+      }
+
+      if sum == 1.0{ continue; }
+      let original = list(abundances);
+      for isotope_abundance in abundances.iter_mut(){
+        isotope_abundance.abundance /= sum;
+      }
+
+      // Differences up to this size are floating point rounding.
+      const ROUNDING: f64 = 1e-12;
+      if (sum - 1.0).abs() > ROUNDING && reported.insert(label.clone()){
+        println!("Group \"{}\": the isotope abundances ({}) sum to {}; \
+they were normalized to ({}).", label, original, sum, list(abundances));
       }
     }
     Ok(())
@@ -681,7 +794,7 @@ impl DetectedSpinCoordinates{
         let vec: Vec::<f64> = array.iter()
           .filter_map(|v| v.as_float()).collect();
 
-        let vec3d = Vector3D::from_vec(vec)?.scale(ANGSTROM);
+        let vec3d = Vector3D::from_vec(vec)?.scale(unit_of_distance);
 
         Ok(Self::XYZ(vec3d))
 
@@ -689,6 +802,11 @@ impl DetectedSpinCoordinates{
       Value::Integer(_) => {
         let vec: Vec::<u32> = array.iter()
           .filter_map(|v| v.as_integer()).map(|n| n as u32).collect();
+
+        // Three integers may have been meant as coordinates.
+        if let Some(message) = serial_position_message(&vec){
+          println!("{}", message);
+        }
 
         Ok(Self::CentroidOverSerials(vec))
       },
@@ -704,6 +822,21 @@ impl DetectedSpinCoordinates{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+
+//------------------------------------------------------------------------------
+// This function returns a message for a detected spin position given as 
+// three integers, which are read as serial numbers, but may have been meant
+// as coordinates.
+fn serial_position_message(serials: &[u32]) -> Option<String>{
+  let [a, b, c] = serials else{
+    return None;
+  };
+  Some(format!("detected_spin.position = [{a}, {b}, {c}] contains integers, \
+so it is read as the centroid of the atoms with serial numbers {a}, {b}, and \
+{c}; to give coordinates, write them with decimal points, for example \
+[{a}.0, {b}.0, {c}.0]."))
+}
+//------------------------------------------------------------------------------
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,PartialEq)]
@@ -1044,6 +1177,10 @@ impl Config{
         self.detected_spin_position 
           = Some(DetectedSpinCoordinates::from_toml_value(
                 toml_value,unit_of_distance)? );
+      }
+
+      if detected_spin.weight_tolerance.is_some(){
+        self.detected_spin_weight_tolerance = detected_spin.weight_tolerance;
       }
 
       if detected_spin.transition.is_some(){
@@ -1479,6 +1616,7 @@ mod tests{
   use super::*;
   use crate::elements::Element;
   use crate::structure::particle_filter::SecondaryParticleFilter;
+  use crate::config::particle_config::ParticleProperties;
 
   //----------------------------------------------------------------------------
   #[test]
@@ -1757,9 +1895,223 @@ mod tests{
     assert_eq!(filter.bonded_elements, vec![Element::Carbon]);
     let properties = groups[6].properties.clone().unwrap();
     assert_eq!(properties.cosubstitute,
-        Some(SecondaryParticleFilter::SameMolecule));
+        Some(crate::config::particle_config::Cosubstitute::SameMolecule));
 
 
+  }
+  //----------------------------------------------------------------------------
+  // This function reads a config with one group "g" with the settings 
+  // `settings`.
+  fn config_with_group(settings: &str) -> Result<Config,CluEError>{
+    Config::from_toml_string(&format!(r##"
+        [[groups]]
+        name = "g"
+        selection.elements = ["C"]
+        {}
+        "##, settings))
+  }
+  // This function returns the isotope abundances of the group "g".
+  fn abundances_of_group(config: &Config) -> Vec::<(Isotope,f64)>{
+    config.particles[0].properties.as_ref().unwrap().isotopic_distribution
+      .isotope_abundances.iter().map(|a| (a.isotope, a.abundance)).collect()
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_isotope_abundances_sum_to_one(){
+    // Abundances within the tolerance of one are normalized.
+    let config = config_with_group(
+        "1H.abundance = 0.1\n2H.abundance = 0.2\n3H.abundance = 0.7")
+      .unwrap();
+    let abundances = abundances_of_group(&config);
+    let sum = 0.1 + 0.2 + 0.7;
+    for ((_, a), expected) in abundances.iter().zip([0.1, 0.2, 0.7]){
+      assert!((a - expected/sum).abs() < 1e-15);
+    }
+
+    // Rounded table values need a larger tolerance.
+    let settings = "12C.abundance = 0.9893\n13C.abundance = 0.0106";
+    assert!(matches!(config_with_group(settings),
+          Err(CluEError::IsotopeAbundancesDoNotSumToOne(group,_,_,tol))
+          if group == "g" && tol == 1e-9));
+    let config = config_with_group(&format!(
+          "{}\nabundance_tolerance = 1e-4", settings)).unwrap();
+    let abundances = abundances_of_group(&config);
+    assert_eq!(abundances[0].0, Isotope::Carbon12);
+    assert!((abundances[0].1 - 0.9893/0.9999).abs() < 1e-12);
+    assert!((abundances[1].1 - 0.0106/0.9999).abs() < 1e-12);
+    assert!((abundances[0].1 + abundances[1].1 - 1.0).abs() < 1e-15);
+
+    // Abundances that do not sum to one are errors.
+    for settings in ["13C.abundance = 0.3", 
+        "13C.abundance = 0.8\n12C.abundance = 0.8"]
+    {
+      assert!(matches!(config_with_group(settings),
+            Err(CluEError::IsotopeAbundancesDoNotSumToOne(group,_,_,_))
+            if group == "g"), "{}", settings);
+    }
+
+    // Configs built in code are checked by set_defaults().
+    let mut config = Config::new();
+    let mut particle_config = ParticleConfig::new("g".to_string());
+    let mut properties = ParticleProperties::new();
+    properties.isotopic_distribution.isotope_abundances.push(
+        IsotopeAbundance{isotope: Isotope::Hydrogen2, abundance: 0.5});
+    particle_config.properties = Some(properties);
+    config.particles.push(particle_config);
+    assert!(matches!(config.set_defaults(),
+          Err(CluEError::IsotopeAbundancesDoNotSumToOne(..))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_invalid_isotope_abundances(){
+    assert_eq!(config_with_group(
+          "12C.abundance = 1.2\n13C.abundance = -0.2").err(),
+        Some(CluEError::InvalidIsotopeAbundance("g".to_string(),
+            "13C".to_string(), -0.2)));
+    assert!(matches!(config_with_group(
+          "12C.abundance = nan\n13C.abundance = 0.5"),
+          Err(CluEError::InvalidIsotopeAbundance(..))));
+
+    for tolerance in ["-1.0", "1.0", "1.5", "nan"]{
+      assert!(matches!(config_with_group(&format!(
+            "12C.abundance = 1.0\nabundance_tolerance = {}", tolerance)),
+            Err(CluEError::InvalidAbundanceTolerance(..))), "{}", tolerance);
+    }
+
+    // A tolerance without abundances is ignored, and the group keeps the 
+    // isotopes of the structure file.
+    let config = config_with_group("abundance_tolerance = 1.5").unwrap();
+    assert!(abundances_of_group(&config).is_empty());
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_detected_spin_grid_weights(){
+    let config_with_grid = |weights: [&str;2], tolerance: &str|{
+      Config::from_toml_string(&format!(r##"
+          [detected_spin]
+          position = [[0.0, 0.0, 0.0, {}], [1.0, 0.0, 0.0, {}]]
+          {}
+          "##, weights[0], weights[1], tolerance))
+    };
+    let weights_of = |config: &Config| -> Vec::<f64>{
+      let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid))
+        = &config.detected_spin_position else{ panic!("no grid"); };
+      grid.weights.clone()
+    };
+
+    // Weights that sum to one, including negative weights, are accepted.
+    let config = config_with_grid(["0.5","0.5"],"").unwrap();
+    assert_eq!(weights_of(&config), vec![0.5, 0.5]);
+    let config = config_with_grid(["1.2","-0.2"],"").unwrap();
+    assert_eq!(weights_of(&config), vec![1.2, -0.2]);
+
+    // Weights that do not sum to one are errors, 
+    // unless they are within the tolerance, which normalizes them.
+    assert_eq!(config_with_grid(["0.45","0.45"],"").err(),
+        Some(CluEError::SpinGridWeightsDoNotSumToOne(0.9, 1e-9)));
+    let config = config_with_grid(["0.45","0.45"],"weight_tolerance = 0.2")
+      .unwrap();
+    for w in weights_of(&config){
+      assert!((w - 0.5).abs() < 1e-15);
+    }
+    assert_eq!(config.detected_spin_weight_tolerance, Some(0.2));
+
+    for tolerance in ["-1.0", "1.0", "nan"]{
+      assert!(matches!(config_with_grid(["0.5","0.5"],
+            &format!("weight_tolerance = {}",tolerance)),
+            Err(CluEError::InvalidSpinGridWeightTolerance(_))), "{}",
+          tolerance);
+    }
+
+    // Positions that are not grids ignore the tolerance.
+    let config = Config::from_toml_string(r##"
+        [detected_spin]
+        position = [1.0, 2.0, 3.0]
+        weight_tolerance = 1.5
+        "##).unwrap();
+    assert!(matches!(config.detected_spin_position,
+          Some(DetectedSpinCoordinates::XYZ(_))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_detected_spin_position_unit_of_distance(){
+    // Coordinates are in unit_of_distance, as grid points are.
+    let config = Config::from_toml_string(r##"
+        unit_of_distance = "nm"
+        detected_spin.position = [1.0, 2.0, 3.0]
+        "##).unwrap();
+    assert_eq!(config.detected_spin_position,
+        Some(DetectedSpinCoordinates::XYZ(
+            Vector3D::from([10.0, 20.0, 30.0]).scale(ANGSTROM))));
+
+    let config = Config::from_toml_string(r##"
+        unit_of_distance = "nm"
+        detected_spin.position = [[1.0, 2.0, 3.0, 1.0]]
+        "##).unwrap();
+    let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid))
+      = config.detected_spin_position else{ panic!("no grid"); };
+    assert_eq!(grid.xyz(0).unwrap(),
+        Vector3D::from([10.0, 20.0, 30.0]).scale(ANGSTROM));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_serial_position_message(){
+    // Three integers are read as serial numbers, with a message.
+    let message = serial_position_message(&[25, 25, 25]).unwrap();
+    assert!(message.contains("serial numbers 25, 25, and 25"));
+    assert!(message.contains("[25.0, 25.0, 25.0]"));
+    let config = Config::from_toml_string(
+        "detected_spin.position = [25, 25, 25]").unwrap();
+    assert_eq!(config.detected_spin_position,
+        Some(DetectedSpinCoordinates::CentroidOverSerials(vec![25,25,25])));
+
+    // Other numbers of serials get no message.
+    assert_eq!(serial_position_message(&[28, 29]), None);
+    assert_eq!(serial_position_message(&[1, 2, 3, 4]), None);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_drop_probability_range(){
+    for p in ["1.5", "-0.5", "nan"]{
+      assert!(matches!(config_with_group(&format!("drop_probability = {}",p)),
+            Err(CluEError::InvalidDropProbability(group,_)) if group == "g"),
+          "{}", p);
+    }
+    for p in ["0.0", "1.0", "0.5"]{
+      assert!(config_with_group(&format!("drop_probability = {}",p)).is_ok());
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_cosubstitute(){
+    use crate::config::particle_config::Cosubstitute;
+    for (value, expected) in [("group", Cosubstitute::Group),
+        ("filter", Cosubstitute::Group), ("particle", Cosubstitute::Particle),
+        ("same_molecule", Cosubstitute::SameMolecule)]
+    {
+      assert_eq!(Cosubstitute::from(value,"methyl"), Ok(expected.clone()));
+      let config = Config::from_toml_string(&format!(r##"
+          [[groups]]
+          name = "methyl"
+          selection.elements = ["H"]
+          cosubstitute = "{}"
+          "##, value)).unwrap();
+      assert_eq!(config.particles[0].properties.as_ref().unwrap().cosubstitute,
+          Some(expected));
+    }
+
+    // "bonded" is not supported for cosubstitution, 
+    // and the error names the group.
+    for value in ["bonded", "nonsense"]{
+      let result = Config::from_toml_string(&format!(r##"
+          [[groups]]
+          name = "methyl"
+          selection.elements = ["H"]
+          cosubstitute = "{}"
+          "##, value));
+      assert_eq!(result.err(), Some(CluEError::CannotParseCosubstitute(
+              "methyl".to_string(), value.to_string())));
+    }
   }
   //----------------------------------------------------------------------------
   #[test]

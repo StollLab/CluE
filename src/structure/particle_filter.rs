@@ -471,24 +471,94 @@ impl ParticleFilter{
   {
     indices.iter().filter_map( |idx| {
       let particle = &structure.bath_particles[*idx];
-      self.does_pass_filter(structure, *idx,particle)
+      self.does_pass_filter(structure, *idx,particle,None)
     }).collect()
   }
   //----------------------------------------------------------------------------
   /// This function find the indices of the particles that pass the filter.
   pub fn filter(&self, structure: &Structure) -> Vec::<usize>{
-    
+
     let particles = &structure.bath_particles;
 
     particles.iter().enumerate()
-      .filter_map(|(idx,particle)| 
-          self.does_pass_filter(structure, idx,particle)
+      .filter_map(|(idx,particle)|
+          self.does_pass_filter(structure, idx,particle,None)
     ).collect()
   }
   //----------------------------------------------------------------------------
+  /// This function finds the indices of the primary cell particles within
+  /// `indices` whose copies in cell `cell_id` pass the filter.
+  /// Distances are measured at `coordinates + cell_offsets[cell_id]`.
+  /// The cell offsets must already be set by `set_cell_shifts()`.
+  pub fn filter_indices_in_cell(&self, structure: &Structure,
+      indices: &[usize], cell_id: usize) -> Vec::<usize>
+  {
+    indices.iter().filter_map( |idx0| {
+      let particle = &structure.bath_particles[*idx0];
+      self.does_pass_filter(structure, *idx0,particle,Some(cell_id))
+    }).collect()
+  }
+  //----------------------------------------------------------------------------
+  /// This function finds the indices of the primary cell particles whose
+  /// copies in cell `cell_id` pass the filter.
+  pub fn filter_in_cell(&self, structure: &Structure, cell_id: usize)
+    -> Vec::<usize>
+  {
+    let n_particles0 = structure.cell_indices.len();
+    let indices = (0..n_particles0).collect::<Vec::<usize>>();
+    self.filter_indices_in_cell(structure,&indices,cell_id)
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns, for each non-empty list of serials, atom names,
+  /// residues, chain IDs, or residue sequence numbers in the filter,
+  /// the selection key, a description of the field, and the number of 
+  /// primary cell particles without that field, which the list cannot select.
+  pub fn count_particles_missing_fields(&self, structure: &Structure)
+    -> Vec::<(&'static str, &'static str, usize)>
+  {
+    let n_particles0 = structure.cell_indices.len();
+    let particles = &structure.bath_particles[..n_particles0];
+    let count = |is_missing: &dyn Fn(&Particle) -> bool| -> usize{
+      particles.iter().filter(|particle| is_missing(particle)).count()
+    };
+
+    let mut counts = Vec::<(&'static str, &'static str, usize)>::new();
+    if !self.serials.is_empty(){
+      counts.push((KEY_SELE_SERIALS, "serial number",
+            count(&|p| p.serial.is_none())));
+    }
+    if !self.names.is_empty(){
+      counts.push((KEY_SELE_NAMES, "atom name", 
+            count(&|p| p.name.is_none())));
+    }
+    if !self.residues.is_empty(){
+      counts.push((KEY_SELE_RESIDUES, "residue name",
+            count(&|p| p.residue.is_none())));
+    }
+    if !self.chain_ids.is_empty(){
+      counts.push((KEY_SELE_CHAIN_IDS, "chain ID",
+            count(&|p| p.chain_id.is_none())));
+    }
+    if !self.residue_sequence_numbers.is_empty(){
+      counts.push((KEY_SELE_RES_SEQ_NUMS, "residue sequence number",
+            count(&|p| p.residue_sequence_number.is_none())));
+    }
+    counts
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns `true` if the filter can select different
+  /// particles in different unit cells,
+  /// which is the case for distance and cell ID selections.
+  pub fn depends_on_cell(&self) -> bool{
+    self.within_distance.is_some() || self.not_within_distance.is_some()
+      || !self.cell_ids.is_empty() || !self.not_cell_ids.is_empty()
+  }
+  //----------------------------------------------------------------------------
   // This function check if the indicated particle passes the filter.
+  // If `cell` is `Some(cell_id)`, then `idx` is a primary cell index
+  // and the filter is evaluated for the copy of the particle in cell `cell_id`.
   fn does_pass_filter(&self, structure: &Structure,
-      idx: usize, particle: &Particle) -> Option<usize>
+      idx: usize, particle: &Particle, cell: Option<usize>) -> Option<usize>
   {
     let particles = &structure.bath_particles;
       // Index
@@ -497,10 +567,14 @@ impl ParticleFilter{
         return None;
       }
 
-      
+
       // Cell ID
       if !self.cell_ids.is_empty() || !self.not_cell_ids.is_empty(){
-        if let Ok(cell_id) = structure.cell_id(idx){ 
+        let cell_id = match cell{
+          Some(cell_id) => Ok(cell_id),
+          None => structure.cell_id(idx),
+        };
+        if let Ok(cell_id) = cell_id{
           if !self.cell_ids.contains(&cell_id) 
             || self.not_cell_ids.contains(&cell_id){
             return None;
@@ -514,41 +588,20 @@ impl ParticleFilter{
        return None;
       }
 
-      // Serial
-      if let Some(serial) = particle.serial{ 
-        if (!self.serials.is_empty() && !self.serials.contains(&serial))
-         || self.not_serials.contains(&serial){
-          return None;
-      }}
-
-      // Atom Name
-      if let Some(name) = &particle.name{ 
-        if (!self.names.is_empty() && !self.names.contains(name))
-         || self.not_names.contains(name){
-          return None;
-      }}
-
-      // Residue
-      if let Some(res) = &particle.residue{ 
-        if (!self.residues.is_empty() && !self.residues.contains(res))
-         || self.not_residues.contains(res){
-          return None;
-      }}
-
-      // Chain
-      if let Some(chain_id) = &particle.chain_id{ 
-        if (!self.chain_ids.is_empty() && !self.chain_ids.contains(chain_id))
-         || self.not_chain_ids.contains(chain_id){
-          return None;
-      }}
-
-      // Residue Sequence ID
-      if let Some(res_seq) = particle.residue_sequence_number{ 
-        if (!self.residue_sequence_numbers.is_empty() 
-            && !self.residue_sequence_numbers.contains(&res_seq))
-         || self.not_residue_sequence_numbers.contains(&res_seq){
-          return None;
-      }}
+      // Serial, atom name, residue, chain, and residue sequence number.
+      if !passes_field(particle.serial.as_ref(), &self.serials,
+            &self.not_serials)
+        || !passes_field(particle.name.as_ref(), &self.names, &self.not_names)
+        || !passes_field(particle.residue.as_ref(), &self.residues,
+            &self.not_residues)
+        || !passes_field(particle.chain_id.as_ref(), &self.chain_ids,
+            &self.not_chain_ids)
+        || !passes_field(particle.residue_sequence_number.as_ref(),
+            &self.residue_sequence_numbers,
+            &self.not_residue_sequence_numbers)
+      {
+        return None;
+      }
 
       // Isotope
       let isotope = &particle.isotope; 
@@ -558,11 +611,15 @@ impl ParticleFilter{
       }
 
 
+      // Bonds are only stored for the primary cell, so periodic copies
+      // use the bonds of their primary cell particle.
+      let idx0 = structure.primary_cell_indices[idx];
+
       // Bonded To
       let mut pass = self.bonded_indices.is_empty();
       for neighbor in self.bonded_indices.iter(){
-        if *neighbor == idx { continue; }
-        if structure.connections.are_connected(idx,*neighbor){
+        if *neighbor == idx0 { continue; }
+        if structure.connections.are_connected(idx0,*neighbor){
           pass = true;
           break;
         }
@@ -571,13 +628,11 @@ impl ParticleFilter{
 
       // Not Bonded To
       for neighbor in self.not_bonded_indices.iter(){
-        if *neighbor == idx { continue; }
-        if structure.connections.are_connected(idx,*neighbor){
+        if *neighbor == idx0 { continue; }
+        if structure.connections.are_connected(idx0,*neighbor){
           return None
         }
       }
-
-      let idx0 = structure.primary_cell_indices[idx];
 
       // Bonded Elements
       let mut pass = self.bonded_elements.is_empty();
@@ -607,9 +662,18 @@ impl ParticleFilter{
         } 
       }
 
+      // Distance from the detected spin, which is at the origin.
+      let distance = || -> f64 {
+        match cell{
+          Some(cell_id) => (&particle.coordinates
+              + &structure.cell_offsets[cell_id]).norm(),
+          None => particle.coordinates.norm(),
+        }
+      };
+
       // Within Distance
       if let Some(r_max) = self.within_distance{
-        let r = particle.coordinates.norm();
+        let r = distance();
         if r > r_max{
           return None;
         }
@@ -617,7 +681,7 @@ impl ParticleFilter{
 
       // Not Within Distance
       if let Some(r_min) = self.not_within_distance{
-        let r = particle.coordinates.norm();
+        let r = distance();
         if r < r_min{
           return None;
         }
@@ -781,6 +845,22 @@ impl ParticleFilter{
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+//------------------------------------------------------------------------------
+// This function returns `true` if a particle with the field `value` passes
+// the selection `include` (in) and `exclude` (not in).
+// A particle without the field does not pass a non-empty `include`, 
+// since it cannot match it, and is never excluded by `exclude`.
+fn passes_field<T: PartialEq>(value: Option<&T>, include: &[T], exclude: &[T])
+  -> bool
+{
+  match value{
+    Some(value) => (include.is_empty() || include.contains(value))
+      && !exclude.contains(value),
+    None => include.is_empty(),
+  }
+}
+//------------------------------------------------------------------------------
+
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// Secondary particle filters allow particles filters to be modified so as to
 /// allow the filter to filter based off the relationship of particles to a
@@ -807,19 +887,15 @@ impl std::fmt::Display for SecondaryParticleFilter {
   } 
 }
 impl SecondaryParticleFilter{
-  pub fn from(secondary_filter: &str) 
-    -> Result<SecondaryParticleFilter,CluEError>
-  {
-    match secondary_filter{
-      "bonded" => Ok(SecondaryParticleFilter::Bonded),
-      "filter" | "group" => Ok(SecondaryParticleFilter::Filter),
-      "particle" => Ok(SecondaryParticleFilter::Particle),
-      "same_molecule" => Ok(SecondaryParticleFilter::SameMolecule),
-      _ => Err(CluEError::CannotParseSecondaryParticleFilter(
-            secondary_filter.to_string())),
-    }
-  }
   //----------------------------------------------------------------------------
+  /// This function returns the indices of the particles selected by `self`
+  /// for the group `label`, relative to the reference particle 
+  /// `particle_index_opt`.
+  /// Periodic copies are translations of the primary cell, so the selection 
+  /// is made within the primary cell: the reference particle is replaced by
+  /// its primary cell particle, and only primary cell particles are returned.
+  /// Vectors between the returned particles are therefore the same for 
+  /// a particle and all of its periodic copies.
   pub fn filter(&self, particle_index_opt: Option<usize>, label: &str, 
       structure: &Structure, config: &Config ) -> Result<Vec::<usize>,CluEError>
   {
@@ -838,12 +914,13 @@ impl SecondaryParticleFilter{
     };
 
 
+    // Get the primary cell particle of the reference particle.
     let get_particle_index = |sec_filt: &SecondaryParticleFilter|{
       let Some(particle_index) = particle_index_opt else{
         return
           Err(CluEError::SecondaryFilterRequiresAnIndex(sec_filt.to_string()));
       };
-      Ok(particle_index)
+      Ok(structure.primary_cell_indices[particle_index])
     };
     //let mut indices = Vec::<usize>::new();
   
@@ -861,7 +938,9 @@ impl SecondaryParticleFilter{
       },
       SecondaryParticleFilter::Filter => {
         let filter = get_filter(label,config)?;
-        filter.filter(structure)
+        let primary_cell = (0..structure.cell_indices.len())
+          .collect::<Vec::<usize>>();
+        filter.filter_indices(structure,&primary_cell)
       },
       //
       SecondaryParticleFilter::Particle => {
@@ -1020,6 +1099,7 @@ mod tests{
   use crate::structure::pdb;
   use crate::Config;
   use crate::config::DetectedSpinCoordinates;
+  use crate::io::FromTOMLString;
 
   use rand::SeedableRng;
 
@@ -1199,4 +1279,216 @@ mod tests{
     assert_eq!(indices.len(),16);
     assert_eq!(indices,vec![2,3,4,6,7,8,10,11,14,16,20,21,22,24,25,26]);
   }
+  //----------------------------------------------------------------------------
+  // This function builds TEMPO with periodic copies of the unit cell.
+  fn build_periodic_tempo() -> (Structure,Config){
+    let config = Config::from_toml_string(r##"
+        input_structure_file = "assets/TEMPO.pdb"
+        radius = 20
+        detected_spin.position = [28,29]
+        number_timepoints = [101]
+        tau_increments = [1e-1]
+        cluster_method = "cce"
+        max_cluster_size = 2
+        magnetic_field = 1.2
+        replicate_unit_cell = true
+
+        [[groups]]
+        name = "tempo_n"
+        selection.elements = ["N"]
+
+        [[groups]]
+        name = "tempo_o"
+        selection.elements = ["O"]
+
+        [[groups]]
+        name = "tempo_c"
+        selection.serials = [1,19]
+        "##).unwrap();
+
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let structure = Structure::build_structure(&mut rng,&config).unwrap();
+    assert!(structure.cell_offsets.len() > 1);
+
+    (structure,config)
+  }
+  //----------------------------------------------------------------------------
+  #[allow(non_snake_case)]
+  #[test]
+  fn test_VectorSpecifier_to_vector3d_periodic_copies(){
+    // Periodic copies are translations of the primary cell, so their tensor 
+    // axes must equal those of the primary cell particle.
+    let (structure,config) = build_periodic_tempo();
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+
+    let idx_n = (0..structure.number()).find(|&idx| 
+        structure.bath_particles[idx].element == Element::Nitrogen
+        && structure.cell_id(idx) == Ok(0)).unwrap();
+    let copies = structure.cell_indices[idx_n].iter().skip(1)
+      .filter_map(|idx| *idx).collect::<Vec::<usize>>();
+    assert_eq!(copies.len(), structure.cell_offsets.len() - 1);
+
+    let diff = |sf0: SecondaryParticleFilter, label0: &str, 
+        sf1: SecondaryParticleFilter, label1: &str|
+      VectorSpecifier::Diff(sf0,label0.to_string(),sf1,label1.to_string());
+    use SecondaryParticleFilter::*;
+    let vector_specifiers = [
+      diff(Particle,"self",Filter,"tempo_o"),
+      diff(Particle,"self",Bonded,"tempo_o"),
+      diff(Particle,"self",SameMolecule,"tempo_o"),
+      diff(Bonded,"tempo_c",Bonded,"tempo_c"),
+      diff(Filter,"tempo_n",Filter,"tempo_o"),
+    ];
+
+    // The N-O bond in the primary cell.
+    let r_no = Vector3D::from([35.290e-10 - 36.440e-10, 
+        36.430e-10 - 36.900e-10, 37.810e-10 - 37.100e-10]);
+
+    for (ii,vector_specifier) in vector_specifiers.iter().enumerate(){
+      let r0 = vector_specifier.to_vector3d(&mut rng, Some(idx_n),
+          &structure,&config).unwrap();
+      if ii != 3{
+        assert!((&r0 - &r_no).norm() < 1e-6*r_no.norm());
+      }
+
+      for &idx in copies.iter(){
+        let r = vector_specifier.to_vector3d(&mut rng, Some(idx),
+            &structure,&config).unwrap();
+        assert!((&r - &r0).norm() < 1e-12*r0.norm(),
+            "{:?} for copy {}: {} != {}",vector_specifier,idx,r,r0);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_filter_bonded_indices_periodic_copies(){
+    // Bonded index selections apply to all periodic copies of the bonded 
+    // particles.
+    let (structure,_config) = build_periodic_tempo();
+
+    // Find a methyl carbon.
+    let idx_c = (0..structure.cell_indices.len()).find(|&idx| 
+        structure.bath_particles[idx].element == Element::Carbon
+        && structure.connections.get_neighbors(idx).unwrap().iter()
+        .filter(|&&n| structure.bath_particles[n].element == Element::Hydrogen)
+        .count() == 3).unwrap();
+    let neighbors = structure.connections.get_neighbors(idx_c).unwrap();
+
+    let mut filter = ParticleFilter::new();
+    filter.bonded_indices = vec![idx_c];
+    let indices = filter.filter(&structure);
+
+    let mut expected = Vec::<usize>::new();
+    for &idx0 in neighbors.iter(){
+      expected.extend(structure.cell_indices[idx0].iter().filter_map(|i| *i));
+    }
+    expected.sort();
+    assert!(expected.len() > neighbors.len());
+    assert_eq!(indices,expected);
+
+    let mut filter = ParticleFilter::new();
+    filter.elements = vec![Element::Hydrogen];
+    filter.not_bonded_indices = vec![idx_c];
+    for idx in filter.filter(&structure){
+      assert!(!expected.contains(&idx));
+    }
+  }
+  //----------------------------------------------------------------------------
+  // This function builds a structure of the particles `particles` 
+  // without bonds or unit cell.
+  fn structure_of(particles: Vec::<Particle>) -> Structure{
+    let n_particles = particles.len();
+    let mut structure = Structure::new(particles, 
+        crate::cluster::adjacency::AdjacencyList::with_capacity(n_particles),
+        Vec::<Vector3D>::new());
+    structure.primary_cell_indices = (0..n_particles).collect();
+    structure.cell_indices = (0..n_particles).map(|idx| vec![Some(idx)])
+      .collect();
+    structure.cell_ids = vec![0; n_particles];
+    structure
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_filter_particles_without_fields(){
+    // A particle without a field is not selected by a list of that field, 
+    // and is not excluded by a "not" list of that field.
+    let without_fields = Particle::new(Element::Hydrogen, 0.0, 0.0, 0.0);
+    let mut with_fields = Particle::new(Element::Hydrogen, 1.0, 0.0, 0.0);
+    with_fields.serial = Some(5);
+    with_fields.name = Some("HW1".to_string());
+    with_fields.residue = Some("SOL".to_string());
+    with_fields.chain_id = Some("A".to_string());
+    with_fields.residue_sequence_number = Some(12);
+    let structure = structure_of(vec![without_fields, with_fields]);
+
+    let set_field = |filter: &mut ParticleFilter, field: &str, not: bool|{
+      match (field, not){
+        ("serial", false) => filter.serials = vec![5],
+        ("serial", true) => filter.not_serials = vec![5],
+        ("name", false) => filter.names = vec!["HW1".to_string()],
+        ("name", true) => filter.not_names = vec!["HW1".to_string()],
+        ("residue", false) => filter.residues = vec!["SOL".to_string()],
+        ("residue", true) => filter.not_residues = vec!["SOL".to_string()],
+        ("chain", false) => filter.chain_ids = vec!["A".to_string()],
+        ("chain", true) => filter.not_chain_ids = vec!["A".to_string()],
+        ("res_seq", false) => filter.residue_sequence_numbers = vec![12],
+        ("res_seq", true) => filter.not_residue_sequence_numbers = vec![12],
+        _ => panic!("unknown field"),
+      }
+    };
+    for field in ["serial","name","residue","chain","res_seq"]{
+      let mut filter = ParticleFilter::new();
+      set_field(&mut filter, field, false);
+      assert_eq!(filter.filter(&structure), vec![1], "{}", field);
+
+      let mut filter = ParticleFilter::new();
+      set_field(&mut filter, field, true);
+      assert_eq!(filter.filter(&structure), vec![0], "not {}", field);
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_passes_field(){
+    let include = [1,2];
+    let exclude = [3];
+    // With the field.
+    assert!(passes_field(Some(&1), &include, &[]));
+    assert!(!passes_field(Some(&4), &include, &[]));
+    assert!(passes_field(Some(&4), &[], &[]));
+    assert!(!passes_field(Some(&3), &[], &exclude));
+    assert!(!passes_field(Some(&1), &include, &[1]));
+    // Without the field.
+    assert!(passes_field(None::<&i32>, &[], &[]));
+    assert!(passes_field(None::<&i32>, &[], &exclude));
+    assert!(!passes_field(None::<&i32>, &include, &[]));
+    assert!(!passes_field(None::<&i32>, &include, &exclude));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_count_particles_missing_fields(){
+    let without_fields = Particle::new(Element::Hydrogen, 0.0, 0.0, 0.0);
+    let mut with_fields = Particle::new(Element::Hydrogen, 1.0, 0.0, 0.0);
+    with_fields.residue = Some("SOL".to_string());
+    with_fields.residue_sequence_number = Some(12);
+    let structure = structure_of(vec![without_fields.clone(), 
+        without_fields, with_fields]);
+
+    let mut filter = ParticleFilter::new();
+    assert!(filter.count_particles_missing_fields(&structure).is_empty());
+
+    // "not" lists cannot leave out particles without the field.
+    filter.not_names = vec!["HW1".to_string()];
+    assert!(filter.count_particles_missing_fields(&structure).is_empty());
+
+    filter.residues = vec!["SOL".to_string()];
+    filter.residue_sequence_numbers = vec![12];
+    filter.names = vec!["HW1".to_string()];
+    assert_eq!(filter.count_particles_missing_fields(&structure), vec![
+        ("names", "atom name", 3),
+        ("residues", "residue name", 2),
+        ("residue_sequence_numbers", "residue sequence number", 2),
+    ]);
+  }
+
 }

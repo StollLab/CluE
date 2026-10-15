@@ -23,13 +23,30 @@ The pdb file specifies the coordinates and elements types of all the atoms,
 and the options file specifies all the additional information needed, 
 such as the pulse sequence the applied magnetic field, the central spin
 coordinates and so on.
+Element symbols are read from columns 77--78 of the ATOM and HETATM records,
+in upper or lower case (for example FE or Fe).
+If these columns are missing or blank, the element is read from the atom 
+name, where the PDB format right-justifies it in columns 13--14,
+and CluE Oxide prints how many elements were read this way.
+Atoms whose element cannot be read, such as virtual sites, are skipped
+with a message.
+The symbols D and T are read as hydrogen, starting as $^1$H, both in the 
+structure file and in element selections, and CluE Oxide prints a message
+when this happens; to simulate deuterium, use a group with 
+\textit{2H.abundance = 1.0}.
 %===============================================================================
 \section{Overview}
 %===============================================================================
 The first steps CluE Oxide takes is to read the options and PDB files to construct
 the spin system.  This includes applying periodic boundary conditions, and
 dropping non-magnetic nuclei as well as those beyond the system radius 
-specified in the options.  Isotope substitutions can also be applied at this
+specified in the options.  
+Before periodic boundary conditions are applied, molecules that are split
+across the unit cell boundary are made whole using the bonds in the 
+structure file (CONECT records):
+starting from the first atom of each molecule, each bonded atom is moved by
+the lattice vector that brings it closest to its bonded partner.
+Molecules that are already whole are not moved.  Isotope substitutions can also be applied at this
 step, if specified in the input options.  In addition to isotope substitution,
 atoms can be replaced with voids at a chosen rate.  
 This can be helpful in hydrogen rich media,
@@ -581,6 +598,27 @@ The available fields are explained below.
  \hline 
 \end{tabular}
 \end{center} 
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+The unit cell is read from the CRYST1 record of the structure file
+and replicated with \textit{replicate\_unit\_cell}, which is
+\textit{true} (the default) to choose the number of unit cells automatically,
+\textit{false} to use only the primary cell, 
+or a list $[n_a, n_b, n_c]$ of the number of unit cells to add on each side 
+of the primary cell along each cell edge.
+When chosen automatically, $n_i$ is the smallest number for which every 
+periodic image within the radius of the detected spin is included,
+which accounts for oblique unit cells and for atoms outside the unit cell,
+but $n_i$ is at least 1 and at least $\lceil r/|\mathbf{a}_i| \rceil$, 
+where $r$ is the radius and $\mathbf{a}_i$ the cell edge.
+If a list is given that is smaller than needed, CluE Oxide prints a message.
+Only lattice translations are applied, so the structure must be 
+in space group P 1 (or have no space group);
+otherwise CluE Oxide reports an error when replicating the unit cell.
+The placeholder unit cell $1\times1\times1$ \AA$^3$ that PDB files use 
+for structures without a unit cell, and unit cells without volume,
+are ignored.
+If the structure spans more than two unit cells along a cell edge,
+the unit cell cannot describe it and CluE Oxide reports an error.
 \subsubsection{ClusterDensityMatrix} % -----------------------------------------
 If no \textit{cluster\_density\_matrix} is specified, the infinite temperature
 limit is assumed for the bath spin, so that the density matrix is proportional
@@ -618,12 +656,21 @@ They can be specified directly.
 detected_spin_position = [1.2, -3, 0];
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Coordinates are in \textit{unit\_of\_distance} (default \AA), as grid points
+are. In the TOML input they must be written as floating point numbers
+(for example \textit{[1.2, -3.0, 0.0]}): a list of integers is read as PDB 
+serial numbers, and CluE Oxide prints a message when a list of three 
+integers is read this way.
 They can be specified as the centroid of atoms in the PDB file.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
 detected_spin_position = centroid_over_serials([28,29]);
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Every serial number, or every group when the position is the centroid of 
+groups, must match at least one atom; otherwise CluE Oxide reports an error 
+naming the serial numbers or group that match nothing.
+CluE Oxide also reports an error if the resulting position is not finite.
 Both of these methods assume that the detected spin is localized to a single
 point.  If the spin is delocalized of multiple points, a csv file can be used
 to provide $|\Psi(x,y,z)|^2$.  
@@ -635,6 +682,13 @@ detected_spin_position = read_csv("xyzw.csv");
 Each row of the file "xyzw.csv" should be four comma separated floating point
 numbers, specifying the $x$, $y$, $z$ and weight,
 $w = |\Psi(x,y,z)|^2 \d x \d y \d z$, for the coordinates.
+The weights must sum to one within \textit{detected\_spin.weight\_tolerance}
+(default $10^{-9}$); weights within the tolerance are normalized to sum to 
+exactly one, and CluE Oxide prints a message if this changes them by more 
+than floating point rounding. Negative weights, as in a spin density, are 
+allowed.
+The bath is centered on the weighted mean of the grid, $\sum_i w_i \mathbf{r}_i$:
+the system radius and distance selections are measured from it.
 
 \subsubsection{LoadGeometry} % ---------------------------------------------
 The \textit{load\_geometry} can be either \textit{sphere}, 
@@ -876,6 +930,15 @@ distance >= r_min; // angstroms
 where \textit{r\_max} and \textit{r\_min} are floating point numbers
 specifing the maximum and minimum distances in \AA~from the detected spin
 that the particles in the group can be.
+Distances are measured from the detected spin position,
+not from the origin of the structure file.
+For periodic copies of the unit cell, the distance criteria are evaluated
+for each copy at its own position, so a particle and its copies 
+can belong to different groups.
+When the detected spin position is defined as the centroid of a group,
+that group cannot use a distance criterion, 
+since the distances are measured from the detected spin;
+CluE Oxide reports an error in this case.
 CluE Oxide will find all the spins that fit all specified criteria.
 Note that depending upon how the criteria are defined it is possible that
 some spins will fall under multiple groups. 
@@ -933,6 +996,19 @@ The following table shows the possible group criteria.
  \hline 
 \end{tabular}
 \end{center}  
+A particle without a field, such as an atom whose residue sequence number 
+in the structure file is not a number, is not selected by a list of 
+that field, and is not excluded by a \textit{not\_} list of that field;
+CluE Oxide prints how many particles of each group this applies to.
+Unit cells are numbered as follows for cell ID selections.
+The primary cell is cell 0.
+The other unit cells are numbered by increasing length of their 
+lattice offset from the primary cell;
+unit cells with offsets of the same length are ordered by their indices
+along $\mathbf{a}$, then $\mathbf{b}$, then $\mathbf{c}$, 
+with each index running from $-n_i$ to $n_i$.
+The unit cell of each particle is listed in the \textit{cell\_id} column of 
+the bath output file.
 %-------------------------------------------------------------------------------
 \subsection{\#[structure\_properties(my\_label)]}
 %-------------------------------------------------------------------------------
@@ -961,6 +1037,33 @@ The following table shows the available properties.
  \hline 
 \end{tabular}
 \end{center} 
+If a group specifies isotope abundances (for example 
+\textit{1H.abundance = 0.7} and \textit{2H.abundance = 0.3}),
+every isotope must be listed and the abundances must sum to one 
+within the group's \textit{abundance\_tolerance} (default $10^{-9}$);
+abundances within the tolerance are normalized to sum to exactly one,
+and CluE Oxide prints a message if this changes them by more than 
+floating point rounding.
+Abundances must not be negative, and \textit{abundance\_tolerance} must be
+at least 0 and less than 1.
+A group without abundances keeps the most common isotope of each element.
+The isotope is drawn once per cosubstitution set and given to every particle
+in the set, whatever its element.
+The \textit{drop\_probability} of a group must lie in the interval $[0,1]$.
+The option \textit{cosubstitute} selects the particles of a group that 
+are given the same random isotope and are kept or removed together:
+\textit{"same\_molecule"} selects the particles of the group in the same
+molecule, \textit{"group"} (or \textit{"filter"}) selects all particles of 
+the group, and \textit{"particle"}, the default, treats each particle on 
+its own.
+The value \textit{"bonded"} is not supported for \textit{cosubstitute} and
+is reported as an error; \textit{bonded} remains available for tensor axes.
+When particles are cosubstituted (for example with 
+\textit{cosubstitute = "same\_molecule"}),
+the whole set of cosubstituted particles is kept or removed together.
+A set is included as long as any of its particles can have a spin, 
+even if its first particle cannot.
+Outside the primary cell, only the particles that can have a spin are copied.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 %-------------------------------------------------------------------------------
@@ -1090,6 +1193,9 @@ The table assumes that the user defined
  \hline 
 \end{tabular}
 \end{center} 
+When the unit cell is replicated, these selections are made within
+the unit cell of the reference particle,
+so a particle and all of its periodic copies have the same tensor axes.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 %===============================================================================
 \section{Shell Scripting}
