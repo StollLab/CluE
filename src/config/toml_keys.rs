@@ -98,9 +98,6 @@ pub const KEY_SELE_NOT_RESIDUES: &str = "not_residues";
 pub const KEY_SELE_RES_SEQ_NUMS: &str = "residue_sequence_numbers";
 pub const KEY_SELE_NOT_RES_SEQ_NUMS: &str = "not_residue_sequence_numbers";
 
-pub const KEY_SELE_ISOTOPES: &str = "isotopes";
-pub const KEY_SELE_NOT_ISOTOPES: &str = "not_isotopes";
-
 pub const KEY_SELE_BONDED_INDICES: &str = "bonded_indices";
 pub const KEY_SELE_NOT_BONDED_INDICES: &str = "not_bonded_indices";
 
@@ -145,7 +142,7 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;371] = [
+pub const ALLOWED_KEYS: [&str;369] = [
   "abundance",
   "abundance_tolerance",
   "active",
@@ -202,7 +199,6 @@ pub const ALLOWED_KEYS: [&str;371] = [
   "indices",
   "info",
   "input_structure_file",
-  "isotopes",
   "kmeans_size",
   "lebedev",
   "magnetic_field",
@@ -228,7 +224,6 @@ pub const ALLOWED_KEYS: [&str;371] = [
   "not_chain_ids",
   "not_elements",
   "not_indices",
-  "not_isotopes",
   "not_names",
   "not_residues",
   "not_residue_sequence_numbers",

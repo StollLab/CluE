@@ -128,6 +128,7 @@ pub struct Config{
   // Experimental Details
   pub magnetic_field: Option<Vector3D>,
   pub orientation_grid: Option<OrientationAveraging>,
+  pub orientation_weight_tolerance: Option<f64>,
   pub pulse_sequence: Option<PulseSequence>,
   tau_axis: Vec::<f64>,
   tau2_axis: Vec::<f64>,
@@ -165,6 +166,10 @@ pub struct Config{
 /// The default allowed difference between one and the sum of the weights of 
 /// a detected spin probability grid.
 pub const DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
+
+/// The default allowed difference between one and the sum of the weights of 
+/// an orientation grid.
+pub const DEFAULT_ORIENTATION_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 
 impl FromTOMLString for Config{
   fn from_toml_string(toml_str: &str) -> Result<Self,CluEError>{
@@ -365,6 +370,8 @@ impl Config{
 
     self.check_detected_spin_grid()?;
 
+    self.check_orientation_grid()?;
+
     Ok(())
   }
   //----------------------------------------------------------------------------
@@ -399,6 +406,44 @@ impl Config{
     const ROUNDING: f64 = 1e-12;
     if (sum - 1.0).abs() > ROUNDING{
       println!("The weights of the detected spin grid sum to {}; \
+they were normalized to sum to one.", sum);
+    }
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function checks that the weights of an orientation grid sum to one
+  // within orientations.weight_tolerance, and normalizes them.
+  // The signal is the weighted sum of the orientation signals and is not 
+  // normalized afterwards, so weights that do not sum to one scale it.
+  // A message is printed when normalizing changes the weights by more 
+  // than floating point rounding.
+  fn check_orientation_grid(&mut self) -> Result<(),CluEError>{
+    let Some(OrientationAveraging::Grid(grid)) 
+      = &mut self.orientation_grid else{
+      return Ok(());
+    };
+
+    let tolerance = self.orientation_weight_tolerance
+      .unwrap_or(DEFAULT_ORIENTATION_GRID_WEIGHT_TOLERANCE);
+    if !(0.0..1.0).contains(&tolerance){
+      return Err(CluEError::InvalidOrientationGridWeightTolerance(tolerance));
+    }
+
+    let sum = grid.weights.iter().fold(0.0, |sum, w| sum + w);
+    if !((sum - 1.0).abs() <= tolerance){
+      return Err(CluEError::OrientationGridWeightsDoNotSumToOne(sum, 
+            tolerance));
+    }
+
+    if sum == 1.0{ return Ok(()); }
+    for weight in grid.weights.iter_mut(){
+      *weight /= sum;
+    }
+
+    // Differences up to this size are floating point rounding.
+    const ROUNDING: f64 = 1e-12;
+    if (sum - 1.0).abs() > ROUNDING{
+      println!("The weights of the orientation grid sum to {}; \
 they were normalized to sum to one.", sum);
     }
     Ok(())
@@ -468,33 +513,6 @@ they were normalized to ({}).", label, original, sum, list(abundances));
       }
     }
     Ok(())
-  }
-  //----------------------------------------------------------------------------
-  /// This function the highest spin multiplicity for a "#[group(...)]". 
-  pub fn max_spin_multiplicity_for_particle_config(&self, id: usize) 
-    -> Option<usize>
-  {
-
-
-   let mult0 = if id < self.particles.len() {
-     self.particles[id].max_possible_spin_multiplicity()
-   } else{
-     None
-   };
-
-   let mult1 = if id < self.extracell_particles.len() {
-     self.extracell_particles[id].max_possible_spin_multiplicity()
-   } else{
-     None
-   };
-
-   match (mult0,mult1){
-     (Some(m0),Some(m1)) => { if m0 >= m1 {Some(m0)}else{Some(m1)}  },
-     (Some(m0),None) => Some(m0),
-     (None,Some(m1)) => Some(m1),
-     (None,None) => None,
-   }
-
   }
   //----------------------------------------------------------------------------
   /// This function gets the simulated experiment's time axis.
@@ -1332,6 +1350,9 @@ impl Config{
 
     // O
     if let Some(ori_toml) = config_toml.orientations{
+      if ori_toml.weight_tolerance.is_some(){
+        self.orientation_weight_tolerance = ori_toml.weight_tolerance;
+      }
       self.orientation_grid 
           = Some(OrientationAveraging::from_orientations_toml(ori_toml)?); 
     }
@@ -2034,6 +2055,79 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   #[test]
+  fn test_orientation_grid_weights(){
+    let config_with_grid = |weights: [&str;2], tolerance: &str|{
+      Config::from_toml_string(&format!(r##"
+          [orientations]
+          grid = "vector_grid"
+          vector_grid = [[0.0, 0.0, 1.0, {}], [1.0, 0.0, 0.0, {}]]
+          {}
+          "##, weights[0], weights[1], tolerance))
+    };
+    let weights_of = |config: &Config| -> Vec::<f64>{
+      let Some(OrientationAveraging::Grid(grid))
+        = &config.orientation_grid else{ panic!("no grid"); };
+      grid.weights.clone()
+    };
+
+    // Weights that sum to one are accepted unchanged.
+    let config = config_with_grid(["0.25","0.75"],"").unwrap();
+    assert_eq!(weights_of(&config), vec![0.25, 0.75]);
+
+    // Weights that do not sum to one are errors, 
+    // unless they are within the tolerance, which normalizes them.
+    assert_eq!(config_with_grid(["0.45","0.45"],"").err(),
+        Some(CluEError::OrientationGridWeightsDoNotSumToOne(0.9, 1e-9)));
+    let config = config_with_grid(["0.45","0.45"],"weight_tolerance = 0.2")
+      .unwrap();
+    for w in weights_of(&config){
+      assert!((w - 0.5).abs() < 1e-15);
+    }
+    assert_eq!(config.orientation_weight_tolerance, Some(0.2));
+
+    for tolerance in ["-1.0", "1.0", "nan"]{
+      assert!(matches!(config_with_grid(["0.5","0.5"],
+            &format!("weight_tolerance = {}",tolerance)),
+            Err(CluEError::InvalidOrientationGridWeightTolerance(_))), "{}",
+          tolerance);
+    }
+
+    // Built-in grids pass the check.
+    for grid in [r#"grid = "vector"
+        vector = [0.0, 0.0, 1.0]"#, r#"grid = "circle"
+        vector = [0.0, 0.0, 1.0]
+        number = 7"#]
+    {
+      let config = Config::from_toml_string(&format!(
+            "[orientations]\n{}", grid)).unwrap();
+      let sum: f64 = weights_of(&config).iter().sum();
+      assert!((sum - 1.0).abs() < 1e-15, "{}", grid);
+    }
+
+    // Grids that are made later ignore the tolerance.
+    let config = Config::from_toml_string(r##"
+        [orientations]
+        grid = "lebedev"
+        number = 6
+        weight_tolerance = 1.5
+        "##).unwrap();
+    assert_eq!(config.orientation_grid, Some(OrientationAveraging::Lebedev(6)));
+
+    // A grid file without a header keeps all of its points, so its weights
+    // sum to one.
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_orientations_{}.csv", std::process::id()));
+    std::fs::write(&filename, "0,0,1,0.25\n1,0,0,0.75\n").unwrap();
+    let config = Config::from_toml_string(&format!(r##"
+        [orientations]
+        grid = "file"
+        file = "{}"
+        "##, filename.to_str().unwrap()));
+    std::fs::remove_file(&filename).unwrap();
+    assert_eq!(weights_of(&config.unwrap()), vec![0.25, 0.75]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
   fn test_detected_spin_position_unit_of_distance(){
     // Coordinates are in unit_of_distance, as grid points are.
     let config = Config::from_toml_string(r##"
@@ -2111,6 +2205,21 @@ mod tests{
           "##, value));
       assert_eq!(result.err(), Some(CluEError::CannotParseCosubstitute(
               "methyl".to_string(), value.to_string())));
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_isotope_selections_are_rejected(){
+    // Groups are selected before isotopes are drawn, so selections by
+    // isotope were removed; the keys are invalid.
+    for (key, value) in [("isotopes", "2H"), ("not_isotopes", "1H")]{
+      let result = Config::from_toml_string(&format!(r##"
+          [[groups]]
+          name = "deuterons"
+          selection.{} = ["{}"]
+          "##, key, value));
+      assert_eq!(result.err(), Some(CluEError::CannotReadTOMLFile(
+              format!("invalid key {}", key))));
     }
   }
   //----------------------------------------------------------------------------

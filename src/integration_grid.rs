@@ -289,45 +289,48 @@ impl IntegrationGrid{
   }
   //----------------------------------------------------------------------------
   /// This function reads a grid from a csv file. 
+  /// Each row holds the coordinates of a point followed by its weight.
+  /// The first row is a header, and is skipped, if none of its entries is a
+  /// number; a first row with both numbers and other entries is an error, 
+  /// so that a data row with a typo is never taken for a header.
+  /// Spaces around entries are ignored.
   pub fn read_from_csv(filename: &str) -> Result<Self,CluEError>{
 
-    let Ok(mut rdr) = csv::Reader::from_path(filename) else{
+    let Ok(mut rdr) = csv::ReaderBuilder::new()
+      .has_headers(false)
+      .trim(csv::Trim::All)
+      .from_path(filename) else{
       return Err(CluEError::CannotOpenFile(filename.to_string()));
     };
 
-    let mut num_rows = 0;
-    let mut num_cols = 0;
+    let mut dim = 0;
+    let mut points = Vec::<f64>::new();
+    let mut weights = Vec::<f64>::new();
     
-    for result in rdr.records() {
-      if let Ok(str_rec) = result{
-        num_cols = str_rec.len();
-      }else{
-        return Err(CluEError::CannotOpenFile(filename.to_string()));
-      };
-      num_rows += 1;
-    } 
-
-    if num_cols <= 1{
-      return Err(CluEError::CannotReadGrid(filename.to_string()));
-    }
-    let dim = num_cols - 1;
-
-    let mut points = Vec::<f64>::with_capacity(dim*num_rows);
-    let mut weights = Vec::<f64>::with_capacity(num_rows);
-    
-    let Ok(mut rdr) = csv::Reader::from_path(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()));
-    };
-
-    for result in rdr.records() {
+    for (irow,result) in rdr.records().enumerate() {
+      // Rows with different numbers of entries are reading errors.
       let Ok(record) = result else{
-        return Err(CluEError::CannotOpenFile(filename.to_string()));
+        return Err(CluEError::CannotReadGrid(filename.to_string()));
       };
 
-      for (icol,entry) in record.iter().enumerate(){
-        let Ok(v) = entry.parse::<f64>() else{
-          return Err(CluEError::CannotOpenFile(filename.to_string()));
-        };
+      let values = record.iter().map(|entry| entry.parse::<f64>().ok())
+        .collect::<Vec::<Option<f64>>>();
+
+      if irow == 0 && values.iter().all(|v| v.is_none()){ continue; }
+
+      if let Some(icol) = values.iter().position(|v| v.is_none()){
+        let line = record.position()
+          .map_or(irow + 1,|pos| pos.line() as usize);
+        return Err(CluEError::CannotParseGridEntry(filename.to_string(), 
+              line, record[icol].to_string()));
+      }
+
+      if values.len() <= 1{
+        return Err(CluEError::CannotReadGrid(filename.to_string()));
+      }
+      dim = values.len() - 1;
+
+      for (icol,v) in values.into_iter().flatten().enumerate(){
         if icol < dim{
           points.push(v);
         }else{
@@ -336,7 +339,7 @@ impl IntegrationGrid{
       }
     }
 
-    if points.len() != dim*num_rows || weights.len() != num_rows{
+    if weights.is_empty(){
       return Err(CluEError::CannotReadGrid(filename.to_string()));
     }
 
@@ -362,7 +365,7 @@ impl IntegrationGrid{
 
       // Loop over dimensions.
       for (ix, d) in data.iter_mut().enumerate().take(self.dim) { 
-        d.push(self.points[ii + ix]);
+        d.push(self.points[self.dim*ii + ix]);
       }
 
       // Record weight.
@@ -472,6 +475,93 @@ mod tests{
                                  0.0,0.0,1.0]);
     assert_eq!(grid.weights, vec![0.3333,0.3333,0.3333]);
 
+  }
+  //----------------------------------------------------------------------------
+  // This function writes `text` to a temporary file, reads it with 
+  // `IntegrationGrid::read_from_csv`, and returns the result and the 
+  // filename.
+  fn read_csv_text(name: &str, text: &str) 
+    -> (Result<IntegrationGrid,CluEError>, String)
+  {
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_{}_{}.csv", name, std::process::id()));
+    std::fs::write(&filename, text).unwrap();
+    let filename = filename.to_str().unwrap().to_string();
+    let result = IntegrationGrid::read_from_csv(&filename);
+    std::fs::remove_file(&filename).unwrap();
+    (result, filename)
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_read_from_csv_header_detection(){
+    let expected = IntegrationGrid{
+      dim: 3,
+      points: vec![1.0,0.0,0.0, 0.0,1.0,0.0, 0.0,0.0,1.0],
+      weights: vec![0.25,0.25,0.5],
+    };
+
+    // Without a header, the first row is a point.
+    let (grid, _) = read_csv_text("no_header",
+        "1,0,0,0.25\n0,1,0,0.25\n0,0,1,0.5\n");
+    assert_eq!(grid, Ok(expected.clone()));
+
+    // A header, spaces around entries, and empty lines are ignored.
+    let (grid, _) = read_csv_text("header_spaces",
+        "x, y, z, w\n 1, 0, 0, 0.25\n\n0 ,1 ,0 ,0.25\n0,0,1,0.5");
+    assert_eq!(grid, Ok(expected.clone()));
+
+    // A UTF-8 byte order mark, as spreadsheet programs write, is ignored.
+    let (grid, _) = read_csv_text("bom",
+        "\u{feff}1,0,0,0.25\n0,1,0,0.25\n0,0,1,0.5\n");
+    assert_eq!(grid, Ok(expected.clone()));
+
+    // The header written by `to_csv` is detected.
+    let (grid, _) = read_csv_text("to_csv_header",
+        "x1,x2,x3,w\n1,0,0,0.25\n0,1,0,0.25\n0,0,1,0.5\n");
+    assert_eq!(grid, Ok(expected));
+
+    // A first row with a typo is not taken for a header.
+    let (grid, filename) = read_csv_text("bad_first_row",
+        "1,0,0,0.25a\n0,1,0,0.75\n");
+    assert_eq!(grid, Err(CluEError::CannotParseGridEntry(filename, 1,
+            "0.25a".to_string())));
+
+    // An entry that is not a number names its line.
+    let (grid, filename) = read_csv_text("bad_entry",
+        "x,y,z,w\n1,0,0,0.5\n0,1,o,0.5\n");
+    assert_eq!(grid, Err(CluEError::CannotParseGridEntry(filename, 3,
+            "o".to_string())));
+
+    // Rows of different lengths, a single column, and no points are errors.
+    for (name, text) in [("ragged", "1,0,0,0.5\n0,1,0\n"), 
+        ("one_column", "1\n2\n"), ("header_only", "x,y,z,w\n"), 
+        ("empty", "")]
+    {
+      let (grid, filename) = read_csv_text(name, text);
+      assert_eq!(grid, Err(CluEError::CannotReadGrid(filename)), "{}", name);
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_to_csv_round_trip(){
+    let mut grid_2d = IntegrationGrid::new(2);
+    grid_2d.push(vec![1.0, 2.0], 0.25).unwrap();
+    grid_2d.push(vec![3.0, 4.0], 0.25).unwrap();
+    grid_2d.push(vec![5.0, 6.0], 0.5).unwrap();
+
+    let grids = [
+      IntegrationGrid::lebedev(26).unwrap().remove_3d_hemisphere(),
+      grid_2d,
+    ];
+    for (igrid, grid) in grids.into_iter().enumerate(){
+      let filename = std::env::temp_dir().join(format!(
+            "clue_oxide_test_to_csv_{}_{}.csv", igrid, std::process::id()));
+      let filename = filename.to_str().unwrap().to_string();
+      grid.to_csv(&filename).unwrap();
+      let read_grid = IntegrationGrid::read_from_csv(&filename);
+      std::fs::remove_file(&filename).unwrap();
+      assert_eq!(read_grid, Ok(grid), "grid {}", igrid);
+    }
   }
   //----------------------------------------------------------------------------
   #[test]

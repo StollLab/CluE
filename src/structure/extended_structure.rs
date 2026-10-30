@@ -2006,6 +2006,41 @@ mod tests{
         "{:?}",result);
   }
   //----------------------------------------------------------------------------
+  #[test]
+  fn test_unit_cell_smaller_than_structure_without_replication(){
+    // Without replication the unit cell is only used to make molecules 
+    // whole, so a unit cell that does not describe the structure is skipped
+    // and the particles stay where the structure file puts them.
+    let mut config = Config::new();
+    config.detected_spin_position = Some(
+        DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );
+    config.replicate_unit_cell = Some(ReplicateUnitCell::No);
+    config.set_defaults().unwrap();
+
+    let build = |cell_offsets: Vec::<Vector3D>|{
+      let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
+      structure.cell_offsets = cell_offsets;
+      let mut rng = ChaCha20Rng::seed_from_u64(0);
+      structure.build_primary_structure(&mut rng, &config).map(|_| structure)
+    };
+
+    let length = 2.0*ANGSTROM;
+    let structure = build(vec![
+      Vector3D::from([length, 0.0, 0.0]),
+      Vector3D::from([0.0, length, 0.0]),
+      Vector3D::from([0.0, 0.0, length]),
+    ]).unwrap();
+    let reference = build(Vec::<Vector3D>::new()).unwrap();
+
+    assert_eq!(structure.bath_particles.len(), 
+        reference.bath_particles.len());
+    for (particle, ref_particle) in structure.bath_particles.iter()
+      .zip(reference.bath_particles.iter())
+    {
+      assert_eq!(particle.coordinates, ref_particle.coordinates);
+    }
+  }
+  //----------------------------------------------------------------------------
   // This function builds TEMPO in a cubic unit cell with edge `length` 
   // and the specified settings.
   fn build_tempo_in_cell(length: f64, settings: &str) 

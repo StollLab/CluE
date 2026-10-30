@@ -97,6 +97,8 @@ impl DetectedSpin{
 /// from the primary cell; an entry is `None` if the copy is not stored,
 /// because it was dropped, cannot have a spin, or cannot be within the radius.
 /// `cell_offsets` is the set of displacements for periodic boundary conditions.
+/// `cell_edges` are the edges of the unit cell, as given to `Structure::new`;
+/// it is empty if there is no unit cell.
 /// `cell_ids` lists the unit cell that each particle is in.
 /// `connections` lists chemical bonds.
 /// `molecules` is the set of molecules in the system.
@@ -127,6 +129,7 @@ pub struct Structure{
   //bath_spins_indices: Vec::<usize>,
   pub cell_indices: Vec::<Vec::<Option<usize>>>,
   pub cell_offsets: Vec::<Vector3D>,
+  cell_edges: Vec::<Vector3D>,
   cell_ids: Vec::<usize>,
   pub connections: AdjacencyList,
   molecules: Vec::<Vec::<usize>>,
@@ -160,6 +163,7 @@ impl Structure{
       bath_particles,
       //bath_spins_indices: Vec::<usize>::new(),
       cell_indices: Vec::<Vec::<Option<usize>>>::new(),
+      cell_edges: cell_offsets.clone(),
       cell_offsets,
       cell_ids: Vec::<usize>::new(),
       connections,

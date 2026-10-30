@@ -27,6 +27,7 @@ pub enum CluEError{
   CannotParseCellType(String),
   CannotParseClusterMethod(String),
   CannotParseElement(String),
+  CannotParseGridEntry(String,usize,String),
   CannotParseLine(String),
   CannotParseIsotope(String),
   CannotParseOrientations(String),
@@ -69,6 +70,7 @@ pub enum CluEError{
   FiltersOverlap(String,String),
   Generic(String),
   IncorrectNumberOfAxes(usize,usize),
+  InvalidGroBox(String),
   InorrectNumberOfCellOffsets(usize,usize),
   InvalidAxes,
   InvalidClusterPartitionKey,
@@ -84,6 +86,7 @@ pub enum CluEError{
   InvalidSpinGridWeights(f64),
   InvalidSpinGridWeightTolerance(f64),
   InvalidSpinMultiplicity(usize),
+  InvalidOrientationGridWeightTolerance(f64),
   IsotopeAbundancesDoNotSumToOne(String,String,f64,f64),
   InvalidStevens(String),
   LenghMismatchTimepointsIncrements(usize,usize),
@@ -130,6 +133,7 @@ pub enum CluEError{
   NoMaxISTRank,
   NoNumberSystemInstances,
   NoOrientationGrid,
+  OrientationGridWeightsDoNotSumToOne(f64,f64),
   NoPartitioningMethod,
   NoPulseSequence,
   NoRadius,
@@ -162,6 +166,7 @@ pub enum CluEError{
   ParticleIsNotActive(usize),
   PropagatorAndDensityNotSameDimension(usize,usize),
   PartitionIsIncomplette,
+  ResidueNumberAboveMaxInPDB(String,String,usize),
   SecondaryFilterRequiresAnIndex(String),
   SpaceGroupNotP1(String),
   SpinGridWeightsDoNotSumToOne(f64,f64),
@@ -172,7 +177,9 @@ pub enum CluEError{
   StructurePropertiesNeedsALabel,
   StructurePropertiesDoesNotNeedAnIsotope(String),
   TensorNotSet(usize),
+  TooManyAtomsInPDB(String,usize),
   TooManyExchangeCouplingsSpecified(usize),
+  TooManyResiduesInPDB(String,String,usize),
   TOMLArrayContainsMultipleTypes,
   TOMLArrayDoesNotSpecifyATensor,
   TOMLArrayDoesNotSpecifyAVector,
@@ -262,6 +269,10 @@ impl fmt::Display for CluEError{
 
       CluEError::CannotParseElement(element) => write!(f,
           "cannot parse \"{}\" as an element", element),
+
+      CluEError::CannotParseGridEntry(filename,line,entry) => write!(f,
+          "cannot read grid from \"{}\": \"{}\" on line {} is not a number",
+          filename, entry, line),
 
       CluEError::CannotParseOrientations(ori) => write!(f,
           "cannot parse \"{}\" as an orientation averaging scheme", ori),
@@ -409,6 +420,11 @@ particles must not reside in more than one group",label0,label1),
       CluEError::IncorrectNumberOfAxes(n,n_ref)=> write!(f,
           "expected {} axes, but {} were provided",n_ref, n),
 
+      CluEError::InvalidGroBox(edges) => write!(f,
+          "the unit cell edges {} (nm) cannot be written in GRO format, \
+which needs the first edge along x and the second edge in the xy plane",
+          edges),
+
       CluEError::InorrectNumberOfCellOffsets(n,n_ref)=> write!(f,
           "expected {} cell offsets, but {} were provided",n_ref, n),
 
@@ -461,6 +477,10 @@ sum to a positive number", sum),
 
       CluEError::InvalidSpinGridWeightTolerance(tolerance) => write!(f,
           "detected_spin.weight_tolerance = {} must be at least 0 and less \
+than 1", tolerance),
+
+      CluEError::InvalidOrientationGridWeightTolerance(tolerance) => write!(f,
+          "orientations.weight_tolerance = {} must be at least 0 and less \
 than 1", tolerance),
 
       CluEError::InvalidSpinMultiplicity(n) => write!(f,
@@ -610,6 +630,10 @@ periodic boundary conditions should be applied"),
       CluEError::NoOrientationGrid => write!(f,
           "orientation_grid is not defined"),
 
+      CluEError::OrientationGridWeightsDoNotSumToOne(sum,tolerance) => write!(f,
+          "the weights of the orientation grid sum to {}, which differs \
+from 1 by more than orientations.weight_tolerance = {}", sum, tolerance),
+
       CluEError::NoPartitioningMethod => write!(f,
           "no partitioning method is defined"),
 
@@ -720,6 +744,11 @@ respectively: they must have the same dimension",
       CluEError::PartitionIsIncomplette => write!(f,
           "partition table should contain n cells indexed by [0,n-1]"),
 
+      CluEError::ResidueNumberAboveMaxInPDB(filename,line,max) => write!(f,
+          "\"{}\" has a residue sequence number that is not a decimal \
+number, as written for numbers above {}, in line \"{}\"", 
+          filename, max, line),
+
       CluEError::SecondaryFilterRequiresAnIndex(group) => write!(f,
           "secondary particle group, \"{}\", requires a particle index",
           group),
@@ -760,9 +789,19 @@ correct or remove the unit cell (CRYST1) record",span,axis),
       CluEError::TensorNotSet(index) => write!(f,
           "no tensor set for particle {}",index),
 
+      CluEError::TooManyAtomsInPDB(filename,max) => write!(f,
+          "\"{}\" has more than {} atoms in the selected model, \
+which the PDB format cannot number with unique serial numbers",
+          filename, max),
+
       CluEError::TooManyExchangeCouplingsSpecified(n) => write!(f,
           "expected 1 exchange coupling, but got {}", 
           n),
+
+      CluEError::TooManyResiduesInPDB(filename,chain_id,max) => write!(f,
+          "chain \"{}\" of \"{}\" has more than {} residues in the \
+selected model, which the PDB format cannot number with unique residue \
+sequence numbers", chain_id, filename, max),
 
       CluEError::TOMLArrayContainsMultipleTypes => write!(f,
           "TOML array contains data of different types", 

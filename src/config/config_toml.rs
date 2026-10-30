@@ -51,6 +51,7 @@ pub struct OrientationsTOML{
   pub file: Option<String>,
   pub vector: Option<Vec::<f64>>,
   pub vector_grid: Option<Vec::<Vec::<f64>>>,
+  pub weight_tolerance: Option<f64>,
 }
 //------------------------------------------------------------------------------
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

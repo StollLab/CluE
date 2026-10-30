@@ -1,4 +1,4 @@
-use crate::config::{Config,DetectedSpinCoordinates};
+use crate::config::{Config,DetectedSpinCoordinates,ReplicateUnitCell};
 use crate::CluEError;
 use crate::cluster::connected_subgraphs::separate_into_connected_subgraphs;
 use crate::physical_constants::{ANGSTROM,HBAR,MUB,MUN};
@@ -34,7 +34,7 @@ impl Structure{
     // Make molecules whole across the unit cell boundary.
     // Particles can end up outside the unit cell; `set_cell_shifts()` 
     // accounts for this when it chooses the number of unit cells.
-    self.reconnect_bonds()?;
+    self.reconnect_bonds(config)?;
 
     // Particle filters need the primary cell indices.
     self.init_primary_cell_indices();
@@ -255,12 +255,6 @@ so selection.{} cannot select {}.",
     self.particle_config_ids 
       = self.pair_particle_configs(&config.particles,None)?;
 
-    // Find spins.
-    //let n_spins = self.count_spins(config);
-
-    //self.bath_spins_indices = Vec::<usize>::with_capacity(n_spins);
-
-
     // Only the primary cell groups apply here; 
     // the copies in other unit cells are set in `extend_structure()`.
     let actives = (0..self.bath_particles.len()).map(|idx| 
@@ -275,29 +269,6 @@ so selection.{} cannot select {}.",
     Ok(()) 
   }
   //----------------------------------------------------------------------------
-  // This method counts the to an elements of self_bath_particles that have
-  // the potential to have a spin.
-  /*
-  fn count_spins(&self,config: &Config) -> usize{
-    let mut n_spins = 0;
-    for (idx, particle) in self.bath_particles.iter().enumerate(){
-
-      let mut spin_mult = particle.isotope.spin_multiplicity();
-      if let Some(id) = self.particle_config_ids[idx]{
-        if let Some(mult) 
-          = config.max_spin_multiplicity_for_particle_config(id){
-          spin_mult = mult;
-        }
-      }
-
-      if spin_mult <= 1 { continue; }
-
-      n_spins += 1;
-    }
-    n_spins
-  }
-  */
-  //----------------------------------------------------------------------------
   
   //----------------------------------------------------------------------------
   // This method uses the PBCs to make molecules whole.
@@ -306,7 +277,9 @@ so selection.{} cannot select {}.",
   // particle it is bonded to, and the search continues from that particle.
   // Particles are only moved by lattice vectors, so the periodic system is
   // unchanged, and molecules that are already whole are not moved.
-  fn reconnect_bonds(&mut self) -> Result<(),CluEError>
+  // A unit cell much smaller than the structure is an error, unless 
+  // replicate_unit_cell = false, where the particles are left in place.
+  fn reconnect_bonds(&mut self, config: &Config) -> Result<(),CluEError>
   {
 
     // TODO: Decide on better error handeling here.
@@ -330,8 +303,16 @@ Molecules will not be made whole across the cell boundary.");
     let c = self.cell_offsets[2].clone();
 
     // Moving particles by the lattice vectors of a unit cell that does not 
-    // describe the structure would scramble it.
-    self.check_structure_fits_cell(&reciprocal_vectors)?;
+    // describe the structure would scramble it. Without replication the
+    // unit cell is only used here, so the particles are left in place.
+    if let Err(err) = self.check_structure_fits_cell(&reciprocal_vectors){
+      if config.replicate_unit_cell == Some(ReplicateUnitCell::No){
+        println!("Warning: {}. Since replicate_unit_cell = false, \
+molecules will not be made whole across the cell boundary.", err);
+        return Ok(());
+      }
+      return Err(err);
+    }
 
     let mut is_placed = vec![false; self.bath_particles.len()];
 
@@ -721,7 +702,7 @@ mod tests{
     let (mut structure, r_original) = split_tempo(None);
     (structure.molecules, structure.molecule_ids) 
       = separate_into_connected_subgraphs(&structure.connections);
-    structure.reconnect_bonds().unwrap();
+    structure.reconnect_bonds(&Config::new()).unwrap();
     assert_coordinates(&structure,&r_original);
     assert_eq!(structure.count_long_bonds(3.0*ANGSTROM),0);
   }
@@ -738,7 +719,7 @@ mod tests{
     let (mut structure, r_original) = split_tempo(Some(cell));
     (structure.molecules, structure.molecule_ids) 
       = separate_into_connected_subgraphs(&structure.connections);
-    structure.reconnect_bonds().unwrap();
+    structure.reconnect_bonds(&Config::new()).unwrap();
     assert_coordinates(&structure,&r_original);
   }
   //----------------------------------------------------------------------------
@@ -750,7 +731,7 @@ mod tests{
       .map(|p| p.coordinates.clone()).collect::<Vec::<Vector3D>>();
     (structure.molecules, structure.molecule_ids) 
       = separate_into_connected_subgraphs(&structure.connections);
-    structure.reconnect_bonds().unwrap();
+    structure.reconnect_bonds(&Config::new()).unwrap();
     for (particle, r) in structure.bath_particles.iter().zip(r_original){
       assert!(particle.coordinates.x() == r.x() 
           && particle.coordinates.y() == r.y()
@@ -777,7 +758,7 @@ mod tests{
     let mut structure = Structure::new(particles,connections,cell);
     (structure.molecules, structure.molecule_ids) 
       = separate_into_connected_subgraphs(&structure.connections);
-    structure.reconnect_bonds().unwrap();
+    structure.reconnect_bonds(&Config::new()).unwrap();
     assert_eq!(structure.count_long_bonds(3.0*ANGSTROM),1);
   }
   //----------------------------------------------------------------------------

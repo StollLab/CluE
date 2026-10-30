@@ -8,10 +8,15 @@ use crate::space_3d::Vector3D;
 
 use std::io::BufRead;
 use std::io::BufWriter;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use substring::Substring;
 use std::fs::File;
 use std::io::prelude::*;
+
+// The PDB format has five columns for atom serial numbers and four for
+// residue sequence numbers.
+const PDB_MAX_ATOMS: usize = 99_999;
+const PDB_MAX_RESIDUE_SEQUENCE_NUMBER: usize = 9_999;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// This function reads a PDB file and tries to build a `Structure`.
@@ -143,17 +148,23 @@ struct ParticleMap{
   hydrogen_symbol_counts: [usize;2],
 }
 //------------------------------------------------------------------------------
-// This function tries to parse the atom data.
+// `AtomNameContext` holds what is needed to read elements from atom names
+// (see `element_symbol_from_atom_name()`): whether any atom name in the model
+// follows the PDB layout, in which a blank column 13 is followed by a 
+// non-blank column 14, and the number of atoms in each residue 
+// (see `residue_key()`).
+struct AtomNameContext{
+  names_follow_layout: bool,
+  residue_sizes: HashMap::<String,usize>,
+}
+//------------------------------------------------------------------------------
+// This function reads the `AtomNameContext` of model `target_model`.
 // If it cannot it will err.
-fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize) 
-  -> Result<ParticleMap,CluEError>
+fn scan_atom_names(filename: &str, target_model: usize) 
+  -> Result<AtomNameContext,CluEError>
 {
-   let mut serial_to_index = HashMap::<u32,Option<usize>>::new(); 
-   let mut unknown_elements = HashMap::<String,usize>::new(); 
-   let mut n_elements_from_names = 0;
-   let mut hydrogen_symbol_counts = [0,0];
-
-   let mut bath_particles = Vec::<Particle>::with_capacity(n_atoms);
+   let mut context = AtomNameContext{names_follow_layout: false,
+     residue_sizes: HashMap::<String,usize>::new()};
 
    let mut model_idx = 0;
 
@@ -182,7 +193,127 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
        continue;
      }
 
-     let particle: Particle = match parse_atom_line(&line){
+     let mut name = pdb_columns(&line,13,14)?.unwrap_or("").chars();
+     if name.next() == Some(' ') && name.next().is_some_and(|c| c != ' '){
+       context.names_follow_layout = true;
+     }
+
+     *context.residue_sizes.entry(residue_key(&line)?).or_insert(0) += 1;
+   }
+   Ok(context)
+}
+//------------------------------------------------------------------------------
+// `ElementsFromNames` maps the residue name, atom name, and element symbol 
+// of atoms whose element was read from the atom name to another element that
+// the name could denote (see `element_symbol_from_atom_name()`) and the 
+// number of such atoms.
+type ElementsFromNames = BTreeMap::<(String,String,String),
+  (Option<String>,usize)>;
+//------------------------------------------------------------------------------
+// This function returns a message about the elements that were read from
+// atom names, or `None` if there are none: the number of atoms per element,
+// and a list of the names that could denote another element or that were 
+// read as D or T.
+fn elements_from_names_message(elements_from_names: &ElementsFromNames) 
+  -> Option<String>
+{
+  if elements_from_names.is_empty(){
+    return None;
+  }
+  // D and T are listed as H.
+  let element_string = |symbol: &str| Element::from(symbol)
+    .map(|element| element.to_string())
+    .unwrap_or_else(|_| symbol.to_string());
+
+  let mut n_atoms = 0;
+  let mut counts = BTreeMap::<String,usize>::new();
+  let mut listed = String::new();
+  for ((residue, name, symbol), (other, n)) in elements_from_names.iter(){
+    let element = element_string(symbol);
+    n_atoms += n;
+    *counts.entry(element.clone()).or_insert(0) += n;
+
+    let note = if let Some(other) = other{
+      format!("could be {}", element_string(other))
+    }else if symbol == "D" || symbol == "T"{
+      format!("read as {}: hydrogen, starting as 1H", symbol)
+    }else{
+      continue;
+    };
+    listed.push_str(&format!("  {:<8} {:<5} {:<7} {:>6}  {}\n",
+          residue, name, element, n, note));
+  }
+
+  let counts = counts.iter()
+    .map(|(element, n)| format!("{} {}", n, element))
+    .collect::<Vec::<String>>().join(", ");
+  let mut message = format!("Element symbols were taken from the atom names \
+for {} atoms, since their element columns (77-78) are blank: {}.\n",
+      n_atoms, counts);
+  if !listed.is_empty(){
+    message.push_str("Check these atom names, and add element columns to \
+the PDB file if an element is wrong:\n");
+    message.push_str(&format!("  {:<8} {:<5} {:<7} {:>6}  {}\n{}",
+      "residue", "name", "element", "atoms", "note", listed));
+  }
+  Some(message)
+}
+//------------------------------------------------------------------------------
+// This function tries to parse the atom data.
+// If it cannot it will err.
+fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize) 
+  -> Result<ParticleMap,CluEError>
+{
+   let mut serial_to_index = HashMap::<u32,Option<usize>>::new(); 
+   let mut unknown_elements = HashMap::<String,usize>::new(); 
+   let mut elements_from_names = ElementsFromNames::new();
+   let mut hydrogen_symbol_counts = [0,0];
+   let mut n_atom_records = 0;
+   // For each chain ID, the last residue (sequence number and insertion
+   // code) and the number of residues.
+   let mut residues_per_chain = HashMap::<String,(String,usize)>::new();
+
+   let mut bath_particles = Vec::<Particle>::with_capacity(
+       usize::min(n_atoms, PDB_MAX_ATOMS));
+
+   let context = scan_atom_names(filename, target_model)?;
+
+   let mut model_idx = 0;
+
+   let Ok(file) = std::fs::File::open(filename) else{
+     return Err(CluEError::CannotOpenFile(filename.to_string()));
+   };
+   
+   let lines = std::io::BufReader::new(file).lines();
+
+   for line_result in lines {
+
+     let Ok(line) = line_result else{
+       return Err(CluEError::CannotOpenFile(filename.to_string()));
+     };
+
+     if line.starts_with("ENDMDL"){
+       model_idx += 1;
+       if model_idx > target_model{
+         break;
+       }
+       continue;
+     }
+
+     if model_idx != target_model
+       || !(line.starts_with("ATOM") || line.starts_with("HETATM")) {
+       continue;
+     }
+
+     // Atoms with unknown elements are counted too, since they use serials.
+     n_atom_records += 1;
+     if n_atom_records > PDB_MAX_ATOMS{
+       return Err(CluEError::TooManyAtomsInPDB(filename.to_string(),
+           PDB_MAX_ATOMS));
+     }
+     check_residue_number(&line, filename, &mut residues_per_chain)?;
+
+     let particle: Particle = match parse_atom_line(&line, &context){
        Ok(p) => p,
 
        Err((CluEError::CannotParseElement(unk_el),serial)) => {
@@ -202,9 +333,13 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
      };
 
      // Count the elements read from atom names, and the symbols D and T.
-     if let Ok((symbol, from_name)) = element_symbol_of_atom_line(&line){
-       if from_name{
-         n_elements_from_names += 1;
+     if let Ok(ElementSymbol{symbol, from_name, other}) 
+       = element_symbol_of_atom_line(&line, &context)
+     {
+       if let (true, Some(symbol)) = (from_name, &symbol){
+         let key = (particle.residue.clone().unwrap_or_default(),
+           particle.name.clone().unwrap_or_default(), symbol.clone());
+         elements_from_names.entry(key).or_insert((other, 0)).1 += 1;
        }
        match symbol.as_deref(){
          Some("D") => hydrogen_symbol_counts[0] += 1,
@@ -227,14 +362,48 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
      println!("Could not parse {} instances of element \"{}\".",
          unk_count, unk_el);
    }
-   if n_elements_from_names > 0{
-     println!("Element symbols were taken from the atom names for {} atoms.",
-         n_elements_from_names);
+   if let Some(message) = elements_from_names_message(&elements_from_names){
+     print!("{}", message);
    }
    Ok( ParticleMap{
      particles: bath_particles,
      map: serial_to_index,
      hydrogen_symbol_counts})
+}
+//------------------------------------------------------------------------------
+// This function errs if the residue sequence number of an ATOM or HETATM line
+// is beyond what the four PDB columns can hold: written in another number
+// system (hybrid-36, hexadecimal) or as placeholders, or in a chain with more
+// than PDB_MAX_RESIDUE_SEQUENCE_NUMBER residues, as when the numbers wrap.
+// Blank and negative numbers are allowed.
+fn check_residue_number(line: &str, filename: &str,
+    residues_per_chain: &mut HashMap::<String,(String,usize)>)
+  -> Result<(),CluEError>
+{
+  let column = |first: usize, last: usize|
+    pdb_columns(line, first, last).map(|s| s.unwrap_or("").to_string());
+  let chain_id = column(22,22)?;
+  let residue_sequence_number = column(23,26)?;
+  let insertion_code = column(27,27)?;
+
+  let number = residue_sequence_number.trim();
+  if !number.is_empty() && number.parse::<i32>().is_err(){
+    return Err(CluEError::ResidueNumberAboveMaxInPDB(filename.to_string(),
+        line.to_string(), PDB_MAX_RESIDUE_SEQUENCE_NUMBER));
+  }
+
+  let residue = format!("{}{}", residue_sequence_number, insertion_code);
+  let (last_residue, n_residues) = residues_per_chain
+    .entry(chain_id.clone()).or_insert((String::new(), 0));
+  if *n_residues == 0 || *last_residue != residue{
+    *n_residues += 1;
+    *last_residue = residue;
+  }
+  if *n_residues > PDB_MAX_RESIDUE_SEQUENCE_NUMBER{
+    return Err(CluEError::TooManyResiduesInPDB(filename.to_string(),
+        chain_id, PDB_MAX_RESIDUE_SEQUENCE_NUMBER));
+  }
+  Ok(())
 }
 //------------------------------------------------------------------------------
 // This function tries to parse the crystallographic data line, and returns
@@ -335,7 +504,9 @@ COLUMNS        DATA  TYPE    FIELD        DEFINITION
 77 - 78        LString(2)    element      Element symbol, right-justified.
 79 - 80        LString(2)    charge       Charge  on the atom.
 */
-fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
+fn parse_atom_line(line: &str, context: &AtomNameContext) 
+  -> Result<Particle,(CluEError,u32)>
+{
 
   let cannot_parse = || (CluEError::CannotParseLine(line.to_string()),0);
   let columns = |first: usize, last: usize| -> Result<Option<&str>,_>{
@@ -374,7 +545,8 @@ fn parse_atom_line(line: &str) -> Result<Particle,(CluEError,u32)>{
 
   // The element is in columns 77-78; if those are missing or blank,
   // it is read from the atom name.
-  let (symbol, from_name) = element_symbol_of_atom_line(line)
+  let ElementSymbol{symbol, from_name, ..} 
+    = element_symbol_of_atom_line(line, context)
     .map_err(|_| cannot_parse())?;
   let Some(Ok(element)) = symbol.as_deref().map(Element::from) else{
     // Report the symbol as written.
@@ -430,55 +602,135 @@ fn capitalize_element_symbol(symbol: &str) -> String{
 //------------------------------------------------------------------------------
 // This function infers the element from the atom name (columns 13-16), 
 // for PDB files without element columns.
-// In the PDB format, the element symbol is right-justified in columns 13-14:
-// if column 13 is blank or a digit, column 14 is the element (" CA " is 
-// carbon, "1HB " is hydrogen); a name of at most two letters starting in 
-// column 13 is a two-letter element ("CA  " is calcium, "FE  " is iron);
-// otherwise column 13 is the element ("HG21" and "HW1 " are hydrogen).
-// It returns the element symbol, or `None` if no element is found.
-fn element_symbol_from_atom_name(name: &str) -> Option<String>{
+// It returns the element symbol, or `None` if no element is found, and 
+// another element that the name could also denote, if the rules below 
+// cannot rule it out.
+// In the PDB format, the element symbol is right-justified in columns 13-14,
+// so that a name starts in column 13 only if it has four characters or a 
+// two-letter element. Not every program follows this layout, so the rules 
+// are, in this order:
+// 1. column 13 blank or a digit: column 14 is the element (" CA " is carbon,
+//    "1HB " is hydrogen);
+// 2. column 13 a letter and column 14 not a letter: column 13 is the element
+//    ("C1  ", "O   ");
+// 3. an upper case letter and a lower case letter: the element as written 
+//    ("Cl", "Fe");
+// 4. two letters that form an element, for the only atom in its residue:
+//    that element, since such atoms are usually ions ("CA" calcium, "CL" 
+//    chloride, "HG" mercury);
+// 5. first letter H: hydrogen, since many hydrogen names start in column 13
+//    ("HG21", "HE  ", "HO  ");
+// 6. if no atom name in the model follows the layout: column 13 is the 
+//    element ("CA  " in an amino acid is carbon);
+// 7. otherwise: the two letters if they form an element ("CL1 " is 
+//    chlorine), else column 13.
+// In rules 2-7, if the preferred reading is not an element, the other one 
+// is used. In rules 5-7, two letters are read as an element only up to 
+// uranium (Z = 92), so that names such as "OG" or "SG" in a residue are not
+// read as the synthetic elements Og or Sg.
+fn element_symbol_from_atom_name(name: &str, single_atom_residue: bool, 
+    names_follow_layout: bool) -> (Option<String>, Option<String>)
+{
   let chars = name.chars().collect::<Vec::<char>>();
-  let col13 = *chars.first()?;
+  let Some(&col13) = chars.first() else{
+    return (None, None);
+  };
   let valid = |symbol: String| -> Option<String>{
     Element::from(&symbol).ok().map(|_| symbol)
   };
+  // The first reading if it is an element, with the second one as the other
+  // reading; otherwise the second reading.
+  let prefer = |first: Option<String>, second: Option<String>|{
+    if first.is_some(){ (first, second) }else{ (second, None) }
+  };
 
+  // Rule 1.
   if col13 == ' ' || col13.is_ascii_digit(){
-    let col14 = *chars.get(1)?;
-    return valid(capitalize_element_symbol(&col14.to_string()));
+    let symbol = chars.get(1).and_then(|col14| 
+        valid(capitalize_element_symbol(&col14.to_string())));
+    return (symbol, None);
   }
   if !col13.is_ascii_alphabetic(){
-    return None;
+    return (None, None);
   }
 
-  let rest_is_blank = chars.iter().skip(2).all(|c| *c == ' ');
-  if let Some(&col14) = chars.get(1){
-    if col14.is_ascii_alphabetic() && rest_is_blank{
-      let symbol = capitalize_element_symbol(&format!("{}{}",col13,col14));
-      if let Some(symbol) = valid(symbol){
-        return Some(symbol);
-      }
-    }
+  let one_letter = valid(capitalize_element_symbol(&col13.to_string()));
+
+  // Rule 2.
+  let col14 = chars.get(1).copied().unwrap_or(' ');
+  if !col14.is_ascii_alphabetic(){
+    return (one_letter, None);
   }
-  valid(capitalize_element_symbol(&col13.to_string()))
+
+  let two_letters = valid(capitalize_element_symbol(
+        &format!("{}{}", col13, col14)));
+
+  // Rule 3.
+  if col13.is_ascii_uppercase() && col14.is_ascii_lowercase(){
+    return (two_letters.or(one_letter), None);
+  }
+
+  // Rule 4.
+  if single_atom_residue && two_letters.is_some(){
+    return (two_letters, None);
+  }
+
+  let two_letters = two_letters.filter(|symbol| Element::from(symbol)
+      .is_ok_and(|element| element as usize <= Element::Uranium as usize));
+
+  // Rule 5. Longer names such as "HG21" cannot be two-letter elements.
+  if col13.eq_ignore_ascii_case(&'H'){
+    let rest_is_blank = chars.iter().skip(2).all(|c| *c == ' ');
+    let other = if rest_is_blank{ two_letters }else{ None };
+    return (one_letter, other);
+  }
+
+  // Rules 6 and 7.
+  if names_follow_layout{
+    prefer(two_letters, one_letter)
+  }else{
+    prefer(one_letter, two_letters)
+  }
 }
 //------------------------------------------------------------------------------
-// This function returns the element symbol of an ATOM or HETATM line, 
-// capitalized as in "Fe", and whether it was read from the atom name.
+// `ElementSymbol` is the element symbol of an ATOM or HETATM line, 
+// capitalized as in "Fe", whether it was read from the atom name, and 
+// another element that the atom name could also denote 
+// (see `element_symbol_from_atom_name()`).
+#[derive(Debug,PartialEq)]
+struct ElementSymbol{
+  symbol: Option<String>,
+  from_name: bool,
+  other: Option<String>,
+}
+//------------------------------------------------------------------------------
+// This function returns the element symbol of an ATOM or HETATM line.
 // The symbol is read from columns 77-78, or from the atom name (columns 
 // 13-16) if those are missing or blank; it is `None` if the atom name gives 
 // no element.  A symbol from columns 77-78 is returned even if it is not an 
 // element.
-fn element_symbol_of_atom_line(line: &str) 
-  -> Result<(Option<String>, bool),CluEError>
+fn element_symbol_of_atom_line(line: &str, context: &AtomNameContext) 
+  -> Result<ElementSymbol,CluEError>
 {
   if let Some(symbol) = pdb_columns(line,77,78)?.map(|s| s.trim())
     .filter(|s| !s.is_empty())
   {
-    return Ok((Some(capitalize_element_symbol(symbol)), false));
+    return Ok(ElementSymbol{symbol: Some(capitalize_element_symbol(symbol)),
+        from_name: false, other: None});
   }
   let name = pdb_columns(line,13,16)?.unwrap_or("");
-  Ok((element_symbol_from_atom_name(name), true))
+  let single_atom_residue 
+    = context.residue_sizes.get(&residue_key(line)?) == Some(&1);
+  let (symbol, other) = element_symbol_from_atom_name(name, 
+      single_atom_residue, context.names_follow_layout);
+  Ok(ElementSymbol{symbol, from_name: true, other})
+}
+//------------------------------------------------------------------------------
+// This function returns columns 18-27 of an ATOM or HETATM line: the residue
+// name, chain ID, residue sequence number, and insertion code, which together
+// identify the residue of the atom.
+fn residue_key(line: &str) -> Result<String,CluEError>{
+  Ok(pdb_columns(line,18,27)?.unwrap_or("").to_string())
 }
 //------------------------------------------------------------------------------
 // This function tries to parse a connections data line.
@@ -721,11 +973,60 @@ mod tests {
         7, name, " ", "SOL", "A", 12, " ", 1.0, -2.5, 30.25, 1.0, 0.0, element)
   }
   //----------------------------------------------------------------------------
+  // This function writes a water oxygen ATOM line in the PDB format, with the
+  // serial number `serial` (wrapped after 99999, as some programs write it),
+  // the chain ID `chain_id` (column 22), and the residue sequence number 
+  // columns `residue` (columns 23-26).
+  fn numbered_atom_line(serial: usize, chain_id: &str, residue: &str) 
+    -> String
+  {
+    assert_eq!(chain_id.len(),1);
+    assert_eq!(residue.len(),4);
+    format!("ATOM  {:>5} {}{}{:>3} {}{}{}   {:>8.3}{:>8.3}{:>8.3}\
+{:>6.2}{:>6.2}          {}",
+        serial % 100_000, " OW ", " ", "SOL", chain_id, residue, " ", 
+        1.0, -2.5, 30.25, 1.0, 0.0, " O")
+  }
+  //----------------------------------------------------------------------------
+  // This function writes `lines` to a temporary PDB file named after `label`,
+  // reads model `target_model` with `parse_pdb`, removes the file, and 
+  // returns the result.
+  fn parse_pdb_lines(lines: &[String], label: &str, target_model: usize)
+    -> Result<Structure,CluEError>
+  {
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_{}_{}.pdb", label, std::process::id()));
+    std::fs::write(&filename, lines.join("\n")).unwrap();
+    let filename = filename.to_str().unwrap().to_string();
+    let result = parse_pdb(&filename, target_model);
+    std::fs::remove_file(&filename).unwrap();
+    result
+  }
+  //----------------------------------------------------------------------------
+  // This function returns an `AtomNameContext` for files whose atom names
+  // follow the PDB layout, without single-atom residues.
+  fn layout_context() -> AtomNameContext{
+    AtomNameContext{names_follow_layout: true, 
+      residue_sizes: HashMap::<String,usize>::new()}
+  }
+  //----------------------------------------------------------------------------
+  // This function writes an ATOM line without element columns, with the
+  // atom name `name` (columns 13-16), residue name `residue`, and residue 
+  // sequence number `residue_number`.
+  fn atom_line_without_element(serial: usize, name: &str, residue: &str, 
+      residue_number: usize) -> String
+  {
+    assert_eq!(name.len(),4);
+    format!("ATOM  {:>5} {} {:>3} A{:>4}    {:>8.3}{:>8.3}{:>8.3}\
+{:>6.2}{:>6.2}",
+        serial, name, residue, residue_number, 1.0, -2.5, 30.25, 1.0, 0.0)
+  }
+  //----------------------------------------------------------------------------
   #[test]
   fn test_parse_atom_line_columns(){
     let line = atom_line(" OW ", " O");
     assert_eq!(line.len(),78);
-    let particle = parse_atom_line(&line).unwrap();
+    let particle = parse_atom_line(&line, &layout_context()).unwrap();
     assert_eq!(particle.element, Element::Oxygen);
     assert_eq!(particle.serial, Some(7));
     assert_eq!(particle.name, Some("OW".to_string()));
@@ -739,7 +1040,8 @@ mod tests {
     let line = atom_line(" CA ", "C ");
     let line = line.trim_end();
     assert_eq!(line.len(),77);
-    assert_eq!(parse_atom_line(line).unwrap().element, Element::Carbon);
+    assert_eq!(parse_atom_line(line, &layout_context()).unwrap().element, 
+        Element::Carbon);
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -747,7 +1049,7 @@ mod tests {
     // Lines that are too short are errors rather than panics.
     let line = atom_line(" OW ", " O");
     for n in [10, 30, 50]{
-      assert!(matches!(parse_atom_line(&line[..n]),
+      assert!(matches!(parse_atom_line(&line[..n], &layout_context()),
             Err((CluEError::CannotParseLine(_),_))));
     }
     let line = cryst1_line([50.0, 60.0, 70.0], [90.0, 90.0, 90.0], "P 1");
@@ -762,7 +1064,7 @@ mod tests {
     // (columns 13-16) starts in the middle of it.
     let line = atom_line(" OW ", " O");
     let line = format!("{}Å{}",&line[..11],&line[12..]);
-    assert!(parse_atom_line(&line).is_err());
+    assert!(parse_atom_line(&line, &layout_context()).is_err());
     // Å replaces column 15, so that the edge a (columns 7-15) ends in the 
     // middle of it.
     let line = cryst1_line([50.0, 60.0, 70.0], [90.0, 90.0, 90.0], "P 1");
@@ -780,12 +1082,13 @@ mod tests {
         ("ZN", Element::Zinc), ("Fe", Element::Iron)]
     {
       let line = atom_line(" X  ", symbol);
-      assert_eq!(parse_atom_line(&line).unwrap().element, element);
+      assert_eq!(parse_atom_line(&line, &layout_context()).unwrap().element,
+          element);
     }
     // Virtual sites are not elements.
     for symbol in ["Mw","MW"," M"]{
       let line = atom_line("MW  ", symbol);
-      assert!(matches!(parse_atom_line(&line),
+      assert!(matches!(parse_atom_line(&line, &layout_context()),
             Err((CluEError::CannotParseElement(_),7))));
     }
   }
@@ -801,14 +1104,144 @@ mod tests {
         ("HD11", Element::Hydrogen)]
     {
       let line = atom_line(name, "  ");
-      assert_eq!(parse_atom_line(&line[..66]).unwrap().element, element,
-          "{}", name);
-      assert_eq!(parse_atom_line(&line).unwrap().element, element,
-          "{}", name);
+      for line in [&line[..66], line.as_str()]{
+        assert_eq!(parse_atom_line(line, &layout_context()).unwrap().element,
+            element, "{}", name);
+      }
     }
     let line = atom_line("MW  ", "  ");
-    assert!(matches!(parse_atom_line(&line[..66]),
+    assert!(matches!(parse_atom_line(&line[..66], &layout_context()),
           Err((CluEError::CannotParseElement(_),7))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_element_symbol_from_atom_name_rules(){
+    // (name, only atom in its residue, names follow the layout, element, 
+    // other element)
+    for (name, single, layout, symbol, other) in [
+      // Rule 1: right-justified element.
+      (" CA ", false, false, Some("C"), None),
+      ("1HB ", false, true, Some("H"), None),
+      ("    ", false, true, None, None),
+      // Rule 2: one letter followed by something else.
+      ("C1  ", false, true, Some("C"), None),
+      ("O   ", false, false, Some("O"), None),
+      // Rule 3: case as written.
+      ("Cl1 ", false, false, Some("Cl"), None),
+      ("Fe  ", false, true, Some("Fe"), None),
+      // Rule 4: single-atom residues.
+      ("CA  ", true, false, Some("Ca"), None),
+      ("CL  ", true, false, Some("Cl"), None),
+      ("HG  ", true, true, Some("Hg"), None),
+      // Rule 5: hydrogen.
+      ("HG  ", false, true, Some("H"), Some("Hg")),
+      ("HE  ", false, false, Some("H"), Some("He")),
+      ("HO  ", false, true, Some("H"), Some("Ho")),
+      ("HG21", false, true, Some("H"), None),
+      ("HD  ", false, true, Some("H"), None),
+      // Rule 6: names that do not follow the layout.
+      ("CA  ", false, false, Some("C"), Some("Ca")),
+      ("NE  ", false, false, Some("N"), Some("Ne")),
+      ("CL1 ", false, false, Some("C"), Some("Cl")),
+      ("LI1 ", false, false, Some("Li"), None),
+      // Rule 7: names that follow the layout.
+      ("CA  ", false, true, Some("Ca"), Some("C")),
+      ("CL1 ", false, true, Some("Cl"), Some("C")),
+      ("NZ  ", false, true, Some("N"), None),
+      // Names starting with D are read as deuterium.
+      ("DC1 ", false, true, Some("D"), None),
+      // No element.
+      ("MW  ", false, true, None, None),
+      ("LP1 ", false, false, None, None),
+      // Synthetic elements only for single-atom residues.
+      ("OG  ", false, false, Some("O"), None),
+      ("SG  ", false, true, Some("S"), None),
+      ("HS  ", false, true, Some("H"), None),
+      ("PU  ", false, true, Some("P"), None),
+      ("PU  ", true, true, Some("Pu"), None),
+      ("*X  ", false, true, None, None),
+    ]{
+      assert_eq!(element_symbol_from_atom_name(name, single, layout),
+          (symbol.map(|s| s.to_string()), other.map(|s| s.to_string())),
+          "{:?}", (name, single, layout));
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_pdb_elements_from_names(){
+    // (residue, residue number, atom name, element), in a file whose names 
+    // do not follow the layout and in one whose names do.
+    let left_justified = [
+      ("ALA", 1, "N   ", Element::Nitrogen),
+      ("ALA", 1, "CA  ", Element::Carbon),
+      ("ALA", 1, "C   ", Element::Carbon),
+      ("ALA", 1, "O   ", Element::Oxygen),
+      ("ALA", 1, "CB  ", Element::Carbon),
+      ("SER", 2, "OG  ", Element::Oxygen),
+      ("SER", 2, "HG  ", Element::Hydrogen),
+      ("LIG", 3, "C1  ", Element::Carbon),
+      ("LIG", 3, "CL1 ", Element::Carbon),
+      ("CA",  4, "CA  ", Element::Calcium),
+    ];
+    let pdb_layout = [
+      ("ALA", 1, " N  ", Element::Nitrogen),
+      ("ALA", 1, " CA ", Element::Carbon),
+      ("ALA", 1, " C  ", Element::Carbon),
+      ("ALA", 1, " O  ", Element::Oxygen),
+      ("ALA", 1, " CB ", Element::Carbon),
+      ("SER", 2, " OG ", Element::Oxygen),
+      ("SER", 2, "HG  ", Element::Hydrogen),
+      ("LIG", 3, " C1 ", Element::Carbon),
+      ("LIG", 3, "CL1 ", Element::Chlorine),
+      ("CA",  4, "CA  ", Element::Calcium),
+    ];
+    for (label, atoms) in [("left_justified", left_justified), 
+        ("pdb_layout", pdb_layout)]
+    {
+      let lines = atoms.iter().enumerate()
+        .map(|(ii, (residue, number, name, _))| 
+            atom_line_without_element(ii + 1, name, residue, *number))
+        .collect::<Vec::<String>>();
+      let structure = parse_pdb_lines(&lines, label, 0).unwrap();
+      let elements = structure.bath_particles.iter()
+        .map(|p| p.element).collect::<Vec::<Element>>();
+      let expected = atoms.iter()
+        .map(|(_, _, _, element)| *element).collect::<Vec::<Element>>();
+      assert_eq!(elements, expected, "{}", label);
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_elements_from_names_message(){
+    assert_eq!(elements_from_names_message(&ElementsFromNames::new()), None);
+
+    let mut elements_from_names = ElementsFromNames::new();
+    for (residue, name, symbol, other, n) in [
+      ("ALA", "CA", "C", Some("Ca"), 5),
+      ("ALA", "N", "N", None, 5),
+      ("SER", "HG", "H", Some("Hg"), 2),
+      ("DRU", "DC1", "D", None, 1),
+    ]{
+      elements_from_names.insert(
+          (residue.to_string(), name.to_string(), symbol.to_string()),
+          (other.map(|s| s.to_string()), n));
+    }
+    let message = elements_from_names_message(&elements_from_names).unwrap();
+    let lines = message.lines().collect::<Vec::<&str>>();
+    assert_eq!(lines[0], "Element symbols were taken from the atom names for \
+13 atoms, since their element columns (77-78) are blank: 5 C, 3 H, 5 N.");
+    assert!(lines[1].starts_with("Check these atom names"));
+    // Names that cannot denote another element are not listed.
+    let rows = lines[2..].iter()
+      .map(|line| line.split_whitespace().collect::<Vec::<&str>>())
+      .collect::<Vec::<Vec::<&str>>>();
+    assert_eq!(rows, vec![
+        vec!["residue", "name", "element", "atoms", "note"],
+        vec!["ALA", "CA", "C", "5", "could", "be", "Ca"],
+        vec!["DRU", "DC1", "H", "1", "read", "as", "D:", "hydrogen,", 
+          "starting", "as", "1H"],
+        vec!["SER", "HG", "H", "2", "could", "be", "Hg"],
+    ]);
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -870,20 +1303,23 @@ mod tests {
 
     // A deuteron named in the atom name, without element columns.
     let line = atom_line(" D1 ", "  ");
-    assert_eq!(element_symbol_of_atom_line(&line[..66]),
-        Ok((Some("D".to_string()), true)));
-    assert_eq!(parse_atom_line(&line[..66]).unwrap().element, 
+    assert_eq!(element_symbol_of_atom_line(&line[..66], &layout_context()),
+        Ok(ElementSymbol{symbol: Some("D".to_string()), from_name: true,
+          other: None}));
+    assert_eq!(parse_atom_line(&line[..66], &layout_context()).unwrap().element, 
         Element::Hydrogen);
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_filter_missing_residue_sequence_number(){
-    // A residue sequence number that is not a number, as in hybrid-36, 
-    // is missing, so it is not selected by residue_sequence_numbers.
+    // parse_atom_line reads a residue sequence number that is not a number,
+    // as in hybrid-36, as missing, so it is not selected by 
+    // residue_sequence_numbers. (parse_atoms rejects files with such
+    // numbers, see check_residue_number.)
     use crate::structure::particle_filter::ParticleFilter;
     let line = atom_line(" OW ", " O");
     let line = format!("{}A000{}", &line[..22], &line[26..]);
-    let particle = parse_atom_line(&line).unwrap();
+    let particle = parse_atom_line(&line, &layout_context()).unwrap();
     assert_eq!(particle.residue_sequence_number, None);
 
     let mut structure = Structure::new(vec![particle], 
@@ -987,6 +1423,110 @@ mod tests {
     let filename = "./assets/TEMPO_wat_gly_70A.pdb";
     let structure = parse_pdb(&filename,0).unwrap();
     assert_eq!(structure.bath_particles.len(),43436);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_pdb_atom_limit(){
+    // 99999 atoms in 5000 residues can be read.
+    let mut lines = (1..=PDB_MAX_ATOMS)
+      .map(|ii| numbered_atom_line(ii, "A", &format!("{:>4}", ii/20 + 1)))
+      .collect::<Vec::<String>>();
+    let structure = parse_pdb_lines(&lines, "atom_limit_ok", 0).unwrap();
+    assert_eq!(structure.bath_particles.len(), PDB_MAX_ATOMS);
+    assert_eq!(structure.bath_particles[PDB_MAX_ATOMS - 1].serial,
+        Some(PDB_MAX_ATOMS as u32));
+
+    // One more atom is an error; its serial wraps to 0.
+    lines.push(numbered_atom_line(PDB_MAX_ATOMS + 1, "A", "5000"));
+    let result = parse_pdb_lines(&lines, "atom_limit_err", 0);
+    assert!(matches!(result, Err(CluEError::TooManyAtomsInPDB(_, max))
+          if max == PDB_MAX_ATOMS));
+
+    // The limit applies to the selected model.
+    let mut models = vec!["MODEL        1".to_string(), 
+      numbered_atom_line(1, "A", "   1"), "ENDMDL".to_string(), 
+      "MODEL        2".to_string()];
+    models.extend(lines);
+    models.push("ENDMDL".to_string());
+    let structure = parse_pdb_lines(&models, "atom_limit_model_0", 0)
+      .unwrap();
+    assert_eq!(structure.bath_particles.len(), 1);
+    let result = parse_pdb_lines(&models, "atom_limit_model_1", 1);
+    assert!(matches!(result, Err(CluEError::TooManyAtomsInPDB(_, _))));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_pdb_residue_number_not_decimal(){
+    // Residue sequence numbers written as for numbers above 9999 are errors.
+    for residue in ["A000", "****", "270f", "a000"]{
+      let lines = vec![numbered_atom_line(1, "A", "   1"),
+        numbered_atom_line(2, "A", residue)];
+      let result = parse_pdb_lines(&lines, "residue_not_decimal", 0);
+      assert!(matches!(result, 
+            Err(CluEError::ResidueNumberAboveMaxInPDB(_, ref line, max))
+            if *line == lines[1] && max == PDB_MAX_RESIDUE_SEQUENCE_NUMBER),
+            "{}", residue);
+    }
+
+    // Blank and negative numbers are read as missing.
+    for residue in ["    ", "  -5"]{
+      let lines = vec![numbered_atom_line(1, "A", residue)];
+      let structure = parse_pdb_lines(&lines, "residue_missing", 0).unwrap();
+      assert_eq!(structure.bath_particles[0].residue_sequence_number, None);
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_parse_pdb_residue_limit(){
+    let is_too_many_residues = |result: &Result<Structure,CluEError>,
+        chain: &str| matches!(result, 
+          Err(CluEError::TooManyResiduesInPDB(_, ref chain_id, max)) 
+          if chain_id == chain && *max == PDB_MAX_RESIDUE_SEQUENCE_NUMBER);
+
+    // 9999 residues, with two atoms each, in one chain can be read.
+    // The serials start at `first_serial`.
+    let residue_lines = |chain_id: &str, numbers: &[i32], 
+        first_serial: usize| numbers.iter()
+      .flat_map(|n| std::iter::repeat(format!("{:>4}", n)).take(2))
+      .enumerate()
+      .map(|(ii, residue)| numbered_atom_line(first_serial + ii, chain_id, 
+            &residue))
+      .collect::<Vec::<String>>();
+    let numbers = (1..=9999).collect::<Vec::<i32>>();
+    let lines = residue_lines("A", &numbers, 1);
+    let structure = parse_pdb_lines(&lines, "residue_limit_ok", 0).unwrap();
+    assert_eq!(structure.bath_particles.len(), 2*9999);
+
+    // 10000 residues in one chain are an error, whether they are numbered 
+    // 0-9999 or wrap after 9999.
+    let numbers = (0..=9999).collect::<Vec::<i32>>();
+    let lines = residue_lines("A", &numbers, 1);
+    let result = parse_pdb_lines(&lines, "residue_limit_err", 0);
+    assert!(is_too_many_residues(&result, "A"));
+
+    let numbers = (1..=10000).map(|n| n % 10000).collect::<Vec::<i32>>();
+    let lines = residue_lines("B", &numbers, 1);
+    let result = parse_pdb_lines(&lines, "residue_limit_wrap", 0);
+    assert!(is_too_many_residues(&result, "B"));
+
+    // Insertion codes make separate residues.
+    let numbers = (1..=9999).collect::<Vec::<i32>>();
+    let mut lines = residue_lines("A", &numbers, 1);
+    let last = lines[lines.len() - 1].clone();
+    lines.push(format!("{}{}{}", &last[..26], "A", &last[27..]));
+    let result = parse_pdb_lines(&lines, "residue_limit_icode", 0);
+    assert!(is_too_many_residues(&result, "A"));
+
+    // The limit applies per chain, also when chains alternate.
+    let numbers = (1..=5000).collect::<Vec::<i32>>();
+    let lines_a = residue_lines("A", &numbers, 1);
+    let lines_b = residue_lines("B", &numbers, 2*5000 + 1);
+    let lines = lines_a.into_iter().zip(lines_b)
+      .flat_map(|(a, b)| [a, b])
+      .collect::<Vec::<String>>();
+    let structure = parse_pdb_lines(&lines, "residue_limit_chains", 0)
+      .unwrap();
+    assert_eq!(structure.bath_particles.len(), 4*5000);
   }
   //----------------------------------------------------------------------------
   #[test]

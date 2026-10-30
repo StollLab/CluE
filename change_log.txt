@@ -9,7 +9,56 @@ ADDED:
   The group key abundance_tolerance (default 1e-9) sets how far the sum 
   of a group's isotope abundances may differ from one.
 
+  The key orientations.weight_tolerance (default 1e-9) sets how far the 
+  sum of the weights of an orientation grid given by a file or by 
+  vector_grid may differ from one. Weights that differ by more are an 
+  error; weights within the tolerance are normalized. Previously the 
+  weights were used as given, and the signal was scaled by their sum.
+
 CHANGED:
+  PDB files with more than 99999 atoms in the selected model, or more than
+  9999 residues in a chain, are now an error, since the PDB format cannot
+  number them uniquely. Previously such files stopped with an error about a
+  duplicate serial or a line that could not be read. A residue sequence
+  number that is not a decimal integer or blank (for example the hybrid-36
+  number A000) is now an error; previously it was read as missing.
+
+  Grid csv files (detected_spin.position = "file.csv" and orientation grid
+  files) no longer need a header line. The first line is skipped only if 
+  none of its entries is a number; previously it was always skipped, so 
+  a file without a header silently lost its first point. Spaces around 
+  entries are ignored, and an entry that is not a number is an error that
+  names the line.
+
+  The orientation grid written to info/orientation_grid.xyzw now holds the
+  right coordinates for every point. Previously only the first row was 
+  right; the weights, orientation_grid_polar.csv, and the signals were not
+  affected.
+
+  For PDB files without element columns (77-78), the rules that read the
+  element from the atom name now also use the rest of the model: a name
+  starting with H is hydrogen ("HG", "HE", "HO" in amino acids were read
+  as Hg, He, Ho, so protons disappeared from the bath or became 165Ho);
+  two letters that form an element are read as that element for the only
+  atom of a residue (ions such as CA, CL, HG); if no name in the model is
+  right-justified as the PDB format requires, names are read as
+  left-justified (an amino acid "CA" is carbon, not calcium); otherwise a
+  name such as "CL1" is chlorine (was carbon). Outside single-atom
+  residues, two letters are read only as elements up to uranium. Instead
+  of a count, CluE Oxide now prints the number of atoms per element and
+  lists the names that could also denote another element, or that were
+  read as D or T. Files with element columns are not affected.
+
+  Structure.write_gro (pyCluE) now writes a valid GRO file of the primary
+  cell: the detected spin as atom 0 of residue DET, then every primary
+  cell particle, then the unit cell box in nm (zero if there is no unit
+  cell). Coordinates have three decimal places, and velocities are no
+  longer written. Previously the atom count included the periodic copies,
+  the box line was missing after replication or garbled (meters, no
+  spaces, one wrong entry), and a Structure made with the constructor
+  was written without atoms. A unit cell that GRO cannot represent (first
+  edge not along x, or second edge not in the xy plane) is an error.
+
   Group distance selections (selection.within_distance and
   selection.not_within_distance) are now measured from the detected spin.
   Previously they were measured from the origin of the structure file.
@@ -70,8 +119,10 @@ CHANGED:
   since only lattice translations are applied. The placeholder 1x1x1 A 
   unit cell that PDB files use for structures without a unit cell, and 
   unit cells without volume, are now ignored. A structure that spans more 
-  than two unit cells along a cell edge is now an error, since the unit 
-  cell cannot describe it.
+  than two unit cells along a cell edge is now an error when the unit cell
+  is replicated, since the unit cell cannot describe it; with 
+  replicate_unit_cell = false, a warning is printed and the atoms are left
+  where the structure file puts them.
 
   Building the structure is faster and uses less memory for large 
   periodic systems, with identical results: the clash checks 
@@ -157,6 +208,22 @@ REMOVED:
 
   space_3d::minimize_absolute_difference_for_vector3d_step(), which moved 
   vectors in the wrong direction and is no longer used.
+
+  Config::max_spin_multiplicity_for_particle_config(), which looked up the
+  same index in the primary cell and extracell group lists, so it mixed
+  unrelated groups when cell_type was used, and is no longer used. Use
+  ParticleConfig::max_possible_spin_multiplicity() on the group list of
+  the particle's unit cell instead.
+
+  The group selections isotopes and not_isotopes, which are now invalid
+  keys. Groups are selected before isotopes are drawn, so these selections
+  only saw the most common isotope of each element: isotopes = ["2H"]
+  selected nothing, and isotopes = ["1H"] selected every hydrogen,
+  including those later drawn as 2H. Use elements to select by element,
+  and isotope-keyed group keys such as 2H.active or 2H.electric_quadrupole
+  for settings of one isotope. Also removed: the fields
+  ParticleFilter::isotopes and ParticleFilter::not_isotopes, and the
+  constants KEY_SELE_ISOTOPES and KEY_SELE_NOT_ISOTOPES.
 --------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.5
 

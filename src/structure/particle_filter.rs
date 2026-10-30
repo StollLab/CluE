@@ -3,7 +3,6 @@ use crate::clue_errors::CluEError;
 use crate::config::config_toml::*;
 use crate::Config;
 use crate::elements::Element;
-use crate::isotopes::Isotope;
 use crate::space_3d::Vector3D;
 use crate::math;
 use crate::structure::{Particle,Structure};
@@ -44,9 +43,6 @@ pub struct ParticleFilter{
 
   //exchange_groups: Vec::<ExchangeGroup>,
   //not_exchange_groups: Vec::<ExchangeGroup>,
-
-  pub isotopes: Vec::<Isotope>,
-  pub not_isotopes: Vec::<Isotope>,
 
   pub bonded_indices: Vec::<usize>,
   pub not_bonded_indices: Vec::<usize>,
@@ -275,31 +271,6 @@ impl ParticleFilter{
       self.not_residue_sequence_numbers = array.iter()
         .filter_map(|v| v.as_integer())
         .map(|n| n as u32).collect::<Vec::<u32>>();
-    }
-    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-
-    if let Some(value) = table.get(KEY_SELE_ISOTOPES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.isotopes = Vec::<Isotope>::with_capacity(array.len());
-      for s in array.iter().filter_map(|v| v.as_str()){
-        let i = Isotope::from(s)?;
-        self.isotopes.push(i);
-      }
-    }
-    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    if let Some(value) = table.get(KEY_SELE_NOT_ISOTOPES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_isotopes = Vec::<Isotope>::with_capacity(array.len());
-      for s in array.iter().filter_map(|v| v.as_str()){
-        let el = Isotope::from(s)?;
-        self.not_isotopes.push(el);
-      }
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -600,13 +571,6 @@ impl ParticleFilter{
             &self.residue_sequence_numbers,
             &self.not_residue_sequence_numbers)
       {
-        return None;
-      }
-
-      // Isotope
-      let isotope = &particle.isotope; 
-      if (!self.isotopes.is_empty() && !self.isotopes.contains(isotope))
-       || self.not_isotopes.contains(isotope){
         return None;
       }
 

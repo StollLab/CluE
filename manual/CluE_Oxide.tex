@@ -25,15 +25,49 @@ such as the pulse sequence the applied magnetic field, the central spin
 coordinates and so on.
 Element symbols are read from columns 77--78 of the ATOM and HETATM records,
 in upper or lower case (for example FE or Fe).
-If these columns are missing or blank, the element is read from the atom 
-name, where the PDB format right-justifies it in columns 13--14,
-and CluE Oxide prints how many elements were read this way.
+If these columns are missing or blank, the element is read from the atom
+name (columns 13--16), where the PDB format right-justifies it in columns
+13--14.
+Since not every program follows this layout, the following rules are
+applied in order:
+\begin{enumerate}
+  \item if column 13 is blank or a digit, column 14 is the element
+    (`` CA '' is carbon);
+  \item if column 13 is a letter and column 14 is not, column 13 is the
+    element (``C1~~'');
+  \item an upper case letter followed by a lower case letter is read as
+    written (``Cl'', ``Fe'');
+  \item if the atom is the only one in its residue (same residue name,
+    chain ID, residue sequence number, and insertion code) and the two
+    letters form an element, the atom is read as that element, since such
+    atoms are usually ions (``CA'' is calcium, ``HG'' is mercury);
+  \item a name starting with H is hydrogen (``HG~~'', ``HG21'');
+  \item if no atom name in the model has a blank column 13 followed by a
+    non-blank column 14, the names are taken to be left-justified and
+    column 13 is the element (``CA~~'' in an amino acid is carbon);
+  \item otherwise the two letters are the element if they form one
+    (``CL1~'' is chlorine), else column 13.
+\end{enumerate}
+If the preferred reading is not an element, the other one is used.
+In rules 5--7, two letters are read as an element only up to uranium.
+CluE Oxide prints how many atoms of each element were read from atom names,
+and lists the residue and atom names that could also denote another element,
+or that were read as D or T, so they can be checked;
+adding element columns to the PDB file avoids these guesses.
 Atoms whose element cannot be read, such as virtual sites, are skipped
 with a message.
 The symbols D and T are read as hydrogen, starting as $^1$H, both in the 
 structure file and in element selections, and CluE Oxide prints a message
-when this happens; to simulate deuterium, use a group with 
+when this happens; to simulate deuterium, use a group with
 \textit{2H.abundance = 1.0}.
+The PDB format has five columns for atom serial numbers and four for
+residue sequence numbers, so a PDB file may have at most 99999 atoms in the
+selected model and at most 9999 residues per chain; larger PDB files are an
+error, whether their numbers wrap or use another number system such as
+hybrid-36 or hexadecimal.
+Residue sequence numbers must be decimal integers or blank; blank and
+negative numbers are read as missing, so such atoms are not selected by
+\textit{residue\_sequence\_numbers}.
 %===============================================================================
 \section{Overview}
 %===============================================================================
@@ -619,6 +653,9 @@ for structures without a unit cell, and unit cells without volume,
 are ignored.
 If the structure spans more than two unit cells along a cell edge,
 the unit cell cannot describe it and CluE Oxide reports an error.
+With \textit{replicate\_unit\_cell} = \textit{false} the unit cell is 
+only used to make molecules whole, so CluE Oxide instead prints a warning 
+and leaves the atoms where the structure file puts them.
 Periodic copies that cannot be within the radius are not stored.
 The particles of an exchange group, such as a methyl, are kept 
 if the center of the group is within the radius plus the largest
@@ -684,12 +721,16 @@ point.  If the spin is delocalized of multiple points, a csv file can be used
 to provide $|\Psi(x,y,z)|^2$.  
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
-detected_spin_position = read_csv("xyzw.csv");
+detected_spin.position = "xyzw.csv"
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Each row of the file "xyzw.csv" should be four comma separated floating point
 numbers, specifying the $x$, $y$, $z$ and weight,
 $w = |\Psi(x,y,z)|^2 \d x \d y \d z$, for the coordinates.
+The first line may be a header, such as \textit{x,y,z,w}: it is skipped if 
+none of its entries is a number.  A first line that mixes numbers and other 
+entries, or any later entry that is not a number, is an error that names the
+line, so a data row is never dropped. Spaces around entries are ignored.
 The weights must sum to one within \textit{detected\_spin.weight\_tolerance}
 (default $10^{-9}$); weights within the tolerance are normalized to sum to 
 exactly one, and CluE Oxide prints a message if this changes them by more 
@@ -744,12 +785,21 @@ orientation_grid = random(1);
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 And as with the detected spin position, a csv file $x$, $y$, $z$ and weight
-entries can be used for a custom grid.
+entries can be used for a custom grid; the same rules for the header line 
+apply.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
-orientation_grid = read_csv("xyzw.csv");
+[orientations]
+grid = "file"
+file = "xyzw.csv"
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+The signal is the weighted sum of the signals at each orientation, so the 
+weights of a grid from a file, or from \textit{vector\_grid}, must sum to one
+within \textit{orientations.weight\_tolerance} (default $10^{-9}$); weights 
+within the tolerance are normalized to sum to exactly one, and CluE Oxide 
+prints a message if this changes them by more than floating point rounding.
+The tolerance must be at least 0 and less than 1.
 
 \subsubsection{PartitioningMethod} % -------------------------------------------
 The partitioning method determines how the spin system should be partitioned
@@ -1055,6 +1105,10 @@ floating point rounding.
 Abundances must not be negative, and \textit{abundance\_tolerance} must be
 at least 0 and less than 1.
 A group without abundances keeps the most common isotope of each element.
+Groups are selected before isotopes are drawn, so a selection cannot depend
+on the drawn isotope; to set properties for one isotope only, use
+isotope-keyed group keys such as \textit{2H.active} or
+\textit{2H.electric\_quadrupole}.
 The isotope is drawn once per cosubstitution set and given to every particle
 in the set, whatever its element.
 The \textit{drop\_probability} of a group must lie in the interval $[0,1]$.
