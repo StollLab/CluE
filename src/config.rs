@@ -200,7 +200,8 @@ impl Config{
   
     let toml_str: String = match fs::read_to_string(filename){
       Ok(lines) => lines,
-      Err(_) => return Err(CluEError::CannotOpenFile(filename.to_string())),
+      Err(err) => return Err(CluEError::CannotOpenFile(
+        filename.to_string(), err.to_string())),
     };
 
     let mut config = Self::from_toml_string(&toml_str)?;
@@ -554,12 +555,12 @@ they were normalized to ({}).", label, original, sum, list(abundances));
   pub fn set_tau_axis(&mut self) -> Result<(),CluEError>
   {
     let (result, n1) = Self::construct_tau_axis(
-        &self.number_timepoints, &self.tau_increments);
+        &self.number_timepoints, &self.tau_increments, "");
 
     self.tau_axis = result?;
 
     let (result, n2) = Self::construct_tau_axis(
-        &self.number_timepoints2, &self.tau2_increments);
+        &self.number_timepoints2, &self.tau2_increments, "2");
 
     self.tau2_axis = result?;
 
@@ -568,13 +569,17 @@ they were normalized to ({}).", label, original, sum, list(abundances));
     Ok(())
   }
   //----------------------------------------------------------------------------
+  /// `suffix` is "" for number_timepoints and tau_increments, and "2" for
+  /// number_timepoints2 and tau2_increments; it is used in error messages.
   pub fn construct_tau_axis(
     number_timepoints: &[usize], 
     tau_increments: &[f64],
+    suffix: &str,
       ) -> (Result<Vec::<f64>,CluEError>,usize)
   {
     if tau_increments.len() != number_timepoints.len(){
-      return (Err(CluEError::LenghMismatchTimepointsIncrements(
+      return (Err(CluEError::LengthMismatchTimepointsIncrements(
+            suffix.to_string(),
             number_timepoints.len(),tau_increments.len())), 0);
     }
   
@@ -614,7 +619,7 @@ they were normalized to ({}).", label, original, sum, list(abundances));
     }
 
     if dts.len() != n_dts.len(){
-      return Err(CluEError::LenghMismatchTimepointsIncrements(
+      return Err(CluEError::LengthMismatchTimepointsIncrements(
             n_dts.len(),dts.len()));
     }
 
@@ -766,7 +771,10 @@ impl DetectedSpinCoordinates{
         int_grid.scale_mut(unit_of_distance);
         Ok(Self::ProbabilityDistribution(int_grid))
       },
-      _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
+      other => Err(CluEError::InvalidTOMLValue(
+            "detected_spin.position".to_string(),
+            "an array or a csv file name".to_string(),
+            other.type_str().to_string())),
     }
   }
   //----------------------------------------------------------------------------
@@ -775,10 +783,13 @@ impl DetectedSpinCoordinates{
   {
 
     if array.is_empty(){
-      return Err(CluEError::TOMLArrayIsEmpty);
+      return Err(CluEError::InvalidTOMLValue("detected_spin.position".to_string(),
+            "a non-empty array".to_string(), "an empty array".to_string()));
     }
     if !are_all_same_type(&array){
-      return Err(CluEError::TOMLArrayContainsMultipleTypes);
+      return Err(CluEError::InvalidTOMLValue("detected_spin.position".to_string(),
+            "an array whose elements have the same type".to_string(),
+            "an array of mixed types".to_string()));
     }
     match array[0]{
       Value::Array(_) => {
@@ -787,18 +798,30 @@ impl DetectedSpinCoordinates{
         let mut weights = Vec::<f64>::with_capacity(n);
         for value in array.iter(){
           let toml::Value::Array(a) = value else{
-            return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
+            return Err(CluEError::InvalidTOMLValue(
+                  "detected_spin.position".to_string(),
+                  "a row [x, y, z, weight] of four floats".to_string(),
+                  value.to_string()));
           };
           if a.len() != 4{
-            return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
+            return Err(CluEError::InvalidTOMLValue(
+                  "detected_spin.position".to_string(),
+                  "a row [x, y, z, weight] of four floats".to_string(),
+                  value.to_string()));
           }
           if !are_all_same_type(a){
-            return Err(CluEError::TOMLArrayContainsMultipleTypes);
+            return Err(CluEError::InvalidTOMLValue(
+                  "detected_spin.position".to_string(),
+                  "a row [x, y, z, weight] of four floats".to_string(),
+                  value.to_string()));
           }
           let (Some(x),Some(y),Some(z),Some(w)) 
               = (a[0].as_float(), a[1].as_float(),a[2].as_float()
               ,a[3].as_float()) else{
-            return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
+            return Err(CluEError::InvalidTOMLValue(
+                  "detected_spin.position".to_string(),
+                  "a row [x, y, z, weight] of four floats".to_string(),
+                  value.to_string()));
           };
           points.push(x*unit_of_distance);
           points.push(y*unit_of_distance);
@@ -818,8 +841,18 @@ impl DetectedSpinCoordinates{
 
       },
       Value::Integer(_) => {
-        let vec: Vec::<u32> = array.iter()
-          .filter_map(|v| v.as_integer()).map(|n| n as u32).collect();
+        // Serial numbers are u32 (`Structure::map_serial_id_to_bath_index`).
+        let mut vec = Vec::<u32>::with_capacity(array.len());
+        for (ii,v) in array.iter().enumerate(){
+          let Some(n) = v.as_integer().and_then(|n| u32::try_from(n).ok())
+          else{
+            return Err(CluEError::InvalidTOMLValue(
+                  format!("detected_spin.position[{}]",ii),
+                  "a serial number 0 <= n <= 4294967295".to_string(),
+                  v.to_string()));
+          };
+          vec.push(n);
+        }
 
         // Three integers may have been meant as coordinates.
         if let Some(message) = serial_position_message(&vec){
@@ -834,7 +867,11 @@ impl DetectedSpinCoordinates{
 
         Ok(Self::CentroidOverGroup(vec))
       },
-      _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
+      _ => Err(CluEError::InvalidTOMLValue(
+            "detected_spin.position".to_string(),
+            "an array of floats [x, y, z], of serial numbers, of group names, \
+or of rows [x, y, z, weight]".to_string(),
+            format!("an array of {}", array[0].type_str()))),
     }
   }
 }
@@ -881,7 +918,10 @@ impl ReplicateUnitCell{
         if b { Ok(Self::Auto)}
         else { Ok(Self::No)  }
       },
-      _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
+      other => Err(CluEError::InvalidTOMLValue(
+            "replicate_unit_cell".to_string(),
+            "true, false, or [n1, n2, n3]".to_string(),
+            other.to_string())),
     }
   }
   //----------------------------------------------------------------------------
@@ -889,19 +929,46 @@ impl ReplicateUnitCell{
   {
 
     if array.is_empty(){
-      return Err(CluEError::TOMLArrayIsEmpty);
+      return Err(CluEError::InvalidTOMLValue("replicate_unit_cell".to_string(),
+            "a non-empty array".to_string(), "an empty array".to_string()));
     }
     if !are_all_same_type(&array){
-      return Err(CluEError::TOMLArrayContainsMultipleTypes);
+      return Err(CluEError::InvalidTOMLValue("replicate_unit_cell".to_string(),
+            "an array whose elements have the same type".to_string(),
+            "an array of mixed types".to_string()));
     }
     match array[0]{
       Value::Integer(_) => {
-        let vec: Vec::<usize> = array.iter()
-          .filter_map(|v| v.as_integer()).map(|n| n as usize).collect();
+        // The number of extra cells per dimension is used as an i32 when
+        // the cell offsets are built (`build_cell_shifts()`), so it must be
+        // in 0..=i32::MAX.
+        let expected = "true, false, or [n1, n2, n3] with integers \
+0 <= n <= 2147483647";
+        if array.len() != 3{
+          return Err(CluEError::InvalidTOMLValue(
+                "replicate_unit_cell".to_string(), expected.to_string(),
+                format!("an array of length {}", array.len())));
+        }
+        let mut nc = [0_usize;3];
+        for (ii,v) in array.iter().enumerate(){
+          let Some(n) = v.as_integer()
+            .and_then(|n| i32::try_from(n).ok())
+            .and_then(|n| usize::try_from(n).ok())
+          else{
+            return Err(CluEError::InvalidTOMLValue(
+                  format!("replicate_unit_cell[{}]",ii),
+                  "an integer 0 <= n <= 2147483647".to_string(),
+                  v.to_string()));
+          };
+          nc[ii] = n;
+        }
 
-        Ok(Self::Specified([vec[0],vec[1],vec[2]]))
+        Ok(Self::Specified(nc))
       },
-      _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
+      _ => Err(CluEError::InvalidTOMLValue(
+            "replicate_unit_cell".to_string(),
+            "true, false, or [n1, n2, n3]".to_string(),
+            format!("an array of {}", array[0].type_str()))),
     }
   }
 }
@@ -945,7 +1012,9 @@ impl PartitionTableConfig{
     match value{
       Value::Array(array) => Self::from_toml_array(array),
       Value::String(s) => Ok(Self::CSV(s.to_string())),
-      _ => Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable),
+      other => Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+            "a csv file name or an array [index0, block0, index1, block1, ...] \
+of integers".to_string(), other.type_str().to_string())),
     }
   }
   //----------------------------------------------------------------------------
@@ -953,30 +1022,49 @@ impl PartitionTableConfig{
   {
 
     if array.is_empty(){
-      return Err(CluEError::TOMLArrayIsEmpty);
+      return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+            "a non-empty array".to_string(), "an empty array".to_string()));
     }
     if !are_all_same_type(&array){
-      return Err(CluEError::TOMLArrayContainsMultipleTypes);
+      return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+            "an array whose elements have the same type".to_string(),
+            "an array of mixed types".to_string()));
     }
     match array[0]{
       Value::Integer(_) => {
         if array.len() % 2 != 0{
-          return Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable);
+          return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+                "a csv file name or an array [index0, block0, index1, block1, ...] \
+of integers".to_string(),
+                format!("an array of length {}", array.len())));
         }
         let mut p_table = Vec::<(usize,usize)>::with_capacity(array.len()/2);
         for ii in 0..array.len()/2{
-          let Some(idx) = array[2*ii].as_integer() else{
-            return Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable);
+          let (Some(idx),Some(blk)) = (array[2*ii].as_integer(),
+              array[2*ii + 1].as_integer()) else{
+            return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+                  "a csv file name or an array [index0, block0, index1, block1, ...] \
+of integers".to_string(),
+                  format!("the pair [{}, {}]", array[2*ii], array[2*ii + 1])));
           };
-          let Some(blk) = array[2*ii + 1].as_integer() else{
-            return Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable);
+          // Serial numbers and blocks are checked further in
+          // `get_partition_pretable()`, which also reads the csv form.
+          let (Ok(idx),Ok(blk)) = (usize::try_from(idx),usize::try_from(blk))
+          else{
+            return Err(CluEError::InvalidTOMLValue(
+                  format!("partition_table[{}..={}]", 2*ii, 2*ii + 1),
+                  "a pair [index, block] of non-negative integers".to_string(),
+                  format!("[{}, {}]", idx, blk)));
           };
-         p_table.push((idx as usize,blk as usize)) 
+          p_table.push((idx,blk));
         }
 
         Ok(Self::IndexBlockList(p_table))
       },
-      _ => Err(CluEError::TOMLValueDoesNotSpecifyAPartitionTable),
+      _ => Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+            "a csv file name or an array [index0, block0, index1, block1, ...] \
+of integers".to_string(),
+            format!("an array of {}", array[0].type_str()))),
     }
   }
 }
@@ -1019,31 +1107,42 @@ impl OrientationAveraging{
     if grid == KEY_ORI_LEBEDEV{
 
       let Some(n_ori) = ori_toml.number else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.number".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       Ok(OrientationAveraging::Lebedev(n_ori))
 
     } else if grid == KEY_ORI_RANDOM{
 
       let Some(n_ori) = ori_toml.number else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.number".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       return Ok(OrientationAveraging::Random(n_ori));
 
     } else if grid == KEY_ORI_FILE{
       
       let Some(filename) = &ori_toml.file else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.file".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       let int_grid = IntegrationGrid::read_from_csv(filename)?;
       return Ok(OrientationAveraging::Grid(int_grid));
 
     } else if grid == KEY_ORI_VECTOR{
       let Some(v) = ori_toml.vector else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.vector".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       if v.len() != 3{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+              "orientations.vector".to_string(),
+              "an array [x, y, z] of three floats".to_string(),
+              format!("an array of length {}", v.len())));
       }
       return Ok(OrientationAveraging::Grid(IntegrationGrid{
           dim: 3,
@@ -1054,26 +1153,38 @@ impl OrientationAveraging{
 
     } else if grid == KEY_ORI_CIRCLE{
       let Some(v) = ori_toml.vector else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.vector".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       if v.len() != 3{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+              "orientations.vector".to_string(),
+              "an array [x, y, z] of three floats".to_string(),
+              format!("an array of length {}", v.len())));
       }
       let Some(n_ori) = ori_toml.number else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.number".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       return Ok(OrientationAveraging::Grid(
           IntegrationGrid::circle_3d(&Vector3D::from([v[0],v[1],v[2]]), n_ori)
       ));
     } else if grid == KEY_ORI_VECTORGRID{
       let Some(v_grid) = ori_toml.vector_grid else{
-        return Err(CluEError::CannotParseOrientations(grid.to_string()));
+        return Err(CluEError::MissingTOMLKey(
+              "orientations.vector_grid".to_string(),
+              format!("orientations.grid = \"{}\"", grid)));
       };
       let mut points = Vec::<f64>::with_capacity(3*v_grid.len());
       let mut weights = Vec::<f64>::with_capacity(v_grid.len());
       for v in v_grid.iter(){
         if v.len() != 4{
-          return Err(CluEError::CannotParseOrientations(grid.to_string()));
+          return Err(CluEError::InvalidTOMLValue(
+                "orientations.vector_grid".to_string(),
+                "rows [x, y, z, weight] of four floats".to_string(),
+                format!("a row of length {}", v.len())));
         }
         points.push(v[0]);
         points.push(v[1]);
@@ -1166,22 +1277,25 @@ impl Config{
               => self.detected_spin_frame = Some(DetFrame::Eigen),
           KEY_DET_FRAME_ZEEMAN 
               => self.detected_spin_frame = Some(DetFrame::Zeeman),
-          _ => return Err(CluEError::InvalidDetectionFrame),
+          _ => return Err(CluEError::InvalidDetectionFrame(frame.to_string())),
         }
       }
       if let Some(toml_value) = detected_spin.g_matrix{
         self.detected_spin_g_matrix 
-          = Some(TensorSpecifier::from_toml_value(toml_value,1.0)?);
+          = Some(TensorSpecifier::from_toml_value(toml_value,1.0,
+                "detected_spin.g_matrix")?);
       }
       
       if let Some(toml_value) = detected_spin.electric_quadrupole{
         self.detected_spin_quadrupole_coupling 
-          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy)?);
+          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy,
+                "detected_spin.electric_quadrupole")?);
       }
       
       if let Some(toml_value) = detected_spin.zerofield{
         self.detected_spin_zerofield_coupling 
-          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy)?);
+          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy,
+                "detected_spin.zerofield")?);
       }
       
       if let Some(spin_id) = &detected_spin.identity{                          
@@ -1212,7 +1326,10 @@ impl Config{
 
             if let toml::Value::Integer(_) = array[0]{
               if array.len() != 2{
-                return Err(CluEError::InvalidDetectionOperator)
+                return Err(CluEError::InvalidTOMLValue(
+                      "detected_spin.detection_operator".to_string(),
+                      "a transition [i, j] of two integers".to_string(),
+                      format!("an array of length {}", array.len())));
               }
               let transition = vec_usize_from_toml_array(array)?;
               self.detection_operator = Some(
@@ -1227,7 +1344,10 @@ impl Config{
             let sop = SpinOp::from_str(&s)?;
             self.detection_operator = Some(DetectionOp::S(sop));
           },
-          _ => return Err(CluEError::InvalidDetectionOperator),
+          other => return Err(CluEError::InvalidTOMLValue(
+                "detected_spin.detection_operator".to_string(),
+                "a transition [i, j], a matrix, or a spin operator name"
+                .to_string(), other.type_str().to_string())),
         }
       }
       if let Some(rho) = detected_spin.density_matrix{
@@ -1244,7 +1364,10 @@ impl Config{
               self.detected_population = Some(DetectedPopulation::S(sop));
             }
           },
-          _ => return Err(CluEError::InvalidDensityMatrix),
+          other => return Err(CluEError::InvalidTOMLValue(
+                "detected_spin.density_matrix".to_string(),
+                format!("a matrix, \"{}\", or a spin operator name",
+                  KEY_DENSITY_MATRIX_THERMAL), other.type_str().to_string())),
         }
       }
     
@@ -1256,8 +1379,9 @@ impl Config{
     if let Some(groups) = config_toml.groups{
       for value in groups.iter(){
         let Some(group) = value.as_table() else{
-          return Err(CluEError::ExpectedTOMLTable(
-                value.type_str().to_string()));
+          return Err(CluEError::InvalidTOMLValue("groups".to_string(),
+                "an array of tables ([[groups]])".to_string(),
+                format!("an array containing a {}", value.type_str())));
         };
         set_particle_configs_from_toml_table(&mut self.particles,
             group.clone(),unit_of_distance,unit_of_energy)?;
@@ -1398,7 +1522,7 @@ impl Config{
     }
     else if let Some(s) = config_toml.partitioning
     {
-      return Err(CluEError::CannotParsePartitioningMethod(0,s.to_string()));  
+      return Err(CluEError::CannotParsePartitioningMethod(s.to_string()));
     }
 
     if let Some(p_table) = config_toml.partition_table{
@@ -1576,58 +1700,6 @@ impl Config{
     self.particles = particles;
 
   }
-  //----------------------------------------------------------------------------
-  /*
-  /// This function updates config from a `Vec<TokenExpression>`.
-  pub fn parse_token_stream(&mut self,token_stream: Vec<TokenExpression>) 
-    -> Result<(),CluEError>
-  {
-    let mut mode = ModeAttribute::new();
-
-    for expression in token_stream.iter(){
-      if expression.lhs.is_empty(){ continue; }
-
-      if let Token::Mode(new_mode) = &expression.lhs[0]{
-        mode = new_mode.clone();
-        continue;
-      }
-
-      match mode.mode{
-        ConfigMode::Config =>  self.parse_config_line(expression)?,
-        ConfigMode::Filter => {
-          let Some(_label) = &mode.label else{
-            return Err(CluEError::FilterNeedsALabel);
-          };
-          self.parse_filter_line(expression,&mode.label)?;
-        },
-        ConfigMode::SpinProperties => {
-          let Some(label) = &mode.label else{
-            return Err(CluEError::SpinPropertiesNeedsALabel);
-          };
-          if mode.isotope.is_none(){
-            return Err(CluEError::SpinPropertiesNeedsAnIsotope(label.clone()));
-          }
-          self.parse_properties_line(expression,&mode.label,mode.isotope)?;
-        },
-        ConfigMode::StructureProperties => {
-          let Some(label) = &mode.label else{
-            return Err(CluEError::StructurePropertiesNeedsALabel);
-          };
-          if mode.isotope.is_some(){
-            return Err(
-               CluEError::StructurePropertiesDoesNotNeedAnIsotope(
-                 label.clone()));
-          }
-          self.parse_properties_line(expression,&mode.label,mode.isotope)?;
-        },
-      }
-
-    }
-
-
-    Ok(())
-  }
-  */
   //----------------------------------------------------------------------------
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -2218,8 +2290,8 @@ mod tests{
           name = "deuterons"
           selection.{} = ["{}"]
           "##, key, value));
-      assert_eq!(result.err(), Some(CluEError::CannotReadTOMLFile(
-              format!("invalid key {}", key))));
+      assert_eq!(result.err(), Some(CluEError::InvalidTOMLKey(
+              key.to_string())));
     }
   }
   //----------------------------------------------------------------------------
@@ -2243,6 +2315,137 @@ mod tests{
     assert!((tau_axis[190]-t).abs()/t<1e-12);
     
   }
+  //----------------------------------------------------------------------------
+  // Errors for invalid config values name the key (and group), and parse 
+  // errors list the valid options.
+  #[test]
+  fn test_config_errors_name_the_key(){
+    let s = |x: &str| x.to_string();
+    let cases = vec![
+      ("replicate_unit_cell = \"auto\"",
+       CluEError::InvalidTOMLValue(s("replicate_unit_cell"),
+         s("true, false, or [n1, n2, n3]"), s("\"auto\""))),
+      ("orientations.grid = \"lebedev\"",
+       CluEError::MissingTOMLKey(s("orientations.number"),
+         s("orientations.grid = \"lebedev\""))),
+      ("orientations.grid = \"vector\"\norientations.vector = [1.0, 0.0]",
+       CluEError::InvalidTOMLValue(s("orientations.vector"),
+         s("an array [x, y, z] of three floats"), s("an array of length 2"))),
+      ("orientations.grid = \"spiral\"",
+       CluEError::CannotParseOrientations(s("spiral"))),
+      ("detected_spin.frame = \"lab\"",
+       CluEError::InvalidDetectionFrame(s("lab"))),
+      ("detected_spin.detection_operator = true",
+       CluEError::InvalidTOMLValue(s("detected_spin.detection_operator"),
+         s("a transition [i, j], a matrix, or a spin operator name"),
+         s("boolean"))),
+      ("partitioning = \"pairs\"",
+       CluEError::CannotParsePartitioningMethod(s("pairs"))),
+      ("partition_table = [1, 2, 3]",
+       CluEError::InvalidTOMLValue(s("partition_table"),
+         s("a csv file name or an array [index0, block0, index1, block1, ...] \
+of integers"), s("an array of length 3"))),
+      ("pulse_sequence = [[\"pulse\", \"pi/2\"], [\"delay2\", \"tau\"]]",
+       CluEError::InvalidPulseStep(1,
+         Box::new(CluEError::WrongTauDimension(2,1)))),
+      ("[[groups]]\nname = \"g\"\ndrop_probability = \"high\"",
+       CluEError::InvalidTOMLValue(s("group \"g\": drop_probability"),
+         s("a float"), s("string"))),
+      ("[[groups]]\nname = \"g\"\n1H.active = 1",
+       CluEError::InvalidTOMLValue(s("group \"g\": 1H.active"),
+         s("a bool"), s("integer"))),
+      ("[[groups]]\nname = \"g\"\n1H.hyperfine.axes.x = [1.0, 0.0, 0.0]",
+       CluEError::MissingTOMLKey(s("group \"g\": 1H.hyperfine.values"),
+         s("group \"g\": 1H.hyperfine given as a table"))),
+    ];
+    for (toml_str, expected) in cases{
+      let result = Config::from_toml_string(toml_str);
+      assert_eq!(result.err(), Some(expected), "{}", toml_str);
+    }
+
+    // Messages.
+    let err = Config::from_toml_string("[[groups]]\nname = \"g\"\n\
+        drop_probability = \"high\"").unwrap_err();
+    assert_eq!(err.to_string(),
+        "group \"g\": drop_probability must be a float, but got string");
+    let err = Config::from_toml_string("pulse_sequence = [[\"delay2\", \"tau\"]]")
+      .unwrap_err();
+    assert_eq!(err.to_string(), "pulse_sequence[0]: \"delay2\" cannot be used \
+with \"tau\"; use \"delay\" with \"tau\" or \"-tau\", and \"delay2\" with \
+\"tau2\" or \"-tau2\"");
+    let err = Config::from_toml_string("cluster_method = \"dmrg\"").unwrap_err();
+    assert_eq!(err.to_string(), "cannot parse \"dmrg\" as a cluster method; \
+the options are \"cce\", \"gcce\", \"appa\", and \"lce\"");
+
+    // The second time axis names its own keys.
+    let (result, _) = Config::construct_tau_axis(&[10, 10], &[1e-8], "2");
+    assert_eq!(result, Err(CluEError::LengthMismatchTimepointsIncrements(
+            s("2"), 2, 1)));
+    assert_eq!(result.unwrap_err().to_string(), "number_timepoints2 has 2 \
+entries, but tau2_increments has 1; they must have the same length");
+  }
+  //----------------------------------------------------------------------------
+  // Integer arrays in replicate_unit_cell, detected_spin.position, and
+  // partition_table are range checked instead of being cast with `as`.
+  #[test]
+  fn test_config_integer_arrays_are_checked(){
+    let s = |x: &str| x.to_string();
+    let rep = "true, false, or [n1, n2, n3] with integers 0 <= n <= 2147483647";
+    let rep_el = "an integer 0 <= n <= 2147483647";
+    let cases = vec![
+      // Wrong lengths (index out of bounds, or entries ignored).
+      ("replicate_unit_cell = [2, 2]",
+       CluEError::InvalidTOMLValue(s("replicate_unit_cell"), s(rep),
+         s("an array of length 2"))),
+      ("replicate_unit_cell = [1, 1, 1, 7]",
+       CluEError::InvalidTOMLValue(s("replicate_unit_cell"), s(rep),
+         s("an array of length 4"))),
+      // Negative and too large (wrapped around).
+      ("replicate_unit_cell = [1, -1, 1]",
+       CluEError::InvalidTOMLValue(s("replicate_unit_cell[1]"), s(rep_el),
+         s("-1"))),
+      ("replicate_unit_cell = [0, 0, 2147483648]",
+       CluEError::InvalidTOMLValue(s("replicate_unit_cell[2]"), s(rep_el),
+         s("2147483648"))),
+      ("detected_spin.position = [12, -5]",
+       CluEError::InvalidTOMLValue(s("detected_spin.position[1]"),
+         s("a serial number 0 <= n <= 4294967295"), s("-5"))),
+      ("detected_spin.position = [4294967296]",
+       CluEError::InvalidTOMLValue(s("detected_spin.position[0]"),
+         s("a serial number 0 <= n <= 4294967295"), s("4294967296"))),
+      ("partition_table = [10, 1, -1, 5]",
+       CluEError::InvalidTOMLValue(s("partition_table[2..=3]"),
+         s("a pair [index, block] of non-negative integers"), s("[-1, 5]"))),
+      ("partition_table = [10, -1]",
+       CluEError::InvalidTOMLValue(s("partition_table[0..=1]"),
+         s("a pair [index, block] of non-negative integers"), s("[10, -1]"))),
+    ];
+    for (toml_str, expected) in cases{
+      let result = Config::from_toml_string(toml_str);
+      assert_eq!(result.err(), Some(expected), "{}", toml_str);
+    }
+
+    // Valid input, including the bounds, is read as before.
+    let config = Config::from_toml_string(
+        "replicate_unit_cell = [0, 3, 2147483647]").unwrap();
+    assert_eq!(config.replicate_unit_cell,
+        Some(ReplicateUnitCell::Specified([0, 3, 2147483647])));
+    let config = Config::from_toml_string(
+        "detected_spin.position = [0, 28, 4294967295]").unwrap();
+    assert_eq!(config.detected_spin_position,
+        Some(DetectedSpinCoordinates::CentroidOverSerials(
+            vec![0, 28, 4294967295])));
+    let config = Config::from_toml_string(
+        "partition_table = [10, 1, 0, 0, 4294967296, 2]").unwrap();
+    assert_eq!(config.partition_table,
+        Some(PartitionTableConfig::IndexBlockList(
+            vec![(10, 1), (0, 0), (4294967296, 2)])));
+
+    let err = Config::from_toml_string("replicate_unit_cell = [2, 2]")
+      .unwrap_err();
+    assert_eq!(err.to_string(), "replicate_unit_cell must be true, false, \
+or [n1, n2, n3] with integers 0 <= n <= 2147483647, but got an array of \
+length 2");
+  }
 
 }
-

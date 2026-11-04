@@ -18,7 +18,8 @@ pub fn read_cluster_file(filename: &str, structure: &Structure)
 
   let toml_string: String = match std::fs::read_to_string(filename){
     Ok(lines) => lines,
-    Err(_) => return Err(CluEError::CannotOpenFile(filename.to_string())),
+    Err(err) => return Err(CluEError::CannotOpenFile(
+        filename.to_string(), err.to_string())),
   };
 
   let cluster_set = ClusterSet::from_toml_str(&toml_string, Some(structure))?;
@@ -32,8 +33,10 @@ fn read_cluster_txt(filename: &str, structure: &Structure)
 {
   // Get number of lines.
   let n_lines = {   
-    let Ok(file) = std::fs::File::open(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()));
+    let file = match std::fs::File::open(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotOpenFile(
+          filename.to_string(), err.to_string())),
     };
 
     std::io::BufReader::new(file).lines().count()
@@ -41,8 +44,10 @@ fn read_cluster_txt(filename: &str, structure: &Structure)
 
   // Get lines.
   let lines_iter = {
-    let Ok(file) = std::fs::File::open(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()));
+    let file = match std::fs::File::open(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotOpenFile(
+          filename.to_string(), err.to_string())),
     };
 
     std::io::BufReader::new(file).lines()
@@ -55,8 +60,10 @@ fn read_cluster_txt(filename: &str, structure: &Structure)
 
   for line_result in lines_iter {
     // Extract the line.
-    let Ok(line) = line_result else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()));
+    let line = match line_result{
+      Ok(line) => line,
+      Err(err) => return Err(CluEError::CannotReadFile(
+          filename.to_string(), err.to_string())),
     };
     if line.is_empty(){
       continue;

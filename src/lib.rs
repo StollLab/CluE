@@ -86,7 +86,8 @@ pub fn run(mut config: Config)
   if let Some(save_path) = &save_path_opt{
     match std::fs::create_dir_all(save_path.clone()){
       Ok(_) => (),
-      Err(_) => return Err(CluEError::CannotCreateDir(save_path.to_string())),
+      Err(err) => return Err(CluEError::CannotCreateDir(save_path.to_string(),
+            err.to_string())),
     }
 
     if tau2_axis.is_empty(){

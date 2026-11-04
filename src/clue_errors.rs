@@ -8,11 +8,11 @@ use std::fmt;
 pub enum CluEError{
   AllSignalsNotSameLength(String),
   AllVectorsNotSameLength(String),
-  BondsAreNotDefined,
+  BondsAreNotDefined(String),
   BothStevensAndIST,
   CannotAddPointToGrid(usize,usize),
   CannotConvertSerialToIndex(u32),
-  CannotCreateDir(String),
+  CannotCreateDir(String,String),
   CannotDiagonalizeHamiltonian(String),
   CannotDiagonalizeOperator(String),
   CannotExpandBlockClusters,
@@ -23,25 +23,30 @@ pub enum CluEError{
   CannotFindRefIndexFromBathIndex(usize),
   CannotFindRefIndexFromNthActive(usize),
   CannotNormalizeVector,
-  CannotOpenFile(String),
+  CannotCreateFile(String,String),
+  CannotOpenFile(String,String),
   CannotParseCellType(String),
   CannotParseClusterMethod(String),
   CannotParseElement(String),
   CannotParseGridEntry(String,usize,String),
   CannotParseLine(String),
+  CannotParseLineInFile(String,usize,String),
+  CannotParseSignalEntry(String,usize,String),
   CannotParseIsotope(String),
   CannotParseOrientations(String),
-  CannotParsePartitioningMethod(usize,String),
+  CannotParsePartitioningMethod(String),
   CannotParsePulseSequence(String),
   CannotParseCosubstitute(String,String),
   CannotParseSpinOp(String),
   CannotPruneClustersMisMatchedSizes,
-  CannotReadGrid(String),
+  CannotReadGrid(String,String),
   CannotReadTOML(String),
   CannotReadTOMLFile(String),
+  CannotReadFile(String,String),
   CannotSampleBinomialDistribution(usize,f64),
   CannotTakeTrace(String),
-  CannotWriteFile(String),
+  CannotWriteCSV(String,String),
+  CannotWriteFile(String,String),
   CentroidGroupHasDistanceSelection(String),
   CentroidOfNoParticles,
   ClusterFileContainsNoHeader(String),
@@ -52,44 +57,43 @@ pub enum CluEError{
   ClusterTOMLNoClusters,
   ClusterTOMLNoNumberClusters,
   PulseSequenceNotSupported(String,String),
+  DensityMatrixTraceVanishes(String,f64),
   DetectedSpinDoesNotHaveAnActiveIndex,
   DetectedSpinPositionNotFinite(String),
   DetectedSpinSelectsNoParticles(String),
   DuplicateSerial(u32),
-  Error(String),
   ExpectedClusterSetWithNSizes(usize,usize),
   ExpectedTOMLArray(String),
-  ExpectedTOMLBool(String),
   ExpectedTOMLFloat(String),
   ExpectedTOMLUInt(String),
-  ExpectedTOMLString(String),
-  ExpectedTOMLTable(String),
   FailedKMeans,
   FilterAlreadySet(String),
-  FilterNeedsALabel,
   FiltersOverlap(String,String),
-  Generic(String),
-  IncorrectNumberOfAxes(usize,usize),
+  GroupHasNoSelection(String),
   InvalidGroBox(String),
-  InorrectNumberOfCellOffsets(usize,usize),
+  IncorrectNumberOfCellOffsets(usize,usize),
   InvalidAxes,
   InvalidClusterPartitionKey,
-  InvalidDensityMatrix,
-  InvalidDetectionFrame,
-  InvalidDetectionOperator,
+  InvalidDetectionFrame(String),
+  InvalidDetectionOperator(String),
   InvalidIST(String),
   InvalidKMeansSize,
-  InvalidPulse(String),
+  InvalidPartitionTableEntry(usize,usize,String),
+  InvalidPulseStep(usize,Box<CluEError>),
   InvalidAbundanceTolerance(String,f64),
   InvalidDropProbability(String,f64),
   InvalidIsotopeAbundance(String,String,f64),
+  InvalidSelectionElement(String,usize,String,String),
   InvalidSpinGridWeights(f64),
   InvalidSpinGridWeightTolerance(f64),
   InvalidSpinMultiplicity(usize),
   InvalidOrientationGridWeightTolerance(f64),
   IsotopeAbundancesDoNotSumToOne(String,String,f64,f64),
   InvalidStevens(String),
-  LenghMismatchTimepointsIncrements(usize,usize),
+  InvalidStevensCoefficientShape(usize,usize,usize),
+  InvalidTOMLKey(String),
+  InvalidTOMLValue(String,String,String),
+  LengthMismatchTimepointsIncrements(String,usize,usize),
   MeanFieldECCENotImplemented,
   MismatchedGroupNames(String,String),
   MissingDMatrix(usize),
@@ -97,22 +101,19 @@ pub enum CluEError{
   MissingFilter(String),
   MissingGroupName,
   MissingHeader(usize,usize,String),
-  NANTensorBathDipoleDipole(usize,String,usize,String),
-  NANTensorBathZeeman(usize,String),
+  MissingTOMLKey(String,String),
+  MutuallyExclusiveKeys(String,String),
+  NANTensorBathDipoleDipole(String,String,String,String),
+  NANTensorBathZeeman(String,String),
   NANTensorDetectedZeeman,
-  NANTensorExchangeCoupling(usize,String,usize,String),
-  NANTensorHyperfine(usize,String),
-  NANTensorQuadrupole(usize,String),
-  NANTensorZerofield(usize,String),
+  NANTensorExchangeCoupling(String,String,String,String),
+  NANTensorHyperfine(String,String),
+  NANTensorQuadrupole(String,String),
+  NANTensorZerofield(String,String),
   NeighborListAndPartitionTableAreNotCompatible,
   NoApplyPBC,
-  NoCentralSpin,
-  NoCentralSpinCoor,
-  NoCentralSpinIdentity,
-  NoCentralSpinTransition,
   NoClusterBatchSize,
   NoClusterMethod,
-  NoClustersOfSize(usize),
   NoClusterSource,
   NoClusterDensityMatrixMethod,
   NoDetectionFrame,
@@ -120,8 +121,9 @@ pub enum CluEError{
   NoDetectedSpinDetectionOperator,
   NoDetectedSpinIdentity,
   NoDetectedSpinMultiplicity,
-  NoDetectedSpinNotSet,
+  NoDetectedSpinPosition,
   NoDetectedSpinTransition,
+  NoDetectedParticle,
   NoEnsembleCCE,
   NoGMatrixSpecifier,
   NoInputFile,
@@ -157,28 +159,24 @@ pub enum CluEError{
   NoTimeIncrements2,
   NoTimepoints,
   NoTimepoints2,
-  NoUnitOfClustering,
   NoUnitOfDistance,
   NoUnitOfEnergy,
   NoUnitOfMagneticField,
   NoUnitOfTime,
-  ParticlesClash(usize,String,usize,String,f64,f64),
+  ParticlesClash(String,String,String,String,f64,f64),
+  Python(String),
   ParticleIsNotActive(usize),
   PropagatorAndDensityNotSameDimension(usize,usize),
-  PartitionIsIncomplette,
+  PartitionIsIncomplete,
   ResidueNumberAboveMaxInPDB(String,String,usize),
   SecondaryFilterRequiresAnIndex(String),
   SpaceGroupNotP1(String),
   SpinGridWeightsDoNotSumToOne(f64,f64),
   SpinAlreadyPartitioned(usize,i32),
-  SpinPropertiesNeedsALabel,
-  SpinPropertiesNeedsAnIsotope(String),
   StructureLargerThanCell(String,f64),
-  StructurePropertiesNeedsALabel,
-  StructurePropertiesDoesNotNeedAnIsotope(String),
   TensorNotSet(usize),
+  ThermalizationRequiresEnsembleCCE,
   TooManyAtomsInPDB(String,usize),
-  TooManyExchangeCouplingsSpecified(usize),
   TooManyResiduesInPDB(String,String,usize),
   TOMLArrayContainsMultipleTypes,
   TOMLArrayDoesNotSpecifyATensor,
@@ -186,20 +184,22 @@ pub enum CluEError{
   TOMLArrayIsEmpty,
   TOMLArrayIsNotAMatrix,
   TOMLArrayIsNotAComplexNumber,
-  TOMLValueDoesNotSpecifyAPartitionTable,
-  ErrorPulseSequence(String),
   TomlPulseStepSpecifier(String),
   UnavailableSpinOp(usize,usize),
   UnassignedCosubstitutionGroup(usize),
   UnequalLengths(String,usize,String,usize),
+  UnexpectedPulseStep(usize,String),
+  UnknownPulse(String),
   UnrecognizedOption(String),
   UnrecognizedVectorSpecifier(String),
-  UnrecognizedUnit(String),
+  UnrecognizedUnit(String,String,String),
   VectorSpecifierDoesNotSpecifyUniqueVector(String),
   WrongClusterSizeForAnalyticCCE(usize),
   WrongDelayDimension(usize),
   WrongNumberOfAxes(usize,usize),
+  WrongNumberOfCellEdges(usize),
   WrongTauDimension(usize,usize),
+  ZeroMaxClusterSize,
 }
 
 impl fmt::Display for CluEError{
@@ -208,31 +208,33 @@ impl fmt::Display for CluEError{
     match self{
 
       CluEError::AllSignalsNotSameLength(filename) => write!(f,
-          "for \"{}\",signals must all have the same length", filename),
+          "for \"{}\", signals must all have the same length", filename),
 
       CluEError::AllVectorsNotSameLength(filename) => write!(f,
-          "for \"{}\",signals must all have the same length", filename),
+          "cannot write \"{}\": all data columns must have the same length",
+          filename),
 
-      CluEError:: BondsAreNotDefined => write!(f,
-          "no chemical bonds are established"),
+      CluEError:: BondsAreNotDefined(label) => write!(f,
+          "{} needs bonds, but the particle has none; bonds are read \
+from the CONECT records of the structure file", label),
 
       CluEError:: BothStevensAndIST => write!(f,
           "{} and {} are mutually exclusive",KEY_IST_COEF,KEY_STEVENS_COEF),
 
       CluEError::CannotAddPointToGrid(point_dim, grid_dim) => write!(f,
-          "cannot add {}D point t0 {}D grid",point_dim, grid_dim),
+          "cannot add {}D point to {}D grid",point_dim, grid_dim),
 
       CluEError::CannotConvertSerialToIndex(serial) => write!(f,
           "cannot convert serial id, {}, to an index",serial),
 
       CluEError::CannotDiagonalizeHamiltonian(matrix) => write!(f,
-          "cannot diagonalize Hamiltonian,\n{}",matrix),
+          "cannot diagonalize the Hamiltonian, {}",matrix),
 
       CluEError::CannotDiagonalizeOperator(matrix) => write!(f,
-          "cannot diagonalize \n{}",matrix),
+          "cannot diagonalize the operator, {}",matrix),
 
-      CluEError::CannotCreateDir(path) => write!(f,
-          "cannot create directory \"{}\"",path),
+      CluEError::CannotCreateDir(path,reason) => write!(f,
+          "cannot create directory \"{}\": {}",path,reason),
 
       CluEError::CannotExpandBlockClusters => write!(f,
           "cannot expand block clusters"),
@@ -244,7 +246,8 @@ impl fmt::Display for CluEError{
           "cannot find spin operator \"{}\"",sop),
 
       CluEError::CannotFindParticleForRefIndex(ref_index) => write!(f,
-          "cannot find bath index for reference index \"{}\"", ref_index),
+          "no active bath particle matches reference index \"{}\"",
+          ref_index),
 
       CluEError::CannotFindBathIndexFromRefIndex(ref_index) => write!(f,
           "cannot find bath index for reference index \"{}\"", ref_index),
@@ -258,14 +261,19 @@ impl fmt::Display for CluEError{
       CluEError::CannotNormalizeVector => write!(f,
           "cannot normalize vector"),
 
-      CluEError::CannotOpenFile(file) => write!(f,
-          "cannot open \"{}\"", file),
+      CluEError::CannotCreateFile(file,reason) => write!(f,
+          "cannot create \"{}\": {}", file, reason),
+
+      CluEError::CannotOpenFile(file,reason) => write!(f,
+          "cannot open \"{}\": {}", file, reason),
 
       CluEError::CannotParseCellType(cell_type) => write!(f,
-          "cannot parse \"{}\" a a cell type", cell_type),
+          "cannot parse \"{}\" as a cell type; the options are \
+\"all_cells\", \"primary_cell\", and \"extracells\"", cell_type),
 
       CluEError::CannotParseClusterMethod(method) => write!(f,
-          "cannot parse \"{}\" as a cluster method", method),
+          "cannot parse \"{}\" as a cluster method; the options are \
+\"cce\", \"gcce\", \"appa\", and \"lce\"", method),
 
       CluEError::CannotParseElement(element) => write!(f,
           "cannot parse \"{}\" as an element", element),
@@ -275,25 +283,33 @@ impl fmt::Display for CluEError{
           filename, entry, line),
 
       CluEError::CannotParseOrientations(ori) => write!(f,
-          "cannot parse \"{}\" as an orientation averaging scheme", ori),
+          "cannot parse orientations.grid = \"{}\"; the options are \
+\"lebedev\", \"random\", \"file\", \"vector\", \"circle\", and \
+\"vector_grid\"", ori),
 
       CluEError::CannotParseLine(line) => write!(f,
           "cannot parse line \"{}\"", line),
 
+      CluEError::CannotParseLineInFile(file,line_number,line) => write!(f,
+          "cannot parse line {} of \"{}\": \"{}\"", line_number, file, line),
+
+      CluEError::CannotParseSignalEntry(file,row,entry) => write!(f,
+          "cannot read signals from \"{}\": \"{}\" in data row {} is not \
+a complex number", file, entry, row),
+
       CluEError::CannotParseIsotope(isotope) => write!(f,
           "cannot parse \"{}\" as an isotope", isotope),
 
-      CluEError::CannotParsePartitioningMethod(line_num, part_method) 
-          => if *line_num > 0 {
-            write!(f, "line {}: cannot parse partitioning method \"{}\"", 
-            line_num, part_method)
-          }else{
-            write!(f, "cannot parse partitioning method \"{}\"", 
-            part_method)
-          },
+      CluEError::CannotParsePartitioningMethod(part_method) => write!(f,
+          "cannot parse partitioning method \"{}\"; the options are \
+\"{}\", \"{}\", \"{}\", and \"{}\"", part_method, 
+          KEY_PARTITION_PARTICLE, KEY_PARTITION_EX_GROUPS, 
+          KEY_PARTITION_KMEANS, KEY_PARTITION_RESTRICTED_KMEANS),
 
       CluEError::CannotParsePulseSequence(seq) => write!(f,
-          "cannot parse \"{}\" as a pulse sequence", seq),
+          "cannot parse \"{}\" as a pulse sequence; the options are \
+\"hahn\", \"fid\", \"free_evolution\", \"refocused_hahn_echo\", \
+\"cp-N\" for an integer N >= 0, or an array of pulse steps", seq),
 
       CluEError::CannotParseCosubstitute(group,cosubstitute) => write!(f,
           "group \"{}\": cannot parse cosubstitute = \"{}\"; the options \
@@ -301,34 +317,39 @@ are \"same_molecule\", \"group\", and \"particle\" (\"bonded\" is not \
 supported)", group, cosubstitute),
 
       CluEError::CannotParseSpinOp(s) => write!(f,
-          "cannot parse \"{}\" as a spin operator", s),
+          "cannot parse \"{}\" as a spin operator; the options are \
+\"Sx\", \"Sy\", \"Sz\", \"S+\", \"S-\", and \"S^2\" \
+(or the same in lowercase)", s),
 
       CluEError::CannotSampleBinomialDistribution(n,p) => write!(f,
           "cannot sample from the binomial distribution B(n={},p={})",
           n,p),
 
       CluEError::CannotTakeTrace(matrix) => write!(f,
-          "cannot take trace of \"{}\"",matrix),
+          "cannot take the trace of {}",matrix),
 
       CluEError::CannotPruneClustersMisMatchedSizes => write!(f,
           "cannot prune clusters because clusters_to_keep has the wrong size"),
 
-      CluEError::CannotReadGrid(filename) => write!(f,
-          "cannot read grid from \"{}\": \
+      CluEError::CannotReadGrid(filename,reason) => write!(f,
+          "cannot read grid from \"{}\": {}; \
 the grid should be specified as a csv file with one column per dimension, \
-followed by a column for the weights", filename),
+followed by a column for the weights", filename,reason),
 
-      CluEError::CannotReadTOML(string) => write!(f,
-          "cannot parse \"{}\" as TOML",string),
+      CluEError::CannotReadTOML(msg) => write!(f,
+          "cannot parse TOML: {}",msg),
 
       CluEError::CannotReadTOMLFile(msg) => write!(f,
-          "cannot parse TOML file \"{}\"",msg),
+          "cannot parse the config as TOML: {}",msg),
+
+      CluEError::CannotReadFile(file,reason) => write!(f,
+          "cannot read \"{}\": {}", file, reason),
 
       CluEError::ClusterFileContainsNoHeader(file) => write!(f,
-          "Cluster file \"{}\" does not contain the correct header: \
+          "cluster file \"{}\" does not contain the correct header: \
 \"#[clusters, number_clusters = [N1,N2,...Nn] ]\", where Ni is the number \
-of clusters of size i in the file, and the list runs from to clusters of \
-size n.", file),
+of clusters of size i in the file, and the list runs from clusters of \
+size 1 to clusters of size n", file),
 
       CluEError::ClusterHasNoSignal(cluster) => write!(f,
           "expected cluster {} to have a signal, but found none", cluster),
@@ -348,8 +369,11 @@ size n.", file),
       CluEError::ClusterTOMLIncorrectNumberOfClusters=> write!(f,
           "in clusters.toml, number_clusters is incorrect"),
 
-      CluEError::CannotWriteFile(file) => write!(f,
-          "cannot write to \"{}\"", file),
+      CluEError::CannotWriteCSV(file,reason) => write!(f,
+          "cannot write CSV file \"{}\": {}", file, reason),
+
+      CluEError::CannotWriteFile(file,reason) => write!(f,
+          "cannot write to \"{}\": {}", file,reason),
 
       CluEError::CentroidOfNoParticles => write!(f,
           "cannot find the centroid of an empty set of particles"),
@@ -359,18 +383,21 @@ size n.", file),
 \"within_distance\" or \"not_within_distance\", since distances are \
 measured from the detected spin",label),
 
-      CluEError::PulseSequenceNotSupported(fun,seq) => write!(f,
-        "\"{}\" does not support {}",fun,seq),
+      CluEError::PulseSequenceNotSupported(method,seq) => write!(f,
+        "cluster method \"{}\" only supports pulse_sequence = \"{}\"",
+        method,seq),
 
       CluEError::DuplicateSerial(srl) => write!(f,
-          "seial \"{}\" has multiple entries", srl),
+          "serial \"{}\" has multiple entries", srl),
 
-      CluEError::Error(error_message) => write!(f,
-          "{}", error_message),
+      CluEError::DensityMatrixTraceVanishes(trace,value) => write!(f,
+          "cannot normalize the thermal density matrix: |{}| = {:e} is \
+below 1e-12; check the temperature and the energy scale of the Hamiltonian",
+          trace, value),
 
       CluEError::DetectedSpinDoesNotHaveAnActiveIndex => write!(f,
-          "the detected spin is always active and so does have an index \
-fo nth active"),
+          "the detected spin (reference index 0) is always active and has no \
+position among the active bath particles"),
 
       CluEError::DetectedSpinPositionNotFinite(position) => write!(f,
           "the detected spin position, {} angstroms, is not finite; check \
@@ -387,20 +414,11 @@ detected_spin.position and the coordinates in the structure file",
       CluEError::ExpectedTOMLArray(type_str) => write!(f,
           "expected array, but got {}",type_str),
 
-      CluEError::ExpectedTOMLBool(type_str) => write!(f,
-          "expected bool, but got {}",type_str),
-
       CluEError::ExpectedTOMLFloat(type_str) => write!(f,
           "expected float, but got {}",type_str),
 
       CluEError::ExpectedTOMLUInt(type_str) => write!(f,
           "expected int > 0, but got {}",type_str),
-
-      CluEError::ExpectedTOMLString(type_str) => write!(f,
-          "expected string, but got {}",type_str),
-
-      CluEError::ExpectedTOMLTable(type_str) => write!(f,
-          "expected table, but got {}",type_str),
 
       CluEError::FailedKMeans => write!(f,
           "k-means failed"),
@@ -408,49 +426,47 @@ detected_spin.position and the coordinates in the structure file",
       CluEError::FilterAlreadySet(filter) => write!(f,
           "{} has already been set",filter),
 
-      CluEError::FilterNeedsALabel => write!(f,
-          "group requires a label to be set: #[group(label = LABEL)]"),
-
       CluEError::FiltersOverlap(label0,label1) => write!(f,
           "groups \"{}\" and \"{}\" overlap: \
 particles must not reside in more than one group",label0,label1),
 
-      CluEError::Generic(s) => write!(f,"{}",s),
-
-      CluEError::IncorrectNumberOfAxes(n,n_ref)=> write!(f,
-          "expected {} axes, but {} were provided",n_ref, n),
+      CluEError::GroupHasNoSelection(label) => write!(f,
+          "group \"{}\" has no selection",label),
 
       CluEError::InvalidGroBox(edges) => write!(f,
           "the unit cell edges {} (nm) cannot be written in GRO format, \
 which needs the first edge along x and the second edge in the xy plane",
           edges),
 
-      CluEError::InorrectNumberOfCellOffsets(n,n_ref)=> write!(f,
+      CluEError::IncorrectNumberOfCellOffsets(n,n_ref)=> write!(f,
           "expected {} cell offsets, but {} were provided",n_ref, n),
 
       CluEError::InvalidAxes => write!(f,
-          "invalid axes"),
+          "invalid axes; the axes must be among x, y, and z"),
 
       CluEError::InvalidClusterPartitionKey => write!(f,
           "invalid cluster partition key"),
 
-      CluEError::InvalidDensityMatrix => write!(f,
-          "invalid density matrix"),
+      CluEError::InvalidDetectionFrame(frame) => write!(f,
+          "cannot parse detected_spin.frame = \"{}\"; the options are \
+\"{}\" and \"{}\"", frame, KEY_DET_FRAME_EIGEN, KEY_DET_FRAME_ZEEMAN),
 
-      CluEError::InvalidDetectionFrame => write!(f,
-          "invalid detection frame"),
-
-      CluEError::InvalidDetectionOperator => write!(f,
-          "invalid detection operator"),
+      CluEError::InvalidDetectionOperator(reason) => write!(f,
+          "invalid detected-spin operator (detection operator, density matrix, \
+or pulse): {}",reason),
 
       CluEError::InvalidIST(ist) => write!(f,
           "invalid {} \"{}\"",KEY_IST_COEF,ist),
 
+      CluEError::InvalidPartitionTableEntry(serial,block,reason) => write!(f,
+          "partition_table entry (serial {}, block {}): {}",
+          serial,block,reason),
+
+      CluEError::InvalidPulseStep(index,error) => write!(f,
+          "pulse_sequence[{}]: {}",index,error),
+
       CluEError::InvalidKMeansSize => write!(f,
           "kmeans_size must be at least 1"),
-
-      CluEError::InvalidPulse(pulse) => write!(f,
-          "invalid {}",pulse),
 
       CluEError::InvalidAbundanceTolerance(group,tolerance) => write!(f,
           "group \"{}\": abundance_tolerance = {} must be at least 0 and \
@@ -471,6 +487,11 @@ differs from 1 by more than abundance_tolerance = {}; list every isotope, \
 for example 1H.abundance = 0.7 and 2H.abundance = 0.3", 
           group, abundances, sum, tol),
 
+      CluEError::InvalidSelectionElement(key,index,expected,found)
+        => write!(f,
+          "selection.{}[{}] must be {}, but got {}",
+          key, index, expected, found),
+
       CluEError::InvalidSpinGridWeights(sum) => write!(f,
           "the weights of the detected spin grid sum to {}, but they must \
 sum to a positive number", sum),
@@ -489,9 +510,21 @@ than 1", tolerance),
       CluEError::InvalidStevens(ist) => write!(f,
           "invalid {} \"{}\"",KEY_STEVENS_COEF,ist),
 
-      CluEError::LenghMismatchTimepointsIncrements(n_dts,dts) => write!(f,
-          "there are {} timepoint specifications, but {} time increments",
-          n_dts,dts),
+      CluEError::InvalidStevensCoefficientShape(index,n_rows,n_cols) 
+        => write!(f,
+          "Stevens coefficient entry {} is a {}×{} matrix, but each entry \
+must have one column", index, n_rows, n_cols),
+
+      CluEError::InvalidTOMLKey(key) => write!(f,
+          "invalid key \"{}\"",key),
+
+      CluEError::InvalidTOMLValue(key,expected,found) => write!(f,
+          "{} must be {}, but got {}",key,expected,found),
+
+      CluEError::LengthMismatchTimepointsIncrements(suffix,n_dts,dts) 
+        => write!(f,
+          "number_timepoints{} has {} entries, but tau{}_increments has {}; \
+they must have the same length", suffix, n_dts, suffix, dts),
 
       CluEError::MeanFieldECCENotImplemented => write!(f,
           "mean field averaging is not implemented for ensemble CCE"),
@@ -508,67 +541,57 @@ than 1", tolerance),
       CluEError::MissingFieldInCSVFile(field,file_name) => write!(f,
           "CSV file \"{}\" has no column \"{}\"",file_name,field),
 
+      CluEError::MissingTOMLKey(key,required_by) => write!(f,
+          "{} is required for {}",key,required_by),
+
+      CluEError::MutuallyExclusiveKeys(key0,key1) => write!(f,
+          "{} and {} are mutually exclusive",key0,key1),
+
       CluEError::MissingGroupName => write!(f,
           "no group name specified"),
 
       CluEError::MissingHeader(n_headers, n_cols,filename) => write!(f,
           "in \"{}\", every entry must have a header, \
-but there are {} headers and {} columns of data.",filename,n_headers,n_cols),
+but there are {} headers and {} columns of data",filename,n_headers,n_cols),
 
       CluEError::NANTensorBathDipoleDipole(idx0,isotope0,idx1,isotope1) 
         => write!(f,
-          "dipole-dipole tensor for particles {} {} and {} {} contains NANs",
+          "the dipole-dipole tensor for {} ({}) and {} ({}) contains NaNs",
           idx0,isotope0,idx1,isotope1),
 
       CluEError::NANTensorBathZeeman(idx,isotope) => write!(f,
-          "zeeman tensor for particle {} {} contains NANs",idx,isotope),
+          "the Zeeman tensor for {} ({}) contains NaNs",idx,isotope),
 
       CluEError::NANTensorDetectedZeeman => write!(f,
-          "Zeeman tensor for the detected particle contains NANs"),
+          "the Zeeman tensor for the detected particle contains NaNs"),
 
       CluEError::NANTensorExchangeCoupling(idx0,isotope0,idx1,isotope1) 
         => write!(f,
-          "exchange tensor for particles {} {} and {} {} contains NANs",
+          "the exchange tensor for {} ({}) and {} ({}) contains NaNs",
           idx0,isotope0,idx1,isotope1),
 
       CluEError::NANTensorHyperfine(idx,isotope) => write!(f,
-          "hyperfine tensor for particle {} {} contains NANs",idx,isotope),
+          "the hyperfine tensor for {} ({}) contains NaNs",idx,isotope),
 
       CluEError::NANTensorQuadrupole(idx,isotope) => write!(f,
-          "electric quadrupole tensor for particle {} {} contains NANs",
+          "the electric quadrupole tensor for {} ({}) contains NaNs",
           idx,isotope),
 
       CluEError::NANTensorZerofield(idx,isotope) => write!(f,
-          "zerofield tensor for particle {} {} contains NANs",
+          "the zero-field tensor for {} ({}) contains NaNs",
           idx,isotope),
 
       CluEError::NeighborListAndPartitionTableAreNotCompatible  => write!(f,
           "neighbor list and partition table are incompatible"),
 
       CluEError::NoApplyPBC => write!(f,
-          "please set \"do_replicate_unit_cell: bool\" to select if \
-periodic boundary conditions should be applied"),
-
-      CluEError::NoCentralSpin => write!(f,
-          "no detected spin defined"),
-
-      CluEError::NoCentralSpinCoor => write!(f,
-          "coordinates for the detected spin were not defined"),
-
-      CluEError::NoCentralSpinIdentity => write!(f,
-          "the detected spin's identity was not defined"),
-
-      CluEError::NoCentralSpinTransition => write!(f,
-          "the detected spin transition was not defined"),
+          "replicate_unit_cell is not set (true, false, or [n1, n2, n3])"),
 
       CluEError::NoClusterBatchSize => write!(f,
           "batch size for clusters not specified"),
 
       CluEError::NoClusterMethod => write!(f,
           "no cluster method specified"),
-
-      CluEError::NoClustersOfSize(size) => write!(f,
-          "cannot find any clusters of size {}", size),
 
       CluEError::NoClusterSource => write!(f,
           "no cluster source specified"),
@@ -586,19 +609,23 @@ periodic boundary conditions should be applied"),
           "no detection operator"),
 
       CluEError::NoDetectedSpinIdentity => write!(f,
-          "detected_spin_identity is not set"),
+          "detected_spin.identity is not set"),
 
       CluEError::NoDetectedSpinMultiplicity => write!(f,
-          "detected_spin_identity is not set"),
+          "the detected spin multiplicity is not set"),
 
-      CluEError::NoDetectedSpinNotSet => write!(f,
-          "detected_spin is not set"),
+      CluEError::NoDetectedSpinPosition => write!(f,
+          "detected_spin.position is not set"),
 
       CluEError::NoDetectedSpinTransition => write!(f,
-          "detected_transition is not set"),
+          "detected_spin.transition is not set"),
+
+      CluEError::NoDetectedParticle => write!(f,
+          "the structure has no detected spin; the detected spin is added \
+when the structure is built from the config"),
 
       CluEError::NoEnsembleCCE => write!(f,
-          "ensemble_cce: bool is not set"),
+          "ensemble_cce is not set"),
 
       CluEError::NoGMatrixSpecifier => write!(f,
           "no g-matrix specifier"),
@@ -613,7 +640,7 @@ periodic boundary conditions should be applied"),
           "please specify the applied magnetic field"),
 
       CluEError::NoMeanFields => write!(f,
-          "please whether or not mean fields should be used"),
+          "mean_fields is not set"),
 
       CluEError::NoModelIndex => write!(f,
           "PDB model not selected"),
@@ -628,7 +655,7 @@ periodic boundary conditions should be applied"),
           "number_runs is not set"),
 
       CluEError::NoOrientationGrid => write!(f,
-          "orientation_grid is not defined"),
+          "orientations.grid is not set"),
 
       CluEError::OrientationGridWeightsDoNotSumToOne(sum,tolerance) => write!(f,
           "the weights of the orientation grid sum to {}, which differs \
@@ -644,7 +671,7 @@ from 1 by more than orientations.weight_tolerance = {}", sum, tolerance),
           "system radius not set"),
 
       CluEError::NotA3DRotationMatrix(matrix) => write!(f,
-          "matrix \"\n{}\n\"does not correspond to a valid rotation matrix", 
+          "the matrix\n{}\ndoes not correspond to a valid rotation matrix", 
           matrix),
 
       CluEError::NotA3DVector(dim) => write!(f,
@@ -652,10 +679,11 @@ from 1 by more than orientations.weight_tolerance = {}", sum, tolerance),
           dim),
 
       CluEError::NotALebedevGrid(n_ori) => write!(f,
-          "\"{}\" is not a valid Lebedev grid; please choose n_ori in \
-{{6, 14, 26, 38, 50, 74, 86, 110, 146, 170, \
-194,  230, 266, 302, 350, 434, 590, 770, 974, 1202, \
-1454, 1730, 2030, 2354, 2702, 3074, 3470, 3890, 4334, 4802,5294, 5810}}",n_ori),
+          "orientations.number = {} is not a valid Lebedev grid size; \
+please choose one of {{6, 14, 26, 38, 50, 74, 86, 110, 146, 170, \
+194, 230, 266, 302, 350, 434, 590, 770, 974, 1202, \
+1454, 1730, 2030, 2354, 2702, 3074, 3470, 3890, 4334, 4802, 5294, 5810}}",
+          n_ori),
 
       CluEError::NotAProperSubset(subcluster, cluster) => write!(f,
           "{} is not a proper subset of {}", subcluster, cluster),
@@ -673,19 +701,18 @@ from 1 by more than orientations.weight_tolerance = {}", sum, tolerance),
           "the time-axis has not been built"),
 
       CluEError::NoTimeIncrements => write!(f,
-          "no tau increments defined"),
+          "tau_increments is not set"),
 
       CluEError::NoTimeIncrements2 => write!(f,
-          "no taa2 increments defined"),
+          "tau2_increments is not set"),
 
       CluEError::NoTimepoints => write!(f,
-          "please specify how many timepoints there are for each tau increment"),
+          "number_timepoints is not set; please specify how many timepoints \
+there are for each tau increment"),
 
       CluEError::NoTimepoints2 => write!(f,
-          "please specify how many timepoints there are for each tau2 increment"),
-
-      CluEError::NoUnitOfClustering => write!(f,
-          "please specify a unit of clustering"),
+          "number_timepoints2 is not set; please specify how many timepoints \
+there are for each tau2 increment"),
 
       CluEError::NoUnitOfDistance => write!(f,
           "please specify a unit of distance"),
@@ -715,34 +742,39 @@ from 1 by more than orientations.weight_tolerance = {}", sum, tolerance),
           p,(*spin_multiplicity as f64 - 1.0)/2.0),
 
       CluEError::NoSpinOpForClusterSize(cluster_size,max_size) => write!(f,
-          "no spin operators for clusters of size {} are built,\
-          only sizes up to {}",cluster_size,max_size),
+          "no spin operators for clusters of size {} are built, \
+only sizes up to {}",cluster_size,max_size),
 
       CluEError::NoSpinOpWithMultiplicity(spin_multiplicity) => write!(f,
           "no spin-{} operators are built", 
           (*spin_multiplicity as f64 - 1.0)/2.0),
 
       CluEError::NoStevensOp(k,q) => write!(f,
-          "Cannot get Stevens operator O_{}^{}",k,q),
+          "cannot get Stevens operator O_{}^{}",k,q),
 
       CluEError::NoStructureFile => write!(f,
           "no structure file defined"),
 
       CluEError::ParticlesClash(idx0,elmt0,idx1,elmt1,r,r_clash) => write!(f,
-          "particle {} {} and particle {} {} are {} Å apart, closer than the
+          "{} ({}) and {} ({}) are {} Å apart, closer than the \
 clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
+
+      CluEError::Python(msg) => write!(f,
+          "{}",msg),
 
       CluEError::ParticleIsNotActive(ref_index) => write!(f,
           "particle \"{}\" is not active", ref_index),
 
       CluEError::PropagatorAndDensityNotSameDimension(h,rho) => write!(f,
-          "the propagator and density matrix are \"{}\" and \"{}\" dimensional\
+          "the propagator and density matrix are \"{}\" and \"{}\" dimensional \
 respectively: they must have the same dimension",
           h,rho),
 
 
-      CluEError::PartitionIsIncomplette => write!(f,
-          "partition table should contain n cells indexed by [0,n-1]"),
+      CluEError::PartitionIsIncomplete => write!(f,
+          "the partition must assign every spin to a block, with blocks \
+numbered 0, 1, ..., n-1 without gaps; block numbers in partition_table must \
+be 1, 2, ..., k"),
 
       CluEError::ResidueNumberAboveMaxInPDB(filename,line,max) => write!(f,
           "\"{}\" has a residue sequence number that is not a decimal \
@@ -765,38 +797,21 @@ from 1 by more than detected_spin.weight_tolerance = {}", sum, tolerance),
       CluEError::SpinAlreadyPartitioned(idx,blk) => write!(f,
           "spin {} already partitioned into block {}", idx,blk),
 
-      CluEError::SpinPropertiesNeedsALabel => write!(f,
-          "spin_properties requires a label to be set: 
-#[spin_properties(label = LABEL, isotope = ISOTOPE)]"),
-
-      CluEError::SpinPropertiesNeedsAnIsotope(label) => write!(f,
-          "spin_properties requires an isotope to be set: 
-#[spin_properties(label = {}, isotope = ISOTOPE)]",label),
-
       CluEError::StructureLargerThanCell(axis,span) => write!(f,
           "the structure spans {:.2} unit cells along cell edge {}, \
 so the unit cell in the structure file does not describe its periodicity; \
 correct or remove the unit cell (CRYST1) record",span,axis),
 
-      CluEError::StructurePropertiesNeedsALabel => write!(f,
-          "structure_properties requires a label to be set: 
-#[structure_properties(label = LABEL)]"),
-
-      CluEError::StructurePropertiesDoesNotNeedAnIsotope(label) => write!(f,
-          "structure_properties does not require an isotope to be set: 
-#[spin_properties(label = {})]",label),
-
       CluEError::TensorNotSet(index) => write!(f,
           "no tensor set for particle {}",index),
+
+      CluEError::ThermalizationRequiresEnsembleCCE => write!(f,
+          "thermalize_cluster_populations = true requires ensemble_cce = true"),
 
       CluEError::TooManyAtomsInPDB(filename,max) => write!(f,
           "\"{}\" has more than {} atoms in the selected model, \
 which the PDB format cannot number with unique serial numbers",
           filename, max),
-
-      CluEError::TooManyExchangeCouplingsSpecified(n) => write!(f,
-          "expected 1 exchange coupling, but got {}", 
-          n),
 
       CluEError::TooManyResiduesInPDB(filename,chain_id,max) => write!(f,
           "chain \"{}\" of \"{}\" has more than {} residues in the \
@@ -804,35 +819,22 @@ selected model, which the PDB format cannot number with unique residue \
 sequence numbers", chain_id, filename, max),
 
       CluEError::TOMLArrayContainsMultipleTypes => write!(f,
-          "TOML array contains data of different types", 
-          ),
+          "TOML array contains data of different types"),
 
       CluEError::TOMLArrayDoesNotSpecifyATensor => write!(f,
-          "cannot interpret TOML array as a tensor", 
-          ),
+          "cannot interpret TOML array as a tensor"),
 
       CluEError::TOMLArrayDoesNotSpecifyAVector => write!(f,
-          "cannot interpret TOML array as a vector", 
-          ),
+          "cannot interpret TOML array as a vector"),
 
       CluEError::TOMLArrayIsEmpty => write!(f,
-          "TOML array is empty", 
-          ),
+          "TOML array is empty"),
 
       CluEError::TOMLArrayIsNotAMatrix => write!(f,
-          "TOML array is not a matrix", 
-          ),
+          "TOML array is not a matrix"),
 
       CluEError::TOMLArrayIsNotAComplexNumber => write!(f,
-          "TOML array is not a complex number", 
-          ),
-
-      CluEError::TOMLValueDoesNotSpecifyAPartitionTable => write!(f,
-          "TOML value is not a partition table", 
-          ),
-
-      CluEError::ErrorPulseSequence(msg) => write!(f,
-          "{}",msg),
+          "TOML array is not a complex number"),
 
       CluEError::TomlPulseStepSpecifier(msg) => write!(f,
           "{}",msg),
@@ -849,18 +851,25 @@ sequence numbers", chain_id, filename, max),
           "unequal lengths, {} has length {}, but {} has length {}",
           vec0,len0,vec1,len1),
 
+      CluEError::UnexpectedPulseStep(position,expected) => write!(f,
+          "pulse step {} should be {}",position,expected),
+
+      CluEError::UnknownPulse(pulse) => write!(f,
+          "no pulse named \"{}\"",pulse),
+
       CluEError::UnrecognizedOption(option) => write!(f,
           "unrecognized option \"{}\"",option),
 
       CluEError::UnrecognizedVectorSpecifier(specifier) => write!(f,
           "unrecognized vector specifier \"{}\"",specifier),
 
-      CluEError::UnrecognizedUnit(unit) => write!(f,
-          "unrecognized unit \"{}\"",unit),
+      CluEError::UnrecognizedUnit(quantity,unit,options) => write!(f,
+          "unrecognized unit of {} \"{}\"; the options are {}",
+          quantity,unit,options),
 
       CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(specifier) 
         => write!(f,
-          "vector specifier does not specify unique vector \"{}\"",specifier),
+          "vector specifier does not specify a unique vector: {}",specifier),
 
       CluEError::WrongClusterSizeForAnalyticCCE(given_size) => write!(f,
           "analytic 2-CCE cannot work with clusters of size {}",given_size),
@@ -871,9 +880,157 @@ sequence numbers", chain_id, filename, max),
       CluEError::WrongNumberOfAxes(num_axes, expected_num) => write!(f,
           "{} axes were provided, but {} are expected",num_axes, expected_num),
 
-      CluEError::WrongTauDimension(d_given, d_expected) => write!(f,
-          "tau{} was provided, but tau{} is expected",d_given, d_expected),
+      CluEError::WrongNumberOfCellEdges(n) => write!(f,
+          "expected 3 unit cell edges, but got {}",n),
+
+      CluEError::WrongTauDimension(delay_dim, tau_dim) => write!(f,
+          "\"{}\" cannot be used with \"{}\"; use \"delay\" with \"tau\" \
+or \"-tau\", and \"delay2\" with \"tau2\" or \"-tau2\"",
+          if *delay_dim == 2 {"delay2"} else {"delay"},
+          if *tau_dim == 2 {"tau2"} else {"tau"}),
+
+      CluEError::ZeroMaxClusterSize => write!(f,
+          "the maximum cluster size must be at least 1"),
     }
   }
 }
 
+/// This implementation lets a `CluEError` be used wherever a
+/// `std::error::Error` is expected, for example as `Box<dyn Error>`.
+/// `source()` is left as `None`: `InvalidPulseStep` already includes the
+/// message of the error it wraps in its own message.
+impl std::error::Error for CluEError{}
+
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+#[cfg(test)]
+mod tests{
+  use super::*;
+  //----------------------------------------------------------------------------
+  // This test checks the text of messages whose wording, spacing, or 
+  // key names were corrected.
+  #[test]
+  fn test_error_messages(){
+    let s = |x: &str| x.to_string();
+    let cases = vec![
+      (CluEError::NoSpinOpForClusterSize(3,2),
+       "no spin operators for clusters of size 3 are built, only sizes up to 2"),
+      (CluEError::PropagatorAndDensityNotSameDimension(4,2),
+       "the propagator and density matrix are \"4\" and \"2\" dimensional \
+respectively: they must have the same dimension"),
+      (CluEError::ParticlesClash(s("bath particle 0"),s("H"),
+          s("bath particle 1"),s("H"),0.5,1.0),
+       // The message uses the Angstrom sign, U+212B.
+       "bath particle 0 (H) and bath particle 1 (H) are 0.5 \u{212B} apart, \
+closer than the clash distance of 1 \u{212B}"),
+      (CluEError::DetectedSpinDoesNotHaveAnActiveIndex,
+       "the detected spin (reference index 0) is always active and has no \
+position among the active bath particles"),
+      (CluEError::NoDetectedSpinMultiplicity,
+       "the detected spin multiplicity is not set"),
+      (CluEError::AllVectorsNotSameLength(s("a.csv")),
+       "cannot write \"a.csv\": all data columns must have the same length"),
+      (CluEError::AllSignalsNotSameLength(s("a.csv")),
+       "for \"a.csv\", signals must all have the same length"),
+      (CluEError::CannotFindParticleForRefIndex(7),
+       "no active bath particle matches reference index \"7\""),
+      (CluEError::PulseSequenceNotSupported(s("lce"),s("hahn")),
+       "cluster method \"lce\" only supports pulse_sequence = \"hahn\""),
+      (CluEError::NoApplyPBC,
+       "replicate_unit_cell is not set (true, false, or [n1, n2, n3])"),
+      (CluEError::NoDetectedSpinIdentity, "detected_spin.identity is not set"),
+      (CluEError::NoDetectedSpinPosition, "detected_spin.position is not set"),
+      (CluEError::NoDetectedParticle,
+       "the structure has no detected spin; the detected spin is added \
+when the structure is built from the config"),
+      (CluEError::ThermalizationRequiresEnsembleCCE,
+       "thermalize_cluster_populations = true requires ensemble_cce = true"),
+      (CluEError::InvalidStevensCoefficientShape(1,5,2),
+       "Stevens coefficient entry 1 is a 5×2 matrix, but each entry must \
+have one column"),
+      (CluEError::CannotReadTOML(s("expected `=`")),
+       "cannot parse TOML: expected `=`"),
+      (CluEError::Python(s("invalid python code")), "invalid python code"),
+      (CluEError::CannotWriteCSV(s("a.csv"),s("permission denied")),
+       "cannot write CSV file \"a.csv\": permission denied"),
+      (CluEError::CannotWriteFile(s("tensors.txt"),
+          s("No space left on device (os error 28)")),
+       "cannot write to \"tensors.txt\": No space left on device \
+(os error 28)"),
+      (CluEError::CannotCreateDir(s("out/info"),s("File exists (os error 17)")),
+       "cannot create directory \"out/info\": File exists (os error 17)"),
+      (CluEError::CannotReadGrid(s("grid.csv"),
+          s("the file contains no grid points")),
+       "cannot read grid from \"grid.csv\": the file contains no grid points; \
+the grid should be specified as a csv file with one column per dimension, \
+followed by a column for the weights"),
+      (CluEError::NoDetectedSpinTransition,
+       "detected_spin.transition is not set"),
+      (CluEError::NoEnsembleCCE, "ensemble_cce is not set"),
+      (CluEError::NoMeanFields, "mean_fields is not set"),
+      (CluEError::NoOrientationGrid, "orientations.grid is not set"),
+      (CluEError::NoTimeIncrements2, "tau2_increments is not set"),
+      (CluEError::MissingHeader(1,2,s("a.csv")),
+       "in \"a.csv\", every entry must have a header, but there are 1 \
+headers and 2 columns of data"),
+      (CluEError::CannotParseCellType(s("all")),
+       "cannot parse \"all\" as a cell type; the options are \"all_cells\", \
+\"primary_cell\", and \"extracells\""),
+      (CluEError::DensityMatrixTraceVanishes(s("Tr[exp(-βH)]"),1e-15),
+       "cannot normalize the thermal density matrix: |Tr[exp(-βH)]| = 1e-15 \
+is below 1e-12; check the temperature and the energy scale of the \
+Hamiltonian"),
+      (CluEError::CannotCreateFile(s("out/a.csv"),s("permission denied")),
+       "cannot create \"out/a.csv\": permission denied"),
+      (CluEError::GroupHasNoSelection(s("methyl")),
+       "group \"methyl\" has no selection"),
+      (CluEError::MutuallyExclusiveKeys(s("exchange_coupling"),
+          s("c3_tunnel_splitting")),
+       "exchange_coupling and c3_tunnel_splitting are mutually exclusive"),
+      (CluEError::UnexpectedPulseStep(1,s("a pi pulse")),
+       "pulse step 1 should be a pi pulse"),
+      (CluEError::UnknownPulse(s("pi/4")), "no pulse named \"pi/4\""),
+      (CluEError::WrongNumberOfCellEdges(2),
+       "expected 3 unit cell edges, but got 2"),
+      (CluEError::CannotParseLineInFile(s("a.pdb"),5,s("CONECT x")),
+       "cannot parse line 5 of \"a.pdb\": \"CONECT x\""),
+    ];
+    for (error, message) in cases{
+      assert_eq!(error.to_string(), message, "{:?}", error);
+    }
+
+    // CluEError implements std::error::Error, with the same text as Display
+    // and no source, also for the variant that wraps another error.
+    let boxed: Box<dyn std::error::Error> = Box::new(CluEError::NoApplyPBC);
+    assert_eq!(boxed.to_string(), CluEError::NoApplyPBC.to_string());
+    assert!(boxed.source().is_none());
+    let step = CluEError::InvalidPulseStep(2,Box::new(CluEError::NoApplyPBC));
+    assert!(std::error::Error::source(&step).is_none());
+    let as_box = || -> Result<(),Box<dyn std::error::Error>>{
+      Err(CluEError::NoApplyPBC)?
+    };
+    assert_eq!(as_box().unwrap_err().to_string(),
+        CluEError::NoApplyPBC.to_string());
+
+    // Messages do not end with a period, since main.rs adds one.
+    let header = CluEError::ClusterFileContainsNoHeader(s("c.txt")).to_string();
+    assert!(!header.ends_with('.'));
+
+    // Units list the options for the quantity.
+    let err = crate::physical_constants::distance_unit_to_meters("in")
+      .unwrap_err();
+    assert_eq!(err.to_string(), 
+        "unrecognized unit of distance \"in\"; the options are \
+fm, pm, nm, μm, mm, cm, m, km, \u{212B}");
+
+    // Lebedev grid sizes name the key.
+    let err = crate::integration_grid::IntegrationGrid::lebedev(7)
+      .unwrap_err();
+    assert!(err.to_string().starts_with(
+          "orientations.number = 7 is not a valid Lebedev grid size"));
+    assert!(err.to_string().contains("194, 230,"));
+    assert!(err.to_string().contains("4802, 5294,"));
+  }
+  //----------------------------------------------------------------------------
+}

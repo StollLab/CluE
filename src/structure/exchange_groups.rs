@@ -49,8 +49,10 @@ impl ExchangeGroupManager{
   pub fn to_csv(&self, filename: &str,structure: &Structure) 
     -> Result<(),CluEError>
   {
-    let Ok(file) = File::create(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    let file = match File::create(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotCreateFile(
+          filename.to_string(), err.to_string())),
     };
 
     let n_char_f64 = 16;
@@ -63,8 +65,9 @@ impl ExchangeGroupManager{
 center_x,center_y,center_z,\
 normal_x,normal_y,normal_z,\
 exchange_coupling,res_seq_id,res\n".to_string();
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(line.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     let pdb_origin = structure.pdb_origin.scale(1.0/ANGSTROM);
@@ -100,11 +103,17 @@ exchange_coupling,res_seq_id,res\n".to_string();
           n.x(),n.y(), n.z(), 
           j, res_seq_id,res);
     
-      if stream.write(line.as_bytes()).is_err(){
-        return Err(CluEError::CannotWriteFile(filename.to_string()) );
+      if let Err(err) = stream.write_all(line.as_bytes()){
+        return Err(CluEError::CannotWriteFile(filename.to_string(),
+              err.to_string()));
       }
     }
 
+    // Dropping a BufWriter ignores write errors, so flush explicitly.
+    if let Err(err) = stream.flush(){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
+    }
 
     Ok(())
   }

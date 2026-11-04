@@ -545,8 +545,10 @@ impl Structure{
 
     if let Some((idx0,idx1,delta_r)) = first_clash{
       return Err(CluEError::ParticlesClash(
-            idx0, self.bath_particles[idx0].element.to_string(),
-            idx1, self.bath_particles[idx1].element.to_string(),
+            self.particle_label(idx0), 
+            self.bath_particles[idx0].element.to_string(),
+            self.particle_label(idx1), 
+            self.bath_particles[idx1].element.to_string(),
             delta_r/ANGSTROM, clash_distance/ANGSTROM));
     }
 
@@ -800,7 +802,7 @@ impl Structure{
 Periodic boudary conditions will not be applied.");
       return Ok(());
     }else if cell_edges.len() != 3 {
-      return Err(CluEError::IncorrectNumberOfAxes(cell_edges.len(),3));
+      return Err(CluEError::WrongNumberOfCellEdges(cell_edges.len()));
     }
 
     // Only lattice translations are applied, so other symmetry operations
@@ -2094,8 +2096,10 @@ mod tests{
             - &reference.bath_particles[idx0].coordinates).norm();
         if r < clash_distance{
           expected = Some(CluEError::ParticlesClash(
-              idx0, reference.bath_particles[idx0].element.to_string(),
-              idx1, reference.bath_particles[idx1].element.to_string(),
+              reference.particle_label(idx0), 
+              reference.bath_particles[idx0].element.to_string(),
+              reference.particle_label(idx1),
+              reference.bath_particles[idx1].element.to_string(),
               r/ANGSTROM, clash_distance/ANGSTROM));
           break 'outer;
         }

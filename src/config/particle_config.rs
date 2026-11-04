@@ -45,7 +45,9 @@ pub fn set_particle_configs_from_toml_table(
 {
   let label = if let Some(value) = table.get(KEY_NAME){
     let Some(name) = value.as_str() else{
-      return Err(CluEError::ExpectedTOMLString(value.type_str().to_string()));
+      return Err(CluEError::InvalidTOMLValue(
+          format!("groups.{}", KEY_NAME), "a string".to_string(),
+          value.type_str().to_string()));
     };
     name
   } else{
@@ -92,7 +94,9 @@ impl ParticleConfig{
 
     let label = if let Some(value) = table.get(KEY_NAME){
       let Some(name) = value.as_str() else{
-        return Err(CluEError::ExpectedTOMLString(value.type_str().to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+          format!("groups.{}", KEY_NAME), "a string".to_string(),
+          value.type_str().to_string()));
       };
       name
     } else {
@@ -112,7 +116,9 @@ impl ParticleConfig{
   {
     let label = if let Some(value) = table.get(KEY_NAME){
       let Some(name) = value.as_str() else{
-        return Err(CluEError::ExpectedTOMLString(value.type_str().to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+          format!("groups.{}", KEY_NAME), "a string".to_string(),
+          value.type_str().to_string()));
       };
       name.to_string()
     } else {
@@ -126,13 +132,17 @@ impl ParticleConfig{
 
     if let Some(value) = table.get(KEY_SELECTION){
       let Some(selection) = value.as_table() else{
-        return Err(CluEError::ExpectedTOMLTable(value.type_str().to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("group \"{}\": {}", self.label, KEY_SELECTION),
+              "a table".to_string(), value.type_str().to_string()));
       };
 
       if let Some(value) = selection.get(KEY_CELL_TYPE){
         let Some(cell_type_str) = value.as_str() else{
-          return Err(CluEError::ExpectedTOMLString(
-                value.type_str().to_string()));
+          return Err(CluEError::InvalidTOMLValue(
+                format!("group \"{}\": {}.{}", self.label, KEY_SELECTION,
+                  KEY_CELL_TYPE),
+                "a string".to_string(), value.type_str().to_string()));
         };
         self.cell_type = CellType::from(cell_type_str)?;
       }
@@ -294,21 +304,27 @@ impl ParticleProperties{
   {
     if let Some(value) = table.get(KEY_ISO_COSUBSTITUTE){
       let Some(cosubstitute) = value.as_str() else{
-        return Err(CluEError::ExpectedTOMLString(value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("group \"{}\": {}", group, KEY_ISO_COSUBSTITUTE),
+              "a string".to_string(), value.type_str().to_string()));
       };
       self.cosubstitute = Some(Cosubstitute::from(cosubstitute,group)?);
     }
 
     if let Some(value) = table.get(KEY_DROP_PROB){
       let Some(p) = value.as_float() else{
-        return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("group \"{}\": {}", group, KEY_DROP_PROB),
+              "a float".to_string(), value.type_str().to_string()));
       };
       self.isotopic_distribution.void_probability = Some(p);
     }
 
     if let Some(value) = table.get(KEY_ABUNDANCE_TOL){
       let Some(tolerance) = value.as_float() else{
-        return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("group \"{}\": {}", group, KEY_ABUNDANCE_TOL),
+              "a float".to_string(), value.type_str().to_string()));
       };
       self.isotopic_distribution.abundance_tolerance = Some(tolerance);
     }
@@ -319,23 +335,28 @@ impl ParticleProperties{
         continue;
       };
       let Some(iso_table) = iso_value.as_table() else {
-        return Err(CluEError::ExpectedTOMLTable(
-              iso_value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("group \"{}\": {}", group, iso_str),
+              "a table".to_string(), iso_value.type_str().to_string()));
       };
 
       if let Some(value) = iso_table.get(KEY_ISO_ABUNDACE){
         let Some(abundance) = value.as_float() else{
-          return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
+          return Err(CluEError::InvalidTOMLValue(
+                format!("group \"{}\": {}.{}", group, iso_str, 
+                  KEY_ISO_ABUNDACE),
+                "a float".to_string(), value.type_str().to_string()));
         };
         self.isotopic_distribution.isotope_abundances.push(
             IsotopeAbundance{isotope,abundance} );
       }
 
+      let context = format!("group \"{}\": {}", group, iso_str);
       if let Some(iso_prop) = self.isotope_properties.get_mut(&iso_str){
-        iso_prop.set_from_toml_table(iso_table,unit_of_energy)?;
+        iso_prop.set_from_toml_table(iso_table,unit_of_energy,&context)?;
       } else{
-        let iso_prop 
-            = IsotopeProperties::from_toml_table(iso_table,unit_of_energy)?;
+        let iso_prop = IsotopeProperties::from_toml_table(iso_table,
+            unit_of_energy,&context)?;
         self.isotope_properties.insert(iso_str.clone(), iso_prop);
       }
 
@@ -373,66 +394,80 @@ impl IsotopeProperties{
   /// This function creates a new instance of `IsotopeProperties`.
   pub fn new() -> Self{ IsotopeProperties::default() }
   //----------------------------------------------------------------------------
-  pub fn from_toml_table(table: &toml::Table, unit_of_energy: f64) 
+  /// `context` names the group and isotope for error messages.
+  pub fn from_toml_table(table: &toml::Table, unit_of_energy: f64,
+      context: &str) 
       -> Result<Self,CluEError>
   {
     let mut properties = Self::new();  
-    properties.set_from_toml_table(table,unit_of_energy)?;
+    properties.set_from_toml_table(table,unit_of_energy,context)?;
 
     Ok(properties)
   }
   //----------------------------------------------------------------------------
-  fn set_from_toml_table(&mut self, table: &toml::Table, unit_of_energy: f64) 
+  fn set_from_toml_table(&mut self, table: &toml::Table, unit_of_energy: f64,
+      context: &str) 
     -> Result<(),CluEError>
   {
     if let Some(value) = table.get(KEY_ISO_ACTIVE){
       let Some(active) = value.as_bool() else{
-        return Err(CluEError::ExpectedTOMLBool(value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("{}.{}", context, KEY_ISO_ACTIVE),
+              "a bool".to_string(), value.type_str().to_string()));
       };
       self.active = Some(active);
     }
 
     if let Some(value) = table.get(KEY_ISO_G_MATRIX){
-      let tensor = TensorSpecifier::from_toml_value(value.clone(),1.0)?;
+      let tensor = TensorSpecifier::from_toml_value(value.clone(),1.0,
+          &format!("{}.{}", context, KEY_ISO_G_MATRIX))?;
       self.g_matrix = Some(tensor);
     }
 
     if let Some(value) = table.get(KEY_ISO_ELEC_QUADRUPOLE){
       let tensor = TensorSpecifier::from_toml_value(
-          value.clone(), unit_of_energy)?;
+          value.clone(), unit_of_energy,
+          &format!("{}.{}", context, KEY_ISO_ELEC_QUADRUPOLE))?;
       self.electric_quadrupole_coupling = Some(tensor);
     }
 
     if let Some(value) = table.get(KEY_ISO_ZEROFIELD){
       let tensor = TensorSpecifier::from_toml_value(
-          value.clone(), unit_of_energy)?;
+          value.clone(), unit_of_energy,
+          &format!("{}.{}", context, KEY_ISO_ZEROFIELD))?;
       self.zerofield_coupling = Some(tensor);
     }
 
     if let Some(value) = table.get(KEY_ISO_HYPERFINE){
       let tensor = TensorSpecifier::from_toml_value(value.clone(),
-          unit_of_energy)?;
+          unit_of_energy, &format!("{}.{}", context, KEY_ISO_HYPERFINE))?;
       self.hyperfine_coupling = Some(tensor);
     }
 
-    let n_ex = [table.contains_key(KEY_ISO_EXCHANGE_COUPLING),
+    let n_ex: usize = [table.contains_key(KEY_ISO_EXCHANGE_COUPLING),
       table.contains_key(KEY_ISO_C3_TUNNEL_SPLITTING)].iter().map(|b| if *b{1}else{0} ).sum();
 
     if n_ex > 1{
-      return Err(CluEError::TooManyExchangeCouplingsSpecified(n_ex));
+      return Err(CluEError::MutuallyExclusiveKeys(
+            KEY_ISO_EXCHANGE_COUPLING.to_string(),
+            KEY_ISO_C3_TUNNEL_SPLITTING.to_string()));
     }
 
     if let Some(value) = table.get(KEY_ISO_EXCHANGE_COUPLING)
     {
       let Some(ex) = value.as_float() else{
-        return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("{}.{}", context, KEY_ISO_EXCHANGE_COUPLING),
+              "a float".to_string(), value.type_str().to_string()));
       };
       self.exchange_coupling = Some(ex*unit_of_energy);
 
     } else if let Some(value) = table.get(KEY_ISO_C3_TUNNEL_SPLITTING)
     {
       let Some(nut) = value.as_float() else{
-        return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string() ));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("{}.{}", context, KEY_ISO_C3_TUNNEL_SPLITTING),
+              "a float".to_string(), value.type_str().to_string()));
       };
       self.exchange_coupling = Some(
         nut*C3_TUNNEL_SPLITTING_TO_EXCHANGE_COUPLING*unit_of_energy
@@ -489,7 +524,9 @@ impl TensorSpecifier{
   pub fn new() -> Self{
     Self::default()
   }
-  pub fn from_toml_value(value: toml::Value, units: f64) 
+  /// This function reads a tensor specifier.
+  /// `key` names the TOML key for error messages.
+  pub fn from_toml_value(value: toml::Value, units: f64, key: &str) 
       -> Result<Self,CluEError>
   {
     match value{
@@ -499,8 +536,10 @@ impl TensorSpecifier{
         Ok(Self::SymmetricTensor3D(tensor))
       },
       toml::Value::Table(table) => Ok(Self::Eig(
-            EigSpecifier::from_toml_table(table,units)?)),
-      _ => Err(CluEError::TOMLArrayDoesNotSpecifyATensor),
+            EigSpecifier::from_toml_table(table,units,key)?)),
+      other => Err(CluEError::InvalidTOMLValue(key.to_string(),
+            "an array or a table with values and axes".to_string(),
+            other.type_str().to_string())),
     }
   
   }
@@ -577,41 +616,50 @@ impl EigSpecifier{
     Self::default()
   }
   //----------------------------------------------------------------------------
-  pub fn from_toml_table(table: toml::Table,units: f64) 
+  /// `key` names the TOML key for error messages.
+  pub fn from_toml_table(table: toml::Table,units: f64, key: &str) 
       -> Result<Self,CluEError>
   {
-  
-    let values = if let Some(toml::Value::Array(array)) 
-        = table.get(KEY_EIG_VALUES){
-      if !are_all_same_type(array){
-        return Err(CluEError::TOMLArrayContainsMultipleTypes);
-      }
-      if array.len() != 3 || !array[0].is_float(){
-        return Err(CluEError::TOMLArrayDoesNotSpecifyATensor);
-      }
-      array.iter().filter_map(|v| v.as_float()).collect::<Vec::<f64>>()
-
-    }else{
-      return Err(CluEError::TOMLArrayDoesNotSpecifyATensor);
+    let values_key = format!("{}.{}", key, KEY_EIG_VALUES);
+    let values = match table.get(KEY_EIG_VALUES){
+      Some(toml::Value::Array(array)) => {
+        if array.len() != 3 || !are_all_same_type(array) 
+          || !array[0].is_float(){
+          return Err(CluEError::InvalidTOMLValue(values_key,
+                "an array of three floats".to_string(),
+                toml::Value::Array(array.clone()).to_string()));
+        }
+        array.iter().filter_map(|v| v.as_float()).collect::<Vec::<f64>>()
+      },
+      Some(value) => return Err(CluEError::InvalidTOMLValue(values_key,
+            "an array of three floats".to_string(),
+            value.type_str().to_string())),
+      None => return Err(CluEError::MissingTOMLKey(values_key,
+            format!("{} given as a table", key))),
     }; 
     let values = Some([values[0]*units, values[1]*units, values[2]*units]);
 
     let Some(axes) = table.get(KEY_EIG_AXES) else{
-      return Err(CluEError::TOMLArrayDoesNotSpecifyATensor);
+      return Err(CluEError::MissingTOMLKey(
+            format!("{}.{}", key, KEY_EIG_AXES),
+            format!("{} given as a table", key)));
     };
 
     let x_axis = if let Some(ax) = axes.get(KEY_EIG_X_AXIS){
-      Some(VectorSpecifier::from_toml_value(ax.clone())?)
+      Some(VectorSpecifier::from_toml_value(ax.clone(),
+            &format!("{}.{}.{}", key, KEY_EIG_AXES, KEY_EIG_X_AXIS))?)
     }else{
       None
     };
     let y_axis = if let Some(ax) = axes.get(KEY_EIG_Y_AXIS){
-      Some(VectorSpecifier::from_toml_value(ax.clone())?)
+      Some(VectorSpecifier::from_toml_value(ax.clone(),
+            &format!("{}.{}.{}", key, KEY_EIG_AXES, KEY_EIG_Y_AXIS))?)
     }else{
       None
     };
     let z_axis = if let Some(ax) = axes.get(KEY_EIG_Z_AXIS){
-      Some(VectorSpecifier::from_toml_value(ax.clone())?)
+      Some(VectorSpecifier::from_toml_value(ax.clone(),
+            &format!("{}.{}.{}", key, KEY_EIG_AXES, KEY_EIG_Z_AXIS))?)
     }else{
       None
     };

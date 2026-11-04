@@ -22,8 +22,8 @@ pub fn lce(
           => lce_hahn_2spin_2order(vertices,tensors,config),
       _ => Err(
           CluEError::PulseSequenceNotSupported(
-            "pulse sequence not supproted".to_string(),
-            "".to_string(),
+            "lce".to_string(),
+            "hahn".to_string(),
           )),
   }
 }

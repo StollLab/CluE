@@ -194,13 +194,14 @@ pub fn propagate_pulse_sequence(
   };
 
   let PulseStep::Pulse(u_half_pi) =  pulses[0] else{
-    return Err(CluEError::InvalidPulse("pi/2 pulse".to_string()))
+    return Err(CluEError::UnexpectedPulseStep(0,"a pi/2 pulse".to_string()))
   };
   let PulseStep::Pulse(u_pi) =  pulses[1] else{
-    return Err(CluEError::InvalidPulse("pi pulse".to_string()))
+    return Err(CluEError::UnexpectedPulseStep(1,"a pi pulse".to_string()))
   };
   let PulseStep::Detect(detection_op0) =  pulses[2] else{
-    return Err(CluEError::InvalidPulse("detection operator".to_string()))
+    return Err(CluEError::UnexpectedPulseStep(2,
+          "a detection operator".to_string()))
   };
 
 
@@ -335,12 +336,12 @@ pub fn get_2nd_free_evolutions_propagators(//hamiltonian: &CxMat,
 {
   let tau_increments = &config.tau2_increments;
   if tau_increments.is_empty(){
-    return Err(CluEError::NoTimeIncrements);
+    return Err(CluEError::NoTimeIncrements2);
   }
 
   let number_timepoints = &config.number_timepoints2;
   if number_timepoints.is_empty(){
-    return Err(CluEError::NoTimepoints);
+    return Err(CluEError::NoTimepoints2);
   }
   let n_tot = config.get_total_number_timesteps();
 
@@ -472,7 +473,8 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
 
   let Ok((eigvals, eigvecs)) = ham.eigh(UPLO::Lower) else{
     return Err(
-        CluEError::CannotDiagonalizeHamiltonian(ham.to_string()));
+        CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&ham)));
   };
 
   Ok((eigvals, eigvecs))
@@ -546,7 +548,8 @@ pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
 
   let Ok((eigvals, eigvecs)) = ham.eigh(UPLO::Lower) else{
     return Err(
-        CluEError::CannotDiagonalizeHamiltonian(ham.to_string()));
+        CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&ham)));
   };
 
   Ok((eigvals, eigvecs))
@@ -568,10 +571,12 @@ pub fn get_electron_cluster_thermal_density_matrix(
   let mut density_matrix = rho_list.swap_remove(0);
 
   let Ok(z) = density_matrix.trace() else{
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
+    return Err(CluEError::CannotTakeTrace(format!("a {}x{} matrix",
+        density_matrix.dim().0, density_matrix.dim().1)));
   };
   if z.norm() < 1e-12{
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
+    return Err(CluEError::DensityMatrixTraceVanishes(
+          "Tr[exp(-βH)]".to_string(), z.norm()));
   }
   density_matrix /= z;
   Ok(density_matrix)
@@ -845,4 +850,19 @@ mod tests{
     true
   }
   //----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_2nd_free_evolution_errors(){
+    let eigvals = Array1::<f64>::zeros(2);
+    let eigvecs = CxMat::eye(2);
+    let mut config = Config::new();
+    let result = get_2nd_free_evolutions_propagators(&eigvals, &eigvecs, 
+        &config);
+    assert_eq!(result.err(), Some(CluEError::NoTimeIncrements2));
+
+    config.tau2_increments = vec![1e-8];
+    let result = get_2nd_free_evolutions_propagators(&eigvals, &eigvecs, 
+        &config);
+    assert_eq!(result.err(), Some(CluEError::NoTimepoints2));
+  }
 }

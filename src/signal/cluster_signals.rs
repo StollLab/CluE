@@ -150,7 +150,8 @@ fn calculate_auxiliary_signals(
           let save_dir = format!("{}/{}",path, SAVE_DIR_CLUSTER_SIGNALS);
           match std::fs::create_dir_all(save_dir.clone()){
             Ok(_) => (),
-            Err(_) => return Err(CluEError::CannotCreateDir(save_dir)),
+            Err(err) => return Err(CluEError::CannotCreateDir(save_dir,
+                  err.to_string())),
           }
           let aux_filename = format!("{}/cluster_size_{}_batch_{}.csv",
               save_dir, cluster_size,ibatch);
@@ -207,7 +208,6 @@ fn calculate_auxiliary_signals(
                 => (subcluster_num_spins-1,subcluster_num_spins-1),
             Some(UnitOfClustering::Set) 
               => (0,std::cmp::min(subcluster_num_spins-1,cluster_size-1)),
-            None => return Err(CluEError::NoUnitOfClustering),
           };
           */
           
@@ -241,7 +241,8 @@ fn calculate_auxiliary_signals(
           let save_dir = format!("{}/{}",path, SAVE_DIR_AUXILIARY_SIGNALS);
           match std::fs::create_dir_all(save_dir.clone()){
             Ok(_) => (),
-            Err(_) => return Err(CluEError::CannotCreateDir(save_dir)),
+            Err(err) => return Err(CluEError::CannotCreateDir(save_dir,
+                  err.to_string())),
           }
           let aux_filename = format!("{}/cluster_size_{}_batch_{}.csv",
               save_dir, cluster_size,ibatch);

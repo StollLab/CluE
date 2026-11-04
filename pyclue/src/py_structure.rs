@@ -73,7 +73,7 @@ impl PyStructure{
         let r_ave = det_particle.get_average_spin_position()?;
         Ok(r_ave.elements.clone())
       },
-      None => Err(PyCluEError::from(CluEError::NoDetectedSpinNotSet))
+      None => Err(PyCluEError::from(CluEError::NoDetectedParticle))
     }
   }
   //----------------------------------------------------------------------------

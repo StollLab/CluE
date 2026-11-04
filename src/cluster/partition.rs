@@ -157,7 +157,7 @@ impl PartitionTable{
     let partitions = math::unique(element_to_num_block.clone());
     for (ii,p) in partitions.iter().enumerate(){
       if ii != *p{
-        return Err(CluEError::PartitionIsIncomplette);
+        return Err(CluEError::PartitionIsIncomplete);
       }
     }
     partitions.len()
@@ -170,7 +170,7 @@ impl PartitionTable{
 
   for (element_idx, part_block) in element_to_block.iter().enumerate(){
     if *part_block == PartitionBlock::Unset{
-      return Err(CluEError::PartitionIsIncomplette);
+      return Err(CluEError::PartitionIsIncomplete);
     }
 
     let Some(block_idx) = part_block.to_number() else{
@@ -210,8 +210,10 @@ impl PartitionTable{
     let filename = &format!("{}/{}.toml",save_path, 
         SAVE_FILE_PARTITION_TABLE);
 
-    let Ok(file) = File::create(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    let file = match File::create(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotCreateFile(
+          filename.to_string(), err.to_string())),
     };
 
     let mut toml_string = "".to_string();
@@ -229,9 +231,15 @@ impl PartitionTable{
       toml_string = format!("{}block_{} = [{}]\n",toml_string,blk,elements_string);
     }
     let mut stream = BufWriter::with_capacity(toml_string.len(),file);
-    if stream.write(toml_string.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(toml_string.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     };
+    // Dropping a BufWriter ignores write errors, so flush explicitly.
+    if let Err(err) = stream.flush(){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
+    }
 
     Ok(())
   }
@@ -306,18 +314,35 @@ fn get_partition_pretable(tensors: &HamiltonianTensors,
   // but CluE needs the partition table in terms of the indices used
   // in tensors: &HamiltonianTensors.
   for (serial,blk) in partition_table.iter(){
-    
-    // Converert PDB serial id to bath_index used on structure. 
+
+    // Block 0 is the detection block.
+    if *blk == 0{
+      return Err(CluEError::InvalidPartitionTableEntry(*serial,*blk,
+            "block 0 is reserved for the detected spin; bath blocks start \
+at 1".to_string()));
+    }
+
+    // PDB serial ids are u32.
+    let Ok(serial_u32) = u32::try_from(*serial) else{
+      return Err(CluEError::InvalidPartitionTableEntry(*serial,*blk,
+            "serial numbers cannot be larger than 4294967295".to_string()));
+    };
+
+    // Converert PDB serial id to bath_index used on structure.
     let Some(bath_idx) = structure.map_serial_id_to_bath_index
-        .get(&(*serial as u32,0_usize)) 
+        .get(&(serial_u32,0_usize))
     else{
-      panic!("TODO");
+      return Err(CluEError::InvalidPartitionTableEntry(*serial,*blk,
+            "no bath particle in the primary cell has this serial number"
+            .to_string()));
     };
 
     // Convert bath_index to active_idx, used in tensors.
-    let Some(active_idx) = structure.bath_indices_to_active_indices[*bath_idx] 
+    // An inactive particle has no tensors and so no block; it is skipped,
+    // so that a table written for a larger bath can be reused.
+    let Some(active_idx) = structure.bath_indices_to_active_indices[*bath_idx]
     else{
-      panic!("TODO");
+      continue;
     };
     element_to_block[active_idx] = PartitionBlock::Preset(*blk);
 
@@ -888,6 +913,56 @@ mod tests{
 
     (adjacency_list,tensors,structure,config)
 
+  }
+  //----------------------------------------------------------------------------
+  // Invalid partition_table entries are errors instead of panics or
+  // wrapped serial numbers; inactive particles are skipped.
+  #[test]
+  fn test_get_partition_pretable_checks_entries(){
+    let (_adjacency_list,tensors,structure,mut config) = get_tempo();
+    let s = |x: &str| x.to_string();
+
+    // Serial 3 (H6) is active; serial 1 (C1, 12C) is not.
+    let active = structure.map_serial_id_to_bath_index.get(&(3,0)).unwrap();
+    assert!(structure.bath_indices_to_active_indices[*active].is_some());
+    let inactive = structure.map_serial_id_to_bath_index.get(&(1,0)).unwrap();
+    assert!(structure.bath_indices_to_active_indices[*inactive].is_none());
+
+    let cases = vec![
+      (vec![(3,1),(999999,2)], CluEError::InvalidPartitionTableEntry(999999,2,
+          s("no bath particle in the primary cell has this serial number"))),
+      (vec![(3,0)], CluEError::InvalidPartitionTableEntry(3,0,
+          s("block 0 is reserved for the detected spin; bath blocks start \
+at 1"))),
+      // 4294967299 = 2^32 + 3 used to be read as serial 3.
+      (vec![(4294967299,1)], CluEError::InvalidPartitionTableEntry(
+          4294967299,1,
+          s("serial numbers cannot be larger than 4294967295"))),
+    ];
+    for (table, expected) in cases{
+      config.partition_table
+        = Some(crate::config::PartitionTableConfig::IndexBlockList(
+              table.clone()));
+      let result = get_partition_pretable(&tensors, &structure, &config);
+      assert_eq!(result.err(), Some(expected), "{:?}", table);
+    }
+
+    // The inactive particle is skipped, and the active one is preset.
+    config.partition_table
+      = Some(crate::config::PartitionTableConfig::IndexBlockList(
+            vec![(1,2),(3,1)]));
+    let (element_to_block, max_block_index)
+      = get_partition_pretable(&tensors, &structure, &config).unwrap();
+    assert_eq!(max_block_index,1);
+    let active_idx = structure.bath_indices_to_active_indices[*active].unwrap();
+    assert_eq!(element_to_block[active_idx], PartitionBlock::Preset(1));
+    assert_eq!(element_to_block.iter()
+        .filter(|b| **b != PartitionBlock::Unset).count(), 2); // Detection.
+
+    let err = CluEError::InvalidPartitionTableEntry(999999,2,
+        s("no bath particle in the primary cell has this serial number"));
+    assert_eq!(err.to_string(), "partition_table entry (serial 999999, \
+block 2): no bath particle in the primary cell has this serial number");
   }
   //----------------------------------------------------------------------------
 }

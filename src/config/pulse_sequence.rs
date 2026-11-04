@@ -21,19 +21,20 @@ impl PulseStepSpecifier{
   pub fn from_toml_value(pulse_step: &toml::Value) -> Result<Self,CluEError>{
     
     let toml::Value::Array(pulse_step) = &pulse_step else{
-      return Err(CluEError::TomlPulseStepSpecifier(
-            "pulse_step must be of type toml::Value::Array".to_string()));
+      return Err(CluEError::TomlPulseStepSpecifier(format!(
+            "each step must be an array, for example [\"pulse\", \"pi\"], \
+but got {}", pulse_step)));
     }; 
     if pulse_step.is_empty(){
       return Err(CluEError::TomlPulseStepSpecifier(
-            "pulse_step cannot be empty".to_string()));
+            "a step cannot be empty".to_string()));
     }
     if pulse_step[0].as_str() == Some("detect"){
       return Ok(PulseStepSpecifier::Detect);
     }
     if pulse_step.len() < 2{
-      return Err(CluEError::TomlPulseStepSpecifier(
-        "missing elements from pulse_step".to_string()));
+      return Err(CluEError::TomlPulseStepSpecifier(format!(
+        "{} needs a second element", toml::Value::Array(pulse_step.clone()))));
     }
 
     let out = match &pulse_step[0]{
@@ -41,19 +42,21 @@ impl PulseStepSpecifier{
         match ps.as_str(){
           "pulse" => {
             let toml::Value::String(pulse_name) = &pulse_step[1] else{
-              return Err(CluEError::TomlPulseStepSpecifier(
-                "pulse step names must be strings".to_string()));
+              return Err(CluEError::TomlPulseStepSpecifier(format!(
+                "pulse names must be strings, but got {}", pulse_step[1])));
             };
             PulseStepSpecifier::Pulse(pulse_name.to_owned())
           },
           "delay" => parse_delay(pulse_step,1)?,
           "delay2" => parse_delay(pulse_step,2)?,
-          _ => return Err(CluEError::TomlPulseStepSpecifier(
-                format!("cannot parse \"{}\"",ps) )),
+          _ => return Err(CluEError::TomlPulseStepSpecifier(format!(
+                "cannot parse \"{}\"; the first element of a step must be \
+\"pulse\", \"delay\", \"delay2\", or \"detect\"",ps) )),
         }
       } 
-      _ => return Err(CluEError::TomlPulseStepSpecifier(
-            format!("cannot parse \"{:?}\"",pulse_step[0]))),
+      _ => return Err(CluEError::TomlPulseStepSpecifier(format!(
+            "cannot parse {}; the first element of a step must be \
+\"pulse\", \"delay\", \"delay2\", or \"detect\"",pulse_step[0]))),
     };
 
     Ok(out)  
@@ -103,7 +106,8 @@ fn parse_delay(pulse_step: &[toml::Value],delay_dim: usize)
 
   let toml::Value::Integer(number) = pulse_step[1] else{
     return Err(CluEError::TomlPulseStepSpecifier(
-      "fixed delays require the number of dt steps".to_string()));
+      format!("a delay needs \"tau\", \"-tau\", \"tau2\", \"-tau2\", \
+or an integer number of time steps, but got {}", pulse_step[1])));
   };
   
 
@@ -145,8 +149,9 @@ impl PulseSequence{
     match pulse_seq{
       toml::Value::String(ps) => Self::from_str(ps),
       toml::Value::Array(ps) => Self::from_toml_array(ps),  
-      _ => Err(CluEError::ErrorPulseSequence(
-            "cannot parse pule sequence".to_string())), 
+      other => Err(CluEError::InvalidTOMLValue("pulse_sequence".to_string(),
+            "a string or an array of steps".to_string(),
+            other.type_str().to_string())),
     }
   }
   //----------------------------------------------------------------------------
@@ -154,8 +159,9 @@ impl PulseSequence{
     let mut pulse_sequence 
       = Vec::<PulseStepSpecifier>::with_capacity(pulse_seq.len());
 
-    for step in pulse_seq.iter(){
-      let pulse_step = PulseStepSpecifier::from_toml_value(step)?;
+    for (ii,step) in pulse_seq.iter().enumerate(){
+      let pulse_step = PulseStepSpecifier::from_toml_value(step)
+        .map_err(|err| CluEError::InvalidPulseStep(ii, Box::new(err)))?;
       pulse_sequence.push(pulse_step)
     }
   
@@ -221,4 +227,37 @@ mod tests{
     }
   }
   //----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_pulse_step_errors(){
+    let table = r##"
+      steps = ["pi", [], ["wait", 1], [1, 2], ["delay", "t"]]
+    "##.parse::<toml::Table>().unwrap();
+    let steps = table["steps"].as_array().unwrap();
+    let messages = steps.iter()
+      .map(|step| PulseStepSpecifier::from_toml_value(step).unwrap_err()
+          .to_string())
+      .collect::<Vec::<String>>();
+    assert_eq!(messages, vec![
+        "each step must be an array, for example [\"pulse\", \"pi\"], \
+but got \"pi\"".to_string(),
+        "a step cannot be empty".to_string(),
+        "cannot parse \"wait\"; the first element of a step must be \"pulse\", \
+\"delay\", \"delay2\", or \"detect\"".to_string(),
+        "cannot parse 1; the first element of a step must be \"pulse\", \
+\"delay\", \"delay2\", or \"detect\"".to_string(),
+        "a delay needs \"tau\", \"-tau\", \"tau2\", \"-tau2\", or an integer \
+number of time steps, but got \"t\"".to_string(),
+    ]);
+
+    // The step index is added by `PulseSequence::from_toml_array`.
+    let err = PulseSequence::from_toml_array(steps).unwrap_err();
+    assert_eq!(err, CluEError::InvalidPulseStep(0, Box::new(
+            PulseStepSpecifier::from_toml_value(&steps[0]).unwrap_err())));
+
+    let err = PulseSequence::from_toml_value(&toml::Value::Integer(3))
+      .unwrap_err();
+    assert_eq!(err.to_string(),
+        "pulse_sequence must be a string or an array of steps, but got integer");
+  }
 }

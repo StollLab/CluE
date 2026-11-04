@@ -296,11 +296,13 @@ impl IntegrationGrid{
   /// Spaces around entries are ignored.
   pub fn read_from_csv(filename: &str) -> Result<Self,CluEError>{
 
-    let Ok(mut rdr) = csv::ReaderBuilder::new()
+    let mut rdr = match csv::ReaderBuilder::new()
       .has_headers(false)
       .trim(csv::Trim::All)
-      .from_path(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()));
+      .from_path(filename){
+      Ok(rdr) => rdr,
+      Err(err) => return Err(CluEError::CannotOpenFile(
+          filename.to_string(), err.to_string())),
     };
 
     let mut dim = 0;
@@ -309,8 +311,10 @@ impl IntegrationGrid{
     
     for (irow,result) in rdr.records().enumerate() {
       // Rows with different numbers of entries are reading errors.
-      let Ok(record) = result else{
-        return Err(CluEError::CannotReadGrid(filename.to_string()));
+      let record = match result{
+        Ok(record) => record,
+        Err(err) => return Err(CluEError::CannotReadGrid(filename.to_string(),
+              err.to_string())),
       };
 
       let values = record.iter().map(|entry| entry.parse::<f64>().ok())
@@ -326,7 +330,10 @@ impl IntegrationGrid{
       }
 
       if values.len() <= 1{
-        return Err(CluEError::CannotReadGrid(filename.to_string()));
+        let line = record.position()
+          .map_or(irow + 1,|pos| pos.line() as usize);
+        return Err(CluEError::CannotReadGrid(filename.to_string(),
+              format!("line {} has only one column", line)));
       }
       dim = values.len() - 1;
 
@@ -340,7 +347,8 @@ impl IntegrationGrid{
     }
 
     if weights.is_empty(){
-      return Err(CluEError::CannotReadGrid(filename.to_string()));
+      return Err(CluEError::CannotReadGrid(filename.to_string(),
+            "the file contains no grid points".to_string()));
     }
 
     Ok(IntegrationGrid{dim,points,weights})
@@ -532,14 +540,26 @@ mod tests{
     assert_eq!(grid, Err(CluEError::CannotParseGridEntry(filename, 3,
             "o".to_string())));
 
-    // Rows of different lengths, a single column, and no points are errors.
-    for (name, text) in [("ragged", "1,0,0,0.5\n0,1,0\n"), 
-        ("one_column", "1\n2\n"), ("header_only", "x,y,z,w\n"), 
-        ("empty", "")]
+    // A single column and no points are errors that give the reason.
+    for (name, text, reason) in [
+        ("one_column", "1\n2\n", "line 1 has only one column"),
+        ("header_only", "x,y,z,w\n", "the file contains no grid points"),
+        ("empty", "", "the file contains no grid points")]
     {
       let (grid, filename) = read_csv_text(name, text);
-      assert_eq!(grid, Err(CluEError::CannotReadGrid(filename)), "{}", name);
+      assert_eq!(grid, Err(CluEError::CannotReadGrid(filename,
+              reason.to_string())), "{}", name);
     }
+
+    // Rows of different lengths keep the csv error, which names the line
+    // and the number of fields. Its exact text comes from the csv crate.
+    let (grid, filename) = read_csv_text("ragged", "1,0,0,0.5\n0,1,0\n");
+    let Err(CluEError::CannotReadGrid(file, reason)) = grid else{
+      panic!("expected CannotReadGrid, got {:?}", grid);
+    };
+    assert_eq!(file, filename);
+    assert!(reason.contains("line: 2") && reason.contains("fields"),
+        "{}", reason);
   }
   //----------------------------------------------------------------------------
   #[test]

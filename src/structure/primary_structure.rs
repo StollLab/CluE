@@ -79,7 +79,7 @@ impl Structure{
   {
 
     let Some(detected_spin_position) = &config.detected_spin_position else{
-      return Err(CluEError::NoCentralSpinCoor);
+      return Err(CluEError::NoDetectedSpinPosition);
     };
 
     let mut weighted_coordinates = IntegrationGrid::new(3);
@@ -95,7 +95,7 @@ impl Structure{
           };
 
           let Some(filter) = &p_cfg.filter else{
-            return Err(CluEError::MissingFilter(label.to_string()));
+            return Err(CluEError::GroupHasNoSelection(label.to_string()));
           };
 
           if filter.within_distance.is_some() 
@@ -173,7 +173,7 @@ impl Structure{
 
     // TODO: move to config?
     let Some(isotope) = config.detected_spin_identity else{
-      return Err(CluEError::NoCentralSpinIdentity);
+      return Err(CluEError::NoDetectedSpinIdentity);
     };
     
     let Some(spin_multiplicity) = config.detected_spin_multiplicity else{
@@ -286,7 +286,7 @@ so selection.{} cannot select {}.",
     match self.cell_offsets.len(){
       0 => return Ok(()),
       3 => (),
-      _ => return Err(CluEError::InorrectNumberOfCellOffsets(
+      _ => return Err(CluEError::IncorrectNumberOfCellOffsets(
             self.cell_offsets.len(),3)),
     }
 

@@ -184,8 +184,9 @@ fn calculate_structure_signal(rng: &mut ChaCha20Rng, config: &Config,
       
       let info_path = format!("{}/{}",save_dir,SAVE_DIR_INFO);
 
-      if std::fs::create_dir_all(info_path.clone()).is_err(){
-        return Err(CluEError::CannotCreateDir(info_path));
+      if let Err(err) = std::fs::create_dir_all(info_path.clone()){
+        return Err(CluEError::CannotCreateDir(info_path,
+              err.to_string()));
       }
       let ori_file = format!("{}/{}.xyzw",info_path,SAVE_FILE_ORIENTATIONS);
 
@@ -454,7 +455,8 @@ fn calculate_methyl_partition_cce(
 {
   match std::fs::create_dir_all(save_path){
     Ok(_) => (),
-    Err(_) => return Err(CluEError::CannotCreateDir(save_path.to_string())),
+    Err(err) => return Err(CluEError::CannotCreateDir(save_path.to_string(),
+          err.to_string())),
   }
 
   if let Some(exchange_group_manager) = &structure.exchange_groups{
@@ -508,15 +510,17 @@ fn get_system_save_dir_opt(
 
       match std::fs::create_dir_all(save_dir.clone()){
         Ok(_) => (),
-        Err(_) => return Err(CluEError::CannotCreateDir(save_dir)),
+        Err(err) => return Err(CluEError::CannotCreateDir(save_dir,
+              err.to_string())),
       }
   
       if config.write_info == Some(true){
 
         let info_path = format!("{}/{}",save_dir,SAVE_DIR_INFO);
 
-        if std::fs::create_dir_all(info_path.clone()).is_err(){
-          return Err(CluEError::CannotCreateDir(info_path));
+        if let Err(err) = std::fs::create_dir_all(info_path.clone()){
+          return Err(CluEError::CannotCreateDir(info_path,
+                err.to_string()));
         }
 
         if config.write_detected_spin == Some(true){
@@ -572,8 +576,9 @@ fn optionally_save_tensors(
       let info_path = format!("{}/{}",save_dir,SAVE_DIR_INFO);
       
       if config.write_tensors == Some(true){
-        if std::fs::create_dir_all(info_path.clone()).is_err(){
-          return Err(CluEError::CannotCreateDir(info_path));
+        if let Err(err) = std::fs::create_dir_all(info_path.clone()){
+          return Err(CluEError::CannotCreateDir(info_path,
+                err.to_string()));
         }
         let tensor_path = format!("{}/{}.txt",info_path,SAVE_FILE_TENSORS);
 
@@ -607,7 +612,8 @@ fn get_orientation_save_dir(
       
         match std::fs::create_dir_all(save_path.clone()){
           Ok(_) => (),
-          Err(_) => return Err(CluEError::CannotCreateDir(save_path)),
+          Err(err) => return Err(CluEError::CannotCreateDir(save_path,
+                err.to_string())),
         }
 
         Some(save_path)

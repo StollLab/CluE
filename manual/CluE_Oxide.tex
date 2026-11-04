@@ -23,64 +23,13 @@ The pdb file specifies the coordinates and elements types of all the atoms,
 and the options file specifies all the additional information needed, 
 such as the pulse sequence the applied magnetic field, the central spin
 coordinates and so on.
-Element symbols are read from columns 77--78 of the ATOM and HETATM records,
-in upper or lower case (for example FE or Fe).
-If these columns are missing or blank, the element is read from the atom
-name (columns 13--16), where the PDB format right-justifies it in columns
-13--14.
-Since not every program follows this layout, the following rules are
-applied in order:
-\begin{enumerate}
-  \item if column 13 is blank or a digit, column 14 is the element
-    (`` CA '' is carbon);
-  \item if column 13 is a letter and column 14 is not, column 13 is the
-    element (``C1~~'');
-  \item an upper case letter followed by a lower case letter is read as
-    written (``Cl'', ``Fe'');
-  \item if the atom is the only one in its residue (same residue name,
-    chain ID, residue sequence number, and insertion code) and the two
-    letters form an element, the atom is read as that element, since such
-    atoms are usually ions (``CA'' is calcium, ``HG'' is mercury);
-  \item a name starting with H is hydrogen (``HG~~'', ``HG21'');
-  \item if no atom name in the model has a blank column 13 followed by a
-    non-blank column 14, the names are taken to be left-justified and
-    column 13 is the element (``CA~~'' in an amino acid is carbon);
-  \item otherwise the two letters are the element if they form one
-    (``CL1~'' is chlorine), else column 13.
-\end{enumerate}
-If the preferred reading is not an element, the other one is used.
-In rules 5--7, two letters are read as an element only up to uranium.
-CluE Oxide prints how many atoms of each element were read from atom names,
-and lists the residue and atom names that could also denote another element,
-or that were read as D or T, so they can be checked;
-adding element columns to the PDB file avoids these guesses.
-Atoms whose element cannot be read, such as virtual sites, are skipped
-with a message.
-The symbols D and T are read as hydrogen, starting as $^1$H, both in the 
-structure file and in element selections, and CluE Oxide prints a message
-when this happens; to simulate deuterium, use a group with
-\textit{2H.abundance = 1.0}.
-The PDB format has five columns for atom serial numbers and four for
-residue sequence numbers, so a PDB file may have at most 99999 atoms in the
-selected model and at most 9999 residues per chain; larger PDB files are an
-error, whether their numbers wrap or use another number system such as
-hybrid-36 or hexadecimal.
-Residue sequence numbers must be decimal integers or blank; blank and
-negative numbers are read as missing, so such atoms are not selected by
-\textit{residue\_sequence\_numbers}.
 %===============================================================================
 \section{Overview}
 %===============================================================================
 The first steps CluE Oxide takes is to read the options and PDB files to construct
 the spin system.  This includes applying periodic boundary conditions, and
 dropping non-magnetic nuclei as well as those beyond the system radius 
-specified in the options.  
-Before periodic boundary conditions are applied, molecules that are split
-across the unit cell boundary are made whole using the bonds in the 
-structure file (CONECT records):
-starting from the first atom of each molecule, each bonded atom is moved by
-the lattice vector that brings it closest to its bonded partner.
-Molecules that are already whole are not moved.  Isotope substitutions can also be applied at this
+specified in the options.  Isotope substitutions can also be applied at this
 step, if specified in the input options.  In addition to isotope substitution,
 atoms can be replaced with voids at a chosen rate.  
 This can be helpful in hydrogen rich media,
@@ -98,7 +47,8 @@ based on the user input.  CluE Oxide will default to applying the point-dipole
 approximation for spin-spin coupling, but the hyperfine tensors can be 
 explicitly set to custom values.  
 Nuclear electric quadrupole coupling tensors can also be set, but default to 
-zero.  There are several ways to specify tensors, and these are discussed later.   
+zero.  Tensor specification requires the eigenvalues, two eigenvectors,
+and which atoms to apply the tensor.
 
 CluE Oxide has a grouping algorithm that allows atoms to be specified by a combination 
 of properties found in the PDB file, such as element, serial number, or residue,
@@ -252,43 +202,7 @@ and system statistics including individual spin and methyl contributions.
 \subsection{Installing}
 %-------------------------------------------------------------------------------
 To start, please make sure that Rust is installed and up to date\cite{rust}.
-The stable version of CluE Oxide is available on crates.io 
-(\url{https://crates.io/crates/clue_oxide}), and can be installed 
-with the following.
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-cargo install clue_oxide
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-You can also build CluE Oxide yourself .
-The most common problem when compiling CluE Oxide is in dealing with OpenBLAS:
-OpenBLAS is dealt with differently on Linux and Windows.  
-The Cargo.toml file is set to try and compile OpenBLAS during the compilation
-of CluE Oxide; however, if you encounter difficulty and your system has
-its own OpenBLAS, you can change to using your system's OpenBLAS.
-On Linux change 
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-ndarray-linalg = { version = "0.16", features = ["openblas-static"] }     
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-in the Cargo.toml file to 
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-ndarray-linalg = { version = "0.16", features = ["openblas-system"] }     
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-More information can be found at
-\url{https://github.com/rust-ndarray/ndarray-linalg}.   
-For Debian based Linux distros, you can install OpenBLAS with the following 
-command.
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-apt install libobenblas-dev
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-% 
-It is a good idea to run the test suite.
+Before starting, it is a good idea to run the test suite.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=bash]
 cargo test
@@ -334,7 +248,7 @@ Options:
     -l, --license    Prints license.
     -O, --option     input additional options.
     -V, --version    Prints version information.
-    -W, --warranty   Prints warranty information.
+    -W, --warrenty   Prints warrenty information.
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 To run CluE Oxide from the command line, an input file is needed.
@@ -408,8 +322,8 @@ orientation_grid = lebedev(170);
   electric_quadrupole_y = diff(particle,bonded(tempo_o));
 
 #[config]
-write_orientation_signals = false;
-write_clusters = false;
+write_orientation_signals = "";
+write_clusters = "";
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 The input script is not Turing complete, 
@@ -487,7 +401,7 @@ other modes back to \textit{\#[config]}.
 The available fields are explained below.  
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{center}
-\begin{tabular}{| m{7cm} | m{2cm}| m{7cm} |}
+\begin{tabular}{| m{20em} | m{1.5cm}| m{7cm} |}
  \hline 
  \textbf{field} & \textbf{values} & \textbf{description} \\ 
   %
@@ -507,7 +421,7 @@ The available fields are explained below.
  cluster\_method & r2cce, cce & method of evaluating clusters \\
  %
  \hline 
- detected\_g\_matrix & [float] & eigenvalues or matrix of the detected spin g-matrix\\
+ detected\_g\_matrix & [float; 3] & eigenvalues of the detected spin g-matrix\\
  %
  \hline 
  detected\_g\_x & vector & x-direction of the  detected spin g-matrix\\
@@ -578,10 +492,6 @@ The available fields are explained below.
  orientation\_grid  & ori\_grid & grid used for orientation averaging\\ 
  %
  \hline 
- partitioning\_method & Partitioning Method & 
- criteria for partitioning the system\\
- %
- \hline 
  pulse\_sequence & cp-$n_{\uppi}$, hahn & 
  pulse sequence to simulate with $n_{\uppi}$ $\uppi$-pulses\\
  %
@@ -594,76 +504,36 @@ The available fields are explained below.
  directory where data will be saved\\
  %
  \hline 
- system\_name & string & 
- directory where the system info will be saved\\
- %
- \hline 
  time\_increments  & [float] & 
  list of $\Delta \tau$s in s used for propagation\\ 
  %
  \hline 
- unit\_of\_clustering & set, spin & 
- determines the definition of a $n$-cluster\\
+ write\_auxiliary\_signals & string & 
+ file name to save cluster auxiliary signals under\\
  %
  \hline 
- write\_auxiliary\_signals & bool & 
- flag to save cluster auxiliary signals\\
+ write\_bath & string & 
+ file name to save bath spins under\\
  %
  \hline 
- write\_bath & bool & 
- flag to save bath spins\\
+ write\_clusters & string & 
+ file name to save clusters under\\
  %
  \hline 
- write\_clusters & bool & 
- flag to save clusters\\
+ write\_info & string & 
+ directory name to save general information under\\
  %
  \hline 
- write\_info & bool & 
- flag to save general information\\
+ write\_exchange\_groups & string & 
+ file name to save exchange groups (such as methyls) under\\
  %
  \hline 
- write\_exchange\_groups & bool & 
- flag to save exchange groups (such as methyls)\\
- %
- \hline 
- write\_structure\_pdb & bool & 
- flag to save to save the spin system as a pdb\\
+ write\_structure\_pdb & string & 
+ PDB file name to save the spin system under\\
  %
  \hline 
 \end{tabular}
 \end{center} 
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-The unit cell is read from the CRYST1 record of the structure file
-and replicated with \textit{replicate\_unit\_cell}, which is
-\textit{true} (the default) to choose the number of unit cells automatically,
-\textit{false} to use only the primary cell, 
-or a list $[n_a, n_b, n_c]$ of the number of unit cells to add on each side 
-of the primary cell along each cell edge.
-When chosen automatically, $n_i$ is the smallest number for which every 
-periodic image within the radius of the detected spin is included,
-which accounts for oblique unit cells and for atoms outside the unit cell,
-but $n_i$ is at least 1 and at least $\lceil r/|\mathbf{a}_i| \rceil$, 
-where $r$ is the radius and $\mathbf{a}_i$ the cell edge.
-If a list is given that is smaller than needed, CluE Oxide prints a message.
-Only lattice translations are applied, so the structure must be 
-in space group P 1 (or have no space group);
-otherwise CluE Oxide reports an error when replicating the unit cell.
-The placeholder unit cell $1\times1\times1$ \AA$^3$ that PDB files use 
-for structures without a unit cell, and unit cells without volume,
-are ignored.
-If the structure spans more than two unit cells along a cell edge,
-the unit cell cannot describe it and CluE Oxide reports an error.
-With \textit{replicate\_unit\_cell} = \textit{false} the unit cell is 
-only used to make molecules whole, so CluE Oxide instead prints a warning 
-and leaves the atoms where the structure file puts them.
-Periodic copies that cannot be within the radius are not stored.
-The particles of an exchange group, such as a methyl, are kept 
-if the center of the group is within the radius plus the largest
-distance of a group member from the center of its group;
-other particles are kept if they are within the radius.
-The bath output file therefore lists only these copies,
-and the indices of periodic copies in output files, such as the bath,
-cluster, and partition table files, differ from those of earlier versions.
 \subsubsection{ClusterDensityMatrix} % -----------------------------------------
 If no \textit{cluster\_density\_matrix} is specified, the infinite temperature
 limit is assumed for the bath spin, so that the density matrix is proportional
@@ -701,43 +571,23 @@ They can be specified directly.
 detected_spin_position = [1.2, -3, 0];
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Coordinates are in \textit{unit\_of\_distance} (default \AA), as grid points
-are. In the TOML input they must be written as floating point numbers
-(for example \textit{[1.2, -3.0, 0.0]}): a list of integers is read as PDB 
-serial numbers, and CluE Oxide prints a message when a list of three 
-integers is read this way.
 They can be specified as the centroid of atoms in the PDB file.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
 detected_spin_position = centroid_over_serials([28,29]);
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Every serial number, or every group when the position is the centroid of 
-groups, must match at least one atom; otherwise CluE Oxide reports an error 
-naming the serial numbers or group that match nothing.
-CluE Oxide also reports an error if the resulting position is not finite.
 Both of these methods assume that the detected spin is localized to a single
 point.  If the spin is delocalized of multiple points, a csv file can be used
 to provide $|\Psi(x,y,z)|^2$.  
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
-detected_spin.position = "xyzw.csv"
+detected_spin_position = read_csv("xyzw.csv");
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Each row of the file "xyzw.csv" should be four comma separated floating point
 numbers, specifying the $x$, $y$, $z$ and weight,
 $w = |\Psi(x,y,z)|^2 \d x \d y \d z$, for the coordinates.
-The first line may be a header, such as \textit{x,y,z,w}: it is skipped if 
-none of its entries is a number.  A first line that mixes numbers and other 
-entries, or any later entry that is not a number, is an error that names the
-line, so a data row is never dropped. Spaces around entries are ignored.
-The weights must sum to one within \textit{detected\_spin.weight\_tolerance}
-(default $10^{-9}$); weights within the tolerance are normalized to sum to 
-exactly one, and CluE Oxide prints a message if this changes them by more 
-than floating point rounding. Negative weights, as in a spin density, are 
-allowed.
-The bath is centered on the weighted mean of the grid, $\sum_i w_i \mathbf{r}_i$:
-the system radius and distance selections are measured from it.
 
 \subsubsection{LoadGeometry} % ---------------------------------------------
 The \textit{load\_geometry} can be either \textit{sphere}, 
@@ -755,23 +605,7 @@ dimension in question.
 The orientation grid specifies the directions and weights for the applied 
 static magnetic field.  If no grid is given, the magnetic field is directed 
 along the $z$-axis of the PDB file.
-A lebedev grid \cite{1999_Lebedev} can be specified as \textit{lebedev}($n$),
-where  
-\begin{equation}
-\begin{tabular}{c c c c c c c c c c c}
-$n \in \{$
-  & 6, &  14, &  26, &  38, &  50, &  
-  74, &  86, & 110, & 146, & 170,  
-\\
-& 194, & 230, & 266, & 302, & 350, & 
-434, & 590, & 770, & 974, &1202, 
-\\
-& 1454, &1730, &2030, & 2354, & 2702, &
-3074, &3470, &3890, & 4334, & 4802, 
-\\
-& 5294,& 5810 & $\}$. & & & & & & &  
-\end{tabular}
-\end{equation}
+A lebedev grid \cite{1999_Lebedev} can be specified.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
 orientation_grid = lebedev(302);
@@ -785,25 +619,13 @@ orientation_grid = random(1);
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 And as with the detected spin position, a csv file $x$, $y$, $z$ and weight
-entries can be used for a custom grid; the same rules for the header line 
-apply.
+entries can be used for a custom grid.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
-[orientations]
-grid = "file"
-file = "xyzw.csv"
+orientation_grid = read_csv("xyzw.csv");
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-The signal is the weighted sum of the signals at each orientation, so the 
-weights of a grid from a file, or from \textit{vector\_grid}, must sum to one
-within \textit{orientations.weight\_tolerance} (default $10^{-9}$); weights 
-within the tolerance are normalized to sum to exactly one, and CluE Oxide 
-prints a message if this changes them by more than floating point rounding.
-The tolerance must be at least 0 and less than 1.
 
-\subsubsection{PartitioningMethod} % -------------------------------------------
-The partitioning method determines how the spin system should be partitioned
-into block. 
 \subsubsection{PulseSequence} % ---------------------------------------------
 To simulate a Carr-Purcell pulse sequence with two $\uppi$-pulses   
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -853,52 +675,6 @@ orientation_grid = random(100);
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-\subsubsection{Tensor Specification} % --------------------------------------------
-Tensors such as \textit{detected\_g\_matrix} or various bath spin
-coupling tensors are specified with an array of floating point numbers.
-Isotropic matrices can be specified with a single number, as an unwritten 
-identity matrix is assumed.
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-detected_g_matrix = 2;
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-The eigenvalues can be specified by an array of three numbers; however, 
-two eigenvectors are also needed under this method.  
-See the section on \textit{VectorSpecifiers} for details.
-Since  CluE Oxide only uses symmetric tensors, 
-six value can be used to specify the upper triangular part of a tensor,
-and the remaining values will be inferred.
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-some_matrix = [1, 2, 3,
-                  5, 6,
-                     9];
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Since the numerical values on the right hand side are for illustrative 
-purposes only, \textit{some\_matrix} is being used as a generic name.
-Finally, nine values can be used to specify a tensor; however, the redundant 
-entries in the lower triangular section of the matrix are discarded.  
-As such the following example is equivalent to the previous example.
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-\begin{lstlisting}[frame=single,numbers=left,language=bash]
-some_matrix = [1, 2, 3,
-               4. 5. 6.
-               7, 8, 9];
-\end{lstlisting}
-% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-CluE Oxide will interpret both the six and nine value examples as
-\begin{equation*}
-\begin{bmatrix}
-1 & 2 & 3 \\
-2 & 5 & 6 \\
-3 & 6 & 9
-\end{bmatrix}
-\end{equation*}
-in the frame of the input PDB.  
-When orientation averaging, CluE Oxide automatically rotates the tensors as 
-well.
 \subsubsection{TimeAxis} % --------------------------------------------
 The time-axis is specified in two part, the number of timepoints, and 
 the time increments.  For example, the CluE Oxide input file could include the
@@ -919,13 +695,6 @@ $\Delta t_\text{axis} = 10$ ns for the first 101 timepoints $\in [0, 1]\ \upmu$s
 and then $\Delta t_\text{axis} = 100$ ns for the next 90 timepoints
 $\in [1.1, 10]\ \upmu$s.
 
-\subsubsection{UnitOfClustering} % --------------------------------------------
-This defines what defines an $n$-cluster; the options are "spin" or "set".
-For example suppose that a methyl group with protons [1,2,3] is partitioned
-into its own block.  If the unit of clustering is set to "spin", then the 
-cluster containing only the methyl group is considered a 3-cluster,
-but if the unit of clustering is set to "set", then it is considered 
-a 1-cluster.
 \subsubsection{VectorSpecifiers} % --------------------------------------------
 The fields that require values of ``vector'' have several options.
 First, a vector can be a list.
@@ -968,13 +737,13 @@ the group conditions that can have multiple matches
 are listed as
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
-property in [allowed_value_1, allowed_value_2, ... allowed_value_n];
+property in [allowed_value_1, allowed_value_n, ...];
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 or
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[frame=single,numbers=left,language=c]
-property not in [forbidden_value_1, forbidden_value_2, ... forbidden_value_n];
+property not in [forbidden_value_1, forbidden_value_n, ...];
 \end{lstlisting}
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 The distance group only takes maximum and minimum values and is specified 
@@ -988,15 +757,6 @@ distance >= r_min; // angstroms
 where \textit{r\_max} and \textit{r\_min} are floating point numbers
 specifing the maximum and minimum distances in \AA~from the detected spin
 that the particles in the group can be.
-Distances are measured from the detected spin position,
-not from the origin of the structure file.
-For periodic copies of the unit cell, the distance criteria are evaluated
-for each copy at its own position, so a particle and its copies 
-can belong to different groups.
-When the detected spin position is defined as the centroid of a group,
-that group cannot use a distance criterion, 
-since the distances are measured from the detected spin;
-CluE Oxide reports an error in this case.
 CluE Oxide will find all the spins that fit all specified criteria.
 Note that depending upon how the criteria are defined it is possible that
 some spins will fall under multiple groups. 
@@ -1054,19 +814,6 @@ The following table shows the possible group criteria.
  \hline 
 \end{tabular}
 \end{center}  
-A particle without a field, such as an atom whose residue sequence number 
-in the structure file is not a number, is not selected by a list of 
-that field, and is not excluded by a \textit{not\_} list of that field;
-CluE Oxide prints how many particles of each group this applies to.
-Unit cells are numbered as follows for cell ID selections.
-The primary cell is cell 0.
-The other unit cells are numbered by increasing length of their 
-lattice offset from the primary cell;
-unit cells with offsets of the same length are ordered by their indices
-along $\mathbf{a}$, then $\mathbf{b}$, then $\mathbf{c}$, 
-with each index running from $-n_i$ to $n_i$.
-The unit cell of each particle is listed in the \textit{cell\_id} column of 
-the bath output file.
 %-------------------------------------------------------------------------------
 \subsection{\#[structure\_properties(my\_label)]}
 %-------------------------------------------------------------------------------
@@ -1095,37 +842,6 @@ The following table shows the available properties.
  \hline 
 \end{tabular}
 \end{center} 
-If a group specifies isotope abundances (for example 
-\textit{1H.abundance = 0.7} and \textit{2H.abundance = 0.3}),
-every isotope must be listed and the abundances must sum to one 
-within the group's \textit{abundance\_tolerance} (default $10^{-9}$);
-abundances within the tolerance are normalized to sum to exactly one,
-and CluE Oxide prints a message if this changes them by more than 
-floating point rounding.
-Abundances must not be negative, and \textit{abundance\_tolerance} must be
-at least 0 and less than 1.
-A group without abundances keeps the most common isotope of each element.
-Groups are selected before isotopes are drawn, so a selection cannot depend
-on the drawn isotope; to set properties for one isotope only, use
-isotope-keyed group keys such as \textit{2H.active} or
-\textit{2H.electric\_quadrupole}.
-The isotope is drawn once per cosubstitution set and given to every particle
-in the set, whatever its element.
-The \textit{drop\_probability} of a group must lie in the interval $[0,1]$.
-The option \textit{cosubstitute} selects the particles of a group that 
-are given the same random isotope and are kept or removed together:
-\textit{"same\_molecule"} selects the particles of the group in the same
-molecule, \textit{"group"} (or \textit{"filter"}) selects all particles of 
-the group, and \textit{"particle"}, the default, treats each particle on 
-its own.
-The value \textit{"bonded"} is not supported for \textit{cosubstitute} and
-is reported as an error; \textit{bonded} remains available for tensor axes.
-When particles are cosubstituted (for example with 
-\textit{cosubstitute = "same\_molecule"}),
-the whole set of cosubstituted particles is kept or removed together.
-A set is included as long as any of its particles can have a spin, 
-even if its first particle cannot.
-Outside the primary cell, only the particles that can have a spin are copied.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 %-------------------------------------------------------------------------------
@@ -1161,7 +877,7 @@ The following table shows the available properties.
  specifies if the particle should be used for spin dynamics\\
  %
  \hline 
- electric\_quadrupole\_coupling & [float] & 
+ electric\_quadrupole\_coupling & [float; 3] & 
  eigenvalues in Hz of the electric quadrupole tensor\\
  %
  \hline 
@@ -1177,7 +893,7 @@ The following table shows the available properties.
  vector & $z$-direction of the electric quadrupole tensor\\
  %
  \hline 
- g\_matrix & [float] & eigenvalues in of the g-matrix\\
+ g\_matrix & [float; 3] & eigenvalues in of the g-matrix\\
  %
  \hline 
  g\_x & vector & $x$-direction of the g-matrix\\
@@ -1189,7 +905,7 @@ The following table shows the available properties.
  g\_z & vector & $z$-direction of the g-matrix\\
  %
  \hline 
- hyperfine\_coupling & [float] & eigenvalues in Hz of the hyperfine tensor\\
+ hyperfine\_coupling & [float; 3] & eigenvalues in Hz of the hyperfine tensor\\
  %
  \hline 
  hyperfine\_x & vector & $x$-direction of the hyperfine tensor\\
@@ -1255,9 +971,6 @@ The table assumes that the user defined
  \hline 
 \end{tabular}
 \end{center} 
-When the unit cell is replicated, these selections are made within
-the unit cell of the reference particle,
-so a particle and all of its periodic copies have the same tensor axes.
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 %===============================================================================
 \section{Shell Scripting}
@@ -1683,7 +1396,8 @@ set\_defaults method.
 Note that set\_defaults will not overwrite user set values.  
 This method is called automatically when using the command line or python
 interface.
-The \textit{Config} struct is defined as shown below.
+The \textit{Config} struct is defined as shown below, with the defaults shown 
+as comments.    
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \begin{lstlisting}[
 frame=single,
@@ -1719,6 +1433,7 @@ pub struct Config{
   pub particles: Vec::<ParticleConfig>,
   pub pdb_model_index: Option<usize>,
   pub pulse_sequence: Option<PulseSequence>,
+  pub remove_partial_methyls: Option<bool>,
   pub root_dir: Option<String>,
   pub radius: Option<f64>,
   pub rng_seed: Option<u64>,

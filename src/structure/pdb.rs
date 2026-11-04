@@ -66,18 +66,23 @@ fn parse_cell(filename: &str)
    let mut cell_offsets = Vec::<Vector3D>::new();
    let mut space_group: Option<String> = None;
 
-   let Ok(file) = std::fs::File::open(filename) else{
-     return Err(CluEError::CannotOpenFile(filename.to_string()));
+   let file = match std::fs::File::open(filename){
+     Ok(file) => file,
+     Err(err) => return Err(CluEError::CannotOpenFile(
+         filename.to_string(), err.to_string())),
    };
    let lines = std::io::BufReader::new(file).lines();
 
 
-   for line_result in lines {
-     let Ok(line) = line_result else{
-       return Err(CluEError::CannotOpenFile(filename.to_string()));
+   for (line_idx, line_result) in lines.enumerate() {
+     let line = match line_result{
+       Ok(line) => line,
+       Err(err) => return Err(CluEError::CannotReadFile(
+           filename.to_string(), err.to_string())),
      };
      if line.starts_with("CRYST1"){
-       (cell_offsets, space_group) = parse_crystal_line(&line)?;
+       (cell_offsets, space_group) = parse_crystal_line(&line)
+         .map_err(|err| locate_line_error(err, filename, line_idx + 1))?;
        break;
      }
    }
@@ -97,20 +102,25 @@ fn parse_connections(filename: &str ,
 
    let mut connections = AdjacencyList::with_capacity(n_atoms);
 
-   let Ok(file) = std::fs::File::open(filename) else{
-     return Err(CluEError::CannotOpenFile(filename.to_string()));
+   let file = match std::fs::File::open(filename){
+     Ok(file) => file,
+     Err(err) => return Err(CluEError::CannotOpenFile(
+         filename.to_string(), err.to_string())),
    };
 
    let lines = std::io::BufReader::new(file).lines();
 
-   'line_loop: for line_result in lines {
+   'line_loop: for (line_idx, line_result) in lines.enumerate() {
 
-     let Ok(line) = line_result else{
-       return Err(CluEError::CannotOpenFile(filename.to_string()));
+     let line = match line_result{
+       Ok(line) => line,
+       Err(err) => return Err(CluEError::CannotReadFile(
+           filename.to_string(), err.to_string())),
      };
 
      if line.starts_with("CONECT"){
-       let bonds_serial = parse_connections_line(&line)?;
+       let bonds_serial = parse_connections_line(&line)
+         .map_err(|err| locate_line_error(err, filename, line_idx + 1))?;
 
        let mut bonds_index =  Vec::<usize>::with_capacity(bonds_serial.len());
        
@@ -168,16 +178,20 @@ fn scan_atom_names(filename: &str, target_model: usize)
 
    let mut model_idx = 0;
 
-   let Ok(file) = std::fs::File::open(filename) else{
-     return Err(CluEError::CannotOpenFile(filename.to_string()));
+   let file = match std::fs::File::open(filename){
+     Ok(file) => file,
+     Err(err) => return Err(CluEError::CannotOpenFile(
+         filename.to_string(), err.to_string())),
    };
    
    let lines = std::io::BufReader::new(file).lines();
 
-   for line_result in lines {
+   for (line_idx, line_result) in lines.enumerate() {
 
-     let Ok(line) = line_result else{
-       return Err(CluEError::CannotOpenFile(filename.to_string()));
+     let line = match line_result{
+       Ok(line) => line,
+       Err(err) => return Err(CluEError::CannotReadFile(
+           filename.to_string(), err.to_string())),
      };
 
      if line.starts_with("ENDMDL"){
@@ -193,12 +207,15 @@ fn scan_atom_names(filename: &str, target_model: usize)
        continue;
      }
 
-     let mut name = pdb_columns(&line,13,14)?.unwrap_or("").chars();
+     let locate = |err| locate_line_error(err, filename, line_idx + 1);
+     let mut name = pdb_columns(&line,13,14).map_err(locate)?
+       .unwrap_or("").chars();
      if name.next() == Some(' ') && name.next().is_some_and(|c| c != ' '){
        context.names_follow_layout = true;
      }
 
-     *context.residue_sizes.entry(residue_key(&line)?).or_insert(0) += 1;
+     *context.residue_sizes.entry(residue_key(&line).map_err(locate)?)
+       .or_insert(0) += 1;
    }
    Ok(context)
 }
@@ -280,16 +297,20 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
 
    let mut model_idx = 0;
 
-   let Ok(file) = std::fs::File::open(filename) else{
-     return Err(CluEError::CannotOpenFile(filename.to_string()));
+   let file = match std::fs::File::open(filename){
+     Ok(file) => file,
+     Err(err) => return Err(CluEError::CannotOpenFile(
+         filename.to_string(), err.to_string())),
    };
    
    let lines = std::io::BufReader::new(file).lines();
 
-   for line_result in lines {
+   for (line_idx, line_result) in lines.enumerate() {
 
-     let Ok(line) = line_result else{
-       return Err(CluEError::CannotOpenFile(filename.to_string()));
+     let line = match line_result{
+       Ok(line) => line,
+       Err(err) => return Err(CluEError::CannotReadFile(
+           filename.to_string(), err.to_string())),
      };
 
      if line.starts_with("ENDMDL"){
@@ -329,7 +350,8 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
          continue;
        }
 
-       Err((err,_)) => return Err(err),
+       Err((err,_)) 
+         => return Err(locate_line_error(err, filename, line_idx + 1)),
      };
 
      // Count the elements read from atom names, and the symbols D and T.
@@ -404,6 +426,19 @@ fn check_residue_number(line: &str, filename: &str,
         chain_id, PDB_MAX_RESIDUE_SEQUENCE_NUMBER));
   }
   Ok(())
+}
+//------------------------------------------------------------------------------
+// This function adds the file name and the line number `line_number` 
+// (counted from 1) to a `CannotParseLine` error; other errors are returned 
+// unchanged.
+fn locate_line_error(err: CluEError, filename: &str, line_number: usize)
+  -> CluEError
+{
+  match err{
+    CluEError::CannotParseLine(line) => CluEError::CannotParseLineInFile(
+        filename.to_string(), line_number, line),
+    other => other,
+  }
 }
 //------------------------------------------------------------------------------
 // This function tries to parse the crystallographic data line, and returns
@@ -785,13 +820,17 @@ fn count_pdb_atoms(filename: &str) -> Result<(usize,usize),CluEError> {
    let mut count = 0;
    let mut model_count = 0;
    let mut increment = 1;
-   let Ok(file) = File::open(filename) else{
-     return Err(CluEError::CannotOpenFile(filename.to_string()));
+   let file = match File::open(filename){
+     Ok(file) => file,
+     Err(err) => return Err(CluEError::CannotOpenFile(
+         filename.to_string(), err.to_string())),
    };
    let lines = std::io::BufReader::new(file).lines();
    for line_result in lines {
-     let Ok(line) = line_result else{
-       return Err(CluEError::CannotOpenFile(filename.to_string()));
+     let line = match line_result{
+       Ok(line) => line,
+       Err(err) => return Err(CluEError::CannotReadFile(
+           filename.to_string(), err.to_string())),
      };
      if line.starts_with("MODEL"){
        model_count += 1;
@@ -821,16 +860,18 @@ impl Structure{
     let bytes_per_char = 32;
     let n_bytes = (n_active +1)*pdb_chars_per_line*bytes_per_char;
 
-    let Ok(file) = File::create(filename)
-    else {
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    let file = match File::create(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotCreateFile(
+          filename.to_string(), err.to_string())),
     };
     let mut stream = BufWriter::with_capacity(n_bytes,file);
 
     let pdb_det_str = self.get_detected_particle_pdb_string()?;
 
-    if stream.write(pdb_det_str.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(pdb_det_str.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     let mut serial_num = 1;
@@ -840,17 +881,19 @@ impl Structure{
       self.set_bath_particle_pdb_string(&mut line, particle, &mut serial_num)?;
 
       
-      let stream_result = stream.write(line.as_bytes());
-      if stream_result.is_err(){
-        return Err(CluEError::CannotWriteFile(filename.to_string()) );
+      let stream_result = stream.write_all(line.as_bytes());
+      if let Err(err) = stream_result{
+        return Err(CluEError::CannotWriteFile(filename.to_string(),
+              err.to_string()));
       }
       
 
     }
 
     let stream_result = stream.flush();
-    if stream_result.is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream_result{
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     Ok(())
@@ -1622,4 +1665,31 @@ mod tests {
     assert!(!structure.connections.are_connected(0,28));
   }
   //----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_pdb_errors_locate_the_line(){
+    let lines = vec![
+      "ATOM      1  H   HOH A   1       0.000   0.000   0.000  1.00  0.00           H".to_string(),
+      "CONECT    1  abc".to_string(),
+    ];
+    let err = parse_pdb_lines(&lines, "bad_conect", 0).unwrap_err();
+    let CluEError::CannotParseLineInFile(file, line_number, line) = err else{
+      panic!("unexpected error: {:?}", err);
+    };
+    assert!(file.ends_with(".pdb"));
+    assert_eq!(line_number, 2);
+    assert_eq!(line, lines[1]);
+
+    // Other errors are not changed.
+    assert_eq!(locate_line_error(CluEError::NoRadius, "f.pdb", 3),
+        CluEError::NoRadius);
+
+    // A missing file reports why it cannot be opened.
+    let err = parse_pdb("assets/no_such_file.pdb", 0).unwrap_err();
+    let CluEError::CannotOpenFile(file, reason) = err else{
+      panic!("unexpected error: {:?}", err);
+    };
+    assert_eq!(file, "assets/no_such_file.pdb");
+    assert!(!reason.is_empty());
+  }
 }

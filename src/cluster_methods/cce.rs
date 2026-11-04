@@ -98,9 +98,7 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
 
   if config.thermalize_cluster_populations == Some(true) && 
       config.ensemble_cce != Some(true){
-    return Err(CluEError::Generic(
-        "thermalilizing cluster populations only is implemented for ensemble CCE"
-        .to_string()));
+    return Err(CluEError::ThermalizationRequiresEnsembleCCE);
   }
   let density_matrix = if config.thermalize_cluster_populations == Some(true){
       get_electron_cluster_thermal_density_matrix(

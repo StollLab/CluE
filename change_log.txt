@@ -6,6 +6,9 @@ ADDED:
   sum of the weights of a detected spin probability grid may differ from 
   one.
 
+  CluEError implements std::error::Error, so library users can return it
+  as Box<dyn Error> or pass it to other error-handling code.
+
   The group key abundance_tolerance (default 1e-9) sets how far the sum 
   of a group's isotope abundances may differ from one.
 
@@ -16,6 +19,107 @@ ADDED:
   weights were used as given, and the signal was scaled by their sum.
 
 CHANGED:
+  Every element of a selection list must have the type of that list:
+  integer lists (serials, residue_sequence_numbers, indices, cell_ids, and
+  their bonded_ and not_ forms) take non-negative integers, and the other
+  lists take strings. Any other element is now an error that names the
+  key and the position, for example
+  selection.serials[1] must be a non-negative integer, but got "13".
+  Previously such elements were ignored, negative integers wrapped around
+  to large numbers, and integers above 4294967295 in u32 lists were
+  truncated. A list with no valid elements, such as serials = ["12"],
+  was therefore empty and selected every particle.
+
+  A selection with not_cell_ids, or with primary_cell = false, and no
+  cell_ids now selects the particles outside the listed cells. Previously
+  such a selection matched no particles, so the group's settings were
+  silently not applied.
+
+  Structure::new() now puts all particles in the primary cell (cell IDs,
+  primary cell indices, and cell indices are set). Previously these were
+  empty until the structure was built, so using a particle filter on such
+  a structure (library API) could panic. Runs from a config file are
+  unchanged.
+
+  Write failures in the tensors, bath, exchange-group, partition-table,
+  cluster, and structure PDB output files are now reported as
+  cannot write to "<file>": <reason>. Previously the tensors, bath, exchange-group,
+  partition-table, and cluster files were not flushed explicitly, so an
+  error such as a full disk could leave the file truncated or empty while
+  the run reported success; partial writes were also not detected. Files
+  written without errors are unchanged.
+
+  Integer arrays in the config are range checked instead of being
+  converted with a silent wrap-around:
+  - replicate_unit_cell must have exactly three integers from 0 to
+    2147483647. Previously fewer than three crashed the program, entries
+    after the third were ignored, negative values or values above
+    2147483647 crashed when the cells were built, and 4294967296 was
+    read as 0.
+  - Serial numbers in detected_spin.position must be from 0 to
+    4294967295; previously -5 was read as serial 4294967291.
+  - partition_table (inline or csv): negative entries, block 0 (reserved
+    for the detected spin), serial numbers above 4294967295 (previously
+    reduced modulo 2^32, so 4294967306 was read as serial 10), and serial
+    numbers not in the structure are errors that name the entry.
+    Previously these crashed the program or used a different particle.
+    Entries for inactive particles are skipped, as they have no
+    partition block; previously they crashed the program.
+  - The error for partition blocks with gaps now says that the block
+    numbers in partition_table must be 1, 2, ..., k.
+
+  Error messages were corrected and made more specific; which inputs are
+  accepted is unchanged. In particular:
+  - Invalid config values name the key, and the group and isotope where
+    they apply, for example
+    group "methyl": drop_probability must be a float, but got string.
+    Missing keys say what requires them, for example
+    orientations.number is required for orientations.grid = "lebedev".
+  - Unknown config keys are reported as invalid key "foo" (previously as
+    a TOML file named "invalid key foo").
+  - Parse errors list the valid options (cluster_method, pulse_sequence,
+    partitioning, orientations.grid, detected_spin.frame, cell_type,
+    spin operators, and units).
+  - File errors give the reason from the operating system and distinguish
+    opening, reading, and creating files; PDB lines that cannot be parsed
+    give the file name and line number. This includes errors writing
+    output files, creating output directories (for example
+    cannot create directory "out/info": Not a directory (os error 20)),
+    and writing the cluster and auxiliary signal batch files, which are
+    reported as CSV write errors. Grid files with rows of different
+    lengths give the csv error, which names the line.
+  - Errors in pulse_sequence steps give the step index.
+  - Clash and NaN-tensor errors give the PDB serial number and unit cell
+    of the particles; diagonalization errors give the matrix size and the
+    number of NaN or infinite entries instead of the whole matrix.
+  - Messages that named old keys (do_replicate_unit_cell,
+    detected_spin_identity, detected_transition, orientation_grid) now
+    use the current keys, and spelling and spacing errors were fixed.
+  - thermalize_cluster_populations = true without ensemble_cce = true and
+    a Stevens coefficient entry with more than one column have their own
+    error variants (ThermalizationRequiresEnsembleCCE,
+    InvalidStevensCoefficientShape) instead of CluEError::Generic; the
+    Stevens error gives the entry index and its shape.
+  - TOML sub-tables that cannot be parsed are reported as
+    cannot parse TOML: <reason>; previously the reason was quoted as if it
+    were the input.
+  - Error variants for the detected spin use one name: NoCentralSpinCoor
+    is now NoDetectedSpinPosition, NoCentralSpinIdentity and
+    NoCentralSpinTransition are now NoDetectedSpinIdentity and
+    NoDetectedSpinTransition, and NoCentralSpin and NoDetectedSpinNotSet
+    are now NoDetectedParticle. CluEError::Error, used only by pyclue, is
+    now CluEError::Python.
+  - Misspelled error variants were renamed:
+    LenghMismatchTimepointsIncrements to LengthMismatchTimepointsIncrements,
+    InorrectNumberOfCellOffsets to IncorrectNumberOfCellOffsets, and
+    PartitionIsIncomplette to PartitionIsIncomplete.
+  - Failures to write the signal and data CSV files give the reason from
+    the operating system, for example
+    cannot write CSV file "out/signal.csv": <reason>, with the new variant
+    CluEError::CannotWriteCSV. Previously Signal::write_to_csv and
+    write_vec_signals dropped the reason, and write_data printed it inside
+    the quoted file name.
+
   PDB files with more than 99999 atoms in the selected model, or more than
   9999 residues in a chain, are now an error, since the PDB format cannot
   number them uniquely. Previously such files stopped with an error about a
@@ -224,6 +328,18 @@ REMOVED:
   for settings of one isotope. Also removed: the fields
   ParticleFilter::isotopes and ParticleFilter::not_isotopes, and the
   constants KEY_SELE_ISOTOPES and KEY_SELE_NOT_ISOTOPES.
+
+  Error variants that were never returned: FilterNeedsALabel,
+  SpinPropertiesNeedsALabel, SpinPropertiesNeedsAnIsotope,
+  StructurePropertiesNeedsALabel, StructurePropertiesDoesNotNeedAnIsotope
+  and NoUnitOfClustering (used only in commented-out code, the first five
+  for the .clue format removed in 0.2.3-alpha.1), and ExpectedTOMLBool,
+  ExpectedTOMLString, ExpectedTOMLTable, IncorrectNumberOfAxes,
+  InvalidDensityMatrix, InvalidPulse, NoClustersOfSize,
+  TooManyExchangeCouplingsSpecified, TOMLValueDoesNotSpecifyAPartitionTable
+  and ErrorPulseSequence (replaced by more specific variants). Also
+  removed: CluEError::Generic, and the commented-out .clue token parser
+  Config::parse_token_stream.
 --------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.5
 

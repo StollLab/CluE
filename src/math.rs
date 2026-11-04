@@ -12,6 +12,23 @@ use ndarray_linalg::{Eig, Norm,Trace};
 type Mat = Array2::<f64>;
 type CxMat = Array2::<Complex64>;
 
+/// This function describes the complex matrix `matrix` for error messages:
+/// its shape, the number of NaN or infinite entries, and, for matrices with
+/// at most `MAX_PRINTED_DIM` rows and columns, the matrix itself.
+pub fn cx_matrix_summary(matrix: &CxMat) -> String{
+  const MAX_PRINTED_DIM: usize = 8;
+  let (n_rows, n_cols) = matrix.dim();
+  let n_not_finite = matrix.iter()
+    .filter(|z| !z.re.is_finite() || !z.im.is_finite()).count();
+  let summary = format!("a {}x{} matrix with {} NaN or infinite entries",
+      n_rows, n_cols, n_not_finite);
+  if n_rows <= MAX_PRINTED_DIM && n_cols <= MAX_PRINTED_DIM{
+    format!("{}:\n{}", summary, matrix)
+  }else{
+    summary
+  }
+}
+//------------------------------------------------------------------------------
 /// This function compares two lists for equality.
 pub fn are_vecs_equal<T: std::cmp::PartialEq>
 (vec0: &[T], vec1: &[T])-> bool{
@@ -306,4 +323,17 @@ mod tests{
   }
   //----------------------------------------------------------------------------
 
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_cx_matrix_summary(){
+    let mut small = CxMat::eye(2);
+    small[[0,1]] = Complex64::new(f64::NAN,0.0);
+    let summary = cx_matrix_summary(&small);
+    assert!(summary.starts_with(
+          "a 2x2 matrix with 1 NaN or infinite entries:\n"), "{}", summary);
+
+    let large = CxMat::eye(9);
+    assert_eq!(cx_matrix_summary(&large),
+        "a 9x9 matrix with 0 NaN or infinite entries");
+  }
 }

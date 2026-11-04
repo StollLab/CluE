@@ -73,7 +73,7 @@ impl DetectedSpin{
   /// This function returns the weighted mean position of the detected spin.
   pub fn get_average_spin_position(&self) -> Result<Vector3D,CluEError>{
     if self.weighted_coordinates.dim() != 3{
-      return Err(CluEError::NoCentralSpinCoor);
+      return Err(CluEError::NotA3DVector(self.weighted_coordinates.dim()));
     }
     let Some(r_ave) = self.weighted_coordinates.weighted_mean() else{
       return Err(CluEError::InvalidSpinGridWeights(
@@ -152,20 +152,26 @@ pub struct Structure{
 impl Structure{
   /// This function builds a new `Structure` from a list of `Particle`s
   /// their connectivity and cell info.
+  /// All particles are in the primary cell (cell 0), so `cell_indices`,
+  /// `cell_ids`, and `primary_cell_indices` are set as in
+  /// `init_primary_cell_indices()`, and particle filters can be used
+  /// before the structure is built.
   pub fn new(
       bath_particles: Vec::<Particle>,
       connections: AdjacencyList,
       cell_offsets: Vec::<Vector3D>
       ) -> Self
   {
+    let n_particles = bath_particles.len();
     Structure{
       detected_particle: None,
       bath_particles,
       //bath_spins_indices: Vec::<usize>::new(),
-      cell_indices: Vec::<Vec::<Option<usize>>>::new(),
+      cell_indices: (0..n_particles).map(|idx| vec![Some(idx)])
+        .collect::<Vec::<Vec::<Option<usize>>>>(),
       cell_edges: cell_offsets.clone(),
       cell_offsets,
-      cell_ids: Vec::<usize>::new(),
+      cell_ids: vec![0; n_particles],
       connections,
       extracell_particle_config_ids: Vec::<Vec::<Option<usize>>>::new(),
       extracell_cosubstitution_groups: Vec::<Vec::<Vec::<usize>>>::new(),
@@ -177,7 +183,7 @@ impl Structure{
       particle_config_ids: Vec::<Option<usize>>::new(),
       pdb_origin: Vector3D::zeros(),
       space_group: None,
-      primary_cell_indices: Vec::<usize>::new(),
+      primary_cell_indices: (0..n_particles).collect::<Vec::<usize>>(),
       nth_active_to_reference_index: Vec::<usize>::new(),
       active_indices: Vec::<usize>::new(),
       bath_indices_to_active_indices: Vec::<Option<usize>>::new(),
@@ -239,6 +245,24 @@ impl Structure{
     }
 
     out
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns a description of bath particle `idx` 
+  /// for messages: its bath index, and its serial number and unit cell 
+  /// when they are known.
+  pub fn particle_label(&self, idx: usize) -> String{
+    let mut details = Vec::<String>::new();
+    if let Some(serial) = self.bath_particles.get(idx).and_then(|p| p.serial){
+      details.push(format!("serial {}", serial));
+    }
+    if let Ok(cell_id) = self.cell_id(idx){
+      details.push(format!("cell {}", cell_id));
+    }
+    if details.is_empty(){
+      format!("bath particle {}", idx)
+    }else{
+      format!("bath particle {} ({})", idx, details.join(", "))
+    }
   }
   //----------------------------------------------------------------------------
   /// This function identifies which pbc copy of the primary cell
@@ -654,8 +678,10 @@ impl Structure{
   pub fn bath_to_csv(&self, filename: &str, config: &Config) 
     -> Result<(),CluEError>
   {
-    let Ok(file) = File::create(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    let file = match File::create(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotCreateFile(
+          filename.to_string(), err.to_string())),
     };
 
     let n_char_f64 = 16;
@@ -669,8 +695,9 @@ impl Structure{
     let mut stream = BufWriter::with_capacity(n_bytes,file);
     
     let line = "index,particle,x,y,z,active,cell_id,group\n";
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(line.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }    
 
     for (ii, particle) in self.bath_particles.iter().enumerate(){
@@ -691,9 +718,16 @@ impl Structure{
           r.x()/ANGSTROM, r.y()/ANGSTROM, r.z()/ANGSTROM,
           particle.active,cell_id,group_label);
     
-      if stream.write(line.as_bytes()).is_err(){
-        return Err(CluEError::CannotWriteFile(filename.to_string()) );
-      }    
+      if let Err(err) = stream.write_all(line.as_bytes()){
+        return Err(CluEError::CannotWriteFile(filename.to_string(),
+              err.to_string()));
+      }
+    }
+
+    // Dropping a BufWriter ignores write errors, so flush explicitly.
+    if let Err(err) = stream.flush(){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     Ok(())
@@ -765,5 +799,75 @@ mod tests{
     assert_eq!(structure.number_active(),19);
   }
   //----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_particle_label(){
+    use crate::elements::Element;
+    let mut particle = Particle::new(Element::Hydrogen, 0.0, 0.0, 0.0);
+    particle.serial = Some(12);
+    let without_serial = Particle::new(Element::Carbon, 1.0, 0.0, 0.0);
+    let structure = Structure::new(vec![particle, without_serial],
+        AdjacencyList::with_capacity(2), Vec::<Vector3D>::new());
+    assert_eq!(structure.particle_label(0), 
+        "bath particle 0 (serial 12, cell 0)");
+    assert_eq!(structure.particle_label(1), "bath particle 1 (cell 0)");
+    assert_eq!(structure.particle_label(5), "bath particle 5");
+  }
+  //----------------------------------------------------------------------------
+  // Writing to /dev/full fails with ENOSPC (os error 28), on the first
+  // write or, for buffered writers, on the flush. The error must be
+  // reported with its reason.
+  #[cfg(target_os = "linux")]
+  #[test]
+  fn test_writers_report_write_errors(){
+    let mut config = Config::from_toml_string(r##"
+        input_structure_file = "assets/TEMPO.pdb"
+        radius = 20
+        detected_spin.position = [28,29]
+        number_timepoints = [101]
+        tau_increments = [1e-1]
+        cluster_method = "cce"
+        max_cluster_size = 2
+        magnetic_field = 1.2
+        replicate_unit_cell = false
+
+        [[groups]]
+        name = "tempo_h"
+        selection.elements = ["H"]
+
+        1H.c3_tunnel_splitting = 80e-3
+        "##).unwrap();
+    config.set_defaults().unwrap();
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let structure = Structure::build_structure(&mut rng,&config).unwrap();
+    let Some(exchange_groups) = &structure.exchange_groups else{
+      panic!("TEMPO should have methyl exchange groups");
+    };
+
+    let full = "/dev/full";
+    let results = [
+      ("bath_to_csv", structure.bath_to_csv(full, &config)),
+      ("write_pdb", structure.write_pdb(full)),
+      ("write_gro", structure.write_gro(full)),
+      ("exchange_groups", exchange_groups.to_csv(full, &structure)),
+    ];
+    for (name, result) in results{
+      let Err(CluEError::CannotWriteFile(file, reason)) = result else{
+        panic!("{}: expected CannotWriteFile, got {:?}", name, result);
+      };
+      assert_eq!(file, full, "{}", name);
+      assert!(reason.contains("os error 28"), "{}: {}", name, reason);
+    }
+
+    // The same writers succeed on a regular file.
+    let path = std::env::temp_dir().join(format!(
+          "clue_oxide_test_writers_{}.txt", std::process::id()));
+    let path = path.to_str().unwrap();
+    assert_eq!(structure.bath_to_csv(path, &config), Ok(()));
+    assert_eq!(structure.write_pdb(path), Ok(()));
+    assert_eq!(structure.write_gro(path), Ok(()));
+    assert_eq!(exchange_groups.to_csv(path, &structure), Ok(()));
+    std::fs::remove_file(path).unwrap();
+  }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

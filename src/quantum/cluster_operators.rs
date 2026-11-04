@@ -527,7 +527,7 @@ impl<'a> DetectionSpinOperators {
   pub fn get_pulse(&'a self, pulse_name: &str, n_ops: usize)
     -> Result<&'a CxMat,CluEError> {
     let Some(pulse_list) = self.pulses_list.get(pulse_name) else{
-      return Err(CluEError::InvalidPulse(pulse_name.to_string()));
+      return Err(CluEError::UnknownPulse(pulse_name.to_string()));
     };   
    
     pulse_list.get(n_ops)
@@ -556,10 +556,12 @@ impl<'a> DetectionSpinOpList {
     }
     let dims = det_operator.shape();
     if dims.len() != 2 || dims[0] != det_multiplicity || dims[1] != dims[0]{
-      return Err(CluEError::InvalidDetectionOperator)
+      return Err(CluEError::InvalidDetectionOperator(format!(
+              "expected a {}x{} matrix, but got shape {:?}",
+              det_multiplicity, det_multiplicity, dims)));
     }
     if max_size == 0 {
-      return Err(CluEError::InvalidDetectionOperator)
+      return Err(CluEError::ZeroMaxClusterSize)
     }
     
     let n_ops = (max_size*( max_size+1) )/2;
@@ -857,7 +859,8 @@ pub fn expmap_spin(multiplicity: usize, sop: &SpinOp, theta: f64) ->
 
   // TODO: This only works for Hermitian spinoperators.
   let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
-    return Err(CluEError::CannotDiagonalizeOperator(s.to_string()));
+    return Err(CluEError::CannotDiagonalizeOperator(
+          crate::math::cx_matrix_summary(&s)));
   };
 
   let inv_eigvecs = eigvecs.t().map(|v| v.conj());
@@ -891,7 +894,8 @@ pub fn expmap_spin_axis_angle(multiplicity: usize, axis: &Vector3D, angle: f64)
   let s = n.x()*ONE*sx + n.y()*ONE*sy + n.z()*ONE*sz;
 
   let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
-    return Err(CluEError::CannotDiagonalizeOperator(s.to_string()));
+    return Err(CluEError::CannotDiagonalizeOperator(
+          crate::math::cx_matrix_summary(&s)));
   };
 
   let inv_eigvecs = eigvecs.t().map(|v| v.conj());
@@ -1022,11 +1026,11 @@ pub fn operator_form_stevens_coefficients(spin_multiplicity: usize,
 
   let mut t = CxMat::zeros([spin_multiplicity,spin_multiplicity]);
 
-  for coefs in coefficients.iter(){
+  for (index,coefs) in coefficients.iter().enumerate(){
     let k = (coefs.dim().0 as i32 - 1)/2;
     if coefs.dim().1 != 1{
-      return Err(CluEError::Generic(
-            "Stevens coeeficients should be a list of k×1 matrices".to_string()));
+      return Err(CluEError::InvalidStevensCoefficientShape(index,
+            coefs.dim().0, coefs.dim().1));
     };
 
     for (ii,bkq) in coefs.iter().enumerate(){
@@ -1085,8 +1089,17 @@ mod tests {
   }
   //----------------------------------------------------------------------------
   #[test]
+  fn test_operator_form_stevens_coefficients_shape_error(){
+    let column = array![[ONE],[ZERO],[ZERO],[ZERO],[ZERO]];
+    let wide = CxMat::zeros([5,2]);
+    let err = operator_form_stevens_coefficients(3,&[column,wide])
+      .unwrap_err();
+    assert_eq!(err, CluEError::InvalidStevensCoefficientShape(1,5,2));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
   fn test_stevens_to_spherical_coefficients(){
-  
+
     let tol = 1e-12;
     let mult = 3;
 
@@ -1666,6 +1679,17 @@ mod tests {
 
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_detection_spin_op_list_errors(){
+    let det_op = CxMat::eye(2);
+    assert_eq!(DetectionSpinOpList::new(&det_op, 2, 2, 0).err(),
+        Some(CluEError::ZeroMaxClusterSize));
+    assert_eq!(DetectionSpinOpList::new(&det_op, 3, 2, 2).err(),
+        Some(CluEError::InvalidDetectionOperator(
+            "expected a 3x3 matrix, but got shape [2, 2]".to_string())));
+    assert!(DetectionSpinOpList::new(&det_op, 2, 2, 2).is_ok());
+  }
 }
 
 

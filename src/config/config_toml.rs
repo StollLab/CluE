@@ -150,7 +150,7 @@ fn check_toml_table(config: &toml::Table, depth: usize) -> Result<(),CluEError>{
 
   for (key, value) in config.iter(){
     if !ALLOWED_KEYS.contains( &&key[..] ){
-      return Err(CluEError::CannotReadTOMLFile(format!("invalid key {}",key))); 
+      return Err(CluEError::InvalidTOMLKey(key.to_string()));
     }
 
     if let toml::Value::Table(table) = value{

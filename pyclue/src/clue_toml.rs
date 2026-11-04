@@ -41,22 +41,22 @@ def dict_to_toml(x):
         c_str!("clue_string.py"),
         c_str!("clue_string"),
     ) else{
-      return Err(CluEError::Error("invalid python code".to_string()));    
+      return Err(CluEError::Python("invalid python code".to_string()));    
     };
 
     let attr = match clue_string.getattr("dict_to_toml"){
       Ok(a) => a,
-      Err(err) => return Err(CluEError::Error(err.to_string())),
+      Err(err) => return Err(CluEError::Python(err.to_string())),
     };
 
     let call = match attr.call1((dict,)){
       Ok(a) => a,
-      Err(err) => return Err(CluEError::Error(err.to_string())),
+      Err(err) => return Err(CluEError::Python(err.to_string())),
     };
 
     let toml_string: String = match call.extract(){
       Ok(a) => a,
-      Err(err) => return Err(CluEError::Error(err.to_string())),
+      Err(err) => return Err(CluEError::Python(err.to_string())),
     };
 
     Ok(toml_string)

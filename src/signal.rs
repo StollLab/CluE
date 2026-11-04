@@ -91,7 +91,8 @@ impl Signal{
   pub fn write_to_csv(&self, filename: &str) -> Result<(),CluEError>{
     match self.write_single_signal_to_csv(filename){
       Ok(()) => Ok(()),
-      Err(_) => Err(CluEError::CannotWriteFile(filename.to_string())),
+      Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
+            err.to_string())),
     }
   }
   //----------------------------------------------------------------------------
@@ -149,7 +150,8 @@ pub fn write_vec_signals(signals: &[Signal],
 
     match write_vec_signals_to_csv(signals,filename,headers){
       Ok(()) => Ok(()),
-      Err(_) => Err(CluEError::CannotWriteFile(filename.to_string())),
+      Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
+            err.to_string())),
     }
 }
 //------------------------------------------------------------------------------
@@ -190,17 +192,19 @@ pub fn load_csv_to_vec_signals(filename: &str)
   -> Result<Vec::<Signal>, CluEError>
 {
   // Count data points.
-  let Ok(mut rdr) = csv::Reader::from_path(filename) else{
-    return Err(CluEError::CannotOpenFile(filename.to_string()));
+  let mut rdr = match csv::Reader::from_path(filename){
+    Ok(rdr) => rdr,
+    Err(err) => return Err(CluEError::CannotOpenFile(
+        filename.to_string(), err.to_string())),
   };
 
   let mut num_data = 0;
   let mut num_sigs = 0;
   for result in rdr.records() {
-      if let Ok(str_rec) = result{
-        num_sigs = str_rec.len();
-      }else{
-        return Err(CluEError::CannotOpenFile(filename.to_string()));
+      match result{
+        Ok(str_rec) => num_sigs = str_rec.len(),
+        Err(err) => return Err(CluEError::CannotReadFile(
+            filename.to_string(), err.to_string())),
       };
       num_data += 1;
   }
@@ -209,18 +213,23 @@ pub fn load_csv_to_vec_signals(filename: &str)
   let mut signals = (0..num_sigs).map(|_| Signal::zeros(num_data))
     .collect::<Vec::<Signal>>();
 
-  let Ok(mut rdr) = csv::Reader::from_path(filename) else{
-    return Err(CluEError::CannotOpenFile(filename.to_string()));
+  let mut rdr = match csv::Reader::from_path(filename){
+    Ok(rdr) => rdr,
+    Err(err) => return Err(CluEError::CannotOpenFile(
+        filename.to_string(), err.to_string())),
   };
 
   for (idata, result) in rdr.records().enumerate() {
-      let Ok(record) = result else{
-        return Err(CluEError::CannotOpenFile(filename.to_string()));
+      let record = match result{
+        Ok(record) => record,
+        Err(err) => return Err(CluEError::CannotReadFile(
+            filename.to_string(), err.to_string())),
       };
 
       for (isig,entry) in record.iter().enumerate(){
         let Ok(v) = entry.parse::<Complex64>() else{
-          return Err(CluEError::CannotOpenFile(filename.to_string()));
+          return Err(CluEError::CannotParseSignalEntry(filename.to_string(),
+                idata + 1, entry.to_string()));
         };
         signals[isig].data[idata] = v;
       }
@@ -269,12 +278,15 @@ pub fn write_batch_signals(clusters: &[Cluster],
     headers.push(header);
   }
 
-  let Ok(mut wtr) = csv::Writer::from_path(filename) else{
-    return Err(CluEError::CannotWriteFile(filename.to_string()));
+  let mut wtr = match csv::Writer::from_path(filename){
+    Ok(wtr) => wtr,
+    Err(err) => return Err(CluEError::CannotCreateFile(filename.to_string(),
+          err.to_string())),
   };
 
-  if wtr.write_record(&headers).is_err(){
-    return Err(CluEError::CannotWriteFile(filename.to_string()));
+  if let Err(err) = wtr.write_record(&headers){
+    return Err(CluEError::CannotWriteCSV(filename.to_string(),
+          err.to_string()));
   }
 
   for ii in 0..n_data{
@@ -298,13 +310,15 @@ pub fn write_batch_signals(clusters: &[Cluster],
         rec.push(signal.data[ii].to_string());
     }
 
-    if wtr.write_record(&rec).is_err() {
-      return Err(CluEError::CannotWriteFile(filename.to_string()));
+    if let Err(err) = wtr.write_record(&rec){
+      return Err(CluEError::CannotWriteCSV(filename.to_string(),
+            err.to_string()));
     }
   }
 
-  if wtr.flush().is_err(){
-    return Err(CluEError::CannotWriteFile(filename.to_string()));
+  if let Err(err) = wtr.flush(){
+    return Err(CluEError::CannotWriteCSV(filename.to_string(),
+          err.to_string()));
   }
 
   Ok(())
@@ -420,6 +434,41 @@ mod tests{
       assert_eq!(signals[ii], *ref_sig);
     }
 
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_load_csv_signal_entry_error(){
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_signal_{}.csv", std::process::id()));
+    std::fs::write(&filename, "signal\n1+0i\nabc\n").unwrap();
+    let filename = filename.to_str().unwrap().to_string();
+    let result = load_csv_to_vec_signals(&filename);
+    std::fs::remove_file(&filename).unwrap();
+    assert_eq!(result.err(), Some(CluEError::CannotParseSignalEntry(
+            filename.clone(), 2, "abc".to_string())));
+  }
+  //----------------------------------------------------------------------------
+  // Writing into a directory that does not exist gives CannotWriteCSV with
+  // the file name and the reason from the operating system.
+  #[test]
+  fn test_write_csv_errors_give_the_reason(){
+    let dir = std::env::temp_dir().join(format!(
+          "clue_oxide_test_no_such_dir_{}", std::process::id()));
+    assert!(!dir.exists());
+    let filename = dir.join("signal.csv").to_str().unwrap().to_string();
+    let signal = Signal{data: vec![Complex64::new(1.0,0.0)]};
+
+    for result in [signal.write_to_csv(&filename),
+        write_vec_signals(&[signal.clone()], vec!["a".to_string()], &filename)]{
+      match result{
+        Err(CluEError::CannotWriteCSV(file,reason)) => {
+          assert_eq!(file, filename);
+          assert!(!reason.is_empty());
+        },
+        other => panic!("expected CannotWriteCSV, got {:?}", other),
+      }
+    }
+    assert!(!dir.exists());
   }
 }
 

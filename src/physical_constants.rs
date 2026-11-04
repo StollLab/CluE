@@ -130,7 +130,8 @@ pub fn energy_unit_to_hertz(unit: &str) -> Result<f64,CluEError>
     "cal" => Ok(CALORIE*JOULES_TO_HERTZ),
     "kcal" => Ok(KILOCALORIE*JOULES_TO_HERTZ),
     "cm^-1" => Ok(C/CENTIMETER ),
-    _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
+    _ => Err(CluEError::UnrecognizedUnit("energy".to_string(),
+          unit.to_string(), "Hz, kHz, MHz, GHz, THz, meV, eV, Eh, J, kJ, kJ/mol, cal/mol, cal, kcal, cm^-1".to_string())),
   }
 }
 
@@ -146,7 +147,8 @@ pub fn distance_unit_to_meters(unit: &str) -> Result<f64,CluEError>
     "m" => Ok(METER),
     "km" => Ok(KILOMETER),
     "Å" => Ok(ANGSTROM),
-    _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
+    _ => Err(CluEError::UnrecognizedUnit("distance".to_string(),
+          unit.to_string(), "fm, pm, nm, μm, mm, cm, m, km, Å".to_string())),
   }
 }
 
@@ -158,7 +160,8 @@ pub fn magnetic_field_unit_to_tesla(unit: &str) -> Result<f64,CluEError>
     "mG" => Ok(MILLIGAUSS),
     "G" => Ok(GAUSS),
     "kG" => Ok(KILOGAUSS),
-    _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
+    _ => Err(CluEError::UnrecognizedUnit("magnetic field".to_string(),
+          unit.to_string(), "mT, T, mG, G, kG".to_string())),
   }
 }
 
@@ -171,7 +174,8 @@ pub fn time_unit_to_seconds(unit: &str) -> Result<f64,CluEError>
     "μs" => Ok(MICROSECOND),
     "ms" => Ok(MILLISECOND),
     "s" => Ok(SECOND),
-    _ => Err(CluEError::UnrecognizedUnit(unit.to_string())),
+    _ => Err(CluEError::UnrecognizedUnit("time".to_string(),
+          unit.to_string(), "ps, fs, ns, μs, ms, s".to_string())),
   }
 }
 

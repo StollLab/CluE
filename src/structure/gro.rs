@@ -26,13 +26,15 @@ impl Structure{
 
     let gro = self.gro_string()?;
 
-    let Ok(mut file) = File::create(filename)
-    else {
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    let mut file = match File::create(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotCreateFile(
+          filename.to_string(), err.to_string())),
     };
 
-    if file.write_all(gro.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = file.write_all(gro.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     Ok(())
@@ -42,8 +44,7 @@ impl Structure{
   // `write_gro()`.
   fn gro_string(&self) -> Result<String,CluEError>{
 
-    // A `Structure` from `Structure::new()` has no cell IDs;
-    // all of its particles are in the primary cell.
+    // A particle without a cell ID is treated as being in the primary cell.
     let primary_indices = (0..self.number())
       .filter(|&idx| self.cell_ids.get(idx).map_or(true, |&id| id == 0))
       .collect::<Vec::<usize>>();
@@ -115,7 +116,7 @@ impl Structure{
     let (a,b,c) = match self.cell_edges.as_slice(){
       [] => return Ok(format!("{:10.5}{:10.5}{:10.5}\n",0.0,0.0,0.0)),
       [a,b,c] => (a,b,c),
-      edges => return Err(CluEError::IncorrectNumberOfAxes(edges.len(),3)),
+      edges => return Err(CluEError::WrongNumberOfCellEdges(edges.len())),
     };
 
     // Values that are written as zero.
@@ -355,7 +356,7 @@ MD of 2 waters, t= 0.0\n\
         AdjacencyList::with_capacity(0),
         vec![Vector3D::from([1.0*nm, 0.0, 0.0])]);
     assert!(matches!(structure.get_gro_box_line(),
-          Err(CluEError::IncorrectNumberOfAxes(1,3))));
+          Err(CluEError::WrongNumberOfCellEdges(1))));
   }
   //----------------------------------------------------------------------------
 }

@@ -51,26 +51,22 @@ pub fn find_clusters( adjacency_list: &AdjacencyList, max_size: usize)
   for clu_size in 2..=max_size{
 
     // Build n-clusters from (n-1)-clusters.
-    if let Ok(n_cluster_set)
-     = build_n_clusters(&clusters[clu_size -1],adjacency_list){
-      let ClusterSet{clusters: nn_clusters,cluster_indices: nn_cluster_indices} 
-       = n_cluster_set; 
-      
-      if nn_clusters.len() != 1 {
-        return Err(CluEError::ExpectedClusterSetWithNSizes(1,
-              nn_clusters.len()) );
-      }
-      if nn_cluster_indices.len() != 1{
-        return Err(CluEError::ExpectedClusterSetWithNSizes(1,
-              nn_cluster_indices.len()) );
-      }
-      for n_clusters in nn_clusters{ clusters.push(n_clusters);}
-      for n_cluster_indices in nn_cluster_indices{
-        cluster_indices.push(n_cluster_indices);
-      }
-
-    }else{
-        return Err(CluEError::NoClustersOfSize(clu_size));
+    let n_cluster_set 
+      = build_n_clusters(&clusters[clu_size -1],adjacency_list)?;
+    let ClusterSet{clusters: nn_clusters,cluster_indices: nn_cluster_indices} 
+     = n_cluster_set; 
+    
+    if nn_clusters.len() != 1 {
+      return Err(CluEError::ExpectedClusterSetWithNSizes(1,
+            nn_clusters.len()) );
+    }
+    if nn_cluster_indices.len() != 1{
+      return Err(CluEError::ExpectedClusterSetWithNSizes(1,
+            nn_cluster_indices.len()) );
+    }
+    for n_clusters in nn_clusters{ clusters.push(n_clusters);}
+    for n_cluster_indices in nn_cluster_indices{
+      cluster_indices.push(n_cluster_indices);
     }
 
 

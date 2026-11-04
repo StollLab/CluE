@@ -107,7 +107,7 @@ impl HamiltonianTensors{
     };
 
     let Some(detected_particle) = &structure.detected_particle else {
-      return Err(CluEError::NoCentralSpin);
+      return Err(CluEError::NoDetectedParticle);
     };
 
     let gamma_matrix = detected_particle.gyromagnetic_ratio_matrix();
@@ -128,7 +128,8 @@ impl HamiltonianTensors{
           &structure,config)?;
       if tensor.any_nan(){
         return Err(CluEError::NANTensorZerofield(
-          0,detected_particle.isotope.to_string()));
+          "the detected spin".to_string(),
+          detected_particle.isotope.to_string()));
       }
       spin2_tensors.add(0,0, tensor.clone());
       spin_spherical_tensors.insert((0usize ,0usize),
@@ -163,7 +164,8 @@ impl HamiltonianTensors{
 
       if bath_zeeman.any_nan(){
         return Err(CluEError::NANTensorBathZeeman(
-              particle_idx0,particle0.isotope.to_string()));
+              structure.particle_label(particle_idx0),
+              particle0.isotope.to_string()));
       }
       spin1_tensors.add(idx0, bath_zeeman);
 
@@ -213,8 +215,10 @@ impl HamiltonianTensors{
 
          if dd_ten.any_nan(){
            return Err(CluEError::NANTensorBathDipoleDipole(
-                 particle_idx0,particle0.isotope.to_string(),
-                 particle_idx1,particle1.isotope.to_string(),
+                 structure.particle_label(particle_idx0),
+                 particle0.isotope.to_string(),
+                 structure.particle_label(particle_idx1),
+                 particle1.isotope.to_string(),
                ));
          }
 
@@ -258,8 +262,10 @@ impl HamiltonianTensors{
 
                   if j_tensor.any_nan(){
                     return Err(CluEError::NANTensorExchangeCoupling(
-                      h0, structure.bath_particles[h0].isotope.to_string(),
-                      h1, structure.bath_particles[h1].isotope.to_string(),
+                      structure.particle_label(h0),
+                      structure.bath_particles[h0].isotope.to_string(),
+                      structure.particle_label(h1),
+                      structure.bath_particles[h1].isotope.to_string(),
                       ));
                   }
 
@@ -390,8 +396,10 @@ impl HamiltonianTensors{
   pub fn save(&self, filename: &str, structure: &Structure) 
     -> Result<(),CluEError>
   {
-    let Ok(file) = File::create(filename) else{
-      return Err(CluEError::CannotOpenFile(filename.to_string()) );
+    let file = match File::create(filename){
+      Ok(file) => file,
+      Err(err) => return Err(CluEError::CannotCreateFile(
+          filename.to_string(), err.to_string())),
     };
 
     let n_char_spin_mult = 30;
@@ -410,14 +418,16 @@ impl HamiltonianTensors{
     let mut stream = BufWriter::with_capacity(n_bytes,file);
     
     let line = format!("#[tensors(number = {})]\n",n_spins);
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(line.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     // Write spin multiplicities.
     let line = "\n// Spin Multiplicities\n".to_string();
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(line.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     for (ii, spin_mult) in self.spin_multiplicities.iter().enumerate(){
@@ -426,15 +436,17 @@ impl HamiltonianTensors{
 
       let line = format!("spin_mutiplicity[{}] = {};\n", idx, spin_mult);
 
-      if stream.write(line.as_bytes()).is_err(){
-        return Err(CluEError::CannotWriteFile(filename.to_string()) );
+      if let Err(err) = stream.write_all(line.as_bytes()){
+        return Err(CluEError::CannotWriteFile(filename.to_string(),
+              err.to_string()));
       }
     }
 
     // Write O(S^1) tensors.
     let line = "\n// One Spin Tensors\n".to_string();
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(line.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     for ii in 0..n_spins{
@@ -443,16 +455,18 @@ impl HamiltonianTensors{
             structure.get_reference_index_of_nth_active(ii)?,
             tensor);
        
-        if stream.write(line.as_bytes()).is_err(){
-          return Err(CluEError::CannotWriteFile(filename.to_string()) );
+        if let Err(err) = stream.write_all(line.as_bytes()){
+          return Err(CluEError::CannotWriteFile(filename.to_string(),
+                err.to_string()));
         } 
       }
     }
 
     // Write O(S^2) tensors.
     let line = "\n// Two Spin Tensors\n".to_string();
-    if stream.write(line.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(line.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     for ii in 0..n_spins{
@@ -464,11 +478,18 @@ impl HamiltonianTensors{
               structure.get_reference_index_of_nth_active(jj)?, 
               tensor);
          
-          if stream.write(line.as_bytes()).is_err(){
-            return Err(CluEError::CannotWriteFile(filename.to_string()) );
-          } 
+          if let Err(err) = stream.write_all(line.as_bytes()){
+            return Err(CluEError::CannotWriteFile(filename.to_string(),
+                  err.to_string()));
+          }
         }
       }
+    }
+
+    // Dropping a BufWriter ignores write errors, so flush explicitly.
+    if let Err(err) = stream.flush(){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     Ok(())
@@ -706,7 +727,8 @@ fn construct_bath_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
 
       if tensor.any_nan(){
         return Err(CluEError::NANTensorQuadrupole(
-          particle_index,particle0.isotope.to_string()));
+          structure.particle_label(particle_index),
+          particle0.isotope.to_string()));
       }
       Ok(Some(tensor))
     },
@@ -735,7 +757,8 @@ fn construct_bath_zerofield_tensor(rng: &mut ChaCha20Rng,
 
       if tensor.any_nan(){
         return Err(CluEError::NANTensorZerofield(
-          particle_index,particle0.isotope.to_string()));
+          structure.particle_label(particle_index),
+          particle0.isotope.to_string()));
       }
       Ok(Some((tensor,spherical_tensor_coefficients)))
     },
@@ -768,9 +791,7 @@ fn construct_hyperfine_tensor(rng: &mut ChaCha20Rng,
     
     let mut hf_ten = SymmetricTensor3D::zeros();
     for ii in 0..detected_particle.weighted_coordinates.len(){
-      let Ok(r) = detected_particle.weighted_coordinates.xyz(ii) else{
-        return Err(CluEError::NoCentralSpinCoor);
-      }; 
+      let r = detected_particle.weighted_coordinates.xyz(ii)?;
       let delta_r = &r - &particle0.coordinates;
     
       let w = detected_particle.weighted_coordinates.weight(ii);
@@ -784,7 +805,8 @@ fn construct_hyperfine_tensor(rng: &mut ChaCha20Rng,
 
   if tensor.any_nan(){
     return Err(CluEError::NANTensorHyperfine(
-          particle_index,particle0.isotope.to_string()));
+          structure.particle_label(particle_index),
+          particle0.isotope.to_string()));
   }
   Ok(tensor)
 }

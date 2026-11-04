@@ -175,6 +175,12 @@ The version is defined in two places that must stay in sync:
 Add an entry at the top of `change_log.txt` describing ADDED / CHANGED /
 REMOVED items for user-visible changes.
 
+## Manual
+
+Do not edit anything in the manual directory.  
+Keep track of changes and maintain a report_manual.md file that details
+what in the manual is out of sync with the code.
+
 ## Numerical correctness
 
 `tests/test_1omp.rs` compares a full simulation against

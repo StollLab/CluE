@@ -21,8 +21,8 @@ pub fn appa(
       PulseSequence::CarrPurcell(1) => appa_hahn(vertices,tensors,config),
       _ => Err(
           CluEError::PulseSequenceNotSupported(
-            "pulse sequence not supproted".to_string(),
-            "".to_string(),
+            "appa".to_string(),
+            "hahn".to_string(),
           )),
   }  
 }

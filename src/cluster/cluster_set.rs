@@ -66,18 +66,27 @@ impl ClusterSet{
 
     let cluster_toml = self.to_cluster_toml( Some(structure) )?;
 
-    let Ok(toml_string) = toml::to_string(&cluster_toml) else{
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    let toml_string = match toml::to_string(&cluster_toml){
+      Ok(s) => s,
+      Err(err) => return Err(CluEError::CannotWriteFile(filename.to_string(),
+            format!("cannot convert the clusters to TOML: {}", err))),
     };
 
     let file = match std::fs::File::create(filename){
       Ok(f) => f,
-      Err(_) => return Err(CluEError::CannotWriteFile(filename.to_string()) ),
+      Err(err) => return Err(CluEError::CannotCreateFile(
+            filename.to_string(), err.to_string())),
     };
 
     let mut stream = BufWriter::with_capacity(toml_string.len(),file);
-    if stream.write(toml_string.as_bytes()).is_err(){
-      return Err(CluEError::CannotWriteFile(filename.to_string()) );
+    if let Err(err) = stream.write_all(toml_string.as_bytes()){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
+    }
+    // Dropping a BufWriter ignores write errors, so flush explicitly.
+    if let Err(err) = stream.flush(){
+      return Err(CluEError::CannotWriteFile(filename.to_string(),
+            err.to_string()));
     }
 
     Ok(())

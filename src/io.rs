@@ -20,7 +20,8 @@ pub fn read_time_axis(filename: &str) -> Result<Vec::<f64>, CluEError >
 {
   match read_single_vec_of_floats_from_csv(filename){
     Ok(data) => Ok(data),
-    Err(_) => Err(CluEError::CannotOpenFile(filename.to_string())),
+    Err(err) => Err(CluEError::CannotReadFile(
+        filename.to_string(), err.to_string())),
   }
 }
 //----------------------------------------------------------------------------
@@ -74,7 +75,8 @@ pub fn read_csv<T>(filename: &str)
 {
   match read_csv_to_hashmap(filename){
     Ok(data) => Ok(data),
-    Err(_) => Err(CluEError::CannotOpenFile(filename.to_string())),
+    Err(err) => Err(CluEError::CannotReadFile(
+        filename.to_string(), err.to_string())),
   }
 
 }
@@ -156,8 +158,8 @@ pub fn write_data<T>(data: &[Vec::<T>], filename: &str,
 
     match write_vecs_to_csv(data,filename,headers){
       Ok(()) => Ok(()),
-      Err(err) => Err(CluEError::CannotWriteFile(
-            format!("{}, {}", filename,err ))),
+      Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
+            err.to_string())),
     }
 }
 //------------------------------------------------------------------------------
@@ -190,3 +192,29 @@ fn write_vecs_to_csv<T>(data: &[Vec::<T>],filename: &str,
   Ok(())
 }
 //------------------------------------------------------------------------------
+
+
+#[cfg(test)]
+mod tests{
+  use super::*;
+  //----------------------------------------------------------------------------
+  // Writing into a directory that does not exist gives CannotWriteCSV with
+  // the file name and the reason from the operating system.
+  #[test]
+  fn test_write_data_error_gives_the_reason(){
+    let dir = std::env::temp_dir().join(format!(
+          "clue_oxide_test_io_no_such_dir_{}", std::process::id()));
+    assert!(!dir.exists());
+    let filename = dir.join("data.csv").to_str().unwrap().to_string();
+    let result = write_data(&[vec![1.0, 2.0]], &filename,
+        vec!["a".to_string()]);
+    match result{
+      Err(CluEError::CannotWriteCSV(file,reason)) => {
+        assert_eq!(file, filename);
+        assert!(!reason.is_empty());
+      },
+      other => panic!("expected CannotWriteCSV, got {:?}", other),
+    }
+    assert!(!dir.exists());
+  }
+}

@@ -189,10 +189,12 @@ pub fn get_cluster_thermal_density_matrix(
   let mut density_matrix = &rho_alpha[0] - &rho_beta[0];
 
   let Ok(z) = density_matrix.trace() else{
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
+    return Err(CluEError::CannotTakeTrace(format!("a {}x{} matrix",
+        density_matrix.dim().0, density_matrix.dim().1)));
   };
   if z.norm() < 1e-12{
-    return Err(CluEError::CannotTakeTrace(format!("{}",density_matrix)));
+    return Err(CluEError::DensityMatrixTraceVanishes(
+          "Tr[ρ_α] - Tr[ρ_β]".to_string(), z.norm()));
   }
   density_matrix /= z;
   Ok(density_matrix)
@@ -207,7 +209,8 @@ pub fn get_propagators(hamiltonian: &CxMat, times: &[f64]  )
 {
   let Ok((eigvals, eigvecs)) = hamiltonian.eigh(UPLO::Lower) else{
     return Err(
-        CluEError::CannotDiagonalizeHamiltonian(hamiltonian.to_string()));
+        CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&hamiltonian)));
   };
 
   let mut propagators = Vec::<CxMat>::with_capacity(times.len());
@@ -272,7 +275,8 @@ pub fn get_propagators_complex_time(hamiltonian: &CxMat,
 {
   let Ok((eigvals, eigvecs)) = hamiltonian.eigh(UPLO::Lower) else{
     return Err(
-        CluEError::CannotDiagonalizeHamiltonian(hamiltonian.to_string()));
+        CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&hamiltonian)));
   };
 
   let mut propagators = Vec::<CxMat>::with_capacity(times.len());
@@ -344,11 +348,13 @@ impl BlockDiagSpinHamiltonian{
 
     let Ok((beta_eigvals, beta_eigvecs)) = beta.eigh(UPLO::Lower) else{
       return Err(
-          CluEError::CannotDiagonalizeHamiltonian(beta.to_string()));
+          CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&beta)));
     };
     let Ok((alpha_eigvals, alpha_eigvecs)) = alpha.eigh(UPLO::Lower) else{
       return Err(
-          CluEError::CannotDiagonalizeHamiltonian(alpha.to_string()));
+          CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&alpha)));
     };
   
     Ok(BlockDiagSpinHamiltonian{
@@ -391,7 +397,7 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
     .collect();
 
   let Some(transition) = config.detected_spin_transition else {
-    return Err(CluEError::NoCentralSpinTransition);
+    return Err(CluEError::NoDetectedSpinTransition);
   };
 
   let ms_beta = spin_ms[transition[0]];

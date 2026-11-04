@@ -92,20 +92,13 @@ impl ParticleFilter{
       -> Result<(),CluEError>
   {
     if let Some(value) = table.get(KEY_SELE_INDICES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.indices = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as usize).collect::<Vec::<usize>>();
+      self.indices = uint_vec_from_toml::<usize>(value, KEY_SELE_INDICES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_INDICES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_indices = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as usize).collect::<Vec::<usize>>();
+      self.not_indices = uint_vec_from_toml::<usize>(value,
+          KEY_SELE_NOT_INDICES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -114,11 +107,7 @@ impl ParticleFilter{
       if !self.cell_ids.is_empty(){
         return Err(CluEError::FilterAlreadySet("cell_ids".to_string()));
       }
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.cell_ids = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as usize).collect::<Vec::<usize>>();
+      self.cell_ids = uint_vec_from_toml::<usize>(value, KEY_SELE_CELL_IDS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -126,11 +115,8 @@ impl ParticleFilter{
       if !self.not_cell_ids.is_empty(){
         return Err(CluEError::FilterAlreadySet("not_cell_ids".to_string()));
       }
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_cell_ids = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as usize).collect::<Vec::<usize>>();
+      self.not_cell_ids = uint_vec_from_toml::<usize>(value,
+          KEY_SELE_NOT_CELL_IDS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -143,7 +129,9 @@ impl ParticleFilter{
       }
 
       let Some(b) = value.as_bool() else{
-        return Err(CluEError::ExpectedTOMLBool(value.type_str().to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("{}.{}", KEY_SELECTION, KEY_SELE_PRIMARY_CELL),
+              "a bool".to_string(), value.type_str().to_string()));
       };      
       if b{
         self.cell_ids.push(0);
@@ -155,148 +143,96 @@ impl ParticleFilter{
 
 
     if let Some(value) = table.get(KEY_SELE_ELEMENTS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.elements = Vec::<Element>::with_capacity(array.len());
-      for s in array.iter().filter_map(|v| v.as_str()){
-        let el = Element::from(s)?;
-        self.elements.push(el);
-      }
+      self.elements = string_vec_from_toml(value, KEY_SELE_ELEMENTS)?
+        .iter().map(|s| Element::from(s))
+        .collect::<Result<Vec::<Element>,CluEError>>()?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_ELEMENTS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_elements = Vec::<Element>::with_capacity(array.len());
-      for s in array.iter().filter_map(|v| v.as_str()){
-        let el = Element::from(s)?;
-        self.not_elements.push(el);
-      }
+      self.not_elements = string_vec_from_toml(value, KEY_SELE_NOT_ELEMENTS)?
+        .iter().map(|s| Element::from(s))
+        .collect::<Result<Vec::<Element>,CluEError>>()?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_SERIALS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.serials = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.serials = uint_vec_from_toml::<u32>(value, KEY_SELE_SERIALS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_SERIALS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_serials = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.not_serials = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_NOT_SERIALS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_NAMES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.names = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.names = string_vec_from_toml(value, KEY_SELE_NAMES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_NAMES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_names = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.not_names = string_vec_from_toml(value, KEY_SELE_NOT_NAMES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_RESIDUES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.residues = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.residues = string_vec_from_toml(value, KEY_SELE_RESIDUES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_RESIDUES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_residues = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.not_residues = string_vec_from_toml(value, KEY_SELE_NOT_RESIDUES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_CHAIN_IDS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.chain_ids = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.chain_ids = string_vec_from_toml(value, KEY_SELE_CHAIN_IDS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_CHAIN_IDS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_chain_ids = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.not_chain_ids = string_vec_from_toml(value, KEY_SELE_NOT_CHAIN_IDS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_RES_SEQ_NUMS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.residue_sequence_numbers = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.residue_sequence_numbers = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_RES_SEQ_NUMS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_RES_SEQ_NUMS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_residue_sequence_numbers = array.iter()
-        .filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.not_residue_sequence_numbers = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_NOT_RES_SEQ_NUMS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_INDICES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_indices = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as usize).collect::<Vec::<usize>>();
+      self.bonded_indices = uint_vec_from_toml::<usize>(value,
+          KEY_SELE_BONDED_INDICES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_INDICES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_indices = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as usize).collect::<Vec::<usize>>();
+      self.not_bonded_indices = uint_vec_from_toml::<usize>(value,
+          KEY_SELE_NOT_BONDED_INDICES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_WITHIN_DISTANCE){
       let Some(r) = value.as_float() else{
-        return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("{}.{}", KEY_SELECTION, KEY_SELE_WITHIN_DISTANCE),
+              "a float".to_string(), value.type_str().to_string()));
       };
       self.within_distance = Some(r*unit_of_distance);
     }
@@ -304,7 +240,9 @@ impl ParticleFilter{
 
     if let Some(value) = table.get(KEY_SELE_NOT_WITHIN_DISTANCE){
       let Some(r) = value.as_float() else{
-        return Err(CluEError::ExpectedTOMLFloat(value.type_str().to_string()));
+        return Err(CluEError::InvalidTOMLValue(
+              format!("{}.{}", KEY_SELECTION, KEY_SELE_NOT_WITHIN_DISTANCE),
+              "a float".to_string(), value.type_str().to_string()));
       };
       self.not_within_distance = Some(r*unit_of_distance);
     }
@@ -312,123 +250,82 @@ impl ParticleFilter{
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_ELEMENTS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_elements = Vec::<Element>::with_capacity(array.len());
-      for s in array.iter().filter_map(|v| v.as_str()){
-        let el = Element::from(s)?;
-        self.bonded_elements.push(el);
-      }
+      self.bonded_elements = string_vec_from_toml(value,
+          KEY_SELE_BONDED_ELEMENTS)?
+        .iter().map(|s| Element::from(s))
+        .collect::<Result<Vec::<Element>,CluEError>>()?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_ELEMENTS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_elements = Vec::<Element>::with_capacity(array.len());
-      for s in array.iter().filter_map(|v| v.as_str()){
-        let el = Element::from(s)?;
-        self.not_bonded_elements.push(el);
-      }
+      self.not_bonded_elements = string_vec_from_toml(value,
+          KEY_SELE_NOT_BONDED_ELEMENTS)?
+        .iter().map(|s| Element::from(s))
+        .collect::<Result<Vec::<Element>,CluEError>>()?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_SERIALS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_serials = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.bonded_serials = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_BONDED_SERIALS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_SERIALS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_serials = array.iter().filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.not_bonded_serials = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_NOT_BONDED_SERIALS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_NAMES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_names = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.bonded_names = string_vec_from_toml(value, KEY_SELE_BONDED_NAMES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_NAMES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_names = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.not_bonded_names = string_vec_from_toml(value,
+          KEY_SELE_NOT_BONDED_NAMES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_RESIDUES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_residues = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.bonded_residues = string_vec_from_toml(value,
+          KEY_SELE_BONDED_RESIDUES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_RESIDUES){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_residues = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.not_bonded_residues = string_vec_from_toml(value,
+          KEY_SELE_NOT_BONDED_RESIDUES)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_RES_SEQ_NUMS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_residue_sequence_numbers = array.iter()
-        .filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.bonded_residue_sequence_numbers = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_BONDED_RES_SEQ_NUMS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_RES_SEQ_NUMS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_residue_sequence_numbers = array.iter()
-        .filter_map(|v| v.as_integer())
-        .map(|n| n as u32).collect::<Vec::<u32>>();
+      self.not_bonded_residue_sequence_numbers = uint_vec_from_toml::<u32>(value,
+          KEY_SELE_NOT_BONDED_RES_SEQ_NUMS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
     if let Some(value) = table.get(KEY_SELE_BONDED_CHAIN_IDS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      };
-      self.bonded_chain_ids = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.bonded_chain_ids = string_vec_from_toml(value,
+          KEY_SELE_BONDED_CHAIN_IDS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if let Some(value) = table.get(KEY_SELE_NOT_BONDED_CHAIN_IDS){
-      let Some(array) = value.as_array() else{
-        return Err(CluEError::ExpectedTOMLArray(value.type_str().to_string()));
-      }; 
-      self.not_bonded_chain_ids = array.iter().filter_map(|v| v.as_str())
-        .map(|s| s.to_string()).collect::<Vec::<String>>();
+      self.not_bonded_chain_ids = string_vec_from_toml(value,
+          KEY_SELE_NOT_BONDED_CHAIN_IDS)?;
     }
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -546,7 +443,7 @@ impl ParticleFilter{
           None => structure.cell_id(idx),
         };
         if let Ok(cell_id) = cell_id{
-          if !self.cell_ids.contains(&cell_id) 
+          if (!self.cell_ids.is_empty() && !self.cell_ids.contains(&cell_id))
             || self.not_cell_ids.contains(&cell_id){
             return None;
         }}
@@ -824,6 +721,50 @@ fn passes_field<T: PartialEq>(value: Option<&T>, include: &[T], exclude: &[T])
   }
 }
 //------------------------------------------------------------------------------
+// This function reads the selection list `value` of key `key` as
+// non-negative integers.
+// Elements of another type, negative integers, and integers too large for `T`
+// are errors, rather than being dropped or wrapped around.
+fn uint_vec_from_toml<T: TryFrom<i64>>(value: &toml::Value, key: &str)
+  -> Result<Vec::<T>,CluEError>
+{
+  let Some(array) = value.as_array() else{
+    return Err(CluEError::InvalidTOMLValue(
+          format!("{}.{}", KEY_SELECTION, key),
+          "an array".to_string(), value.type_str().to_string()));
+  };
+  let mut out = Vec::<T>::with_capacity(array.len());
+  for (ii,el) in array.iter().enumerate(){
+    let Some(n) = el.as_integer().and_then(|n| T::try_from(n).ok()) else{
+      return Err(CluEError::InvalidSelectionElement(key.to_string(), ii,
+            "a non-negative integer".to_string(), el.to_string()));
+    };
+    out.push(n);
+  }
+  Ok(out)
+}
+//------------------------------------------------------------------------------
+// This function reads the selection list `value` of key `key` as strings.
+// Elements of another type are errors, rather than being dropped.
+fn string_vec_from_toml(value: &toml::Value, key: &str)
+  -> Result<Vec::<String>,CluEError>
+{
+  let Some(array) = value.as_array() else{
+    return Err(CluEError::InvalidTOMLValue(
+          format!("{}.{}", KEY_SELECTION, key),
+          "an array".to_string(), value.type_str().to_string()));
+  };
+  let mut out = Vec::<String>::with_capacity(array.len());
+  for (ii,el) in array.iter().enumerate(){
+    let Some(s) = el.as_str() else{
+      return Err(CluEError::InvalidSelectionElement(key.to_string(), ii,
+            "a string".to_string(), el.to_string()));
+    };
+    out.push(s.to_string());
+  }
+  Ok(out)
+}
+//------------------------------------------------------------------------------
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// Secondary particle filters allow particles filters to be modified so as to
@@ -872,7 +813,7 @@ impl SecondaryParticleFilter{
       };
 
       let Some(filter) = &p_cfg.filter else{
-        return Err(CluEError::MissingFilter(label.to_string()));
+        return Err(CluEError::GroupHasNoSelection(label.to_string()));
       };
       Ok(filter.clone())
     };
@@ -897,7 +838,9 @@ impl SecondaryParticleFilter{
           .get_neighbors(particle_index){
           filter.filter_indices(structure,bonded)
         }else{
-          return Err(CluEError::BondsAreNotDefined);
+          return Err(CluEError::BondsAreNotDefined(format!(
+                "the \"{}\" selection of group \"{}\" for {}", self, label,
+                structure.particle_label(particle_index))));
         }
       },
       SecondaryParticleFilter::Filter => {
@@ -937,14 +880,19 @@ pub enum VectorSpecifier{
 //------------------------------------------------------------------------------
 impl VectorSpecifier{
   //----------------------------------------------------------------------------
-  pub fn from_toml_value(value: toml::Value) -> Result<Self,CluEError>
+  /// This function reads a vector specifier.
+  /// `key` names the TOML key for error messages.
+  pub fn from_toml_value(value: toml::Value, key: &str) 
+    -> Result<Self,CluEError>
   {
     match value{
       toml::Value::Array(array) 
           => Ok(Self::Vector(Vector3D::from_toml_array(array)?)),
       toml::Value::String(s) => Self::from_toml_str_value(&s),
-      toml::Value::Table(table) => Self::from_toml_table(table),
-      _ => Err(CluEError::TOMLArrayDoesNotSpecifyAVector),
+      toml::Value::Table(table) => Self::from_toml_table(table, key),
+      other => Err(CluEError::InvalidTOMLValue(key.to_string(),
+            "an array [x, y, z], \"random\", or a table with from and to"
+            .to_string(), other.type_str().to_string())),
     }
   }
   //----------------------------------------------------------------------------
@@ -956,10 +904,15 @@ impl VectorSpecifier{
     }
   }
   //----------------------------------------------------------------------------
-  pub fn from_toml_table(table: toml::Table) -> Result<Self,CluEError>
+  /// This function reads a vector specifier given as a table.
+  /// `key` names the TOML key for error messages.
+  pub fn from_toml_table(table: toml::Table, key: &str) 
+    -> Result<Self,CluEError>
   {
+    let found = toml::Value::Table(table.clone()).to_string();
     let Ok(table) = table.try_into::<HashMap::<String,String>>() else{
-      return Err(CluEError::TOMLArrayDoesNotSpecifyAVector);
+      return Err(CluEError::InvalidTOMLValue(key.to_string(),
+            "a table whose values are group names".to_string(), found));
     };
 
     let (from_group,from_filter) 
@@ -1012,8 +965,9 @@ impl VectorSpecifier{
           
           if indices_0.len() != 2 {
             return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...from ' \"{}\", to = \"{}\"...",
-                  sec_fltr_0, sec_fltr_1, )));
+                format!("from = \"{}\" ({}) and to = \"{}\" ({}) do not \
+select two distinct particles",
+                  label_0, sec_fltr_0, label_1, sec_fltr_1)));
           }
 
           indices_1 = vec![indices_0[1]];
@@ -1023,22 +977,22 @@ impl VectorSpecifier{
 
         if indices_0.len() != 1 {
           return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...from = \"{}\"...",
-                sec_fltr_0 )));
+                format!("from = \"{}\" ({}) selects {} particles, but must \
+select exactly 1", label_0, sec_fltr_0, indices_0.len())));
         }
         let idx0 = indices_0[0]; 
 
         if indices_1.len() != 1 {
           return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...to = \"{}\"...",
-                sec_fltr_1 )));
+                format!("to = \"{}\" ({}) selects {} particles, but must \
+select exactly 1", label_1, sec_fltr_1, indices_1.len())));
         }
         let idx1 = indices_1[0]; 
 
         if idx0 == idx1{
           return Err(CluEError::VectorSpecifierDoesNotSpecifyUniqueVector(
-                format!("...from ' \"{}\", to = \"{}\"...",
-                  sec_fltr_0, sec_fltr_1, )));
+                format!("from = \"{}\" ({}) and to = \"{}\" ({}) select \
+the same particle", label_0, sec_fltr_0, label_1, sec_fltr_1)));
         }
 
         let vector3d = &structure.bath_particles[idx1].coordinates 
@@ -1456,6 +1410,154 @@ mod tests{
         ("residues", "residue name", 2),
         ("residue_sequence_numbers", "residue sequence number", 2),
     ]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_set_from_toml_table_reads_valid_lists(){
+    let table = r##"
+      indices = [0, 3]
+      not_cell_ids = [1]
+      serials = [12, 13]
+      not_residue_sequence_numbers = [4294967295]
+      elements = ["C", "N"]
+      not_names = ["H1"]
+      bonded_chain_ids = []
+    "##.parse::<toml::Table>().unwrap();
+    let filter = ParticleFilter::from_toml_table(table, 1.0).unwrap();
+    assert_eq!(filter.indices, vec![0,3]);
+    assert_eq!(filter.not_cell_ids, vec![1]);
+    assert_eq!(filter.serials, vec![12,13]);
+    assert_eq!(filter.not_residue_sequence_numbers, vec![u32::MAX]);
+    assert_eq!(filter.elements, vec![Element::Carbon, Element::Nitrogen]);
+    assert_eq!(filter.not_names, vec!["H1".to_string()]);
+    assert!(filter.bonded_chain_ids.is_empty());
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_set_from_toml_table_rejects_invalid_list_elements(){
+    // Each case is (selection, key, index, expected, found).
+    let int = "a non-negative integer";
+    let string = "a string";
+    let cases = [
+      // Wrong type: previously dropped, so ["13"] selected every particle.
+      (r#"serials = [12, "13"]"#, "serials", 1, int, r#""13""#),
+      (r#"serials = ["13"]"#, "serials", 0, int, r#""13""#),
+      ("residue_sequence_numbers = [12.0]", "residue_sequence_numbers", 0,
+       int, "12.0"),
+      (r#"bonded_indices = [true]"#, "bonded_indices", 0, int, "true"),
+      (r#"names = ["H1", 2]"#, "names", 1, string, "2"),
+      (r#"not_chain_ids = [["A"]]"#, "not_chain_ids", 0, string, r#"["A"]"#),
+      (r#"elements = ["C", 6]"#, "elements", 1, string, "6"),
+      (r#"not_bonded_elements = [7]"#, "not_bonded_elements", 0, string,
+       "7"),
+      // Negative: previously wrapped around to a huge number.
+      ("not_serials = [-1]", "not_serials", 0, int, "-1"),
+      ("indices = [0, -1]", "indices", 1, int, "-1"),
+      ("cell_ids = [-1]", "cell_ids", 0, int, "-1"),
+      // Too large for u32: previously truncated to 0.
+      ("serials = [4294967296]", "serials", 0, int, "4294967296"),
+    ];
+    for (selection, key, index, expected, found) in cases{
+      let table = selection.parse::<toml::Table>().unwrap();
+      let result = ParticleFilter::from_toml_table(table, 1.0);
+      assert_eq!(result, Err(CluEError::InvalidSelectionElement(
+            key.to_string(), index, expected.to_string(), found.to_string())),
+          "{}", selection);
+    }
+
+    let table = r#"serials = [12, "13"]"#.parse::<toml::Table>().unwrap();
+    let error = ParticleFilter::from_toml_table(table, 1.0).unwrap_err();
+    assert_eq!(error.to_string(),
+        r#"selection.serials[1] must be a non-negative integer, but got "13""#);
+
+    // A list that is not an array is reported with its key.
+    let table = r#"serials = 12"#.parse::<toml::Table>().unwrap();
+    let error = ParticleFilter::from_toml_table(table, 1.0).unwrap_err();
+    assert_eq!(error, CluEError::InvalidTOMLValue("selection.serials".to_string(),
+          "an array".to_string(), "integer".to_string()));
+    assert_eq!(error.to_string(),
+        "selection.serials must be an array, but got integer");
+  }
+  //----------------------------------------------------------------------------
+  // Regression test: when only "not" cell IDs are set, an empty `cell_ids`
+  // must mean "no restriction", as for every other selection field.
+  #[test]
+  fn test_not_cell_ids_selects_other_cells(){
+    let (structure,_config) = build_periodic_tempo();
+    let n_particles = structure.number();
+    let in_cell = |cell_id: usize| (0..n_particles)
+      .filter(|&idx| structure.cell_id(idx) == Ok(cell_id))
+      .collect::<Vec::<usize>>();
+    let not_in_cell = |cell_id: usize| (0..n_particles)
+      .filter(|&idx| structure.cell_id(idx) != Ok(cell_id))
+      .collect::<Vec::<usize>>();
+    assert!(!in_cell(0).is_empty());
+    assert!(!not_in_cell(0).is_empty());
+
+    // Control: an include list of cell IDs works.
+    let mut filter = ParticleFilter::new();
+    filter.cell_ids = vec![0];
+    assert_eq!(filter.filter(&structure), in_cell(0));
+
+    // Exclude list only.
+    let mut filter = ParticleFilter::new();
+    filter.not_cell_ids = vec![0];
+    assert_eq!(filter.filter(&structure), not_in_cell(0), "not_cell_ids");
+
+    // primary_cell = false sets not_cell_ids = [0].
+    let table = "primary_cell = false".parse::<toml::Table>().unwrap();
+    let filter = ParticleFilter::from_toml_table(table, 1.0).unwrap();
+    assert_eq!(filter.not_cell_ids, vec![0]);
+    assert_eq!(filter.filter(&structure), not_in_cell(0), "primary_cell");
+
+    // The per-cell path used for extracells.
+    let n_particles0 = structure.cell_indices.len();
+    let all0 = (0..n_particles0).collect::<Vec::<usize>>();
+    let mut filter = ParticleFilter::new();
+    filter.not_cell_ids = vec![0];
+    assert_eq!(filter.filter_in_cell(&structure, 1), all0, "filter_in_cell");
+  }
+  //----------------------------------------------------------------------------
+  // A `Structure` from `Structure::new()` contains only the primary cell,
+  // so filters can be used on it before it is built.
+  #[test]
+  fn test_filter_structure_from_new(){
+    let particles = vec![
+      Particle::new(Element::Carbon, 0.0, 0.0, 0.0),
+      Particle::new(Element::Hydrogen, 1.0, 0.0, 0.0),
+      Particle::new(Element::Hydrogen, 0.0, 1.0, 0.0),
+    ];
+    let mut connections = crate::cluster::adjacency::AdjacencyList
+      ::with_capacity(3);
+    connections.connect(0,1);
+    let structure = Structure::new(particles, connections,
+        Vec::<Vector3D>::new());
+
+    assert_eq!(structure.cell_ids, vec![0,0,0]);
+    assert_eq!(structure.primary_cell_indices, vec![0,1,2]);
+    assert_eq!(structure.cell_indices,
+        vec![vec![Some(0)], vec![Some(1)], vec![Some(2)]]);
+
+    // No selection.
+    assert_eq!(ParticleFilter::new().filter(&structure), vec![0,1,2]);
+
+    // Cell selections.
+    let mut filter = ParticleFilter::new();
+    filter.cell_ids = vec![0];
+    assert_eq!(filter.filter(&structure), vec![0,1,2], "cell_ids = [0]");
+
+    let mut filter = ParticleFilter::new();
+    filter.cell_ids = vec![1];
+    assert!(filter.filter(&structure).is_empty(), "cell_ids = [1]");
+
+    let mut filter = ParticleFilter::new();
+    filter.not_cell_ids = vec![0];
+    assert!(filter.filter(&structure).is_empty(), "not_cell_ids = [0]");
+
+    // A bonded selection reads `primary_cell_indices`.
+    let mut filter = ParticleFilter::new();
+    filter.bonded_elements = vec![Element::Carbon];
+    assert_eq!(filter.filter(&structure), vec![1], "bonded_elements");
   }
 
 }
