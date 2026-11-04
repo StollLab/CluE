@@ -60,18 +60,18 @@ pub const VOLT: f64 = JOULE/COULOMB;
 // 2022 https://physics.nist.gov/cgi-bin/cuu/Value?h
 pub const PLANCK: f64 = 6.62607015e-34*JOULE/HERTZ;
 
-// 2021: https://physics.nist.gov/cgi-bin/cuu/Value?hbar 
+// 2022 https://physics.nist.gov/cgi-bin/cuu/Value?hbar 
 //pub const HBAR: f64 = 1.054571817e-34 * JOULE * SECOND;
 pub const HBAR: f64 = (PLANCK/2.0/PI) * JOULE * SECOND;
 
 // 2022 https://www.physics.nist.gov/cgi-bin/cuu/Value?mub
-pub const MUB:f64 = 9.2740100783e-24 * JOULE/TESLA;
+pub const MUB:f64 = 9.2740100657e-24 * JOULE/TESLA;
 
 // 2022 https://www.physics.nist.gov/cgi-bin/cuu/Value?mun
-pub const MUN: f64 = 5.0507837461e-27 * JOULE/TESLA;
+pub const MUN: f64 = 5.0507837393e-27 * JOULE/TESLA;
 
 // 2022 https://www.physics.nist.gov/cgi-bin/cuu/Value?mu0
-pub const MU0: f64 = 1.25663706212e-6 * NEWTON/AMPERE/AMPERE;
+pub const MU0: f64 = 1.25663706127e-6 * NEWTON/AMPERE/AMPERE;
 
 // 2022 https://physics.nist.gov/cgi-bin/cuu/Value?k
 pub const BOLTZMANN: f64 = 1.380649e-23 * JOULE/KELVIN;
@@ -85,7 +85,7 @@ pub const CALORIE_PER_MOLE: f64 = CALORIE/AVOGADRO;
 pub const KILOCALORIE_PER_MOLE: f64 = KILOCALORIE/AVOGADRO;
 
 // 2022 https://www.physics.nist.gov/cgi-bin/cuu/Value?gem 
-pub const ELECTRON_G: f64 = 2.00231930436256;
+pub const ELECTRON_G: f64 = 2.00231930436092;
 
 // 2022 https://physics.nist.gov/cgi-bin/cuu/Value?e
 pub const ELEMENTARY_CHARGE: f64 = 1.602176634e-19 * COULOMB;
@@ -93,15 +93,15 @@ pub const ELEMENTARY_CHARGE: f64 = 1.602176634e-19 * COULOMB;
 pub const ELECTRON_VOLT: f64 = ELEMENTARY_CHARGE * VOLT;
 pub const MILLIELECTRON_VOLT: f64 = ELECTRON_VOLT*1e-3;
 
-// 2025 https://physics.nist.gov/cgi-bin/cuu/Value?hr
+// 2022 https://physics.nist.gov/cgi-bin/cuu/Value?hr
 pub const HARTREE: f64 =  4.3597447222060e-18 * JOULE;
 
 pub const BARN: f64 = 100.0 * FEMTOMETER * FEMTOMETER;
 
-// 2025 https://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
+// 2022 https://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
 pub const BOHR_RADIUS: f64 = 5.29177210544e-11 * METER;
 
-// 2026 https://physics.nist.gov/cgi-bin/cuu/Value?c
+// 2022 https://physics.nist.gov/cgi-bin/cuu/Value?c
 pub const C: f64 = 299792458.0 * METER/SECOND ; 
 
 // Conversions
