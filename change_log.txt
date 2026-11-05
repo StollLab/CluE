@@ -19,6 +19,23 @@ ADDED:
   weights were used as given, and the signal was scaled by their sum.
 
 CHANGED:
+  The test reference signal assets/1omp_K26R1_0.003228966616048703_signal.csv
+  was regenerated after the update of the physical constants to CODATA
+  2022. The new constants change the 1omp signal by an RMSD of 7.7e-9;
+  with the previous constants, the current code reproduces the old
+  reference to an RMSD of 7.5e-14. Unit tests in quantum/tensors.rs that
+  hard-coded CODATA 2018 values (γe, γp, μN/h) now use the CODATA 2022
+  values from NIST.
+
+  gCCE signals for the fid, hahn, CP-n, free-evolution and custom pulse
+  sequences are now Tr[ρ D(t)]. Previously they were Tr[ρ^T D(t)], which
+  is the same only when the density matrix ρ is real and symmetric.
+  Results change when ρ is complex: with
+  thermalize_cluster_populations = true, with populations = "random",
+  with populations = "thermal" and ensemble_cce = false, or with a complex
+  detected_spin.density_matrix (for example "Sy" or "S+"). The refocused
+  Hahn echo and CCE were already correct.
+
   Every element of a selection list must have the type of that list:
   integer lists (serials, residue_sequence_numbers, indices, cell_ids, and
   their bonded_ and not_ forms) take non-negative integers, and the other

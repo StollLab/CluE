@@ -1202,8 +1202,13 @@ mod tests{
 
     let tensor = tensors.spin1_tensors.get(19).unwrap().clone();
 
-    let ref_value = -3693247.037734574/0.403761;
-    assert!( (tensor.z() - ref_value ).abs() < 1e-12);
+    // -μN·B/h for g = 1 and B = 1.2 T. CODATA 2022 (NIST): μN/h =
+    // 7.6225932188(24) MHz/T gives -9147111.8626(29) Hz; the literal is the
+    // value the code computes from the constants in physical_constants.rs.
+    // The check is relative: an absolute 1e-12 is below the f64 spacing
+    // (~1.9e-9) at this magnitude.
+    let ref_value = -9147111.862617394;
+    assert!( ((tensor.z() - ref_value)/ref_value).abs() < 1e-12);
     assert!( (tensor.x()/ref_value).abs() < 1e-12);
     assert!( (tensor.y()/ref_value).abs() < 1e-12);
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1414,7 +1419,8 @@ mod tests{
   #[test]
   fn test_construct_zeeman_tensor() {
     let gmr = -ELECTRON_G*MUB/HBAR;
-    assert!((gmr+1.76085963023e11).abs() < 0.00000000053e11);
+    // CODATA 2022 (NIST): γe = 1.760 859 627 84(55) × 10^11 s^-1 T^-1.
+    assert!((gmr+1.76085962784e11).abs() < 0.00000000055e11);
     let gyromagnetic_ratio = SymmetricTensor3D::from([gmr,0.0, 0.0,
                                                           gmr, 0.0,
                                                                gmr]); 
@@ -1423,7 +1429,9 @@ mod tests{
     let zeeman = construct_zeeman_tensor(&gyromagnetic_ratio,&magnetic_field);
     assert_eq!(zeeman.x(),0.0);
     assert_eq!(zeeman.y(),0.0);
-    assert!( (zeeman.z() - 33629941709.0).abs() < 0.1);
+    // γe·B/(2π) with the CODATA 2022 γe; the tolerance is the propagated
+    // CODATA uncertainty, 0.00000000055e11·1.2/(2π) ≈ 10.5 Hz.
+    assert!( (zeeman.z() - 33629941663.40).abs() < 11.0);
 
     let gmr =  5.5856946893*MUN/HBAR;
     let gyromagnetic_ratio = SymmetricTensor3D::from([gmr,0.0, 0.0,
@@ -1440,12 +1448,14 @@ mod tests{
   #[test]
   fn test_get_perpendicular_dipole_dipole_frequency(){
     let gmr = Isotope::Hydrogen1.gyromagnetic_ratio();
-    let gmr0 = 2.6752218744e8;
+    // CODATA 2022 (NIST): γp = 2.675 221 8708(11) × 10^8 s^-1 T^-1.
+    let gmr0 = 2.6752218708e8;
     assert!( (gmr-gmr0).abs() < 0.000_000_0011e8);
     let r = 1.5e-10;
     let freq = get_perpendicular_dipole_dipole_frequency(gmr,gmr,r);
     
-    let ref_freq = 35591.15890;
+    // μ0/(4π)·γp²·ħ/r³/(2π) from CODATA 2022 γp and μ0.
+    let ref_freq = 35591.15878;
     assert!((freq-ref_freq).abs()/ref_freq<1e-9);
   
   }

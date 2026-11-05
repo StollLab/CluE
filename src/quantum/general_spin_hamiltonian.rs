@@ -140,8 +140,9 @@ pub fn propagate_custom_pulse_sequence(
               PulseStep::Detect(detection_op0) => {
                 let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
                 let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
-                let it = std::iter::zip(density_matrix,&detection_op);
-                v += it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+                // Tr[ρ D] = Σ_ij ρ_ji D_ij.
+                let it = std::iter::zip(density_matrix.t(),&detection_op);
+                v += it.map(|(rho_ji,u_ij)| rho_ji*u_ij).sum::<Complex<f64>>();
               },
               /*
               PulseStep::Integrate(delay,detection_op0) =>{
@@ -153,8 +154,8 @@ pub fn propagate_custom_pulse_sequence(
                 for _ii in 0..delay.number{
                   let u_sequence_dag = u_sequence.t().map(|u_ij| u_ij.conj() );
                   let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
-                  let it = std::iter::zip(density_matrix,&detection_op);
-                  v += it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+                  let it = std::iter::zip(density_matrix.t(),&detection_op);
+                  v += it.map(|(rho_ji,u_ij)| rho_ji*u_ij).sum::<Complex<f64>>();
                   u_sequence = dus[delay_idx].dot(&u_sequence); 
                 }
               },
@@ -286,8 +287,9 @@ pub fn propagate_pulse_sequence(
     // D(T) = U(T)^* D U(T). 
     let detection_op = u_sequence_dag.dot(&detection_op0.dot(&u_sequence));
 
-    let it = std::iter::zip(density_matrix,&detection_op);
-    let v = it.map(|(rho_ij,u_ij)| rho_ij*u_ij).sum::<Complex<f64>>();
+    // Tr[ρ D(T)] = Σ_ij ρ_ji D(T)_ij.
+    let it = std::iter::zip(density_matrix.t(),&detection_op);
+    let v = it.map(|(rho_ji,u_ij)| rho_ji*u_ij).sum::<Complex<f64>>();
     signal.push(v);
   }
 
@@ -864,5 +866,59 @@ mod tests{
     let result = get_2nd_free_evolutions_propagators(&eigvals, &eigvecs, 
         &config);
     assert_eq!(result.err(), Some(CluEError::NoTimepoints2));
+  }
+  //----------------------------------------------------------------------------
+  // The signal must be Tr[ρ U^† D U], not Tr[ρ^T U^† D U]; the two differ
+  // when ρ is not real-symmetric.
+  // One spin-1/2 with H = ν Sz, ρ = Sx + Sy, D = Sx, and identity pulses:
+  // U^† Sx U = Sx cos(φ) - Sy sin(φ), with φ = 2πνt, so
+  // Tr[ρ D(t)]/Tr[ρ D(0)] = cos(φ) - sin(φ).
+  // Tr[ρ^T D(t)] would give cos(φ) + sin(φ).
+  #[test]
+  fn test_signal_is_trace_of_rho_times_detection_operator(){
+    let mut config = Config::from_toml_string(r##"
+      cluster_method = "gcce"
+      magnetic_field = 1.2
+      pulse_sequence = "fid"
+      number_timepoints = [8]
+      tau_increments = [0.125]
+    "##).unwrap();
+    config.set_tau_axis().unwrap();
+
+    let nu = 1.0e6;
+    // H = ν Sz = diag(ν/2, -ν/2); eigh returns ascending eigenvalues.
+    let eigvals = Array1::<f64>::from_vec(vec![-0.5*nu, 0.5*nu]);
+    let one = Complex::<f64>::new(1.0,0.0);
+    let zero = Complex::<f64>::new(0.0,0.0);
+    let eigvecs = ndarray::array![[zero, one],[one, zero]];
+
+    let e = CxMat::eye(2);
+    let sx = spin_x(2);
+    let rho = &sx + &spin_y(2);
+
+    let expected: Vec::<f64> = config.get_tau_axis().unwrap().iter()
+      .map(|t| {
+        let phi = 2.0*crate::physical_constants::PI*nu*t;
+        phi.cos() - phi.sin()
+      }).collect();
+
+    // Standard pulse sequence (FID).
+    let pulses = vec![PulseStep::Pulse(&e),PulseStep::Pulse(&e),
+        PulseStep::Detect(&sx)];
+    let signal = propagate_pulse_sequence(&pulses, &rho, &eigvals, &eigvecs,
+        &config).unwrap();
+    assert_eq!(signal.len(), expected.len());
+    for (v,v0) in signal.data.iter().zip(expected.iter()){
+      assert!((v - v0).norm() < 1e-12);
+    }
+
+    // Custom pulse sequence.
+    let pulse_sequence = vec![PulseStep::TauDelay, PulseStep::Detect(&sx)];
+    let signal = propagate_custom_pulse_sequence(&pulse_sequence, &rho,
+        &eigvals, &eigvecs, &config).unwrap();
+    assert_eq!(signal.len(), expected.len());
+    for (v,v0) in signal.data.iter().zip(expected.iter()){
+      assert!((v - v0).norm() < 1e-12);
+    }
   }
 }
