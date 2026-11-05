@@ -869,6 +869,100 @@ mod tests{
     }
   }
   //----------------------------------------------------------------------------
+  #[test]
+  fn test_same_molecule_cosubstitution_with_split_prone_atom_order(){
+    // The glycerol of a_TEMPO_a_water_a_glycerol.pdb with C2 (serial 35) and
+    // its H2, O2, HO2 moved after the C3 block.  C1 and C3 are then not
+    // bonded to any earlier atom, and only the later C2 joins them, which
+    // used to split the molecule in two (N38).
+    // The 5 C-bonded H (serials 31, 32, 36, 40, 41) are in a group with
+    // cosubstitute = "same_molecule" and must form one set; the 3 O-bonded H
+    // (34, 38, 43) are in a group with cosubstitute = "particle".
+    use crate::io::FromTOMLString;
+    let original = std::fs::read_to_string(
+        "./assets/a_TEMPO_a_water_a_glycerol.pdb").unwrap();
+    let is_c2_block = |line: &&str| line.starts_with("ATOM") 
+        && [35,36,37,38].contains(&line[6..11].trim().parse::<u32>()
+            .unwrap_or(0));
+    let c2_block = original.lines().filter(is_c2_block)
+      .collect::<Vec::<&str>>();
+    assert_eq!(c2_block.len(), 4);
+    let mut reordered = Vec::<&str>::new();
+    for line in original.lines(){
+      if is_c2_block(&line){ continue; }
+      reordered.push(line);
+      if line.starts_with("ATOM") && line[6..11].trim() == "43"{
+        reordered.extend(c2_block.iter());
+      }
+    }
+    let filename = std::env::temp_dir().join(format!(
+        "clue_oxide_test_reordered_glycerol_{}.pdb", std::process::id()));
+    std::fs::write(&filename, reordered.join("\n") + "\n").unwrap();
+
+    let config = Config::from_toml_string(&format!(r##"
+        input_structure_file = "{}"
+        radius = 50
+        detected_spin.position = [28,29]
+        replicate_unit_cell = false
+        [[groups]]
+        name = "ch"
+        selection.elements = ["H"]
+        selection.bonded_elements = ["C"]
+        cosubstitute = "same_molecule"
+        [[groups]]
+        name = "oh"
+        selection.elements = ["H"]
+        selection.bonded_elements = ["O"]
+        cosubstitute = "particle"
+        "##, filename.display())).unwrap();
+    let mut structure = pdb::parse_pdb(filename.to_str().unwrap(),0).unwrap();
+    std::fs::remove_file(&filename).unwrap();
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    structure.build_primary_structure(&mut rng,&config).unwrap();
+
+    // The glycerol is one molecule.
+    let index_of = |serial: u32| structure.bath_particles.iter()
+      .position(|p| p.serial == Some(serial)).unwrap();
+    let glycerol = (30..=43).map(index_of).collect::<Vec::<usize>>();
+    let mol_id = structure.molecule_ids[glycerol[0]];
+    assert!(glycerol.iter().all(|&idx| structure.molecule_ids[idx] == mol_id));
+
+    let set_of = |serial: u32| {
+      let idx = index_of(serial);
+      let mut set = structure.cosubstitution_groups.iter()
+        .find(|group| group.contains(&idx)).unwrap()
+        .iter().map(|&ii| structure.bath_particles[ii].serial.unwrap())
+        .collect::<Vec::<u32>>();
+      set.sort();
+      set
+    };
+
+    // One draw for the 5 C-H of the glycerol, and nothing else.
+    for serial in [31,32,36,40,41]{
+      assert_eq!(set_of(serial), vec![31,32,36,40,41]);
+    }
+    // The O-H keep their own setting: one draw each.
+    for serial in [34,38,43]{
+      assert_eq!(set_of(serial), vec![serial]);
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_1omp_is_one_molecule(){
+    // The R1 spin label (residue 26) is bonded to the protein by CE (serial 
+    // 400) - C3 (serial 404), with C3 listed after atoms it is not bonded to.
+    // It used to be split from the protein (N38).
+    let structure 
+      = pdb::parse_pdb("./assets/1omp_K26R1_0.003228966616048703.pdb",0)
+      .unwrap();
+    let (molecules, molecule_ids) 
+      = separate_into_connected_subgraphs(&structure.connections);
+    assert_eq!(molecules.len(), 1);
+    let index_of = |serial: u32| structure.bath_particles.iter()
+      .position(|p| p.serial == Some(serial)).unwrap();
+    assert_eq!(molecule_ids[index_of(400)], molecule_ids[index_of(404)]);
+  }
+  //----------------------------------------------------------------------------
   // This function builds the primary structure of TEMPO with the detected 
   // spin position `position` and the groups `groups`.
   fn build_tempo_with_spin_position(position: &str, groups: &str)

@@ -142,7 +142,7 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;373] = [
+pub const ALLOWED_KEYS: [&str;374] = [
   "abundance",
   "abundance_tolerance",
   "active",
@@ -199,6 +199,7 @@ pub const ALLOWED_KEYS: [&str;373] = [
   "indices",
   "info",
   "input_structure_file",
+  "kmeans_iter_cap",
   "kmeans_size",
   "lebedev",
   "magnetic_field",

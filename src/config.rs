@@ -120,6 +120,7 @@ pub struct Config{
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
   pub max_spins: Option<usize>,
+  pub kmeans_iter_cap: Option<usize>,
   pub partitioning: Option<PartitioningMethod>,
   pub partition_table: Option<PartitionTableConfig>,
   pub rng_seed: Option<u64>,
@@ -282,6 +283,10 @@ impl Config{
 
     if self.number_runs.is_none(){
       self.number_runs = Some(1);
+    }
+
+    if self.kmeans_iter_cap.is_none(){
+      self.kmeans_iter_cap = Some(1000);
     }
 
     if self.number_timepoints2.is_empty(){
@@ -1525,6 +1530,13 @@ impl Config{
       return Err(CluEError::CannotParsePartitioningMethod(s.to_string()));
     }
 
+    if let Some(kmeans_iter_cap) = config_toml.kmeans_iter_cap{
+      if kmeans_iter_cap < 1{
+        return Err(CluEError::InvalidKMeansIterCap);
+      }
+      self.kmeans_iter_cap = Some(kmeans_iter_cap);
+    }
+
     if let Some(p_table) = config_toml.partition_table{
       self.partition_table 
           = Some(PartitionTableConfig::from_toml_value(p_table)?); 
@@ -2246,6 +2258,29 @@ mod tests{
     for p in ["0.0", "1.0", "0.5"]{
       assert!(config_with_group(&format!("drop_probability = {}",p)).is_ok());
     }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_kmeans_iter_cap(){
+    // Default.
+    let config = Config::from_toml_string("").unwrap();
+    assert_eq!(config.kmeans_iter_cap, Some(1000));
+
+    // Set from TOML.
+    let config = Config::from_toml_string(r##"
+        partitioning = "restricted_kmeans"
+        kmeans_size = 3
+        kmeans_iter_cap = 25
+        "##).unwrap();
+    assert_eq!(config.kmeans_iter_cap, Some(25));
+    assert_eq!(config.partitioning, 
+        Some(PartitioningMethod::RestrictedKMeans(3)));
+
+    // Zero is rejected.
+    assert_eq!(Config::from_toml_string("kmeans_iter_cap = 0").err(),
+        Some(CluEError::InvalidKMeansIterCap));
+    assert_eq!(CluEError::InvalidKMeansIterCap.to_string(),
+        "kmeans_iter_cap must be at least 1");
   }
   //----------------------------------------------------------------------------
   #[test]

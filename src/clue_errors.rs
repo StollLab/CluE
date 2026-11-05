@@ -77,7 +77,9 @@ pub enum CluEError{
   InvalidDetectionFrame(String),
   InvalidDetectionOperator(String),
   InvalidIST(String),
+  InvalidKMeansIterCap,
   InvalidKMeansSize,
+  InvalidNumberOfKMeansClusters(usize,usize),
   InvalidPartitionTableEntry(usize,usize,String),
   InvalidPulseStep(usize,Box<CluEError>),
   InvalidAbundanceTolerance(String,f64),
@@ -127,6 +129,7 @@ pub enum CluEError{
   NoEnsembleCCE,
   NoGMatrixSpecifier,
   NoInputFile,
+  NoKMeansIterCap,
   NoKMeansSize,
   NoMagneticField,
   NoMeanFields,
@@ -465,8 +468,15 @@ or pulse): {}",reason),
       CluEError::InvalidPulseStep(index,error) => write!(f,
           "pulse_sequence[{}]: {}",index,error),
 
+      CluEError::InvalidKMeansIterCap => write!(f,
+          "kmeans_iter_cap must be at least 1"),
+
       CluEError::InvalidKMeansSize => write!(f,
           "kmeans_size must be at least 1"),
+
+      CluEError::InvalidNumberOfKMeansClusters(k,n) => write!(f,
+          "k-means cannot split {} points into {} clusters; the number of \
+clusters must be between 1 and the number of points",n,k),
 
       CluEError::InvalidAbundanceTolerance(group,tolerance) => write!(f,
           "group \"{}\": abundance_tolerance = {} must be at least 0 and \
@@ -632,6 +642,9 @@ when the structure is built from the config"),
 
       CluEError::NoInputFile => write!(f,
           "no input file"),
+
+      CluEError::NoKMeansIterCap => write!(f,
+          "k-means requires kmeans_iter_cap to be set"),
 
       CluEError::NoKMeansSize => write!(f,
           "k-means requires kmeans_size to be set"),

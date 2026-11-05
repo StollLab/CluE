@@ -1,20 +1,42 @@
 use crate::CluEError;
 use crate::space_3d::Vector3D;
 
-use rand::distributions::Uniform;
-use rand_distr::Distribution;
+use rand::seq::index::sample;
 use rand_chacha::ChaCha20Rng;
 
 use mcmf::{GraphBuilder, Vertex, Cost, Capacity};
 use math::round;
 
+// Largest integer cost of a datum-to-kluster edge in restricted k-means.
+const MAX_RESTRICTED_KMEANS_COST: i64 = 1_000_000;
+
+// The mcmf crate solves the flow problem with LEMON's NetworkSimplex with 
+// 32-bit int costs.  LEMON adds artificial arcs with cost 
+// (max_cost + 1)*(number of nodes) (lemon/network_simplex.h, ART_COST), 
+// which must not overflow; this bound leaves a factor of two of headroom.
+const LEMON_COST_BOUND: i64 = 1 << 30;
+
+/// This function partitions `data` into `k` k-means clusters and returns the
+/// cluster label of each datum.  If `do_restricted_kmeans` is true, every
+/// cluster has at most ceil(n/k) members.  At most `iter_cap` 
+/// assignment/update iterations are done after the first assignment; if the
+/// assignments have not converged by then, a warning is printed and the last
+/// assignment is returned.
 pub fn get_kmeans_partition(
     rng: &mut ChaCha20Rng,
     k: usize,
     data: &[Vector3D],
     do_restricted_kmeans: bool,
+    iter_cap: usize,
     ) -> Result<Vec::<usize>,CluEError>
 {
+  // Each kluster starts at a distinct data point, so k must be in 1..=n.
+  if k == 0 || k > data.len(){
+    return Err(CluEError::InvalidNumberOfKMeansClusters(k,data.len()));
+  }
+  if iter_cap == 0{
+    return Err(CluEError::InvalidKMeansIterCap);
+  }
 
   let mut klusters = initialize_klusters(rng, k, data);
 
@@ -26,9 +48,10 @@ pub fn get_kmeans_partition(
 
   move_kluster_centers(&mut klusters, data);
 
-  loop{
+  let mut is_converged = false;
+  for _iter in 0..iter_cap{
 
-    let is_converged = if do_restricted_kmeans{
+    is_converged = if do_restricted_kmeans{
       restricted_assign_data(&mut klusters, data)?
     }else{  
       assign_data(&mut klusters, data)?
@@ -38,6 +61,12 @@ pub fn get_kmeans_partition(
 
     move_kluster_centers(&mut klusters, data);
     
+  }
+
+  // Every assignment is a valid partition, so the last one is used.
+  if !is_converged{
+    println!("Warning: k-means did not converge within kmeans_iter_cap = {} \
+iterations; the last assignment is used.", iter_cap);
   }
 
   let mut element_to_block = (0..data.len()).map(|_| 0)
@@ -64,21 +93,9 @@ struct Kluster{
 
 impl Kluster{
   //----------------------------------------------------------------------------
-  fn random(
-    rng: &mut ChaCha20Rng,
-    min: &Vector3D,
-    max: &Vector3D,
-  ) -> Self
+  // This function returns a `Kluster` centered at `center` with no elements.
+  fn at(center: Vector3D) -> Self
   {
-    let mut center = Vector3D::zeros();
-
-    let range = Uniform::new(0.0f64, 1.0);
-
-    for (ii,r) in center.elements.iter_mut().enumerate(){
-      let delta_x = max.elements[ii] -min.elements[ii];
-      let random_number = range.sample(rng);
-      *r = min.elements[ii] + delta_x * random_number; 
-    }
     Self{
       center,
       elements: Vec::<usize>::new(),
@@ -127,18 +144,17 @@ fn restricted_assign_data(
     graph.add_edge(vertex_c.clone(),Vertex::Sink,Capacity(src_cap),Cost(0));
   }
 
+  let costs = get_restricted_kmeans_costs(klusters, data);
+
   // Add edge from the source vertex each data point. 
-  for (ii,x) in data.iter().enumerate(){
+  for (ii,costs_of_datum) in costs.iter().enumerate(){
 
     let vertex_x = KMNode{class: VertexClass::Data, index: ii};
     graph.add_edge(Vertex::Source,vertex_x.clone(),Capacity(1),Cost(0));
     
     // Add edge from each datum to each kluster.
-    for (jj,c) in klusters.iter().enumerate(){
+    for (jj,&cost) in costs_of_datum.iter().enumerate(){
       let vertex_c = KMNode{class: VertexClass::ClusterCenter, index: jj};
-
-      let distance = (x - &c.center).norm();
-      let cost = round::half_up(distance,0) as i32;
 
       graph.add_edge(vertex_x.clone(),vertex_c.clone(),Capacity(1),Cost(cost));
     }
@@ -177,6 +193,47 @@ fn restricted_assign_data(
   Ok(true)
 }
 //------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// This function returns the integer cost, costs[i][j], of assigning datum i
+// to kluster j in restricted k-means.  The cost is the squared distance
+// from the datum to the kluster center, as in constrained k-means
+// (P. S. Bradley, K. P. Bennett, and A. Demiriz, "Constrained K-Means 
+// Clustering", Microsoft Research Technical Report MSR-TR-2000-65 (2000)),
+// so that the assignment and the center update (the mean) minimize the same
+// sum of squared distances.  The flow solver needs integer costs, so the 
+// squared distances are divided by the largest one and scaled to 
+// 0..=max_cost; this makes the costs independent of the unit of length.
+// max_cost is at most MAX_RESTRICTED_KMEANS_COST and is lowered for large
+// problems to keep LEMON's artificial-arc cost within LEMON_COST_BOUND.
+fn get_restricted_kmeans_costs(klusters: &[Kluster], data: &[Vector3D])
+  -> Vec::<Vec::<i32>>
+{
+  let squared_distances = data.iter()
+    .map(|x| klusters.iter()
+        .map(|kluster| (x - &kluster.center).norm_squared())
+        .collect::<Vec::<f64>>())
+    .collect::<Vec::<Vec::<f64>>>();
+
+  let max_squared_distance = squared_distances.iter().flatten()
+    .fold(0.0_f64, |acc, &d2| f64::max(acc, d2));
+
+  // Nodes: data, klusters, source, sink, and LEMON's root node.
+  let n_nodes = (data.len() + klusters.len() + 3) as i64;
+  let max_cost = i64::min(MAX_RESTRICTED_KMEANS_COST,
+      LEMON_COST_BOUND/n_nodes - 1).max(0) as f64;
+
+  squared_distances.iter()
+    .map(|row| row.iter()
+        .map(|&d2| {
+          if max_squared_distance > 0.0 {
+            (d2/max_squared_distance*max_cost).round() as i32
+          }else{
+            0
+          }
+        })
+        .collect::<Vec::<i32>>())
+    .collect::<Vec::<Vec::<i32>>>()
+}
 //------------------------------------------------------------------------------
 fn move_kluster_centers(klusters: &mut [Kluster], data: &[Vector3D])
 {
@@ -227,29 +284,21 @@ fn assign_data(klusters: &mut [Kluster], data: &[Vector3D])
   Ok(true)
 }
 //------------------------------------------------------------------------------
+// This function places the k initial kluster centers at k distinct data 
+// points, chosen uniformly at random (Forgy initialization, E. W. Forgy, 
+// Biometrics 21, 768 (1965)). Unlike centers drawn uniformly in the bounding 
+// box, every kluster then starts with at least its own point (for distinct
+// points), which avoids klusters that stay empty.
+// Requires 1 <= k <= data.len().
 fn initialize_klusters(
     rng: &mut ChaCha20Rng,
     k: usize,
     data: &[Vector3D],
     ) -> Vec::<Kluster>
 {
-  let ones = Vector3D::from([1.0,1.0,1.0]);
-  let mut max = ones.scale(-f64::INFINITY);
-  let mut min = ones.scale(f64::INFINITY);
-  
-  for r in data.iter(){
-    for (ii,x) in r.elements.iter().enumerate(){
-      max.elements[ii] = f64::max(*x,max.elements[ii]);
-      min.elements[ii] = f64::min(*x,min.elements[ii]);
-    }
-  }
-
-  let mut klusters = Vec::<Kluster>::with_capacity(k);
-  for _ii in 0..k{
-    klusters.push(Kluster::random(rng,&min,&max));
-  }
-   
-  klusters
+  sample(rng, data.len(), k).into_iter()
+    .map(|idx| Kluster::at(data[idx].clone()))
+    .collect::<Vec::<Kluster>>()
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -268,7 +317,7 @@ mod tests{
     let mut rng = ChaCha20Rng::seed_from_u64(2);
     let (data,_expected_klusters) = get_test_kluster_data();
 
-    let elements_to_block = get_kmeans_partition(&mut rng,k,&data,false).unwrap();
+    let elements_to_block = get_kmeans_partition(&mut rng,k,&data,false, 1000).unwrap();
     assert_eq!(elements_to_block.len(),12); 
 
     assert_eq!(elements_to_block[0],elements_to_block[1]);
@@ -300,7 +349,7 @@ mod tests{
     let mut rng = ChaCha20Rng::seed_from_u64(2);
     let (data,_expected_klusters) = get_test_kluster_data();
 
-    let elements_to_block = get_kmeans_partition(&mut rng,k,&data,true).unwrap();
+    let elements_to_block = get_kmeans_partition(&mut rng,k,&data,true, 1000).unwrap();
     assert_eq!(elements_to_block.len(),12); 
 
     assert_eq!(elements_to_block[0],elements_to_block[1]);
@@ -365,15 +414,189 @@ mod tests{
     let mut rng = ChaCha20Rng::from_entropy();
     let (data,_) = get_test_kluster_data();
     let klusters = initialize_klusters(&mut rng, k, &data);
+    assert_eq!(klusters.len(), k);
 
     for kluster in klusters.iter(){
       let center = &kluster.center;
-      assert!(center.x() > 34.530);
-      assert!(center.x() < 38.970);
-      assert!(center.y() > 34.140);
-      assert!(center.y() < 40.260);
-      assert!(center.z() > 35.140);
-      assert!(center.z() < 39.500);
+      // Centers are data points, so they can lie on the bounding box.
+      assert!(center.x() >= 34.530);
+      assert!(center.x() <= 38.970);
+      assert!(center.y() >= 34.140);
+      assert!(center.y() <= 40.260);
+      assert!(center.z() >= 35.140);
+      assert!(center.z() <= 39.500);
+      assert!(kluster.elements.is_empty());
+    }
+
+    // Each center is a distinct data point.
+    let mut center_indices = klusters.iter()
+      .map(|kluster| data.iter().position(|x| *x == kluster.center).unwrap())
+      .collect::<Vec::<usize>>();
+    center_indices.sort();
+    center_indices.dedup();
+    assert_eq!(center_indices.len(), k);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_get_kmeans_partition_rejects_invalid_k(){
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let (data,_) = get_test_kluster_data();
+    for do_restricted_kmeans in [false, true]{
+      for k in [0, data.len()+1]{
+        assert_eq!(
+            get_kmeans_partition(&mut rng,k,&data,do_restricted_kmeans, 1000).err(),
+            Some(CluEError::InvalidNumberOfKMeansClusters(k,data.len())));
+      }
+      // k = n is allowed: every point is its own kluster.
+      let labels = get_kmeans_partition(&mut rng, data.len(), &data,
+          do_restricted_kmeans, 1000).unwrap();
+      let mut sorted = labels.clone();
+      sorted.sort();
+      assert_eq!(sorted, (0..data.len()).collect::<Vec::<usize>>());
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_unrestricted_kmeans_has_no_empty_klusters_for_distinct_points(){
+    // Before Forgy initialization, random centers in the bounding box
+    // left klusters empty for most seeds.
+    let (data,_) = get_test_kluster_data();
+    for seed in 0..50{
+      let mut rng = ChaCha20Rng::seed_from_u64(seed);
+      for k in 1..=data.len(){
+        let labels = get_kmeans_partition(&mut rng,k,&data,false, 1000).unwrap();
+        let mut used = labels.clone();
+        used.sort();
+        used.dedup();
+        assert_eq!(used.len(), k, "seed {}, k {}", seed, k);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_kmeans_with_duplicate_points(){
+    // Duplicate points can share a center, so a kluster may stay empty; 
+    // the result must still label every point with a label below k.
+    let p = Vector3D::from([1.0,2.0,3.0]);
+    let q = Vector3D::from([5.0,2.0,3.0]);
+    let data = vec![p.clone(), p.clone(), p, q];
+    for seed in 0..20{
+      for do_restricted_kmeans in [false, true]{
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let labels = get_kmeans_partition(&mut rng,3,&data,
+            do_restricted_kmeans, 1000).unwrap();
+        assert_eq!(labels.len(), 4);
+        assert!(labels.iter().all(|&label| label < 3));
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_restricted_kmeans_in_si_units(){
+    // CluE positions are in metres.  The old cost, round(distance), was 0 
+    // for every pair, so the four groups were never found (N5).
+    let (data,_) = get_test_kluster_data();
+    let data = data.iter().map(|x| x.scale(1e-10))
+      .collect::<Vec::<Vector3D>>();
+
+    let mut rng = ChaCha20Rng::seed_from_u64(2);
+    let labels = get_kmeans_partition(&mut rng,4,&data,true,1000).unwrap();
+
+    for g in 0..4{
+      assert_eq!(labels[3*g],labels[3*g+1]);
+      assert_eq!(labels[3*g],labels[3*g+2]);
+    }
+    let mut group_labels = (0..4).map(|g| labels[3*g])
+      .collect::<Vec::<usize>>();
+    group_labels.sort();
+    assert_eq!(group_labels, vec![0,1,2,3]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_restricted_kmeans_is_independent_of_length_unit(){
+    let (data,_) = get_test_kluster_data();
+    let data_si = data.iter().map(|x| x.scale(1e-10))
+      .collect::<Vec::<Vector3D>>();
+
+    for seed in 0..20{
+      for k in [2,3,4,6]{
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let labels = get_kmeans_partition(&mut rng,k,&data,true,1000)
+          .unwrap();
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let labels_si = get_kmeans_partition(&mut rng,k,&data_si,true,1000)
+          .unwrap();
+        assert_eq!(labels, labels_si, "seed {}, k {}", seed, k);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_restricted_kmeans_respects_capacity(){
+    let (data,_) = get_test_kluster_data();
+    let n = data.len();
+    for seed in 0..20{
+      for k in 1..=n{
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let labels = get_kmeans_partition(&mut rng,k,&data,true,1000)
+          .unwrap();
+        let capacity = (n + k - 1)/k;
+        for label in 0..k{
+          let size = labels.iter().filter(|&&l| l == label).count();
+          assert!(size <= capacity, "seed {}, k {}, label {}", seed, k, label);
+        }
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_get_restricted_kmeans_costs(){
+    let data = vec![
+      Vector3D::from([0.0,0.0,0.0]),
+      Vector3D::from([1e-10,0.0,0.0]),
+      Vector3D::from([2e-10,0.0,0.0]),
+    ];
+    let klusters = vec![Kluster::at(data[0].clone()), 
+        Kluster::at(data[2].clone())];
+    let costs = get_restricted_kmeans_costs(&klusters, &data);
+    // Squared distances 0, 1, 4 (in Å^2), scaled so that 4 -> 10^6.
+    assert_eq!(costs, vec![vec![0, 1_000_000], vec![250_000, 250_000],
+        vec![1_000_000, 0]]);
+
+    // All data at one point: all costs are 0.
+    let data = vec![Vector3D::from([1.0,2.0,3.0]); 3];
+    let klusters = vec![Kluster::at(data[0].clone())];
+    assert_eq!(get_restricted_kmeans_costs(&klusters, &data), 
+        vec![vec![0]; 3]);
+
+    // Large problems lower the maximum cost to keep LEMON's artificial-arc
+    // cost, (max_cost + 1)*(number of nodes), within LEMON_COST_BOUND.
+    let n = 3000;
+    let data = (0..n).map(|ii| Vector3D::from([ii as f64,0.0,0.0]))
+      .collect::<Vec::<Vector3D>>();
+    let klusters = vec![Kluster::at(data[0].clone())];
+    let costs = get_restricted_kmeans_costs(&klusters, &data);
+    let max_cost = costs.iter().flatten().max().unwrap();
+    let n_nodes = (n + 1 + 3) as i64;
+    assert_eq!(*max_cost as i64, LEMON_COST_BOUND/n_nodes - 1);
+    assert!((*max_cost as i64 + 1)*n_nodes <= LEMON_COST_BOUND);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_kmeans_iter_cap(){
+    let (data,_) = get_test_kluster_data();
+    for do_restricted_kmeans in [false, true]{
+      // A cap of 1 still returns a valid labelling.
+      let mut rng = ChaCha20Rng::seed_from_u64(0);
+      let labels = get_kmeans_partition(&mut rng,4,&data,
+          do_restricted_kmeans,1).unwrap();
+      assert_eq!(labels.len(), data.len());
+      assert!(labels.iter().all(|&label| label < 4));
+
+      let mut rng = ChaCha20Rng::seed_from_u64(0);
+      assert_eq!(get_kmeans_partition(&mut rng,4,&data,
+          do_restricted_kmeans,0).err(), 
+          Some(CluEError::InvalidKMeansIterCap));
     }
   }
   //----------------------------------------------------------------------------

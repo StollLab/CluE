@@ -1,6 +1,5 @@
-use crate::math;
-
 /// This struct is holds the vertex adjacency lists for a graph.
+/// Each neighbor list is kept sorted and without duplicates.
 #[derive(Debug,Clone)]
 pub struct AdjacencyList{
   list: Vec::< Option<Vec::<usize>> >,
@@ -47,12 +46,9 @@ impl AdjacencyList{
   // them.
   fn contains(&self,m: usize, n: usize) -> bool{
 
+    // Neighbor lists are sorted.
     if let Some(neighbors) = &self.list[m]{
-      for ii in neighbors.iter(){
-        if *ii == n{
-          return true;
-        }
-      }
+      return neighbors.binary_search(&n).is_ok();
     }
 
     false
@@ -82,13 +78,14 @@ impl AdjacencyList{
     }
   }
   //----------------------------------------------------------------------------
-  // This function places `n` onto the neighbor list of `m`.
+  // This function places `n` onto the neighbor list of `m`, keeping the 
+  // list sorted and without duplicates.
   fn insert(&mut self, m: usize, n: usize){
 
     if let Some(neighbors) = &mut self.list[m]{
-      neighbors.push(n);
-      *neighbors = math::unique((*neighbors).clone());
-      neighbors.sort();
+      if let Err(position) = neighbors.binary_search(&n){
+        neighbors.insert(position, n);
+      }
     }else{
       self.list[m] = Some(Vec::from([n]));
     }
@@ -173,7 +170,40 @@ mod tests {
     let vertices = adjacency_list.get_active_vertices();
     assert_eq!(vertices,vec![0,1,2,4]);
   }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_AdjacencyList_matches_sorted_set_reference(){
+    use rand::Rng;
+    use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
+    use std::collections::BTreeSet;
+
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    for _trial in 0..100{
+      let n = rng.gen_range(1..30);
+      let mut graph = AdjacencyList::with_capacity(n);
+      let mut reference = vec![None::<BTreeSet<usize>>; n];
+
+      // Random edges, with repeats, both orders, and self-links.
+      for _ in 0..rng.gen_range(0..200){
+        let (a, b) = (rng.gen_range(0..n), rng.gen_range(0..n));
+        graph.connect(a,b);
+        reference[a].get_or_insert_with(BTreeSet::new);
+        if a != b{
+          reference[a].as_mut().unwrap().insert(b);
+          reference[b].get_or_insert_with(BTreeSet::new).insert(a);
+        }
+      }
+
+      for v in 0..n{
+        let expected = reference[v].as_ref()
+          .map(|set| set.iter().copied().collect::<Vec::<usize>>());
+        assert_eq!(graph.get_neighbors(v).cloned(), expected);
+        for w in 0..n{
+          let connected = reference[v].as_ref()
+            .map_or(false, |set| set.contains(&w));
+          assert_eq!(graph.are_connected(v,w), connected);
+        }
+      }
+    }
+  }
 }
-
-
-

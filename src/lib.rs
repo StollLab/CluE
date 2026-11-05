@@ -121,7 +121,7 @@ pub fn run(mut config: Config)
 
   if let Some(save_dir) =  &save_path_opt{
     let save_path = format!("{}/signal.csv", save_dir);
-    let headers = (1..=max_size)
+    let headers = (0..max_size)
       .map(|ii| format!("signal_{}",ii))
       .collect::<Vec::<String>>();
     write_vec_signals(&order_n_signals, headers, &save_path)?;

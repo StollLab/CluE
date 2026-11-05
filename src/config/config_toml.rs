@@ -87,6 +87,7 @@ pub struct ConfigTOML{
   pub cluster_source: Option<String>,
   pub connect_exchange_groups: Option<bool>,
   pub ensemble_cce: Option<bool>,
+  pub kmeans_iter_cap: Option::<usize>,
   pub kmeans_size: Option::<usize>,
   pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,

@@ -13,7 +13,7 @@ use crate::structure::{
   Structure,
 };
 
-use crate::cluster::find_isolated_subgraphs::find_nearly_isolated_subgraphs;
+use crate::cluster::find_isolated_subgraphs::find_nearly_isolated_components;
 use crate::kmeans::get_kmeans_partition;
 use crate::math::unique;
 use crate::space_3d::Vector3D;
@@ -279,13 +279,13 @@ pub fn get_partition_table(rng: &mut ChaCha20Rng,
       => set_element_to_block_kmeans(
           rng, 
           &mut element_to_block, max_block_index,
-          *kluster_size,false,
+          *kluster_size,false,get_kmeans_iter_cap(config)?,
           spin_adjacency_list,structure)?,
     PartitioningMethod::RestrictedKMeans(kluster_size) 
       => set_element_to_block_kmeans(
           rng, 
           &mut element_to_block, max_block_index,
-          *kluster_size,true,
+          *kluster_size,true,get_kmeans_iter_cap(config)?,
           spin_adjacency_list,structure)?,
   };
 
@@ -484,35 +484,98 @@ fn set_element_to_block_exchange_groups(
 fn set_element_to_block_kmeans(
     rng: &mut ChaCha20Rng,
     element_to_block: &mut [PartitionBlock], mut max_id: usize,
-    kluster_size: usize,do_restricted_kmeans: bool,
+    kluster_size: usize,do_restricted_kmeans: bool, iter_cap: usize,
     spin_adjacency_list: &AdjacencyList,
     structure: &Structure,
     ) -> Result<(),CluEError>
 {
-  // Separate the bath spins into connected subgraphs.
-  let subgraphs: Vec::<AdjacencyList> 
-      = find_nearly_isolated_subgraphs(spin_adjacency_list,Some(0))?;
+  // Separate the bath spins into connected subgraphs, excluding the
+  // detected spin (vertex 0); only the vertex sets are needed.
+  let components = find_nearly_isolated_components(spin_adjacency_list,
+      Some(0));
 
   // Run k-means clustering on each subgraph and collect the results.
-  for subgraph in subgraphs.iter(){
-    let indices = subgraph.get_active_vertices();
+  for component in components.iter(){
+    // Vertices of the spin adjacency list are active (tensor) indices.
+    // Spins whose block is already set, e.g. by a user partition_table
+    // (PartitionBlock::Preset), keep it; only unset spins are clustered.
+    let indices = component.iter().copied()
+      .filter(|&index| element_to_block[index] == PartitionBlock::Unset)
+      .collect::<Vec::<usize>>();
 
-    let positions: Vec::<Vector3D> = structure.get_positions(&indices);
+    if indices.is_empty(){
+      continue;
+    }
 
-    let number_klusters 
-        = (indices.len() as f64 / kluster_size as f64).round() as usize;
+    let positions = get_positions_of_active_indices(&indices, structure)?;
+
+    // At least one kluster, so that a subgraph with fewer than about
+    // kluster_size/2 spins becomes a single block.
+    let number_klusters = usize::max(1,
+        (indices.len() as f64 / kluster_size as f64).round() as usize);
 
     let klusters = get_kmeans_partition(rng, number_klusters, &positions,
-        do_restricted_kmeans)?;
+        do_restricted_kmeans, iter_cap)?;
+
+    // Klusters can be empty, so the labels need not be 0, 1, ..., k-1.
+    // Renumber them so that the block IDs are unique and without gaps.
+    let (labels, number_used) = renumber_labels_contiguously(&klusters);
 
     for (ii,index) in indices.iter().enumerate(){
       element_to_block[*index] 
-          = PartitionBlock::Bath(klusters[ii] + max_id + 1);
+          = PartitionBlock::Bath(labels[ii] + max_id + 1);
     }
-    max_id += unique(klusters).len();
+    max_id += number_used;
   }
 
   Ok(())
+}
+//------------------------------------------------------------------------------
+// This function returns `config.kmeans_iter_cap`, the maximum number of 
+// k-means iterations.
+fn get_kmeans_iter_cap(config: &Config) -> Result<usize,CluEError>
+{
+  match config.kmeans_iter_cap{
+    Some(iter_cap) => Ok(iter_cap),
+    None => Err(CluEError::NoKMeansIterCap),
+  }
+}
+//------------------------------------------------------------------------------
+// This function maps the distinct values of `labels`, in increasing order,
+// to 0, 1, ..., m-1, where m is the number of distinct values.
+// It returns the renumbered labels and m.
+fn renumber_labels_contiguously(labels: &[usize]) -> (Vec::<usize>,usize)
+{
+  let used = unique(labels.to_vec());
+
+  let rank: HashMap::<usize,usize> = used.iter().enumerate()
+    .map(|(new_label,&old_label)| (old_label,new_label))
+    .collect();
+
+  let renumbered = labels.iter().map(|label| rank[label])
+    .collect::<Vec::<usize>>();
+
+  (renumbered, used.len())
+}
+//------------------------------------------------------------------------------
+// This function returns the coordinates of the particles with the input
+// active (tensor) indices, where index n >= 1 is the nth active bath
+// particle.  Index 0 is the detected spin, which is not a bath particle, and
+// is an error.  The active indices are converted to bath indices before
+// `bath_particles` is accessed.
+fn get_positions_of_active_indices(active_indices: &[usize],
+    structure: &Structure) -> Result<Vec::<Vector3D>,CluEError>
+{
+  let bath_indices = active_indices.iter()
+    .map(|&n| {
+      if n == 0 {
+        return Err(CluEError::CannotFindRefIndexFromNthActive(n));
+      }
+      structure.get_bath_index_of_nth_active(n)
+    })
+    .collect::<Result<Vec::<usize>,CluEError>>()?;
+
+  Ok(structure.get_positions(&bath_indices))
 }
 //------------------------------------------------------------------------------
 /// This function takes a graph (as a `&AdjacencyList`), and a 
@@ -963,6 +1026,226 @@ at 1"))),
         s("no bath particle in the primary cell has this serial number"));
     assert_eq!(err.to_string(), "partition_table entry (serial 999999, \
 block 2): no bath particle in the primary cell has this serial number");
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_get_positions_of_active_indices(){
+    // TEMPO: 29 bath particles; the carbons and the oxygen are inactive, 
+    // so active indices and bath indices differ.
+    let (_adjacency_list,_tensors,structure,_config) = get_tempo();
+
+    let active_indices = (1..=structure.number_active())
+      .collect::<Vec::<usize>>();
+    let positions 
+      = get_positions_of_active_indices(&active_indices, &structure).unwrap();
+    assert_eq!(positions.len(), active_indices.len());
+
+    for (&n, r) in active_indices.iter().zip(positions.iter()){
+      let bath_idx = structure.nth_active_to_reference_index[n] - 1;
+      let particle = &structure.bath_particles[bath_idx];
+      assert!(particle.active);
+      assert_eq!(*r, particle.coordinates);
+    }
+
+    // Active index 1 is H6 (bath index 2), not C3 (bath index 1).
+    assert_eq!(structure.nth_active_to_reference_index[1], 3);
+    assert_eq!(positions[0], structure.bath_particles[2].coordinates);
+    assert_ne!(positions[0], structure.bath_particles[1].coordinates);
+
+    // The last active particle, N, is bath index 27.
+    assert_eq!(*positions.last().unwrap(), 
+        structure.bath_particles[27].coordinates);
+
+    // Indices beyond the active particles are an error, not a panic.
+    let n_out = structure.number_active() + 1;
+    assert_eq!(get_positions_of_active_indices(&[n_out], &structure).err(),
+        Some(CluEError::CannotFindRefIndexFromNthActive(n_out)));
+
+    // The detected spin (index 0) is not a bath particle.
+    assert_eq!(get_positions_of_active_indices(&[0], &structure).err(),
+        Some(CluEError::CannotFindRefIndexFromNthActive(0)));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_set_element_to_block_kmeans_terminates_and_assigns_all_spins(){
+    let (adjacency_list,tensors,structure,_config) = get_tempo();
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+
+    for do_restricted_kmeans in [false, true]{
+      let mut element_to_block = (0..tensors.len())
+        .map(|_| PartitionBlock::Unset).collect::<Vec::<PartitionBlock>>();
+      element_to_block[0] = PartitionBlock::Detection;
+
+      set_element_to_block_kmeans(&mut rng, &mut element_to_block, 0, 2,
+          do_restricted_kmeans, 1000, &adjacency_list, &structure).unwrap();
+
+      assert_eq!(element_to_block[0], PartitionBlock::Detection);
+      for blk in element_to_block.iter().skip(1){
+        assert!(matches!(blk, PartitionBlock::Bath(id) if *id > 0), 
+            "{:?}", blk);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_renumber_labels_contiguously(){
+    // Labels 1 and 3 are unused (empty klusters).
+    let (labels, n) = renumber_labels_contiguously(&[4,0,2,2,4,0]);
+    assert_eq!(labels, vec![2,0,1,1,2,0]);
+    assert_eq!(n, 3);
+
+    let (labels, n) = renumber_labels_contiguously(&[5]);
+    assert_eq!(labels, vec![0]);
+    assert_eq!(n, 1);
+
+    let (labels, n) = renumber_labels_contiguously(&[0,1,2]);
+    assert_eq!(labels, vec![0,1,2]);
+    assert_eq!(n, 3);
+  }
+  //----------------------------------------------------------------------------
+  // This function checks that a k-means partition of TEMPO is a valid 
+  // partition table: every active bath spin is in a bath block, and the
+  // block IDs are 0, 1, ..., n-1 without gaps (`PartitionTable::from`).
+  // It returns the number of blocks.
+  fn check_kmeans_partition_of_tempo(rng: &mut ChaCha20Rng, 
+      kluster_size: usize, do_restricted_kmeans: bool,
+      adjacency_list: &AdjacencyList, n_spins: usize, structure: &Structure)
+    -> usize
+  {
+    let mut element_to_block = (0..n_spins)
+      .map(|_| PartitionBlock::Unset).collect::<Vec::<PartitionBlock>>();
+    element_to_block[0] = PartitionBlock::Detection;
+
+    set_element_to_block_kmeans(rng, &mut element_to_block, 0, kluster_size,
+        do_restricted_kmeans, 1000, adjacency_list, structure).unwrap();
+
+    for blk in element_to_block.iter().skip(1){
+      assert!(matches!(blk, PartitionBlock::Bath(id) if *id > 0), "{:?}", blk);
+    }
+
+    let partition_table = PartitionTable::from(element_to_block).unwrap();
+    partition_table.number_blocks()
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_set_element_to_block_kmeans_gives_valid_partition(){
+    let (adjacency_list,tensors,structure,_config) = get_tempo();
+    let n_spins = tensors.len();
+    assert_eq!(n_spins, 20);
+
+    // A graph on the same spins with three isolated subgraphs, 
+    // so that block IDs from different subgraphs must not collide.
+    let mut three_subgraphs = AdjacencyList::with_capacity(n_spins);
+    for ii in 2..=9{ three_subgraphs.connect(1,ii); }
+    for ii in 11..=18{ three_subgraphs.connect(10,ii); }
+    three_subgraphs.connect(19,19);
+
+    // A 16-spin subgraph followed by a 3-spin subgraph. With 
+    // kluster_size = 3, restricted k-means uses k = 5 klusters with 
+    // capacity 4 for the 16 spins, so a kluster can stay empty; the 
+    // block IDs of the next subgraph must not collide or leave a gap.
+    let mut sixteen_and_three = AdjacencyList::with_capacity(n_spins);
+    for ii in 2..=16{ sixteen_and_three.connect(1,ii); }
+    sixteen_and_three.connect(17,18);
+    sixteen_and_three.connect(18,19);
+
+    for seed in 0..20{
+      let mut rng = ChaCha20Rng::seed_from_u64(seed);
+      for do_restricted_kmeans in [false, true]{
+        for graph in [&adjacency_list, &three_subgraphs, &sixteen_and_three]{
+          // kluster_size = 100 gives round(n/100) = 0 for every subgraph,
+          // which must give one block per subgraph instead of a panic.
+          for kluster_size in [1,2,3,4,100]{
+            let n_blocks = check_kmeans_partition_of_tempo(&mut rng, 
+                kluster_size, do_restricted_kmeans, graph, n_spins, 
+                &structure);
+            // Detection block plus at least one block per subgraph.
+            let n_subgraphs 
+              = find_nearly_isolated_components(graph, Some(0)).len();
+            assert!(n_blocks > n_subgraphs);
+            if kluster_size == 1{
+              assert_eq!(n_blocks, n_spins);
+            }
+            if kluster_size == 100{
+              assert_eq!(n_blocks, 1 + n_subgraphs);
+            }
+          }
+        }
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_kmeans_keeps_preset_blocks(){
+    // get_tempo() presets the spins with serials 3, 4, 5, 7, 8, 9 (the two
+    // methyl groups on C1 and C2) to block 1.
+    let (adjacency_list,tensors,structure,mut config) = get_tempo();
+
+    let preset = [3_u32,4,5,7,8,9].iter().map(|&serial| {
+      let bath_idx = structure.map_serial_id_to_bath_index[&(serial,0)];
+      structure.bath_indices_to_active_indices[bath_idx].unwrap()
+    }).collect::<Vec::<usize>>();
+
+    for partitioning in [PartitioningMethod::KMeans(3), 
+        PartitioningMethod::RestrictedKMeans(3)]
+    {
+      config.partitioning = Some(partitioning.clone());
+      for seed in 0..10{
+        let mut rng = ChaCha20Rng::seed_from_u64(seed);
+        let partition_table = get_partition_table(&mut rng, &adjacency_list,
+            &tensors, &structure, &config).unwrap();
+
+        for &idx in preset.iter(){
+          assert_eq!(partition_table.element_to_block[idx], 
+              PartitionBlock::Preset(1), "{:?}", partitioning);
+        }
+        let mut block_1 = partition_table.block_to_elements[1].clone();
+        block_1.sort();
+        let mut expected = preset.clone();
+        expected.sort();
+        assert_eq!(block_1, expected);
+
+        // Every other bath spin is in a k-means block after the presets.
+        for blk in partition_table.element_to_block.iter().skip(1){
+          match blk{
+            PartitionBlock::Preset(1) => (),
+            PartitionBlock::Bath(id) => assert!(*id > 1),
+            _ => panic!("{:?}", blk),
+          }
+        }
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_kmeans_skips_fully_preset_subgraph(){
+    let (_adjacency_list,tensors,structure,_config) = get_tempo();
+    let n_spins = tensors.len();
+
+    // Subgraph {1,2,3} is fully preset; subgraph {4,...,19} is not.
+    let mut graph = AdjacencyList::with_capacity(n_spins);
+    graph.connect(1,2);
+    graph.connect(2,3);
+    for ii in 5..n_spins{ graph.connect(4,ii); }
+
+    let mut element_to_block = (0..n_spins)
+      .map(|_| PartitionBlock::Unset).collect::<Vec::<PartitionBlock>>();
+    element_to_block[0] = PartitionBlock::Detection;
+    for ii in 1..=3{ element_to_block[ii] = PartitionBlock::Preset(1); }
+
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    set_element_to_block_kmeans(&mut rng, &mut element_to_block, 1, 4,
+        true, 1000, &graph, &structure).unwrap();
+
+    for ii in 1..=3{
+      assert_eq!(element_to_block[ii], PartitionBlock::Preset(1));
+    }
+    for blk in element_to_block.iter().skip(4){
+      assert!(matches!(blk, PartitionBlock::Bath(id) if *id > 1), "{:?}", blk);
+    }
+    // 16 spins, kmeans_size 4: restricted k-means gives 4 blocks of 4.
+    let table = PartitionTable::from(element_to_block).unwrap();
+    assert_eq!(table.number_blocks(), 1 + 1 + 4);
   }
   //----------------------------------------------------------------------------
 }
