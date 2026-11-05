@@ -74,8 +74,9 @@ pub enum Isotope{
   Germanium74,//
   Arsenic75,//
   Selenium77,
-  Selenium78,//
+  Selenium78,
   Selenium79,
+  Selenium80,//
   Bromine79,//
   Bromine81,
   Krypton83,
@@ -134,8 +135,9 @@ pub enum Isotope{
   Lanthanum139,//
   Cerium140,//
   Praseodymium141,//
+  Neodymium142,//
   Neodymium143,
-  Neodymium144,//
+  Neodymium144,
   Neodymium145,
   Promethium141,
   Samarium147,
@@ -148,14 +150,16 @@ pub enum Isotope{
   Europium154,
   Europium155,
   Gadolinium155,
-  Gadolinium156,//
+  Gadolinium156,
   Gadolinium157,
+  Gadolinium158,//
   Terbium157,
   Terbium159,//
   Terbium160,
   Dysprosium161,
   Dysprosium163,
-  Dysprosium165,//
+  Dysprosium164,//
+  Dysprosium165,
   Holmium165,
   Erbium166,//
   Erbium167,
@@ -636,9 +640,9 @@ impl Isotope{
       Element::Copper => Isotope::Copper63,
       Element::Zinc => Isotope::Zinc64,
       Element::Gallium => Isotope::Gallium69,
-      Element::Germanium => Isotope::Germanium73,
+      Element::Germanium => Isotope::Germanium74,
       Element::Arsenic => Isotope::Arsenic75,
-      Element::Selenium => Isotope::Selenium78,
+      Element::Selenium => Isotope::Selenium80,
       Element::Bromine => Isotope::Bromine79,
       Element::Krypton => Isotope::Krypton84,
       Element::Rubidium => Isotope::Rubidium85,
@@ -664,13 +668,13 @@ impl Isotope{
       Element::Lanthanum => Isotope::Lanthanum139,
       Element::Cerium => Isotope::Cerium140,
       Element::Praseodymium => Isotope::Praseodymium141,
-      Element::Neodymium => Isotope::Neodymium144,
+      Element::Neodymium => Isotope::Neodymium142,
       Element::Promethium => Isotope::Promethium141,
       Element::Samarium => Isotope::Samarium152,
       Element::Europium => Isotope::Europium153,
-      Element::Gadolinium => Isotope::Gadolinium156,
+      Element::Gadolinium => Isotope::Gadolinium158,
       Element::Terbium => Isotope::Terbium159,
-      Element::Dysprosium => Isotope::Dysprosium165,
+      Element::Dysprosium => Isotope::Dysprosium164,
       Element::Holmium => Isotope::Holmium165,
       Element::Erbium => Isotope::Erbium166,
       Element::Thulium => Isotope::Thulium169,
@@ -804,6 +808,7 @@ impl Isotope{
      "77Se" =>  Ok(Isotope::Selenium77), 
      "78Se" =>  Ok(Isotope::Selenium78), 
      "79Se" =>  Ok(Isotope::Selenium79), 
+     "80Se" =>  Ok(Isotope::Selenium80), 
      "79Br" =>  Ok(Isotope::Bromine79), 
      "81Br" =>  Ok(Isotope::Bromine81), 
      "83Kr" =>  Ok(Isotope::Krypton83), 
@@ -862,6 +867,7 @@ impl Isotope{
      "139La" =>  Ok(Isotope::Lanthanum139), 
      "140Ce" =>  Ok(Isotope::Cerium140), 
      "141Pr" =>  Ok(Isotope::Praseodymium141), 
+     "142Nd" =>  Ok(Isotope::Neodymium142), 
      "143Nd" =>  Ok(Isotope::Neodymium143), 
      "144Nd" =>  Ok(Isotope::Neodymium144), 
      "145Nd" =>  Ok(Isotope::Neodymium145), 
@@ -878,11 +884,13 @@ impl Isotope{
      "155Gd" =>  Ok(Isotope::Gadolinium155), 
      "156Gd" =>  Ok(Isotope::Gadolinium156), 
      "157Gd" =>  Ok(Isotope::Gadolinium157), 
+     "158Gd" =>  Ok(Isotope::Gadolinium158), 
      "157Tb" =>  Ok(Isotope::Terbium157), 
      "159Tb" =>  Ok(Isotope::Terbium159), 
      "160Tb" =>  Ok(Isotope::Terbium160), 
      "161Dy" =>  Ok(Isotope::Dysprosium161), 
      "163Dy" =>  Ok(Isotope::Dysprosium163), 
+     "164Dy" =>  Ok(Isotope::Dysprosium164), 
      "165Dy" =>  Ok(Isotope::Dysprosium165), 
      "165Ho" =>  Ok(Isotope::Holmium165), 
      "166Er" =>  Ok(Isotope::Erbium166), 
@@ -1038,6 +1046,7 @@ impl std::fmt::Display for Isotope {
       Isotope::Selenium77=> "77Se".to_string(), 
       Isotope::Selenium78=> "78Se".to_string(), 
       Isotope::Selenium79=> "79Se".to_string(), 
+      Isotope::Selenium80=> "80Se".to_string(), 
       Isotope::Bromine79=> "79Br".to_string(), 
       Isotope::Bromine81=> "81Br".to_string(), 
       Isotope::Krypton83=> "83Kr".to_string(), 
@@ -1096,6 +1105,7 @@ impl std::fmt::Display for Isotope {
       Isotope::Lanthanum139=> "139La".to_string(), 
       Isotope::Cerium140=> "140Ce".to_string(), 
       Isotope::Praseodymium141=> "141Pr".to_string(), 
+      Isotope::Neodymium142=> "142Nd".to_string(), 
       Isotope::Neodymium143=> "143Nd".to_string(), 
       Isotope::Neodymium144=> "144Nd".to_string(), 
       Isotope::Neodymium145=> "145Nd".to_string(), 
@@ -1112,11 +1122,13 @@ impl std::fmt::Display for Isotope {
       Isotope::Gadolinium155=> "155Gd".to_string(), 
       Isotope::Gadolinium156=> "156Gd".to_string(), 
       Isotope::Gadolinium157=> "157Gd".to_string(), 
+      Isotope::Gadolinium158=> "158Gd".to_string(), 
       Isotope::Terbium157=> "157Tb".to_string(), 
       Isotope::Terbium159=> "159Tb".to_string(), 
       Isotope::Terbium160=> "160Tb".to_string(), 
       Isotope::Dysprosium161=> "161Dy".to_string(), 
       Isotope::Dysprosium163=> "163Dy".to_string(), 
+      Isotope::Dysprosium164=> "164Dy".to_string(), 
       Isotope::Dysprosium165=> "165Dy".to_string(), 
       Isotope::Holmium165=> "165Ho".to_string(), 
       Isotope::Erbium166=> "166Er".to_string(), 

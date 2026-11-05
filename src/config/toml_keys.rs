@@ -142,7 +142,7 @@ pub const KEY_VEC_SPECIFIER_TO_BONDED_TO: &str = "to_bonded_to";
 pub const KEY_VEC_SPECIFIER_TO_SAME_MOLECULE_AS: &str = "to_same_molecule_as";
 pub const KEY_VEC_SPECIFIER_RANDOM: &str = "random";
 
-pub const ALLOWED_KEYS: [&str;369] = [
+pub const ALLOWED_KEYS: [&str;373] = [
   "abundance",
   "abundance_tolerance",
   "active",
@@ -355,6 +355,7 @@ pub const ALLOWED_KEYS: [&str;369] = [
   "77Se",
   "78Se",
   "79Se",
+  "80Se",
   "79Br",
   "81Br",
   "83Kr",
@@ -413,6 +414,7 @@ pub const ALLOWED_KEYS: [&str;369] = [
   "139La",
   "140Ce",
   "141Pr",
+  "142Nd",
   "143Nd",
   "144Nd",
   "145Nd",
@@ -429,11 +431,13 @@ pub const ALLOWED_KEYS: [&str;369] = [
   "155Gd",
   "156Gd",
   "157Gd",
+  "158Gd",
   "157Tb",
   "159Tb",
   "160Tb",
   "161Dy",
   "163Dy",
+  "164Dy",
   "165Dy",
   "165Ho",
   "166Er",
