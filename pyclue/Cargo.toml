@@ -1,7 +1,11 @@
 [package]
 name = "pyclue"
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 edition = "2018"
+# Resolver 2 applies target-specific dependency features (e.g. the unix and
+# windows ndarray-linalg backends in ../Cargo.toml) only on their own target.
+# The edition-2018 default (resolver 1) enables both backends on every target.
+resolver = "2"
 
 [lib]
 name = "clue_oxide"
