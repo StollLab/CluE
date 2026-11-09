@@ -48,9 +48,7 @@ mcmf = "2.0.0"
 ndarray-linalg = { version = "0.17", features = ["openblas-system"] }
 #ndarray-linalg = { version = "0.17", features = ["openblas-static"] }
 
-#[target.'cfg(windows)'.dependencies.ndarray-linalg]
-#version = '0.17.0'
-#features = ['intel-mkl']
+[target.'cfg(windows)'.dependencies.ndarray-linalg]
+version = '0.17.0'
+features = ['intel-mkl']
 
-#[target.'cfg(windows)'.dev-dependencies]
-#criterion = '0.3.0'
