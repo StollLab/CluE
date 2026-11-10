@@ -241,22 +241,40 @@ pub fn load_csv_to_vec_signals(filename: &str)
 /// to the corresponding cluster.
 /// The file is assummed to be saved from CluE Oxide as part of the
 /// checkpointing process.
-/// This function will return an error if it cannot find/parse the file.
-pub fn load_batch_signals(clusters: &mut [Cluster], 
-    idx: usize, batch_size: usize, 
+/// The batch starts at `clusters[idx]` and holds up to `batch_size` clusters.
+/// This function will return an error if it cannot find/parse the file,
+/// if `batch_size` is zero, if the file does not have exactly one signal
+/// per cluster in the batch, or if the signals do not have `n_data` points.
+pub fn load_batch_signals(clusters: &mut [Cluster],
+    idx: usize, batch_size: usize, n_data: usize,
     filename: &str) -> Result<(),CluEError>
 {
+  if batch_size == 0{
+    return Err(CluEError::ZeroClusterBatchSize);
+  }
 
   let signals = load_csv_to_vec_signals(filename)?;
 
-  let mut ii = 0;
-  for signal in signals{
-    clusters[idx + ii].signal = Ok(Some(signal)); 
-    ii += 1;
-    if ii == batch_size{
-      break;
+  // Number of clusters in this batch; the last batch can be shorter.
+  let n_expected = std::cmp::min(batch_size,
+      clusters.len().saturating_sub(idx));
+
+  if signals.len() != n_expected{
+    return Err(CluEError::WrongNumberOfBatchSignals(filename.to_string(),
+          signals.len(), n_expected));
+  }
+
+  // All columns of a csv file have the same length.
+  if let Some(signal) = signals.first(){
+    if signal.len() != n_data{
+      return Err(CluEError::WrongBatchSignalLength(filename.to_string(),
+            signal.len(), n_data));
     }
-  } 
+  }
+
+  for (ii, signal) in signals.into_iter().enumerate(){
+    clusters[idx + ii].signal = Ok(Some(signal));
+  }
 
   Ok(())
 }
@@ -446,6 +464,48 @@ mod tests{
     std::fs::remove_file(&filename).unwrap();
     assert_eq!(result.err(), Some(CluEError::CannotParseSignalEntry(
             filename.clone(), 2, "abc".to_string())));
+  }
+  //----------------------------------------------------------------------------
+  // load_batch_signals attaches one signal per cluster of the batch, and
+  // rejects files that do not match the batch or the time axis, and a
+  // zero batch size.
+  #[test]
+  fn test_load_batch_signals_checks(){
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_batch_{}.csv", std::process::id()));
+    let filename = filename.to_str().unwrap().to_string();
+    std::fs::write(&filename, 
+        "clu_1,clu_2\n1+0i,1+0i\n0.9+0i,0.8+0i\n0.7+0i,0.6+0i\n").unwrap();
+    let new_clusters = || (1..=5).map(|v| Cluster::from(vec![v]))
+      .collect::<Vec::<Cluster>>();
+
+    // With batches of 2 over 5 clusters, the batch at index 3 holds
+    // clusters 3 and 4.
+    let mut clusters = new_clusters();
+    load_batch_signals(&mut clusters, 3, 2, 3, &filename).unwrap();
+    assert_eq!(clusters[3].signal, Ok(Some(Signal{data: vec![
+        Complex64::new(1.0,0.0),Complex64::new(0.9,0.0),
+        Complex64::new(0.7,0.0)]})));
+    assert_eq!(clusters[4].signal, Ok(Some(Signal{data: vec![
+        Complex64::new(1.0,0.0),Complex64::new(0.8,0.0),
+        Complex64::new(0.6,0.0)]})));
+    assert_eq!(clusters[2].signal, Ok(None));
+
+    // The batch at index 4 has one cluster, but the file has two signals.
+    let mut clusters = new_clusters();
+    assert_eq!(load_batch_signals(&mut clusters, 4, 2, 3, &filename),
+        Err(CluEError::WrongNumberOfBatchSignals(filename.clone(),2,1)));
+    // A batch of three clusters.
+    assert_eq!(load_batch_signals(&mut clusters, 0, 3, 3, &filename),
+        Err(CluEError::WrongNumberOfBatchSignals(filename.clone(),2,3)));
+    // The run has a different number of time points.
+    assert_eq!(load_batch_signals(&mut clusters, 0, 2, 4, &filename),
+        Err(CluEError::WrongBatchSignalLength(filename.clone(),3,4)));
+    assert_eq!(load_batch_signals(&mut clusters, 0, 0, 3, &filename),
+        Err(CluEError::ZeroClusterBatchSize));
+    assert!(clusters.iter().all(|c| c.signal == Ok(None)));
+
+    std::fs::remove_file(&filename).unwrap();
   }
   //----------------------------------------------------------------------------
   // Writing into a directory that does not exist gives CannotWriteCSV with

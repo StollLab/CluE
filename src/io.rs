@@ -25,8 +25,14 @@ pub fn read_time_axis(filename: &str) -> Result<Vec::<f64>, CluEError >
   }
 }
 //----------------------------------------------------------------------------
-// TODO: Test
 /// This function loads auxiliary signals from 'load_dir' into a `ClusterSet`.
+/// The files are those written by `calculate_auxiliary_signals`:
+/// `cluster_size_{n}_batch_{b}.csv` holds batch `b` of
+/// `cluster_set.clusters[n]`, where `n` is the index into
+/// `cluster_set.clusters` (index 0 is the empty cluster).
+/// `config` must have the `cluster_batch_size` and time axis of the run
+/// that wrote the files.
+/// Batches without a file are left unchanged.
 pub fn load_auxiliary_signals(cluster_set: &mut ClusterSet, 
     config: &Config, load_dir: &str) 
     -> Result<(),CluEError>
@@ -36,14 +42,27 @@ pub fn load_auxiliary_signals(cluster_set: &mut ClusterSet,
   let Some(batch_size) = config.cluster_batch_size else{
     return Err(CluEError::NoClusterBatchSize);
   };
+  if batch_size == 0{
+    return Err(CluEError::ZeroClusterBatchSize);
+  }
 
-  let max_size = clusters.len();
+  // The number of time points, as in Config::set_tau_axis();
+  // `config` may not have had set_tau_axis() called.
+  let n_data = {
+    let (result, n1) = Config::construct_tau_axis(
+        &config.number_timepoints, &config.tau_increments, "");
+    result?;
+    let (result, n2) = Config::construct_tau_axis(
+        &config.number_timepoints2, &config.tau2_increments, "2");
+    result?;
+    n1*n2
+  };
 
   // Loop over cluster sizes.
-  for cluster_size in 1..=max_size{
+  for (cluster_size, clusters_of_size) in clusters.iter_mut().enumerate(){
 
     // Split the cluster into batches.
-    let n_clusters = clusters[cluster_size-1].len();
+    let n_clusters = clusters_of_size.len();
     let n_batches 
       = math::ceil( (n_clusters as f64)/(batch_size as f64)) as usize;
 
@@ -56,10 +75,8 @@ pub fn load_auxiliary_signals(cluster_set: &mut ClusterSet,
           load_dir, cluster_size,ibatch);
 
       if Path::new(&aux_filename).exists(){
-         load_batch_signals(&mut clusters[cluster_size-1],
-             idx,batch_size,&aux_filename)?;
-
-         continue;
+         load_batch_signals(clusters_of_size,
+             idx,batch_size,n_data,&aux_filename)?;
       }
     }
   }
@@ -216,5 +233,81 @@ mod tests{
       other => panic!("expected CannotWriteCSV, got {:?}", other),
     }
     assert!(!dir.exists());
+  }
+  //----------------------------------------------------------------------------
+  // A gCCE run that saves its auxiliary signals (in batches of 2) is
+  // reloaded with load_auxiliary_signals. Every cluster, including the empty
+  // cluster, must get a signal, and their product must be the signal of the
+  // run. Before the fix, files were loaded one cluster size too low, which
+  // panicked.
+  #[test]
+  fn test_load_auxiliary_signals_round_trip(){
+    use crate::cluster::read_clusters::read_cluster_file;
+    use crate::config::{SAVE_DIR_AUXILIARY_SIGNALS,SAVE_DIR_ORIENTATION_SIGNALS,
+      SAVE_FILE_CLUSTERS};
+    use crate::signal::{Signal,load_csv_to_vec_signals};
+    use crate::structure::Structure;
+    use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
+
+    let out_dir = std::env::temp_dir().join(format!(
+          "clue_oxide_test_load_aux_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&out_dir);
+    let out = out_dir.to_str().unwrap().to_string();
+
+    let toml = std::fs::read_to_string(
+        "assets/1omp_K26R1_0.003228966616048703_gcce.toml").unwrap()
+      .replace("radius = 300","radius = 8\ncluster_batch_size = 2")
+      .replace("number_timepoints = [301]","number_timepoints = [11]")
+      .replace("auxiliary_signals = false","auxiliary_signals = true");
+    let toml = format!("output_directory = \"{}\"\n{}",out,toml);
+    let config = Config::from_toml_string(&toml).unwrap();
+    assert_eq!(config.output_directory, Some(out.clone()));
+    let (_, signal_first) = crate::run(config.clone()).unwrap();
+    // A second run into the same directory reloads every batch, including
+    // the empty cluster's, through the checkpoint path.
+    let (_, signal_second) = crate::run(config.clone()).unwrap();
+    assert_eq!(signal_first, signal_second);
+
+    // The run_name of the asset is "system"; there is one orientation.
+    let ori_root = format!("{}/system/{}",out,SAVE_DIR_ORIENTATION_SIGNALS);
+    let entries = std::fs::read_dir(&ori_root).unwrap()
+      .map(|e| e.unwrap().path()).collect::<Vec::<_>>();
+    assert_eq!(entries.len(),1);
+    let ori_dir = entries[0].to_str().unwrap().to_string();
+
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let structure = Structure::build_structure(&mut rng,&config).unwrap();
+    let mut cluster_set = read_cluster_file(
+        &format!("{}/{}.toml",ori_dir,SAVE_FILE_CLUSTERS), &structure).unwrap();
+    assert!(cluster_set.clusters[1].len() > 2, "need several batches");
+
+    load_auxiliary_signals(&mut cluster_set, &config, 
+        &format!("{}/{}",ori_dir,SAVE_DIR_AUXILIARY_SIGNALS)).unwrap();
+
+    let n_tot = 11;
+    let mut product = Signal::ones(n_tot);
+    for clusters_of_size in cluster_set.clusters.iter(){
+      for cluster in clusters_of_size.iter(){
+        let Ok(Some(signal)) = &cluster.signal else{
+          panic!("cluster {} has no signal", cluster);
+        };
+        product = &product * signal;
+      }
+    }
+    // The empty cluster's auxiliary signal (the bare detected-spin signal
+    // in gCCE) is now saved and loaded.
+    assert!(std::path::Path::new(&format!("{}/{}/cluster_size_0_batch_0.csv",
+        ori_dir,SAVE_DIR_AUXILIARY_SIGNALS)).exists());
+    assert_eq!(cluster_set.clusters[0][0].signal.as_ref().unwrap()
+        .as_ref().unwrap().len(), n_tot);
+
+    let run_signals = load_csv_to_vec_signals(
+        &format!("{}/signal.csv",ori_dir)).unwrap();
+    let reference = &run_signals[run_signals.len()-1];
+    for (v,v0) in product.data.iter().zip(reference.data.iter()){
+      assert!((v-v0).norm() < 1e-12, "{} vs {}", v, v0);
+    }
+
+    std::fs::remove_dir_all(&out_dir).unwrap();
   }
 }

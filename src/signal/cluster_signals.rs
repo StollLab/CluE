@@ -96,6 +96,9 @@ fn calculate_auxiliary_signals(
   let Some(batch_size) = config.cluster_batch_size else{
     return Err(CluEError::NoClusterBatchSize);
   };
+  if batch_size == 0{
+    return Err(CluEError::ZeroClusterBatchSize);
+  }
 
   let n_tot = config.get_total_number_timesteps();
 
@@ -121,7 +124,7 @@ fn calculate_auxiliary_signals(
 
           if Path::new(&aux_filename).exists(){
              load_batch_signals(&mut clusters[cluster_size],
-                 idx,batch_size,&aux_filename)?;
+                 idx,batch_size,n_tot,&aux_filename)?;
 
              continue;
           }
@@ -161,13 +164,13 @@ fn calculate_auxiliary_signals(
         }
       }
 
-      if cluster_size == 0 {
-        continue;
-      }
-
       // Loop over cluster in this batch and calculate the auxiliary signals
       // from the cluster signals.
-      for iclu in (0..n_clusters).skip(idx).take(batch_size){
+      // The empty cluster has no subclusters: its auxiliary signal is its
+      // cluster signal (all ones for CCE, the bare detected-spin signal
+      // for gCCE), so it is skipped here but still saved below.
+      let cluster_range = if cluster_size == 0 { 0..0 } else { 0..n_clusters };
+      for iclu in cluster_range.skip(idx).take(batch_size){
         let mut cluster = clusters[cluster_size][iclu].clone();
         let cluster_num_spins = cluster.vertices().len();
 

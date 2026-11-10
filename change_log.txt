@@ -379,6 +379,24 @@ CHANGED:
   Previously it was always read in angstroms. A position given as three 
   integers, which is read as serial numbers, now prints a message.
 
+  pyCluE load_auxiliary_signals loaded each auxiliary_signals file into
+  the clusters one size below it (cluster_size_1 into the empty cluster,
+  and so on), which panicked for any real run. Files are now loaded into
+  the cluster size they were written for.
+
+  The auxiliary signal of the empty cluster (the bare detected-spin signal
+  in gCCE, all ones in CCE) is now saved as
+  auxiliary_signals/cluster_size_0_batch_0.csv, so that the saved
+  auxiliary signals contain every factor of the signal. Results are
+  unchanged.
+
+  Loading saved auxiliary signals, by a run or by pyCluE, now stops with an
+  error if a file does not have one signal per cluster of its batch, or if
+  its signals do not have the number of time points of the run.
+  Previously the signals were attached by position without checks, which
+  could attach wrong signals or panic. cluster_batch_size = 0 is now an
+  error; previously the run never finished.
+
 REMOVED:
   cosubstitute = "bonded", which did not group particles as intended, is 
   now an error that names the group. The options are "same_molecule", 

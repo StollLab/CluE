@@ -197,11 +197,14 @@ pub enum CluEError{
   UnrecognizedVectorSpecifier(String),
   UnrecognizedUnit(String,String,String),
   VectorSpecifierDoesNotSpecifyUniqueVector(String),
+  WrongBatchSignalLength(String,usize,usize),
   WrongClusterSizeForAnalyticCCE(usize),
   WrongDelayDimension(usize),
+  WrongNumberOfBatchSignals(String,usize,usize),
   WrongNumberOfAxes(usize,usize),
   WrongNumberOfCellEdges(usize),
   WrongTauDimension(usize,usize),
+  ZeroClusterBatchSize,
   ZeroMaxClusterSize,
 }
 
@@ -902,6 +905,19 @@ or \"-tau\", and \"delay2\" with \"tau2\" or \"-tau2\"",
           if *delay_dim == 2 {"delay2"} else {"delay"},
           if *tau_dim == 2 {"tau2"} else {"tau"}),
 
+      CluEError::WrongBatchSignalLength(filename,found,expected) => write!(f,
+          "the signals in \"{}\" have {} time points, but the run has {}; \
+the file was written by a run with a different time axis",
+          filename, found, expected),
+
+      CluEError::WrongNumberOfBatchSignals(filename,found,expected) => write!(f,
+          "\"{}\" has {} signals, but the batch has {} clusters; the file was \
+written for a different cluster set or cluster_batch_size",
+          filename, found, expected),
+
+      CluEError::ZeroClusterBatchSize => write!(f,
+          "cluster_batch_size must be at least 1"),
+
       CluEError::ZeroMaxClusterSize => write!(f,
           "the maximum cluster size must be at least 1"),
     }
@@ -982,6 +998,13 @@ followed by a column for the weights"),
        "detected_spin.transition is not set"),
       (CluEError::NoEnsembleCCE, "ensemble_cce is not set"),
       (CluEError::NoMeanFields, "mean_fields is not set"),
+      (CluEError::ZeroClusterBatchSize, "cluster_batch_size must be at least 1"),
+      (CluEError::WrongNumberOfBatchSignals(s("b.csv"),3,2),
+       "\"b.csv\" has 3 signals, but the batch has 2 clusters; the file was \
+written for a different cluster set or cluster_batch_size"),
+      (CluEError::WrongBatchSignalLength(s("b.csv"),5,8),
+       "the signals in \"b.csv\" have 5 time points, but the run has 8; \
+the file was written by a run with a different time axis"),
       (CluEError::NoOrientationGrid, "orientations.grid is not set"),
       (CluEError::NoTimeIncrements2, "tau2_increments is not set"),
       (CluEError::MissingHeader(1,2,s("a.csv")),
