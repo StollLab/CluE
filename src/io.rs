@@ -256,10 +256,11 @@ mod tests{
 
     let toml = std::fs::read_to_string(
         "assets/1omp_K26R1_0.003228966616048703_gcce.toml").unwrap()
-      .replace("radius = 300","radius = 8\ncluster_batch_size = 2")
+      .replace("radius = 300","radius = 8")
       .replace("number_timepoints = [301]","number_timepoints = [11]")
-      .replace("auxiliary_signals = false","auxiliary_signals = true");
-    let toml = format!("output_directory = \"{}\"\n{}",out,toml);
+      .replace("auxiliary_signals = false",
+          &format!("auxiliary_signals = true\n  directory = \"{}\"",out));
+    let toml = format!("{}\n[run]\n  cluster_batch_size = 2\n",toml);
     let config = Config::from_toml_string(&toml).unwrap();
     assert_eq!(config.output_directory, Some(out.clone()));
     let (_, signal_first) = crate::run(config.clone()).unwrap();

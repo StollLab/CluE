@@ -856,8 +856,8 @@ Periodic boudary conditions will not be applied.");
           let n_required = required_extra_cells_per_dim(reciprocal_vectors,
               &positions, radius + delta);
           if (0..3).any(|ii| n_cells_per_dim[ii] < n_required[ii]){
-            println!("replicate_unit_cell = [{}, {}, {}] is less than the \
-[{}, {}, {}] unit cells needed to fill the radius.",
+            println!("structure.replicate_unit_cell = [{}, {}, {}] is less \
+than the [{}, {}, {}] unit cells needed to fill the radius.",
                 n_cells_per_dim[0], n_cells_per_dim[1], n_cells_per_dim[2],
                 n_required[0], n_required[1], n_required[2]);
           }
@@ -1073,7 +1073,7 @@ mod tests{
     ];
 
     let config = Config::from_toml_string(r##"
-        replicate_unit_cell = [1,2,1]
+        structure.replicate_unit_cell = [1,2,1]
         "##).unwrap();
 
     let structure = Structure::new(Vec::<Particle>::new(), 
@@ -1307,27 +1307,27 @@ mod tests{
     set_store_all_copies(true);
 
     let config = Config::from_toml_string(r##"
-      input_structure_file = "./assets/TEMPO_3gly_1npr_50A.pdb"
+      structure.file = "./assets/TEMPO_3gly_1npr_50A.pdb"
       detected_spin.position = [28,29]
-      radius = 73.5676
-      replicate_unit_cell = true
+      structure.radius = 73.5676
+      structure.replicate_unit_cell = true
       
-      pulse_sequence = "hahn"
-      tau_increments = [1e-2]
-      number_timepoints = [101]
+      pulse_sequence.sequence = "hahn"
+      pulse_sequence.tau_increments = [1e-2]
+      pulse_sequence.number_timepoints = [101]
       
       [[groups]]
       name = "exchangeable_hydrogens"
-      selection.elements = ["H"]
-      selection.bonded_elements = ["O"]
+      include.elements = ["H"]
+      include.bonded_to.elements = ["O"]
 
       1H.abundance = 0.5
       2H.abundance = 0.5
       
       [[groups]]
       name = "nonexchangeable_hydrogens"
-      selection.elements = ["H"]
-      selection.not_bonded_elements = ["O"]
+      include.elements = ["H"]
+      exclude.bonded_to.elements = ["O"]
       
       1H.abundance = 0.5
       2H.abundance = 0.5
@@ -1438,22 +1438,22 @@ mod tests{
   #[test]
   fn test_add_voidable_particles(){
     let config0 = Config::from_toml_string(r##"
-      input_structure_file = "./assets/TEMPO_3gly_1npr_50A.pdb"
+      structure.file = "./assets/TEMPO_3gly_1npr_50A.pdb"
       detected_spin.position = [28,29]
-      radius = 70.0
-      replicate_unit_cell = true
+      structure.radius = 70.0
+      structure.replicate_unit_cell = true
       
-      pulse_sequence = "hahn"
-      tau_increments = [1e-2]
-      number_timepoints = [101]
+      pulse_sequence.sequence = "hahn"
+      pulse_sequence.tau_increments = [1e-2]
+      pulse_sequence.number_timepoints = [101]
       
       [[groups]]
       name = "h"
-      selection.elements = ["H"]
+      include.elements = ["H"]
 
       [[groups]]
       name = "non_h"
-      selection.not_elements = ["H"]
+      exclude.elements = ["H"]
       drop_probability = 1.0
 
     "##).unwrap();
@@ -1462,23 +1462,23 @@ mod tests{
     let structure0 = Structure::build_structure(&mut rng,&config0).unwrap();
 
     let config1 = Config::from_toml_string(r##"
-      input_structure_file = "./assets/TEMPO_3gly_1npr_50A.pdb"
+      structure.file = "./assets/TEMPO_3gly_1npr_50A.pdb"
       detected_spin.position = [28,29]
-      radius = 70.0
-      replicate_unit_cell = true
+      structure.radius = 70.0
+      structure.replicate_unit_cell = true
       
-      pulse_sequence = "hahn"
-      tau_increments = [1e-2]
-      number_timepoints = [101]
+      pulse_sequence.sequence = "hahn"
+      pulse_sequence.tau_increments = [1e-2]
+      pulse_sequence.number_timepoints = [101]
       
       [[groups]]
       name = "h"
-      selection.elements = ["H"]
+      include.elements = ["H"]
       drop_probability = 0.5
 
       [[groups]]
       name = "non_h"
-      selection.not_elements = ["H"]
+      exclude.elements = ["H"]
       drop_probability = 1.0
 
 
@@ -1753,15 +1753,15 @@ mod tests{
   // and the specified groups.
   fn build_periodic_tempo(groups: &str, seed: u64) -> Structure{
     let config = Config::from_toml_string(&format!(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 20
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 20
         detected_spin.position = [28,29]
-        number_timepoints = [101]
-        tau_increments = [1e-1]
-        cluster_method = "cce"
-        max_cluster_size = 2
-        magnetic_field = 1.2
-        replicate_unit_cell = true
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1]
+        cluster_expansion.method = "cce"
+        cluster_expansion.max_cluster_size = 2
+        conditions.magnetic_field = 1.2
+        structure.replicate_unit_cell = true
         {}
         "##,groups)).unwrap();
 
@@ -1772,24 +1772,73 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   #[test]
+  fn test_cells_with_include_all_selects_every_atom_of_its_cells(){
+    // cells = "primary" with include = {} is the new form of the old
+    // selection = {cell_type = "primary_cell"}, which applied the group to
+    // every atom of the primary cell and to none of its copies.
+    // The radius reaches into the neighboring cells (edge 72.6 Å).
+    // The reference has no group, so it shows which particles are active 
+    // without the group; copies beyond the radius are inactive in both.
+    let build = |groups: &str| -> Structure{
+      let config = Config::from_toml_string(&format!(r##"
+          structure.file = "assets/TEMPO.pdb"
+          structure.radius = 80
+          structure.replicate_unit_cell = true
+          detected_spin.position = [28,29]
+          {}
+          "##, groups)).unwrap();
+      let mut rng = ChaCha20Rng::seed_from_u64(0);
+      Structure::build_structure(&mut rng,&config).unwrap()
+    };
+    let reference = build("");
+    let structure = build(r##"
+        [[groups]]
+        name = "primary"
+        cells = "primary"
+        include = {}
+        1H.active = false
+        "##);
+    assert_eq!(structure.number(), reference.number());
+
+    let hydrogens = (0..structure.number()).filter(|&idx| 
+        structure.bath_particles[idx].element == Element::Hydrogen)
+      .collect::<Vec::<usize>>();
+    let (primary, copies): (Vec::<usize>, Vec::<usize>) = hydrogens.iter()
+      .partition(|&&idx| structure.cell_id(idx) == Ok(0));
+    assert_eq!(primary.len(), 18);
+
+    // Every primary cell hydrogen is deactivated by the group.
+    for &idx in primary.iter(){
+      assert!(reference.bath_particles[idx].active, "{}", idx);
+      assert!(!structure.bath_particles[idx].active, "{}", idx);
+    }
+    // The copies are not in the group.
+    for &idx in copies.iter(){
+      assert_eq!(structure.bath_particles[idx].active, 
+          reference.bath_particles[idx].active, "{}", idx);
+    }
+    assert!(copies.iter().any(|&idx| structure.bath_particles[idx].active));
+  }
+  //----------------------------------------------------------------------------
+  #[test]
   fn test_build_structure_is_reproducible_with_drop_probabilities(){
     // With several drop probabilities, the random draws must happen 
     // in the same order on every build with the same seed.
     let groups = r##"
         [[groups]]
         name = "methyl_h"
-        selection.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        include.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         drop_probability = 0.3
 
         [[groups]]
         name = "other_h"
-        selection.elements = ["H"]
-        selection.not_serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        include.elements = ["H"]
+        exclude.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         drop_probability = 0.6
 
         [[groups]]
         name = "nitrogen"
-        selection.elements = ["N"]
+        include.elements = ["N"]
         drop_probability = 0.5
         "##;
 
@@ -1817,20 +1866,20 @@ mod tests{
     let c_primary = r##"
         [[groups]]
         name = "c_primary"
-        selection.elements = ["C"]
-        selection.cell_type = "primary_cell"
+        include.elements = ["C"]
+        cells = "primary"
         "##;
     let h_primary = r##"
         [[groups]]
         name = "h_primary"
-        selection.elements = ["H"]
-        selection.cell_type = "primary_cell"
+        include.elements = ["H"]
+        cells = "primary"
         "##;
     let c_extra = r##"
         [[groups]]
         name = "c_extra"
-        selection.elements = ["C"]
-        selection.cell_type = "extracells"
+        include.elements = ["C"]
+        cells = "extra"
         13C.abundance = 1.0
         "##;
     let n_c0 = 9;
@@ -1906,11 +1955,11 @@ mod tests{
       Vector3D::from([0.0, 0.0, 25.0]).scale(ANGSTROM),
     ];
     assert_hydrogen_images_within_radius_exist(cell_edges, r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 38
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 38
         detected_spin.position = [28,29]
-        replicate_unit_cell = true
-        clash_distance_pbc = 0.0
+        structure.replicate_unit_cell = true
+        structure.clash_distance_pbc = 0.0
         "##);
   }
   //----------------------------------------------------------------------------
@@ -1923,11 +1972,11 @@ mod tests{
       Vector3D::from([0.0, 0.0, 20.0]).scale(ANGSTROM),
     ];
     assert_hydrogen_images_within_radius_exist(cell_edges, r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 15
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 15
         detected_spin.position = [66.44, 36.90, 37.10]
-        replicate_unit_cell = true
-        clash_distance_pbc = 0.0
+        structure.replicate_unit_cell = true
+        structure.clash_distance_pbc = 0.0
         "##);
   }
   //----------------------------------------------------------------------------
@@ -1970,10 +2019,10 @@ mod tests{
       ("true", None, Ok(())),
     ]{
       let config = Config::from_toml_string(&format!(r##"
-          input_structure_file = "assets/TEMPO.pdb"
-          radius = 20
+          structure.file = "assets/TEMPO.pdb"
+          structure.radius = 20
           detected_spin.position = [28,29]
-          replicate_unit_cell = {}
+          structure.replicate_unit_cell = {}
           "##,replicate)).unwrap();
       let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
       assert_eq!(structure.space_group, Some("P 1".to_string()));
@@ -2049,10 +2098,10 @@ mod tests{
     -> Result<Structure,CluEError>
   {
     let config = Config::from_toml_string(&format!(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 20
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 20
         detected_spin.position = [28,29]
-        replicate_unit_cell = true
+        structure.replicate_unit_cell = true
         {}
         "##,settings)).unwrap();
     let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
@@ -2107,7 +2156,8 @@ mod tests{
     }
     let expected = expected.unwrap();
 
-    let result = build_tempo_in_cell(10.0*ANGSTROM,"clash_distance = 2.0");
+    let result = build_tempo_in_cell(10.0*ANGSTROM,
+        "structure.clash_distance = 2.0");
     assert_eq!(result.err(), Some(expected));
   }
   //----------------------------------------------------------------------------
@@ -2118,7 +2168,7 @@ mod tests{
     let clash_distance = 4.0*ANGSTROM;
     let reference = build_tempo_in_cell(10.0*ANGSTROM,"").unwrap();
     let structure = build_tempo_in_cell(10.0*ANGSTROM,
-        "clash_distance_pbc = 4.0").unwrap();
+        "structure.clash_distance_pbc = 4.0").unwrap();
     assert_eq!(structure.number(), reference.number());
 
     let mut n_removed = 0;
@@ -2193,10 +2243,10 @@ mod tests{
     // Every particle in a group with abundances gets a listed isotope.
     let build = |groups: &str, seed: u64| -> Structure{
       let config = Config::from_toml_string(&format!(r##"
-          input_structure_file = "assets/TEMPO.pdb"
-          radius = 20
+          structure.file = "assets/TEMPO.pdb"
+          structure.radius = 20
           detected_spin.position = [28,29]
-          replicate_unit_cell = false
+          structure.replicate_unit_cell = false
           {}
           "##, groups)).unwrap();
       let mut rng = ChaCha20Rng::seed_from_u64(seed);
@@ -2208,7 +2258,7 @@ mod tests{
       let structure = build(r##"
           [[groups]]
           name = "h"
-          selection.elements = ["H"]
+          include.elements = ["H"]
           1H.abundance = 0.5
           2H.abundance = 0.5
           "##, seed);
@@ -2227,7 +2277,7 @@ mod tests{
     let structure = build(r##"
         [[groups]]
         name = "c"
-        selection.elements = ["C"]
+        include.elements = ["C"]
         13C.abundance = 1.0
         "##, 0);
     let carbons = structure.bath_particles.iter()
@@ -2239,7 +2289,7 @@ mod tests{
     let structure = build(r##"
         [[groups]]
         name = "h"
-        selection.elements = ["H"]
+        include.elements = ["H"]
         "##, 0);
     assert!(structure.bath_particles.iter()
         .filter(|p| p.element == Element::Hydrogen)
@@ -2269,7 +2319,7 @@ mod tests{
     let structure = build_periodic_tempo(r##"
         [[groups]]
         name = "tempo"
-        selection.residues = ["TEM"]
+        include.residues = ["TEM"]
         cosubstitute = "same_molecule"
         "##,0);
     assert_eq!(structure.bath_particles[0].element, Element::Carbon);
@@ -2290,7 +2340,7 @@ mod tests{
     let structure = build_periodic_tempo(r##"
         [[groups]]
         name = "tempo"
-        selection.residues = ["TEM"]
+        include.residues = ["TEM"]
         cosubstitute = "same_molecule"
         drop_probability = 0.5
         "##,3);
@@ -2316,17 +2366,17 @@ mod tests{
     // The first particle of each water is an oxygen without spin; 
     // waters in the primary cell must still be dropped as whole molecules.
     let config = Config::from_toml_string(r##"
-        input_structure_file = "./assets/water_gly_20pc_vol.pdb"
+        structure.file = "./assets/water_gly_20pc_vol.pdb"
         detected_spin.position = [25.0, 25.0, 25.0]
-        radius = 60
-        replicate_unit_cell = false
-        number_timepoints = [101]
-        tau_increments = [1e-1]
-        magnetic_field = 1.2
+        structure.radius = 60
+        structure.replicate_unit_cell = false
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1]
+        conditions.magnetic_field = 1.2
 
         [[groups]]
         name = "water"
-        selection.residues = ["SOL"]
+        include.residues = ["SOL"]
         cosubstitute = "same_molecule"
         drop_probability = 0.5
         "##).unwrap();
@@ -2395,14 +2445,14 @@ mod tests{
     let groups = r##"
         [[groups]]
         name = "methyl_h"
-        selection.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        include.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         1H.abundance = 0.5
         2H.abundance = 0.5
 
         [[groups]]
         name = "other_h"
-        selection.elements = ["H"]
-        selection.not_serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        include.elements = ["H"]
+        exclude.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         drop_probability = 0.3
         "##;
 
@@ -2410,10 +2460,10 @@ mod tests{
     let mut n_mixed_groups = 0;
     for radius in [68,70,71,72,73,74,75,76,78]{
       let config = Config::from_toml_string(&format!(r##"
-          input_structure_file = "assets/TEMPO.pdb"
-          radius = {}
+          structure.file = "assets/TEMPO.pdb"
+          structure.radius = {}
           detected_spin.position = [28,29]
-          replicate_unit_cell = true
+          structure.replicate_unit_cell = true
           {}
           "##,radius,groups)).unwrap();
       let radius = config.radius.unwrap();
@@ -2468,10 +2518,10 @@ mod tests{
     // is within the radius plus the largest member distance from the
     // centroid, and other particles if they are within the radius.
     let config = Config::from_toml_string(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 20
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 20
         detected_spin.position = [28,29]
-        replicate_unit_cell = false
+        structure.replicate_unit_cell = false
         "##).unwrap();
     let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
     let mut rng = ChaCha20Rng::seed_from_u64(0);

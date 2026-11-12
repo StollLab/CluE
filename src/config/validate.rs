@@ -13,73 +13,59 @@ use std::path::Path;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // Keys of the tables of the input file.
-// The key names are the ones read by `ConfigTOML` (src/config/config_toml.rs),
-// `Config::set_from_config_toml` (src/config.rs), `ParticleConfig`,
+// The key names are the ones read by `ConfigTOML` and the structs of its
+// tables (src/config/config_toml.rs), `ParticleConfig`, 
 // `ParticleProperties`, `IsotopeProperties`, `EigSpecifier`
 // (src/config/particle_config.rs), and `ParticleFilter` and
 // `VectorSpecifier` (src/structure/particle_filter.rs).
 
-const TOP_LEVEL_KEYS: [&str; 45] = [
-  "clash_distance",
-  "clash_distance_pbc",
-  "cluster_batch_size",
-  "cluster_method",
-  "cluster_source",
-  "connect_exchange_groups",
-  "ensemble_cce",
-  "input_structure_file",
-  "kmeans_iter_cap",
-  "kmeans_size",
-  "magnetic_field",
-  "max_cell_size",
-  "max_cluster_size",
-  "max_spherical_tensor_rank",
-  "max_spins",
-  "mean_fields",
-  "min_cell_size",
-  "number_runs",
-  "number_timepoints",
-  "number_timepoints2",
-  "output_directory",
-  "partition_table",
-  "partitioning",
-  "pdb_model_index",
-  "populations",
-  "pulse_sequence",
-  "radius",
-  "replicate_unit_cell",
-  "rng_seed",
-  "run_in_parallel",
-  "run_name",
-  "tau_increments",
-  "tau2_increments",
-  "temperature",
-  "thermalize_cluster_populations",
-  "unit_of_distance",
-  "unit_of_energy",
-  "unit_of_magnetic_field",
-  "unit_of_time",
-  // Tables.
+// The top level holds only tables.
+const TOP_LEVEL_KEYS: [&str; 10] = [
+  "units",
+  "structure",
   "detected_spin",
   "groups",
+  "conditions",
   "orientations",
+  "pulse_sequence",
+  "cluster_expansion",
+  "run",
   "output",
-  "pair_cutoffs",
-  "pulses",
+];
+
+const UNITS_KEYS: [&str; 4] = [
+  "distance",
+  "energy",
+  "magnetic_field",
+  "time",
+];
+
+const STRUCTURE_KEYS: [&str; 6] = [
+  "file",
+  "pdb_model_index",
+  "radius",
+  "replicate_unit_cell",
+  "clash_distance",
+  "clash_distance_pbc",
 ];
 
 const DETECTED_SPIN_KEYS: [&str; 11] = [
   "density_matrix",
   "detection_operator",
-  "electric_quadrupole",
   "frame",
   "g_matrix",
   "identity",
+  "max_spherical_tensor_rank",
   "multiplicity",
   "position",
   "transition",
   "weight_tolerance",
   "zerofield",
+];
+
+const CONDITIONS_KEYS: [&str; 2] = [
+  "magnetic_field",
+  "temperature",
 ];
 
 const ORIENTATIONS_KEYS: [&str; 6] = [
@@ -91,12 +77,58 @@ const ORIENTATIONS_KEYS: [&str; 6] = [
   "weight_tolerance",
 ];
 
+const PULSE_SEQUENCE_KEYS: [&str; 5] = [
+  "sequence",
+  "number_timepoints",
+  "tau_increments",
+  "number_timepoints2",
+  "tau2_increments",
+];
+
+const CLUSTER_EXPANSION_KEYS: [&str; 7] = [
+  "method",
+  "max_cluster_size",
+  "ensemble",
+  "populations",
+  "mean_fields",
+  "thermalize_cluster_populations",
+  "clustering",
+];
+
+const CLUSTERING_KEYS: [&str; 8] = [
+  "file",
+  "max_spins",
+  "partitioning",
+  "kmeans_size",
+  "kmeans_iter_cap",
+  "partition_table",
+  "connect_exchange_groups",
+  "pair_cutoffs",
+];
+
+const PAIR_CUTOFFS_KEYS: [&str; 7] = [
+  KEY_CUTOFF_COUPLING,
+  KEY_CUTOFF_DELTA_HF,
+  KEY_CUTOFF_DIPOLE_PERP,
+  KEY_CUTOFF_DISTANCE,
+  KEY_CUTOFF_HAHN_MOD_DEPTH,
+  KEY_CUTOFF_HAHN_TAYLOR_4,
+  KEY_CUTOFF_DELTA_ZEEMAN,
+];
+
+const RUN_KEYS: [&str; 4] = [
+  "rng_seed",
+  "number_runs",
+  "parallel",
+  "cluster_batch_size",
+];
+
 const OUTPUT_KEYS: [&str; 15] = [
+  "directory",
+  "run_name",
   KEY_OUT_AUX_SIGS,
   KEY_OUT_BATH,
-  KEY_OUT_CLU_SIGS,
   KEY_OUT_CLUSTERS,
-  KEY_OUT_CONFIG,
   KEY_OUT_DET_SPIN,
   KEY_OUT_EXCHANGE_GROUPS,
   KEY_OUT_INFO,
@@ -109,67 +141,49 @@ const OUTPUT_KEYS: [&str; 15] = [
   KEY_OUT_TENSORS,
 ];
 
-// "coupling" is accepted but not read (see CluE_input_redesign.md,
-// "Removed keys"); it is removed with the new input format.
-const PAIR_CUTOFFS_KEYS: [&str; 8] = [
-  "coupling",
-  KEY_CUTOFF_COUPLING,
-  KEY_CUTOFF_DELTA_HF,
-  KEY_CUTOFF_DIPOLE_PERP,
-  KEY_CUTOFF_DISTANCE,
-  KEY_CUTOFF_HAHN_MOD_DEPTH,
-  KEY_CUTOFF_HAHN_TAYLOR_4,
-  KEY_CUTOFF_DELTA_ZEEMAN,
-];
-
-// [[pulses]] is accepted but not read (see CluE_input_redesign.md,
-// "Removed keys"); it is removed with the new input format.
-const PULSE_KEYS: [&str; 2] = [KEY_NAME, "matrix"];
-
 // The isotope tables of a group are checked by `is_isotope_key()`.
-const GROUP_KEYS: [&str; 5] = [
+const GROUP_KEYS: [&str; 7] = [
   KEY_NAME,
   KEY_ABUNDANCE_TOL,
   KEY_DROP_PROB,
   KEY_ISO_COSUBSTITUTE,
-  KEY_SELECTION,
+  KEY_CELLS,
+  KEY_INCLUDE,
+  KEY_EXCLUDE,
 ];
 
-const SELECTION_KEYS: [&str; 34] = [
+const INCLUDE_KEYS: [&str; 9] = [
   KEY_SELE_CHAIN_IDS,
   KEY_SELE_ELEMENTS,
   KEY_SELE_INDICES,
   KEY_SELE_NAMES,
   KEY_SELE_RESIDUES,
-  KEY_SELE_RES_SEQ_NUMS,
+  KEY_SELE_RES_NUMS,
   KEY_SELE_SERIALS,
-  KEY_SELE_NOT_CHAIN_IDS,
-  KEY_SELE_NOT_ELEMENTS,
-  KEY_SELE_NOT_INDICES,
-  KEY_SELE_NOT_NAMES,
-  KEY_SELE_NOT_RESIDUES,
-  KEY_SELE_NOT_RES_SEQ_NUMS,
-  KEY_SELE_NOT_SERIALS,
-  KEY_SELE_BONDED_CHAIN_IDS,
-  KEY_SELE_BONDED_ELEMENTS,
-  KEY_SELE_BONDED_INDICES,
-  KEY_SELE_BONDED_NAMES,
-  KEY_SELE_BONDED_RESIDUES,
-  KEY_SELE_BONDED_RES_SEQ_NUMS,
-  KEY_SELE_BONDED_SERIALS,
-  KEY_SELE_NOT_BONDED_CHAIN_IDS,
-  KEY_SELE_NOT_BONDED_ELEMENTS,
-  KEY_SELE_NOT_BONDED_INDICES,
-  KEY_SELE_NOT_BONDED_NAMES,
-  KEY_SELE_NOT_BONDED_RESIDUES,
-  KEY_SELE_NOT_BONDED_RES_SEQ_NUMS,
-  KEY_SELE_NOT_BONDED_SERIALS,
-  KEY_SELE_WITHIN_DISTANCE,
-  KEY_SELE_NOT_WITHIN_DISTANCE,
-  KEY_SELE_CELL_IDS,
-  KEY_SELE_NOT_CELL_IDS,
-  KEY_SELE_PRIMARY_CELL,
-  KEY_CELL_TYPE,
+  KEY_SELE_DISTANCE,
+  KEY_BONDED_TO,
+];
+
+const EXCLUDE_KEYS: [&str; 8] = [
+  KEY_SELE_CHAIN_IDS,
+  KEY_SELE_ELEMENTS,
+  KEY_SELE_INDICES,
+  KEY_SELE_NAMES,
+  KEY_SELE_RESIDUES,
+  KEY_SELE_RES_NUMS,
+  KEY_SELE_SERIALS,
+  KEY_BONDED_TO,
+];
+
+// The seven atom attributes.
+const BONDED_TO_KEYS: [&str; 7] = [
+  KEY_SELE_CHAIN_IDS,
+  KEY_SELE_ELEMENTS,
+  KEY_SELE_INDICES,
+  KEY_SELE_NAMES,
+  KEY_SELE_RESIDUES,
+  KEY_SELE_RES_NUMS,
+  KEY_SELE_SERIALS,
 ];
 
 const ISOTOPE_KEYS: [&str; 8] = [
@@ -203,36 +217,138 @@ const AXIS_KEYS: [&str; 6] = [
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+// Keys of the input format before 1.0.0, which are rejected with a hint to
+// what replaced them.
+
+// The top-level keys and tables of the old format, and where they moved.
+const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 37] = [
+  ("clash_distance", "structure.clash_distance"),
+  ("clash_distance_pbc", "structure.clash_distance_pbc"),
+  ("cluster_batch_size", "run.cluster_batch_size"),
+  ("cluster_method", "cluster_expansion.method"),
+  ("cluster_source", "cluster_expansion.clustering.file"),
+  ("connect_exchange_groups", 
+   "cluster_expansion.clustering.connect_exchange_groups"),
+  ("ensemble_cce", "cluster_expansion.ensemble"),
+  ("input_structure_file", "structure.file"),
+  ("kmeans_iter_cap", "cluster_expansion.clustering.kmeans_iter_cap"),
+  ("kmeans_size", "cluster_expansion.clustering.kmeans_size"),
+  ("magnetic_field", "conditions.magnetic_field"),
+  ("max_cluster_size", "cluster_expansion.max_cluster_size"),
+  ("max_spherical_tensor_rank", "detected_spin.max_spherical_tensor_rank"),
+  ("max_spins", "cluster_expansion.clustering.max_spins"),
+  ("mean_fields", "cluster_expansion.mean_fields"),
+  ("number_runs", "run.number_runs"),
+  ("number_timepoints", "pulse_sequence.number_timepoints"),
+  ("number_timepoints2", "pulse_sequence.number_timepoints2"),
+  ("output_directory", "output.directory"),
+  ("partition_table", "cluster_expansion.clustering.partition_table"),
+  ("partitioning", "cluster_expansion.clustering.partitioning"),
+  ("pdb_model_index", "structure.pdb_model_index"),
+  ("populations", "cluster_expansion.populations"),
+  ("radius", "structure.radius"),
+  ("replicate_unit_cell", "structure.replicate_unit_cell"),
+  ("rng_seed", "run.rng_seed"),
+  ("run_in_parallel", "run.parallel"),
+  ("run_name", "output.run_name"),
+  ("tau_increments", "pulse_sequence.tau_increments"),
+  ("tau2_increments", "pulse_sequence.tau2_increments"),
+  ("temperature", "conditions.temperature"),
+  ("thermalize_cluster_populations", 
+   "cluster_expansion.thermalize_cluster_populations"),
+  ("unit_of_distance", "units.distance"),
+  ("unit_of_energy", "units.energy"),
+  ("unit_of_magnetic_field", "units.magnetic_field"),
+  ("unit_of_time", "units.time"),
+  ("pair_cutoffs", "cluster_expansion.clustering.pair_cutoffs"),
+];
+
+// The old key pulse_sequence is now the table [pulse_sequence]; 
+// an old value, which is not a table, moved to pulse_sequence.sequence.
+const OLD_KEY_PULSE_SEQUENCE: &str = "pulse_sequence";
+
+// The keys that were removed because the code did not use them, 
+// by the table they were in, with the reason.
+const REMOVED_KEYS: [(Schema,&str,&str); 7] = [
+  (Schema::TopLevel, "min_cell_size", "it was read but never used"),
+  (Schema::TopLevel, "max_cell_size", "it was read but never used"),
+  (Schema::TopLevel, "pulses", "[[pulses]] was read but never used; the \
+pulses are built from detected_spin.transition"),
+  (Schema::DetectedSpin, "electric_quadrupole", "it was read but never \
+used; the isotope key electric_quadrupole of [[groups]] is unchanged"),
+  (Schema::PairCutoffs, "coupling", "it was never read; the coupling cutoff \
+is coupling_xx_yy"),
+  (Schema::Output, "cluster_signals", "it was read but never used; cluster \
+signals are written with auxiliary_signals"),
+  (Schema::Output, "config", "it was read but never used"),
+];
+
+// The old group table that the include and exclude tables and the group
+// key cells replace.
+const OLD_KEY_SELECTION: &str = "selection";
+
+// The keys of the old selection table that the group key cells replaces.
+const OLD_CELL_KEYS: [&str; 2] = ["cell_type", "primary_cell"];
+
+// The atom attributes of the old selection table, and their new names.
+const OLD_SELECTION_ATTRIBUTES: [(&str,&str); 7] = [
+  ("chain_ids", KEY_SELE_CHAIN_IDS),
+  ("elements", KEY_SELE_ELEMENTS),
+  ("indices", KEY_SELE_INDICES),
+  ("names", KEY_SELE_NAMES),
+  ("residues", KEY_SELE_RESIDUES),
+  ("residue_sequence_numbers", KEY_SELE_RES_NUMS),
+  ("serials", KEY_SELE_SERIALS),
+];
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `Schema` lists the kinds of tables in the input file.
 #[derive(Debug,Clone,Copy,PartialEq)]
 enum Schema{
   TopLevel,
+  Units,
+  Structure,
   DetectedSpin,
-  Orientations,
-  Output,
-  PairCutoffs,
-  Pulse,
   Group,
-  Selection,
+  Include,
+  Exclude,
+  BondedTo,
   Isotope,
   Tensor,
   Axes,
   Axis,
+  Conditions,
+  Orientations,
+  PulseSequence,
+  ClusterExpansion,
+  Clustering,
+  PairCutoffs,
+  Run,
+  Output,
 }
 
-const ALL_SCHEMAS: [Schema; 12] = [
+const ALL_SCHEMAS: [Schema; 20] = [
   Schema::TopLevel,
+  Schema::Units,
+  Schema::Structure,
   Schema::DetectedSpin,
-  Schema::Orientations,
-  Schema::Output,
-  Schema::PairCutoffs,
-  Schema::Pulse,
   Schema::Group,
-  Schema::Selection,
+  Schema::Include,
+  Schema::Exclude,
+  Schema::BondedTo,
   Schema::Isotope,
   Schema::Tensor,
   Schema::Axes,
   Schema::Axis,
+  Schema::Conditions,
+  Schema::Orientations,
+  Schema::PulseSequence,
+  Schema::ClusterExpansion,
+  Schema::Clustering,
+  Schema::PairCutoffs,
+  Schema::Run,
+  Schema::Output,
 ];
 
 impl Schema{
@@ -241,17 +357,25 @@ impl Schema{
   fn keys(&self) -> &'static [&'static str]{
     match self{
       Schema::TopLevel => &TOP_LEVEL_KEYS,
+      Schema::Units => &UNITS_KEYS,
+      Schema::Structure => &STRUCTURE_KEYS,
       Schema::DetectedSpin => &DETECTED_SPIN_KEYS,
-      Schema::Orientations => &ORIENTATIONS_KEYS,
-      Schema::Output => &OUTPUT_KEYS,
-      Schema::PairCutoffs => &PAIR_CUTOFFS_KEYS,
-      Schema::Pulse => &PULSE_KEYS,
       Schema::Group => &GROUP_KEYS,
-      Schema::Selection => &SELECTION_KEYS,
+      Schema::Include => &INCLUDE_KEYS,
+      Schema::Exclude => &EXCLUDE_KEYS,
+      Schema::BondedTo => &BONDED_TO_KEYS,
       Schema::Isotope => &ISOTOPE_KEYS,
       Schema::Tensor => &TENSOR_KEYS,
       Schema::Axes => &AXES_KEYS,
       Schema::Axis => &AXIS_KEYS,
+      Schema::Conditions => &CONDITIONS_KEYS,
+      Schema::Orientations => &ORIENTATIONS_KEYS,
+      Schema::PulseSequence => &PULSE_SEQUENCE_KEYS,
+      Schema::ClusterExpansion => &CLUSTER_EXPANSION_KEYS,
+      Schema::Clustering => &CLUSTERING_KEYS,
+      Schema::PairCutoffs => &PAIR_CUTOFFS_KEYS,
+      Schema::Run => &RUN_KEYS,
+      Schema::Output => &OUTPUT_KEYS,
     }
   }
   //----------------------------------------------------------------------------
@@ -269,27 +393,36 @@ impl Schema{
   fn child(&self, key: &str) -> Option<(Schema,bool)>{
     match self{
       Schema::TopLevel => match key{
+        "units" => Some((Schema::Units,false)),
+        "structure" => Some((Schema::Structure,false)),
         "detected_spin" => Some((Schema::DetectedSpin,false)),
-        "orientations" => Some((Schema::Orientations,false)),
-        "output" => Some((Schema::Output,false)),
-        "pair_cutoffs" => Some((Schema::PairCutoffs,false)),
         "groups" => Some((Schema::Group,true)),
-        "pulses" => Some((Schema::Pulse,true)),
+        "conditions" => Some((Schema::Conditions,false)),
+        "orientations" => Some((Schema::Orientations,false)),
+        "pulse_sequence" => Some((Schema::PulseSequence,false)),
+        "cluster_expansion" => Some((Schema::ClusterExpansion,false)),
+        "run" => Some((Schema::Run,false)),
+        "output" => Some((Schema::Output,false)),
         _ => None,
       },
       Schema::DetectedSpin => match key{
-        "g_matrix" | "electric_quadrupole" | "zerofield"
-          => Some((Schema::Tensor,false)),
+        "g_matrix" | "zerofield" => Some((Schema::Tensor,false)),
         _ => None,
       },
       Schema::Group => {
-        if key == KEY_SELECTION{
-          Some((Schema::Selection,false))
+        if key == KEY_INCLUDE{
+          Some((Schema::Include,false))
+        }else if key == KEY_EXCLUDE{
+          Some((Schema::Exclude,false))
         }else if is_isotope_key(key){
           Some((Schema::Isotope,false))
         }else{
           None
         }
+      },
+      Schema::Include | Schema::Exclude => match key{
+        KEY_BONDED_TO => Some((Schema::BondedTo,false)),
+        _ => None,
       },
       Schema::Isotope => match key{
         KEY_ISO_G_MATRIX | KEY_ISO_HYPERFINE | KEY_ISO_ELEC_QUADRUPOLE
@@ -301,8 +434,17 @@ impl Schema{
         _ => None,
       },
       Schema::Axes => Some((Schema::Axis,false)),
-      Schema::Orientations | Schema::Output | Schema::PairCutoffs
-        | Schema::Pulse | Schema::Selection | Schema::Axis => None,
+      Schema::ClusterExpansion => match key{
+        "clustering" => Some((Schema::Clustering,false)),
+        _ => None,
+      },
+      Schema::Clustering => match key{
+        "pair_cutoffs" => Some((Schema::PairCutoffs,false)),
+        _ => None,
+      },
+      Schema::Units | Schema::Structure | Schema::BondedTo | Schema::Axis
+        | Schema::Conditions | Schema::Orientations | Schema::PulseSequence
+        | Schema::PairCutoffs | Schema::Run | Schema::Output => None,
     }
   }
   //----------------------------------------------------------------------------
@@ -310,19 +452,28 @@ impl Schema{
   fn description(&self) -> &'static str{
     match self{
       Schema::TopLevel => "the top level",
+      Schema::Units => "[units]",
+      Schema::Structure => "[structure]",
       Schema::DetectedSpin => "[detected_spin]",
-      Schema::Orientations => "[orientations]",
-      Schema::Output => "[output]",
-      Schema::PairCutoffs => "[pair_cutoffs]",
-      Schema::Pulse => "[[pulses]]",
       Schema::Group => "[[groups]]",
-      Schema::Selection => "the selection table of [[groups]]",
+      Schema::Include => "the include table of [[groups]]",
+      Schema::Exclude => "the exclude table of [[groups]]",
+      Schema::BondedTo => "a bonded_to table of [[groups]] \
+(include.bonded_to, exclude.bonded_to)",
       Schema::Isotope => "an isotope table of [[groups]]",
       Schema::Tensor => "a tensor table (values, axes, \
 spherical_coefficients, stevens_coefficients)",
       Schema::Axes => "the axes table of a tensor (x, y, z)",
       Schema::Axis => "an axis table of a tensor (from, from_bonded_to, \
 from_same_molecule_as, to, to_bonded_to, to_same_molecule_as)",
+      Schema::Conditions => "[conditions]",
+      Schema::Orientations => "[orientations]",
+      Schema::PulseSequence => "[pulse_sequence]",
+      Schema::ClusterExpansion => "[cluster_expansion]",
+      Schema::Clustering => "[cluster_expansion.clustering]",
+      Schema::PairCutoffs => "[cluster_expansion.clustering.pair_cutoffs]",
+      Schema::Run => "[run]",
+      Schema::Output => "[output]",
     }
   }
   //----------------------------------------------------------------------------
@@ -344,8 +495,10 @@ fn is_isotope_key(key: &str) -> bool{
 /// This function checks that every key of the parsed input `table` is
 /// allowed in the table that contains it.
 /// All keys that are not allowed are reported together, each with its full
-/// path, for example `groups[2].selection.not_elemnts`;
+/// path, for example `groups[2].include.elemnts`;
 /// `groups[i]` counts the [[groups]] entries from 0.
+/// Keys of the input format before 1.0.0 are reported with what replaced 
+/// them, for example `radius: moved to structure.radius`.
 /// Types and values are not checked here.
 pub fn check_toml_keys(table: &toml::Table) -> Result<(),CluEError>{
   let mut errors = Vec::<String>::new();
@@ -365,14 +518,35 @@ fn check_table(table: &toml::Table, schema: Schema, path: &str,
     group: Option<&str>, errors: &mut Vec::<String>)
 {
   for (key, value) in table.iter(){
-    let key_path = if path.is_empty(){
-      key.to_string()
-    }else{
-      format!("{}.{}", path, key)
-    };
+    let key_path = join_path(path, key);
 
     if !schema.allows(key){
-      errors.push(not_allowed_message(&key_path, key, schema, group));
+      // Each key of an old selection table gets its own hint.
+      if let (Schema::Group, OLD_KEY_SELECTION, Some(selection)) 
+        = (schema, key.as_str(), value.as_table())
+      {
+        if !selection.is_empty(){
+          // Without other keys, the old selection selected every atom of
+          // its cells.
+          let only_cells = selection.keys()
+            .all(|k| OLD_CELL_KEYS.contains(&k.as_str()));
+          for old_key in selection.keys(){
+            errors.push(with_group(
+                  &format!("{}.{}", key_path, old_key), group,
+                  &old_selection_key_hint(path, old_key, only_cells)));
+          }
+          continue;
+        }
+      }
+      errors.push(not_allowed_message(path, key, schema, group));
+      continue;
+    }
+
+    if schema == Schema::TopLevel && key == OLD_KEY_PULSE_SEQUENCE
+      && !value.is_table()
+    {
+      errors.push(with_group(&key_path, group, &format!("moved to {}.{}",
+              OLD_KEY_PULSE_SEQUENCE, "sequence")));
       continue;
     }
 
@@ -403,14 +577,51 @@ fn check_table(table: &toml::Table, schema: Schema, path: &str,
   }
 }
 //------------------------------------------------------------------------------
-// This function writes the message for `key` at `key_path`, which is not
-// allowed in a table of kind `schema`.
-fn not_allowed_message(key_path: &str, key: &str, schema: Schema,
+// This function returns `key` at `path`.
+fn join_path(path: &str, key: &str) -> String{
+  if path.is_empty(){
+    key.to_string()
+  }else{
+    format!("{}.{}", path, key)
+  }
+}
+//------------------------------------------------------------------------------
+// This function writes the message `problem` for the key at `key_path`,
+// in the group named `group`, if any.
+fn with_group(key_path: &str, group: Option<&str>, problem: &str) -> String{
+  match group{
+    Some(name) => format!("{} (group \"{}\"): {}", key_path, name, problem),
+    None => format!("{}: {}", key_path, problem),
+  }
+}
+//------------------------------------------------------------------------------
+// This function writes the message for `key` in the table at `path`, 
+// which is of kind `schema`, where `key` is not allowed.
+// A key of the old input format names what replaced it; a key that is 
+// allowed in other tables names them.
+fn not_allowed_message(path: &str, key: &str, schema: Schema,
     group: Option<&str>) -> String
 {
-  let mut message = key_path.to_string();
-  if let Some(name) = group{
-    message = format!("{} (group \"{}\")", message, name);
+  let key_path = join_path(path, key);
+
+  if schema == Schema::TopLevel{
+    if let Some((_, new_path)) = MOVED_TOP_LEVEL_KEYS.iter()
+      .find(|(old, _)| *old == key)
+    {
+      return with_group(&key_path, group, &format!("moved to {}", new_path));
+    }
+  }
+
+  if let Some((_, _, reason)) = REMOVED_KEYS.iter()
+    .find(|(s, old, _)| *s == schema && *old == key)
+  {
+    return with_group(&key_path, group, &format!("removed; {}", reason));
+  }
+
+  if schema == Schema::Group && key == OLD_KEY_SELECTION{
+    return with_group(&key_path, group, &format!("replaced by {}, {}, and \
+{}", join_path(path, KEY_INCLUDE), join_path(path, KEY_EXCLUDE), 
+          join_path(path, KEY_CELLS)));
   }
 
   let places = ALL_SCHEMAS.iter()
@@ -419,10 +630,61 @@ fn not_allowed_message(key_path: &str, key: &str, schema: Schema,
     .collect::<Vec::<&str>>();
 
   if places.is_empty(){
-    format!("{}: unknown key", message)
+    with_group(&key_path, group, "unknown key")
   }else{
-    format!("{}: not allowed in {}; this key belongs in {}", message,
-        schema.description(), places.join(" or "))
+    with_group(&key_path, group, &format!("not allowed in {}; this key \
+belongs in {}", schema.description(), places.join(" or ")))
+  }
+}
+//------------------------------------------------------------------------------
+// This function returns what replaced the key `old_key` of the old
+// selection table of the group at `group_path`.
+// `only_cells` is `true` if the selection table had no keys other than 
+// `OLD_CELL_KEYS`, so that it selected every atom of its cells; 
+// the group then also needs `include = {}`.
+fn old_selection_key_hint(group_path: &str, old_key: &str, only_cells: bool)
+  -> String
+{
+  let at = |key: &str| join_path(group_path, key);
+  let include_all = if only_cells{
+    format!(", together with {} = {{}} to select all atoms as before", 
+        at(KEY_INCLUDE))
+  }else{
+    String::new()
+  };
+
+  match old_key{
+    "cell_type" => return format!("replaced by {} = \"all\", \"primary\", \
+or \"extra\" (was \"all_cells\", \"primary_cell\", \"extracells\"){}", 
+        at(KEY_CELLS), include_all),
+    "primary_cell" => return format!("replaced by {} = \"primary\" (true) \
+or \"extra\" (false){}", at(KEY_CELLS), include_all),
+    "cell_ids" | "not_cell_ids" => return "removed; selection by unit-cell \
+index is no longer supported".to_string(),
+    "within_distance" => return format!("replaced by {} = [0.0, max]",
+        at("include.distance")),
+    "not_within_distance" => return format!("replaced by {} = [min, inf]",
+        at("include.distance")),
+    _ => (),
+  }
+
+  // X, not_X, bonded_X, and not_bonded_X.
+  let (table, attribute) = if let Some(a) 
+    = old_key.strip_prefix("not_bonded_")
+  {
+    ("exclude.bonded_to", a)
+  }else if let Some(a) = old_key.strip_prefix("bonded_"){
+    ("include.bonded_to", a)
+  }else if let Some(a) = old_key.strip_prefix("not_"){
+    ("exclude", a)
+  }else{
+    ("include", old_key)
+  };
+
+  match OLD_SELECTION_ATTRIBUTES.iter().find(|(old, _)| *old == attribute){
+    Some((_, new)) => format!("moved to {}.{}", at(table), new),
+    None => format!("unknown key; the selection table is replaced by {}, \
+{}, and {}", at(KEY_INCLUDE), at(KEY_EXCLUDE), at(KEY_CELLS)),
   }
 }
 //------------------------------------------------------------------------------
@@ -438,8 +700,9 @@ impl Config{
   /// Relative paths are resolved against the current directory,
   /// as in a run.
   /// Settings that are read when the input is parsed
-  /// (`partitioning` with its `kmeans_size`, `orientations.file`, and a
-  /// csv `detected_spin.position`) are checked by the parser.
+  /// (`cluster_expansion.clustering.partitioning` with its `kmeans_size`, 
+  /// `orientations.file`, and a csv `detected_spin.position`) are checked
+  /// by the parser.
   /// Errors that depend on the structure (group names, overlapping groups,
   /// empty selections) are found only by a run.
   pub fn check_completeness(&self) -> Result<(),CluEError>{
@@ -447,18 +710,19 @@ impl Config{
 
     // Settings without a default.
     let required = [
-      (self.input_structure_file.is_some(), "input_structure_file"),
-      (self.radius.is_some(), "radius"),
-      (self.magnetic_field.is_some(), "magnetic_field"),
+      (self.input_structure_file.is_some(), "structure.file"),
+      (self.radius.is_some(), "structure.radius"),
+      (self.magnetic_field.is_some(), "conditions.magnetic_field"),
       (self.detected_spin_position.is_some(), "detected_spin.position"),
-      (self.pulse_sequence.is_some(), "pulse_sequence"),
-      (!self.number_timepoints.is_empty(), "number_timepoints"),
-      (!self.tau_increments.is_empty(), "tau_increments"),
-      (self.cluster_method.is_some(), "cluster_method"),
-      (self.max_cluster_size.is_some(), "max_cluster_size"),
-      // Set from unit_of_time or its default when the input is parsed;
+      (self.pulse_sequence.is_some(), "pulse_sequence.sequence"),
+      (!self.number_timepoints.is_empty(), 
+       "pulse_sequence.number_timepoints"),
+      (!self.tau_increments.is_empty(), "pulse_sequence.tau_increments"),
+      (self.cluster_method.is_some(), "cluster_expansion.method"),
+      (self.max_cluster_size.is_some(), "cluster_expansion.max_cluster_size"),
+      // Set from units.time or its default when the input is parsed;
       // it can be unset only in a `Config` built in code.
-      (self.unit_of_time_to_seconds.is_some(), "unit_of_time"),
+      (self.unit_of_time_to_seconds.is_some(), "units.time"),
     ];
     for (is_set, key) in required.iter(){
       if !is_set{
@@ -474,8 +738,8 @@ impl Config{
     if self.cluster_populations == Some(ClusterPopulations::Thermal)
       && !has_temperature
     {
-      problems.push(format!("temperature is required for populations = \
-\"{}\"", KEY_DENSITY_MATRIX_THERMAL));
+      problems.push(format!("conditions.temperature is required for \
+cluster_expansion.populations = \"{}\"", KEY_DENSITY_MATRIX_THERMAL));
     }
 
     // Mean-field couplings are not implemented for ensemble CCE, for any
@@ -522,7 +786,7 @@ name two different levels from 0 to {}", level_0, level_1, m - 1));
     if let (true, Some(m)) = (is_gcce, valid_multiplicity){
       match self.detection_operator{
         None => problems.push("detected_spin.detection_operator is required \
-for cluster_method = \"gcce\"".to_string()),
+for cluster_expansion.method = \"gcce\"".to_string()),
         // [i, i] is the projector |i><i|, a valid observable, so only the
         // range is checked.
         Some(DetectionOp::Transition(level_0, level_1)) => {
@@ -535,9 +799,9 @@ for cluster_method = \"gcce\"".to_string()),
       }
       match self.detected_population{
         None => problems.push("detected_spin.density_matrix is required \
-for cluster_method = \"gcce\"".to_string()),
+for cluster_expansion.method = \"gcce\"".to_string()),
         Some(DetectedPopulation::Thermal) if !has_temperature =>
-          problems.push(format!("temperature is required for \
+          problems.push(format!("conditions.temperature is required for \
 detected_spin.density_matrix = \"{}\"", KEY_DENSITY_MATRIX_THERMAL)),
         Some(_) => (),
       }
@@ -550,27 +814,29 @@ detected_spin.density_matrix = \"{}\"", KEY_DENSITY_MATRIX_THERMAL)),
             .to_string());
       }
       if !has_temperature{
-        problems.push("temperature is required for \
-thermalize_cluster_populations = true".to_string());
+        problems.push("conditions.temperature is required for \
+cluster_expansion.thermalize_cluster_populations = true".to_string());
       }
     }
 
     // Files and directories.
     if let Some(filename) = &self.input_structure_file{
       if let Some(problem) = check_path(filename, false){
-        problems.push(format!("input_structure_file: {}", problem));
+        problems.push(format!("structure.file: {}", problem));
       }
     }
 
     match &self.cluster_source{
       Some(ClusterSource::File(filename)) => {
         if let Some(problem) = check_path(filename, false){
-          problems.push(format!("cluster_source: {}", problem));
+          problems.push(format!("cluster_expansion.clustering.file: {}", 
+                problem));
         }
       },
       Some(ClusterSource::OrientationsDir(dirname)) => {
         if let Some(problem) = check_path(dirname, true){
-          problems.push(format!("cluster_source: {}", problem));
+          problems.push(format!("cluster_expansion.clustering.file: {}", 
+                problem));
         }
       },
       // The partition table is read only when clusters are built from
@@ -580,7 +846,9 @@ thermalize_cluster_populations = true".to_string());
           = &self.partition_table
         {
           if let Some(problem) = check_path(filename, false){
-            problems.push(format!("partition_table: {}", problem));
+            problems.push(format!(
+                  "cluster_expansion.clustering.partition_table: {}", 
+                  problem));
           }
         }
       },
@@ -650,9 +918,21 @@ mod tests{
   fn test_all_table_forms_pass_key_check(){
     // Every table kind, with tensors and axes given as tables.
     let errors = key_errors(r##"
+        [units]
+        distance = "Å"
+        energy = "MHz"
+        magnetic_field = "T"
+        time = "μs"
+        [structure]
+        file = "a.pdb"
+        pdb_model_index = 0
         radius = 10
+        replicate_unit_cell = false
+        clash_distance = 0.01
+        clash_distance_pbc = 0.001
         [detected_spin]
         position = [0.0, 0.0, 0.0]
+        max_spherical_tensor_rank = 2
         g_matrix.values = [2.0, 2.0, 2.0]
         g_matrix.axes.x = {from = "a", to_bonded_to = "b"}
         g_matrix.axes.y = "random"
@@ -661,23 +941,54 @@ mod tests{
         zerofield.axes.z.from_same_molecule_as = "a"
         zerofield.axes.z.to_same_molecule_as = "b"
         zerofield.spherical_coefficients = [[0.0, 0.0, 0.0, 0.0, 0.0]]
+        [conditions]
+        magnetic_field = 1.2
+        temperature = 50
         [orientations]
         grid = "lebedev"
         number = 170
+        [pulse_sequence]
+        sequence = "hahn"
+        number_timepoints = [10]
+        tau_increments = [0.1]
+        number_timepoints2 = [1]
+        tau2_increments = [0.0]
+        [cluster_expansion]
+        method = "cce"
+        max_cluster_size = 2
+        ensemble = false
+        populations = "uniform"
+        mean_fields = false
+        thermalize_cluster_populations = false
+        [cluster_expansion.clustering]
+        file = "clusters.toml"
+        max_spins = 4
+        partitioning = "kmeans"
+        kmeans_size = 3
+        kmeans_iter_cap = 10
+        partition_table = [1, 1]
+        connect_exchange_groups = false
+        [cluster_expansion.clustering.pair_cutoffs]
+        distance = 10
+        coupling_xx_yy = 1.0
+        [run]
+        rng_seed = 0
+        number_runs = 1
+        parallel = true
+        cluster_batch_size = 10
         [output]
+        directory = "out"
+        run_name = "system"
         bath = true
         partition_table = true
         detected_spin = true
-        [pair_cutoffs]
-        distance = 10
-        coupling = 1.0
-        [[pulses]]
-        name = "pi"
-        matrix = [[0.0, 1.0], [1.0, 0.0]]
         [[groups]]
         name = "h"
         drop_probability = 0.1
-        selection = {elements = ["H"], cell_type = "all_cells"}
+        cells = "all"
+        include = {distance = [0, 5], bonded_to = {residues = "SOL"}}
+        exclude.residue_numbers = 3
+        exclude.bonded_to.names = ["O1"]
         1H.abundance = 1.0
         1H.hyperfine.values = [1.0, 1.0, -2.0]
         1H.hyperfine.axes.x = {from_bonded_to = "a", to = "b"}
@@ -685,8 +996,7 @@ mod tests{
         e.g_matrix = [2.0]
         [[groups]]
         name = "o"
-        selection.not_bonded_residues = ["SOL"]
-        selection.within_distance = 5.0
+        exclude.bonded_to.residues = ["SOL"]
         "##);
     assert_eq!(errors, Vec::<String>::new());
   }
@@ -694,9 +1004,10 @@ mod tests{
   #[test]
   fn test_unknown_keys_are_reported_together(){
     let errors = key_errors(r##"
+        lebedev = 1
+        [structure]
         radius = 10
         radiuss = 10
-        lebedev = 1
         [detected_spin]
         positon = [0.0, 0.0, 0.0]
         g_matrix.valeus = [2.0, 2.0, 2.0]
@@ -704,10 +1015,11 @@ mod tests{
         g_matrix.axes.x = {form = "a"}
         [[groups]]
         name = "a"
-        selection.elements = ["H"]
+        include.elements = ["H"]
         [[groups]]
         name = "b"
-        selection.not_elemnts = ["H"]
+        exclude.elemnts = ["H"]
+        include.bonded_to.distance = [0, 1]
         1H.abundanse = 1.0
         1H.hyperfine.axes.q = [1.0, 0.0, 0.0]
         1h.abundance = 1.0
@@ -720,18 +1032,22 @@ mod tests{
         "groups[1].1H.abundanse (group \"b\"): unknown key".to_string(),
         "groups[1].1H.hyperfine.axes.q (group \"b\"): unknown key".to_string(),
         "groups[1].1h (group \"b\"): unknown key".to_string(),
-        "groups[1].selection.not_elemnts (group \"b\"): unknown key"
-          .to_string(),
+        "groups[1].exclude.elemnts (group \"b\"): unknown key".to_string(),
+        "groups[1].include.bonded_to.distance (group \"b\"): not allowed in \
+a bonded_to table of [[groups]] (include.bonded_to, exclude.bonded_to); this \
+key belongs in [units] or the include table of [[groups]] or \
+[cluster_expansion.clustering.pair_cutoffs]".to_string(),
         "lebedev: unknown key".to_string(),
-        "radiuss: unknown key".to_string(),
+        "structure.radiuss: unknown key".to_string(),
     ]);
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_misplaced_keys_name_their_table(){
     let errors = key_errors(r##"
-        grid = "lebedev"
         1H.abundance = 1.0
+        [orientations]
+        temperature = 50
         [detected_spin]
         radius = 10
         [output]
@@ -739,29 +1055,187 @@ mod tests{
         [[groups]]
         name = "a"
         elements = ["H"]
-        selection.name = "a"
+        exclude.distance = [0, 4]
         "##);
     assert_eq!(errors, vec![
         "1H: not allowed in the top level; this key belongs in [[groups]]"
           .to_string(),
         "detected_spin.radius: not allowed in [detected_spin]; this key \
-belongs in the top level".to_string(),
-        "grid: not allowed in the top level; this key belongs in \
-[orientations]".to_string(),
+belongs in [structure]".to_string(),
         "groups[0].elements (group \"a\"): not allowed in [[groups]]; this \
-key belongs in the selection table of [[groups]]".to_string(),
-        "groups[0].selection.name (group \"a\"): not allowed in the \
-selection table of [[groups]]; this key belongs in [[pulses]] or \
-[[groups]]".to_string(),
+key belongs in the include table of [[groups]] or the exclude table of \
+[[groups]] or a bonded_to table of [[groups]] (include.bonded_to, \
+exclude.bonded_to)".to_string(),
+        "groups[0].exclude.distance (group \"a\"): not allowed in the \
+exclude table of [[groups]]; this key belongs in [units] or the include \
+table of [[groups]] or [cluster_expansion.clustering.pair_cutoffs]".to_string(),
+        "orientations.temperature: not allowed in [orientations]; this key \
+belongs in [conditions]".to_string(),
         "output.number_runs: not allowed in [output]; this key belongs in \
-the top level".to_string(),
+[run]".to_string(),
     ]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_old_keys_get_migration_hints(){
+    // The top level of assets/1omp_K26R1_0.003228966616048703.toml before 
+    // the input redesign, with the removed keys.
+    let errors = key_errors(r##"
+        input_structure_file = "a.pdb"
+        populations = "thermal"
+        cluster_method = "cce"
+        ensemble_cce = true
+        magnetic_field = 1.2
+        max_cluster_size = 2
+        partitioning = "exchange_groups"
+        pulse_sequence = "hahn"
+        run_name = "system"
+        unit_of_time = "ns"
+        min_cell_size = 1
+        [pair_cutoffs]
+        hahn_mod_depth = 2e-7
+        [detected_spin]
+        electric_quadrupole = [1.0, 1.0, -2.0]
+        [output]
+        cluster_signals = true
+        config = true
+        [[pulses]]
+        name = "pi"
+        [cluster_expansion.clustering.pair_cutoffs]
+        coupling = 1.0
+        "##);
+    assert_eq!(errors, vec![
+        "cluster_expansion.clustering.pair_cutoffs.coupling: removed; it was \
+never read; the coupling cutoff is coupling_xx_yy".to_string(),
+        "cluster_method: moved to cluster_expansion.method".to_string(),
+        "detected_spin.electric_quadrupole: removed; it was read but never \
+used; the isotope key electric_quadrupole of [[groups]] is unchanged"
+          .to_string(),
+        "ensemble_cce: moved to cluster_expansion.ensemble".to_string(),
+        "input_structure_file: moved to structure.file".to_string(),
+        "magnetic_field: moved to conditions.magnetic_field".to_string(),
+        "max_cluster_size: moved to cluster_expansion.max_cluster_size"
+          .to_string(),
+        "min_cell_size: removed; it was read but never used".to_string(),
+        "output.cluster_signals: removed; it was read but never used; \
+cluster signals are written with auxiliary_signals".to_string(),
+        "output.config: removed; it was read but never used".to_string(),
+        "pair_cutoffs: moved to cluster_expansion.clustering.pair_cutoffs"
+          .to_string(),
+        "partitioning: moved to cluster_expansion.clustering.partitioning"
+          .to_string(),
+        "populations: moved to cluster_expansion.populations".to_string(),
+        "pulse_sequence: moved to pulse_sequence.sequence".to_string(),
+        "pulses: removed; [[pulses]] was read but never used; the pulses are \
+built from detected_spin.transition".to_string(),
+        "run_name: moved to output.run_name".to_string(),
+        "unit_of_time: moved to units.time".to_string(),
+    ]);
+
+    // Every moved key names a key that the new layout accepts.
+    for (old, new) in MOVED_TOP_LEVEL_KEYS.iter(){
+      let mut schema = Schema::TopLevel;
+      let parts = new.split('.').collect::<Vec::<&str>>();
+      for (ii, part) in parts.iter().enumerate(){
+        assert!(schema.allows(part), "{} -> {}", old, new);
+        if ii + 1 < parts.len(){
+          schema = schema.child(part).unwrap().0;
+        }
+      }
+      // The old key is not a key of the new top level.
+      assert!(!Schema::TopLevel.allows(old), "{}", old);
+    }
+    // Removed keys are not accepted where they were.
+    for (schema, key, _) in REMOVED_KEYS.iter(){
+      assert!(!schema.allows(key), "{:?}: {}", schema, key);
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_old_selection_keys_get_migration_hints(){
+    let errors = key_errors(r##"
+        [[groups]]
+        name = "pro_ex"
+        selection.not_residues = ["R1C"]
+        selection.elements = ["H"]
+        selection.bonded_elements = ["O","N"]
+        selection.not_bonded_elements = ["C"]
+        selection.residue_sequence_numbers = [1]
+        selection.within_distance = 4.0
+        selection.not_within_distance = 1.0
+        selection.cell_type = "primary_cell"
+        selection.primary_cell = true
+        selection.cell_ids = [0]
+        selection.not_cell_ids = [1]
+        selection.elemnts = ["H"]
+        [[groups]]
+        name = "empty"
+        selection = {}
+        [[groups]]
+        name = "primary_only"
+        selection.cell_type = "primary_cell"
+        [[groups]]
+        name = "extra_only"
+        selection.primary_cell = false
+        "##);
+    let g = "groups[0].selection";
+    let n = "(group \"pro_ex\")";
+    assert_eq!(errors, vec![
+        format!("{}.bonded_elements {}: moved to \
+groups[0].include.bonded_to.elements", g, n),
+        format!("{}.cell_ids {}: removed; selection by unit-cell index is no \
+longer supported", g, n),
+        format!("{}.cell_type {}: replaced by groups[0].cells = \"all\", \
+\"primary\", or \"extra\" (was \"all_cells\", \"primary_cell\", \
+\"extracells\")", g, n),
+        format!("{}.elements {}: moved to groups[0].include.elements", g, n),
+        format!("{}.elemnts {}: unknown key; the selection table is replaced \
+by groups[0].include, groups[0].exclude, and groups[0].cells", g, n),
+        format!("{}.not_bonded_elements {}: moved to \
+groups[0].exclude.bonded_to.elements", g, n),
+        format!("{}.not_cell_ids {}: removed; selection by unit-cell index is \
+no longer supported", g, n),
+        format!("{}.not_residues {}: moved to groups[0].exclude.residues", 
+            g, n),
+        format!("{}.not_within_distance {}: replaced by \
+groups[0].include.distance = [min, inf]", g, n),
+        format!("{}.primary_cell {}: replaced by groups[0].cells = \
+\"primary\" (true) or \"extra\" (false)", g, n),
+        format!("{}.residue_sequence_numbers {}: moved to \
+groups[0].include.residue_numbers", g, n),
+        format!("{}.within_distance {}: replaced by \
+groups[0].include.distance = [0.0, max]", g, n),
+        "groups[1].selection (group \"empty\"): replaced by \
+groups[1].include, groups[1].exclude, and groups[1].cells".to_string(),
+        // A selection with only cell keys selected every atom of its cells.
+        "groups[2].selection.cell_type (group \"primary_only\"): replaced by \
+groups[2].cells = \"all\", \"primary\", or \"extra\" (was \"all_cells\", \
+\"primary_cell\", \"extracells\"), together with groups[2].include = {} \
+to select all atoms as before".to_string(),
+        "groups[3].selection.primary_cell (group \"extra_only\"): replaced \
+by groups[3].cells = \"primary\" (true) or \"extra\" (false), together \
+with groups[3].include = {} to select all atoms as before".to_string(),
+    ]);
+
+    // Every attribute key of the old selection table, in its four forms, 
+    // moves to a key that the new tables accept.
+    for (old, new) in OLD_SELECTION_ATTRIBUTES.iter(){
+      for (prefix, table, schema) in [("", "include", Schema::Include),
+          ("not_", "exclude", Schema::Exclude),
+          ("bonded_", "include.bonded_to", Schema::BondedTo),
+          ("not_bonded_", "exclude.bonded_to", Schema::BondedTo)]
+      {
+        assert!(schema.allows(new), "{}", new);
+        assert_eq!(old_selection_key_hint("groups[0]", 
+              &format!("{}{}", prefix, old), false),
+            format!("moved to groups[0].{}.{}", table, new));
+      }
+    }
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_key_check_runs_when_toml_is_parsed(){
     let result = Config::from_toml_string(r##"
-        radius = 10
         [orientations]
         grid = "lebedev"
         numbr = 170
@@ -770,7 +1244,7 @@ the top level".to_string(),
           "orientations.numbr: unknown key".to_string()])));
 
     // A TOML syntax error is reported before the key check.
-    let result = Config::from_toml_string("radius = ");
+    let result = Config::from_toml_string("structure.radius = ");
     assert!(matches!(result, Err(CluEError::CannotReadTOMLFile(_))));
 
     // The message lists every key on its own line.
@@ -789,8 +1263,13 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
         detected_spin = 1
         [orientations]
         vector = [0.0, 0.0, 1.0]
-        [[pulses]]
-        name = "pi"
+        "##);
+    assert_eq!(errors, Vec::<String>::new());
+    let errors = key_errors(r##"
+        [[groups]]
+        name = "b"
+        include = 1
+        exclude.bonded_to = "C"
         "##);
     assert_eq!(errors, Vec::<String>::new());
   }
@@ -802,7 +1281,7 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
       assert!(is_isotope_key(&isotope.to_string()), "{}", isotope);
     }
     assert!(is_isotope_key("e"));
-    for key in ["1h", "H", "H1", "", "selection", "lebedev"]{
+    for key in ["1h", "H", "H1", "", "include", "lebedev"]{
       assert!(!is_isotope_key(key), "{}", key);
     }
   }
@@ -816,6 +1295,36 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
         // Fixed keys are never isotope names.
         assert!(!is_isotope_key(key), "{:?}: {}", schema, key);
       }
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_every_schema_is_reachable(){
+    // Every table kind in ALL_SCHEMAS is the child of an allowed key, so 
+    // that its keys are checked; this also catches a missing entry in 
+    // ALL_SCHEMAS, since a child that is not in it fails here.
+    let mut reached = vec![Schema::TopLevel];
+    let mut ii = 0;
+    while ii < reached.len(){
+      let schema = reached[ii];
+      let keys = schema.keys().iter().map(|k| k.to_string())
+        .chain(std::iter::once("1H".to_string()))
+        .collect::<Vec::<String>>();
+      for key in keys.iter(){
+        if !schema.allows(key){
+          continue;
+        }
+        if let Some((child, _)) = schema.child(key){
+          assert!(ALL_SCHEMAS.contains(&child), "{:?}", child);
+          if !reached.contains(&child){
+            reached.push(child);
+          }
+        }
+      }
+      ii += 1;
+    }
+    for schema in ALL_SCHEMAS.iter(){
+      assert!(reached.contains(schema), "{:?} is not reachable", schema);
     }
   }
   //----------------------------------------------------------------------------
@@ -843,24 +1352,24 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
   fn test_missing_settings_are_reported_together(){
     let config = Config::from_toml_string("").unwrap();
     assert_eq!(problems_of(&config), vec![
-        "input_structure_file is not set".to_string(),
-        "radius is not set".to_string(),
-        "magnetic_field is not set".to_string(),
+        "structure.file is not set".to_string(),
+        "structure.radius is not set".to_string(),
+        "conditions.magnetic_field is not set".to_string(),
         "detected_spin.position is not set".to_string(),
-        "pulse_sequence is not set".to_string(),
-        "number_timepoints is not set".to_string(),
-        "tau_increments is not set".to_string(),
-        "cluster_method is not set".to_string(),
-        "max_cluster_size is not set".to_string(),
+        "pulse_sequence.sequence is not set".to_string(),
+        "pulse_sequence.number_timepoints is not set".to_string(),
+        "pulse_sequence.tau_increments is not set".to_string(),
+        "cluster_expansion.method is not set".to_string(),
+        "cluster_expansion.max_cluster_size is not set".to_string(),
     ]);
 
-    // unit_of_time is set when the input is parsed; 
+    // units.time is set when the input is parsed; 
     // a Config built in code can lack it.
     let mut config = Config::from_toml_file(
         "assets/1omp_K26R1_0.003228966616048703.toml").unwrap();
     config.unit_of_time_to_seconds = None;
     assert_eq!(problems_of(&config), vec![
-        "unit_of_time is not set".to_string()]);
+        "units.time is not set".to_string()]);
 
     let message = CluEError::IncompleteConfig(vec!["a is not set".to_string(),
         "b is not set".to_string()]).to_string();
@@ -877,16 +1386,17 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
     let mut config = Config::from_toml_file(cce_file).unwrap();
     config.temperature = None;
     assert_eq!(problems_of(&config), vec![
-        "temperature is required for populations = \"thermal\"".to_string()]);
+        "conditions.temperature is required for \
+cluster_expansion.populations = \"thermal\"".to_string()]);
 
     // A field set after parsing: gCCE needs the detected spin operators.
     let mut config = Config::from_toml_file(cce_file).unwrap();
     config.cluster_method = Some(ClusterMethod::GCCE);
     assert_eq!(problems_of(&config), vec![
-        "detected_spin.detection_operator is required for cluster_method = \
-\"gcce\"".to_string(),
-        "detected_spin.density_matrix is required for cluster_method = \
-\"gcce\"".to_string(),
+        "detected_spin.detection_operator is required for \
+cluster_expansion.method = \"gcce\"".to_string(),
+        "detected_spin.density_matrix is required for \
+cluster_expansion.method = \"gcce\"".to_string(),
     ]);
     // A detected spin with one state has no coherence; gCCE would panic
     // on the missing detected spin operators.
@@ -900,13 +1410,14 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
     config.temperature = None;
     config.ensemble_cce = Some(false);
     assert_eq!(problems_of(&config), vec![
-        "temperature is required for populations = \"thermal\"".to_string(),
-        "temperature is required for detected_spin.density_matrix = \
-\"thermal\"".to_string(),
-        "thermalize_cluster_populations = true requires ensemble_cce = true"
-          .to_string(),
-        "temperature is required for thermalize_cluster_populations = true"
-          .to_string(),
+        "conditions.temperature is required for \
+cluster_expansion.populations = \"thermal\"".to_string(),
+        "conditions.temperature is required for detected_spin.density_matrix \
+= \"thermal\"".to_string(),
+        "cluster_expansion.thermalize_cluster_populations = true requires \
+cluster_expansion.ensemble = true".to_string(),
+        "conditions.temperature is required for \
+cluster_expansion.thermalize_cluster_populations = true".to_string(),
     ]);
 
     // These settings are used only by gCCE.
@@ -991,12 +1502,13 @@ to 1".to_string()]);
   //----------------------------------------------------------------------------
   #[test]
   fn test_mean_fields_with_ensemble_cce(){
-    // The asset uses ensemble_cce = true and mean_fields = false.
+    // The asset uses cluster_expansion.ensemble = true and mean_fields = false.
     let mut config = Config::from_toml_file(
         "assets/1omp_K26R1_0.003228966616048703.toml").unwrap();
     config.mean_fields = Some(true);
     assert_eq!(problems_of(&config), vec![
-        "mean field averaging is not implemented for ensemble CCE"
+        "mean field averaging is not implemented for ensemble CCE \
+(cluster_expansion.mean_fields = true with cluster_expansion.ensemble = true)"
           .to_string()]);
     config.ensemble_cce = Some(false);
     assert_eq!(problems_of(&config), Vec::<String>::new());
@@ -1010,9 +1522,10 @@ to 1".to_string()]);
     config.partition_table = Some(PartitionTableConfig::CSV(
           "assets".to_string()));
     assert_eq!(problems_of(&config), vec![
-        "input_structure_file: \"assets/no_such_file.pdb\" does not exist"
+        "structure.file: \"assets/no_such_file.pdb\" does not exist"
           .to_string(),
-        "partition_table: \"assets\" is not a file".to_string(),
+        "cluster_expansion.clustering.partition_table: \"assets\" is not a \
+file".to_string(),
     ]);
 
     // The partition table is not read for clusters from a file.
@@ -1021,13 +1534,14 @@ to 1".to_string()]);
     config.cluster_source = Some(ClusterSource::File(
           "assets/no_clusters.toml".to_string()));
     assert_eq!(problems_of(&config), vec![
-        "cluster_source: \"assets/no_clusters.toml\" does not exist"
-          .to_string()]);
+        "cluster_expansion.clustering.file: \"assets/no_clusters.toml\" does \
+not exist".to_string()]);
 
     config.cluster_source = Some(ClusterSource::OrientationsDir(
           "assets/TEMPO.pdb".to_string()));
     assert_eq!(problems_of(&config), vec![
-        "cluster_source: \"assets/TEMPO.pdb\" is not a directory".to_string()]);
+        "cluster_expansion.clustering.file: \"assets/TEMPO.pdb\" is not a \
+directory".to_string()]);
 
     config.cluster_source = Some(ClusterSource::OrientationsDir(
           "assets".to_string()));
@@ -1043,7 +1557,7 @@ to 1".to_string()]);
     config.output_directory = Some(
         "CluE-test_run_checks_completeness_first".to_string());
     assert_eq!(crate::run(config).err(), Some(CluEError::IncompleteConfig(
-            vec!["radius is not set".to_string()])));
+            vec!["structure.radius is not set".to_string()])));
     assert!(!Path::new("CluE-test_run_checks_completeness_first").exists());
   }
   //----------------------------------------------------------------------------

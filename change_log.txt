@@ -436,6 +436,60 @@ CHANGED:
   meaningless signals with no error (gCCE). For gCCE, the levels of a
   detection_operator = [i, j] must also be in range.
 
+  The input file has a new layout; input files must be converted. The top
+  level now holds only tables, and every former top-level key moved into
+  the table of what it controls:
+    [units]: distance, energy, magnetic_field, time (were unit_of_*).
+    [structure]: file (was input_structure_file), pdb_model_index, radius,
+      replicate_unit_cell, clash_distance, clash_distance_pbc.
+    [detected_spin]: gains max_spherical_tensor_rank, which also limits
+      the zero-field terms of the bath spins.
+    [conditions]: magnetic_field, temperature.
+    [pulse_sequence]: sequence (was pulse_sequence), number_timepoints,
+      tau_increments, number_timepoints2, tau2_increments.
+    [cluster_expansion]: method (was cluster_method), max_cluster_size,
+      ensemble (was ensemble_cce), populations, mean_fields,
+      thermalize_cluster_populations.
+    [cluster_expansion.clustering]: file (was cluster_source), max_spins,
+      partitioning, kmeans_size, kmeans_iter_cap, partition_table,
+      connect_exchange_groups.
+    [cluster_expansion.clustering.pair_cutoffs]: was [pair_cutoffs].
+    [run]: rng_seed, number_runs, parallel (was run_in_parallel),
+      cluster_batch_size.
+    [output]: gains directory (was output_directory) and run_name.
+  Values, types, defaults, and units are unchanged. A key of the old
+  layout is rejected with what replaced it, for example
+  "radius: moved to structure.radius". Error messages name keys by their
+  new path.
+
+  In [[groups]], the table selection is replaced by the tables include and
+  exclude and the group key cells:
+    selection.X               -> include.X
+    selection.not_X           -> exclude.X
+    selection.bonded_X        -> include.bonded_to.X
+    selection.not_bonded_X    -> exclude.bonded_to.X
+  for the attributes elements, serials, names, residues, chain_ids,
+  indices, and residue_numbers (was residue_sequence_numbers);
+  selection.within_distance = b and selection.not_within_distance = a
+  become include.distance = [a, b], with [0.0, b] and [a, inf] for one
+  bound (integers are accepted); selection.cell_type = "all_cells",
+  "primary_cell", "extracells" and selection.primary_cell = true / false
+  become cells = "all", "primary", "extra" / cells = "primary", "extra".
+  A selection table that held only cell_type or primary_cell selected
+  every atom of its cells; its new form also needs include = {}, and the
+  hint for these keys says so. Otherwise the same atoms are selected as
+  before. A list can now also be given as a single value without brackets
+  (elements = "H"). Each old selection key is rejected with its new key.
+
+  A group with neither include nor exclude is now an error that names the
+  group. Such a group selected no atoms, so its settings were ignored
+  without notice; include = {} selects all atoms (of the cells set by
+  cells).
+
+  The default output directory name CluE-<hash> is a hash of the parsed
+  configuration, so it changes for the same input, since unused fields
+  were removed from it.
+
 REMOVED:
   cosubstitute = "bonded", which did not group particles as intended, is 
   now an error that names the group. The options are "same_molecule", 
@@ -475,6 +529,28 @@ REMOVED:
   and ErrorPulseSequence (replaced by more specific variants). Also
   removed: CluEError::Generic, and the commented-out .clue token parser
   Config::parse_token_stream.
+
+  Input keys that the code did not use: min_cell_size, max_cell_size,
+  detected_spin.electric_quadrupole (the isotope key electric_quadrupole
+  of [[groups]] is unchanged), pair_cutoffs.coupling (the cutoff is
+  coupling_xx_yy), output.cluster_signals (cluster signals are written
+  with output.auxiliary_signals), output.config, and the table [[pulses]]
+  (the pulses are always built from detected_spin.transition). They are
+  now rejected with the reason. Also removed: the Config fields
+  min_cell_size, max_cell_size, write_cluster_signals, write_config, and
+  detected_spin_quadrupole_coupling, and the constants KEY_OUT_CLU_SIGS
+  and KEY_OUT_CONFIG.
+
+  Selection by unit-cell index: selection.cell_ids and
+  selection.not_cell_ids. The group key cells still distinguishes the
+  primary cell from its periodic copies. Also removed: the fields
+  ParticleFilter::cell_ids and ParticleFilter::not_cell_ids, the error
+  CluEError::FilterAlreadySet, which only they used, and the constants
+  of the old selection keys (KEY_SELECTION, KEY_CELL_TYPE,
+  KEY_SELE_PRIMARY_CELL, KEY_SELE_NOT_*, KEY_SELE_BONDED_*, ...).
+  ParticleFilter::from_toml_table() and set_from_toml_table() are replaced
+  by from_toml_tables() and set_from_toml_tables(), which read the
+  include and exclude tables of a group.
 --------------------------------------------------------------------------------
 CluE Oxide: 0.2.3-alpha.5
 

@@ -13,7 +13,6 @@ pub use crate::config::toml_keys::*;
 pub struct DetectedSpinTOML{
   pub multiplicity: Option<usize>,
   pub g_matrix: Option<toml::Value>,
-  pub electric_quadrupole: Option<toml::Value>,
   pub zerofield: Option<toml::Value>,
   pub density_matrix: Option<toml::Value>,
   pub detection_operator: Option<toml::Value>,
@@ -27,6 +26,7 @@ pub struct DetectedSpinTOML{
   pub transition: Option<[usize;2]>,
   pub weight_tolerance: Option<f64>,
   pub identity: Option<String>,
+  pub max_spherical_tensor_rank: Option<usize>,
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -58,79 +58,132 @@ pub struct OrientationsTOML{
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/// `UnitsTOML` holds the [units] table: the units of the numbers in the input.
 #[derive(Debug,Clone,Default,Serialize,Deserialize)]
-pub struct ConfigTOML{
-
-  // Structure
-  pub clash_distance: Option<f64>, 
-  pub clash_distance_pbc: Option<f64>,
-  pub input_structure_file: Option<String>,
-  pub partitioning: Option<String>, 
-  pub partition_table: Option<toml::Value>,
-  pub populations: Option<String>, 
+pub struct UnitsTOML{
+  pub distance: Option<String>,
+  pub energy: Option<String>,
+  pub magnetic_field: Option<String>,
+  pub time: Option<String>,
+}
+//------------------------------------------------------------------------------
+/// `StructureTOML` holds the [structure] table: the structure file and how
+/// the system is built from it.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct StructureTOML{
+  pub file: Option<String>,
   pub pdb_model_index: Option<usize>,
   pub radius: Option<f64>,
   pub replicate_unit_cell: Option<toml::Value>,
-  pub rng_seed: Option<u64>,
-  pub temperature: Option<f64>,  
-
-  // Experiment
-  pub pulse_sequence: Option<toml::Value>,  
+  pub clash_distance: Option<f64>, 
+  pub clash_distance_pbc: Option<f64>,
+}
+//------------------------------------------------------------------------------
+/// `ConditionsTOML` holds the [conditions] table: the sample conditions.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct ConditionsTOML{
   pub magnetic_field: Option<f64>,
+  pub temperature: Option<f64>,  
+}
+//------------------------------------------------------------------------------
+/// `PulseSequenceTOML` holds the [pulse_sequence] table: the sequence and 
+/// its time axes.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct PulseSequenceTOML{
+  pub sequence: Option<toml::Value>,  
   pub number_timepoints: Option<Vec::<usize>>,
   pub number_timepoints2: Option<Vec::<usize>>,
   pub tau_increments: Option<Vec::<f64>>,
   pub tau2_increments: Option<Vec::<f64>>,
-
-  // CCE
-  pub cluster_batch_size: Option<usize>, 
-  pub cluster_method: Option<String>,
-  pub cluster_source: Option<String>,
-  pub connect_exchange_groups: Option<bool>,
-  pub ensemble_cce: Option<bool>,
-  pub kmeans_iter_cap: Option::<usize>,
-  pub kmeans_size: Option::<usize>,
-  pub max_cell_size: Option<usize>,
+}
+//------------------------------------------------------------------------------
+/// `ClusterExpansionTOML` holds the [cluster_expansion] table: the method,
+/// the truncation order, and the starting state of the cluster calculations.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct ClusterExpansionTOML{
+  pub method: Option<String>,
   pub max_cluster_size: Option<usize>,
-  pub max_spins: Option<usize>,
-  pub max_spherical_tensor_rank: Option<usize>,
+  pub ensemble: Option<bool>,
+  pub populations: Option<String>, 
   pub mean_fields: Option<bool>,
-  pub min_cell_size: Option<usize>,
-  pub number_runs: Option<usize>, 
-  pub run_in_parallel: Option<bool>,
   pub thermalize_cluster_populations: Option<bool>,
-
-  // Output
-  pub output_directory: Option<String>,
-  pub run_name: Option<String>,
-
-  // Units
-  pub unit_of_energy: Option<String>,
-  pub unit_of_magnetic_field: Option<String>,
-  pub unit_of_distance: Option<String>,
-  pub unit_of_time: Option<String>,
-
-  
-  pub detected_spin: Option<DetectedSpinTOML>, 
-  pub orientations: Option<OrientationsTOML>,
-  pub output: Option<HashMap::<String,bool>>, 
+  pub clustering: Option<ClusteringTOML>,
+}
+//------------------------------------------------------------------------------
+/// `ClusteringTOML` holds the [cluster_expansion.clustering] table: 
+/// how the clusters are read or built.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct ClusteringTOML{
+  pub file: Option<String>,
+  pub max_spins: Option<usize>,
+  pub partitioning: Option<String>, 
+  pub kmeans_size: Option::<usize>,
+  pub kmeans_iter_cap: Option::<usize>,
+  pub partition_table: Option<toml::Value>,
+  pub connect_exchange_groups: Option<bool>,
   pub pair_cutoffs: Option<HashMap::<String,f64>>,
+}
+//------------------------------------------------------------------------------
+/// `RunTOML` holds the [run] table: how the calculation is run.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct RunTOML{
+  pub rng_seed: Option<u64>,
+  pub number_runs: Option<usize>, 
+  pub parallel: Option<bool>,
+  pub cluster_batch_size: Option<usize>, 
+}
+//------------------------------------------------------------------------------
+/// `OutputTOML` holds the [output] table: where the output is written and
+/// which files are written.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct OutputTOML{
+  pub directory: Option<String>,
+  pub run_name: Option<String>,
+  pub auxiliary_signals: Option<bool>,
+  pub bath: Option<bool>,
+  pub clusters: Option<bool>,
+  pub detected_spin: Option<bool>,
+  pub exchange_groups: Option<bool>,
+  pub info: Option<bool>,
+  pub methyl_partitions: Option<bool>,
+  pub orientation_grid: Option<bool>,
+  pub orientation_signals: Option<bool>,
+  pub partition_table: Option<bool>,
+  pub sans_spin_signals: Option<bool>,
+  pub structure_pdb: Option<bool>,
+  pub tensors: Option<bool>,
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/// `ConfigTOML` holds the parsed input file. Its top level holds only tables.
+#[derive(Debug,Clone,Default,Serialize,Deserialize)]
+pub struct ConfigTOML{
+  pub units: Option<UnitsTOML>,
+  pub structure: Option<StructureTOML>,
+  pub detected_spin: Option<DetectedSpinTOML>, 
   pub groups: Option<Vec::<toml::Value>>, 
-  pub pulses: Option<Vec::<toml::Value>>, 
+  pub conditions: Option<ConditionsTOML>,
+  pub orientations: Option<OrientationsTOML>,
+  pub pulse_sequence: Option<PulseSequenceTOML>,
+  pub cluster_expansion: Option<ClusterExpansionTOML>,
+  pub run: Option<RunTOML>,
+  pub output: Option<OutputTOML>, 
 }
 impl ConfigTOML{
   fn set_default_units(&mut self){
-    if self.unit_of_energy.is_none(){
-      self.unit_of_energy = Some(DEFAULT_UNIT_ENERGY.to_string());
+    let units = self.units.get_or_insert_with(UnitsTOML::default);
+    if units.energy.is_none(){
+      units.energy = Some(DEFAULT_UNIT_ENERGY.to_string());
     }
-    if self.unit_of_distance.is_none(){
-      self.unit_of_distance = Some(DEFAULT_UNIT_DISTANCE.to_string());
+    if units.distance.is_none(){
+      units.distance = Some(DEFAULT_UNIT_DISTANCE.to_string());
     }
-    if self.unit_of_magnetic_field.is_none(){
-      self.unit_of_magnetic_field = Some(DEFAULT_UNIT_MAGNETIC_FIELD.to_string());
+    if units.magnetic_field.is_none(){
+      units.magnetic_field = Some(DEFAULT_UNIT_MAGNETIC_FIELD.to_string());
     }
-    if self.unit_of_time.is_none(){
-      self.unit_of_time = Some(DEFAULT_UNIT_TIME.to_string());
+    if units.time.is_none(){
+      units.time = Some(DEFAULT_UNIT_TIME.to_string());
     }
   }
 }
@@ -185,41 +238,51 @@ mod tests{
     // Energy: Mhz,
     // Magnetic Field, T,
     let toml_str = r##"
+        [structure]
+        file = "../../assets/TEMPO_wat_gly_70A.pdb"
+        pdb_model_index = 0
+        radius = 80
         replicate_unit_cell = false
         clash_distance_pbc = 0.1
-        cluster_batch_size = 20000
 
-        populations = "thermal"
+        [conditions]
+        magnetic_field = 1.2
         temperature = 20
 
-        cluster_method = "CCE"
-        cluster_source = "clusters_file.toml"
-        connect_exchange_groups = true
-        input_structure_file = "../../assets/TEMPO_wat_gly_70A.pdb"
-        magnetic_field = 1.2
-        max_cell_size = 2
-        max_cluster_size = 4
-        max_spins = 8
-        min_cell_size = 1
-        number_runs = 1
-        partitioning = "exchange_groups"
-        pdb_model_index = 0
-        
-        #pulse_sequence = "CP-1"
-        pulse_sequence = [
+        [pulse_sequence]
+        #sequence = "CP-1"
+        sequence = [
           ["pulse","pi/2"],
           ["delay", "tau"],
           ["pulse","pi"],
           ["delay", "tau"],
           ["detect"],
         ]
-
-        radius = 80
-        rng_seed = 0
-        output_directory = "save_directory"
-
         number_timepoints = [40,60]
         tau_increments = [1, 500] # ns
+
+        [cluster_expansion]
+        method = "CCE"
+        max_cluster_size = 4
+        populations = "thermal"
+
+        [cluster_expansion.clustering]
+        file = "clusters_file.toml"
+        connect_exchange_groups = true
+        max_spins = 8
+        partitioning = "exchange_groups"
+
+        [cluster_expansion.clustering.pair_cutoffs]
+        delta_hyperfine_zz = 1e04
+        point_dipole_perpendicular = 100
+        distance = 10
+        hahn_mod_depth = 1e-10
+        hahn_taylor_4 = 1e-9
+
+        [run]
+        cluster_batch_size = 20000
+        number_runs = 1
+        rng_seed = 0
 
         [orientations]
         grid = "lebedev" 
@@ -265,15 +328,8 @@ mod tests{
         # position = ["group1", "group2", "group3"]
 
 
-        [pair_cutoffs]
-        coupling = 1e+3
-        delta_hyperfine_zz = 1e04
-        point_dipole_perpendicular = 100
-        distance = 10
-        hahn_mod_depth = 1e-10
-        hahn_taylor_4 = 1e-9
-
         [output]
+        directory = "save_directory"
         auxiliary_signals = true
         bath = true
         clusters = true
@@ -284,20 +340,6 @@ mod tests{
         sans_spin_signals = false
         structure_pdb = true
         tensors = false
-
-        [[pulses]]
-          name = "pi/2"
-          matrix = [
-            [0.7071067811865476, -0.7071067811865476],
-            [0.7071067811865476,  0.7071067811865476],
-          ]
-
-        [[pulses]]
-          name = "pi"
-          matrix = [
-            [0.0, -1.0],
-            [1.0,  0.0],
-          ]
 
         [[groups]]
         name = "hydrogens"
@@ -310,18 +352,19 @@ mod tests{
 
         2H.active = false
 
-        [groups.selection] 
+        [groups.include] 
         elements = ["H"]
-        not_elements = ["N",  "O"]
-        within_distance = 25
-        not_within_distance = 4
+        distance = [4, 25]
+
+        [groups.exclude] 
+        elements = ["N",  "O"]
 
 
         [[groups]]
 
         name = "nitroxide_N"
 
-        selection = {elements = ["N"],residues = ["R1M"]}
+        include = {elements = ["N"],residues = ["R1M"]}
 
         14N.abundance = 0.9
         15N.abundance = 0.1
@@ -343,7 +386,18 @@ mod tests{
       "##;
 
     let config = ConfigTOML::from_toml_string(toml_str).unwrap();  
-    assert!(config.pulse_sequence.is_some());
+    let pulse_sequence = config.pulse_sequence.unwrap();
+    assert!(pulse_sequence.sequence.is_some());
+    assert_eq!(pulse_sequence.number_timepoints, Some(vec![40,60]));
+    let clustering = config.cluster_expansion.unwrap().clustering.unwrap();
+    assert_eq!(clustering.file, Some("clusters_file.toml".to_string()));
+    assert_eq!(clustering.pair_cutoffs.unwrap().get("distance"), Some(&10.0));
+    assert_eq!(config.output.unwrap().directory, 
+        Some("save_directory".to_string()));
+    // Missing units get their defaults.
+    let units = config.units.unwrap();
+    assert_eq!(units.distance, Some(DEFAULT_UNIT_DISTANCE.to_string()));
+    assert_eq!(units.time, Some(DEFAULT_UNIT_TIME.to_string()));
 
     
   }

@@ -1,21 +1,27 @@
-input_structure_file = "water_gly_20pc_vol.pdb"
+[structure]
+  file = "water_gly_20pc_vol.pdb"
+  radius = 60
 
-magnetic_field = 1.2
-pulse_sequence = "hahn"
-tau_increments = [5e-2]
-number_timepoints = [301]
-temperature = 50
+[conditions]
+  magnetic_field = 1.2
+  temperature = 50
 
-radius = 60
-run_name = "system"
-number_runs = 1
+[pulse_sequence]
+  sequence = "hahn"
+  tau_increments = [5e-2]
+  number_timepoints = [301]
 
+[cluster_expansion]
+  method = "cce"
+  max_cluster_size = 2
+  populations = "thermal"
 
-populations = "thermal"
-cluster_method = "cce"
-max_cluster_size = 2
-max_spins = 2
-partitioning = "singles"
+[cluster_expansion.clustering]
+  max_spins = 2
+  partitioning = "singles"
+
+[run]
+  number_runs = 1
 
 [detected_spin]
   position = [25.0,25.0,25.0]
@@ -30,6 +36,7 @@ grid = "random"
 number = 1
 
 [output]
+  run_name = "system"
   auxiliary_signals = false
   bath = true
   clusters = false
@@ -41,14 +48,14 @@ number = 1
 
 [[groups]]
 name = "CLOSE_H"
-selection.within_distance = 4.0
+include.distance = [0.0, 4.0]
 1H.active = false
   
 [[groups]]
 name = "WATER_H"
-selection.residues = ["SOL"]
-selection.elements = ["H"]
-selection.not_within_distance = 4.0
+include.residues = "SOL"
+include.elements = "H"
+include.distance = [4.0, inf]
 
 drop_probability = 0.99
 
@@ -58,10 +65,10 @@ drop_probability = 0.99
 
 [[groups]]
 name = "GLYCEROL_OH"
-selection.residues = ["GLY"]
-selection.elements = ["H"]
-selection.bonded_elements = ["O"]
-selection.not_within_distance = 4.0
+include.residues = "GLY"
+include.elements = "H"
+include.bonded_to.elements = "O"
+include.distance = [4.0, inf]
 
 drop_probability = 0.99
 
@@ -71,10 +78,10 @@ drop_probability = 0.99
 
 [[groups]]
 name = "GLYCEROL_CH"
-selection.residues = ["GLY"]
-selection.elements = ["H"]
-selection.bonded_elements = ["C"]
-selection.not_within_distance = 4.0
+include.residues = "GLY"
+include.elements = "H"
+include.bonded_to.elements = "C"
+include.distance = [4.0, inf]
 
 cosubstitute = "same_molecule"
 
@@ -83,4 +90,3 @@ drop_probability = 0.99
 2H.electric_quadrupole.values = [-0.1945,-0.1945,0.389]
 2H.electric_quadrupole.axes.x = "random"
 2H.electric_quadrupole.axes.y = "random"
-

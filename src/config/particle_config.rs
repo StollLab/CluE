@@ -25,7 +25,8 @@ type CxMat = Array2::<Complex64>;
 /// `label` is an identifier.
 /// `filter` selects the set of particles to modify.
 /// `properties` specify the custom properties.
-/// `cell_type` allows for treating the main cell and PBC copies differently.
+/// `cell_type` (the group key `cells`) allows for treating the main cell and
+/// PBC copies differently.
 #[derive(Debug,Clone,PartialEq)]
 pub struct ParticleConfig{
   pub label: String,
@@ -130,34 +131,32 @@ impl ParticleConfig{
     }
 
 
-    if let Some(value) = table.get(KEY_SELECTION){
-      let Some(selection) = value.as_table() else{
+    if let Some(value) = table.get(KEY_CELLS){
+      let Some(cells) = value.as_str() else{
         return Err(CluEError::InvalidTOMLValue(
-              format!("group \"{}\": {}", self.label, KEY_SELECTION),
-              "a table".to_string(), value.type_str().to_string()));
+              format!("group \"{}\": {}", self.label, KEY_CELLS),
+              "a string".to_string(), value.type_str().to_string()));
       };
+      self.cell_type = CellType::from(cells)?;
+    }
 
-      if let Some(value) = selection.get(KEY_CELL_TYPE){
-        let Some(cell_type_str) = value.as_str() else{
-          return Err(CluEError::InvalidTOMLValue(
-                format!("group \"{}\": {}.{}", self.label, KEY_SELECTION,
-                  KEY_CELL_TYPE),
-                "a string".to_string(), value.type_str().to_string()));
-        };
-        self.cell_type = CellType::from(cell_type_str)?;
-      }
+    // A group with neither include nor exclude has no filter and selects
+    // no particles.
+    let include = selection_table(&table, KEY_INCLUDE, &self.label)?;
+    let exclude = selection_table(&table, KEY_EXCLUDE, &self.label)?;
+    if include.is_some() || exclude.is_some(){
 
       // D and T are read as hydrogen.
-      for (key, symbol) in hydrogen_isotope_symbols_in_selection(selection){
-        println!("Group \"{}\": \"{}\" in selection.{} is read as \
+      for (key, symbol) in hydrogen_isotope_symbols_in_selection(&table){
+        println!("Group \"{}\": \"{}\" in {} is read as \
 hydrogen, so it applies to all hydrogens.", self.label, symbol, key);
       }
 
       if let Some(filter) = &mut self.filter {
-        filter.set_from_toml_table(selection.clone(),unit_of_distance)?;
+        filter.set_from_toml_tables(include, exclude, unit_of_distance)?;
       }else{
-        self.filter = Some(ParticleFilter::from_toml_table(
-              selection.clone(), unit_of_distance)?);
+        self.filter = Some(ParticleFilter::from_toml_tables(
+              include, exclude, unit_of_distance)?);
       }
     }
     if let Some(properties) = &mut self.properties {
@@ -195,7 +194,9 @@ hydrogen, so it applies to all hydrogens.", self.label, symbol, key);
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-/// This enum specifies different sets of PBC cells.
+/// This enum specifies the unit cells that a group is used for
+/// (the group key `cells`): all cells, the primary cell, or the periodic 
+/// copies of the primary cell (`Config::set_extracell_particles()`).
 #[derive(Debug,Clone,PartialEq)]
 pub enum CellType{
   AllCells,
@@ -205,9 +206,9 @@ pub enum CellType{
 impl CellType{
   fn from(cell_type: &str) -> Result<Self,CluEError>{
     match cell_type{
-      "all_cells" => Ok(Self::AllCells),
-      "primary_cell" => Ok(Self::PrimaryCell),
-      "extracells" => Ok(Self::Extracells),
+      "all" => Ok(Self::AllCells),
+      "primary" => Ok(Self::PrimaryCell),
+      "extra" => Ok(Self::Extracells),
       _ => Err(CluEError::CannotParseCellType(cell_type.to_string())),
     }
   }
@@ -215,21 +216,51 @@ impl CellType{
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //------------------------------------------------------------------------------
-// This function returns the element selections in `selection` that contain 
-// the symbols "D" or "T", which are read as hydrogen, as (key, symbol) pairs.
-fn hydrogen_isotope_symbols_in_selection(selection: &toml::Table)
-  -> Vec::<(&'static str, String)>
+// This function returns the table `key` (include or exclude) of the group 
+// `table` with name `label`, if the group has one.
+fn selection_table<'a>(table: &'a toml::Table, key: &str, label: &str)
+  -> Result<Option<&'a toml::Table>,CluEError>
 {
-  let mut found = Vec::<(&'static str, String)>::new();
-  for key in [KEY_SELE_ELEMENTS, KEY_SELE_NOT_ELEMENTS, 
-      KEY_SELE_BONDED_ELEMENTS, KEY_SELE_NOT_BONDED_ELEMENTS]
-  {
-    let Some(array) = selection.get(key).and_then(|v| v.as_array()) else{
+  let Some(value) = table.get(key) else{
+    return Ok(None);
+  };
+  let Some(selection) = value.as_table() else{
+    return Err(CluEError::InvalidTOMLValue(
+          format!("group \"{}\": {}", label, key),
+          "a table".to_string(), value.type_str().to_string()));
+  };
+  Ok(Some(selection))
+}
+//------------------------------------------------------------------------------
+// This function returns the element selections of the group `table` 
+// (include.elements, exclude.elements, and their bonded_to forms) that 
+// contain the symbols "D" or "T", which are read as hydrogen, 
+// as (key, symbol) pairs.
+fn hydrogen_isotope_symbols_in_selection(table: &toml::Table)
+  -> Vec::<(String, String)>
+{
+  let mut found = Vec::<(String, String)>::new();
+  for key in [KEY_INCLUDE, KEY_EXCLUDE]{
+    let Some(selection) = table.get(key).and_then(|v| v.as_table()) else{
       continue;
     };
-    for symbol in array.iter().filter_map(|v| v.as_str()){
-      if symbol == "D" || symbol == "T"{
-        found.push((key, symbol.to_string()));
+    let bonded_to = selection.get(KEY_BONDED_TO).and_then(|v| v.as_table());
+    for (path, sub) in [(key.to_string(), Some(selection)),
+        (format!("{}.{}", key, KEY_BONDED_TO), bonded_to)]
+    {
+      let Some(value) = sub.and_then(|t| t.get(KEY_SELE_ELEMENTS)) else{
+        continue;
+      };
+      // A single value is a list of one.
+      let symbols = match value{
+        toml::Value::Array(array) => array.iter().collect::<Vec::<_>>(),
+        single => vec![single],
+      };
+      for symbol in symbols.iter().filter_map(|v| v.as_str()){
+        if symbol == "D" || symbol == "T"{
+          found.push((format!("{}.{}", path, KEY_SELE_ELEMENTS), 
+                symbol.to_string()));
+        }
       }
     }
   }
@@ -702,20 +733,28 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_hydrogen_isotope_symbols_in_selection(){
-    let selection: toml::Table = toml::from_str(r##"
-        elements = ["D", "C"]
-        not_elements = ["O"]
-        bonded_elements = ["T"]
+    let group: toml::Table = toml::from_str(r##"
+        include.elements = ["D", "C"]
+        include.bonded_to.elements = "T"
+        exclude.elements = ["O"]
+        exclude.bonded_to.elements = ["N", "D"]
         "##).unwrap();
-    assert_eq!(hydrogen_isotope_symbols_in_selection(&selection), vec![
-        (KEY_SELE_ELEMENTS, "D".to_string()),
-        (KEY_SELE_BONDED_ELEMENTS, "T".to_string()),
+    let s = |x: &str| x.to_string();
+    assert_eq!(hydrogen_isotope_symbols_in_selection(&group), vec![
+        (s("include.elements"), s("D")),
+        (s("include.bonded_to.elements"), s("T")),
+        (s("exclude.bonded_to.elements"), s("D")),
     ]);
 
     // The selection still treats D and T as hydrogen.
-    let filter = ParticleFilter::from_toml_table(selection, 1.0).unwrap();
+    let include = group.get(KEY_INCLUDE).and_then(|v| v.as_table());
+    let exclude = group.get(KEY_EXCLUDE).and_then(|v| v.as_table());
+    let filter = ParticleFilter::from_toml_tables(include, exclude, 1.0)
+      .unwrap();
     assert_eq!(filter.elements, vec![Element::Hydrogen, Element::Carbon]);
     assert_eq!(filter.bonded_elements, vec![Element::Hydrogen]);
+    assert_eq!(filter.not_bonded_elements, 
+        vec![Element::Nitrogen, Element::Hydrogen]);
   }
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

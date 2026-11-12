@@ -67,7 +67,6 @@ pub enum CluEError{
   ExpectedTOMLFloat(String),
   ExpectedTOMLUInt(String),
   FailedKMeans,
-  FilterAlreadySet(String),
   FiltersOverlap(String,String),
   GroupHasNoSelection(String),
   InvalidGroBox(String),
@@ -275,8 +274,8 @@ from the CONECT records of the structure file", label),
           "cannot open \"{}\": {}", file, reason),
 
       CluEError::CannotParseCellType(cell_type) => write!(f,
-          "cannot parse \"{}\" as a cell type; the options are \
-\"all_cells\", \"primary_cell\", and \"extracells\"", cell_type),
+          "cannot parse \"{}\" as cells; the options are \"all\", \
+\"primary\", and \"extra\"", cell_type),
 
       CluEError::CannotParseClusterMethod(method) => write!(f,
           "cannot parse \"{}\" as a cluster method; the options are \
@@ -391,7 +390,8 @@ size 1 to clusters of size n", file),
 measured from the detected spin",label),
 
       CluEError::PulseSequenceNotSupported(method,seq) => write!(f,
-        "cluster method \"{}\" only supports pulse_sequence = \"{}\"",
+        "cluster method \"{}\" only supports pulse_sequence.sequence = \
+\"{}\"",
         method,seq),
 
       CluEError::DuplicateSerial(srl) => write!(f,
@@ -430,15 +430,14 @@ detected_spin.position and the coordinates in the structure file",
       CluEError::FailedKMeans => write!(f,
           "k-means failed"),
 
-      CluEError::FilterAlreadySet(filter) => write!(f,
-          "{} has already been set",filter),
-
       CluEError::FiltersOverlap(label0,label1) => write!(f,
           "groups \"{}\" and \"{}\" overlap: \
 particles must not reside in more than one group",label0,label1),
 
       CluEError::GroupHasNoSelection(label) => write!(f,
-          "group \"{}\" has no selection",label),
+          "group \"{}\" has no include or exclude table, so it selects no \
+atoms; include = {{}} selects all atoms (of the cells set by cells)",
+          label),
 
       CluEError::InvalidGroBox(edges) => write!(f,
           "the unit cell edges {} (nm) cannot be written in GRO format, \
@@ -469,17 +468,18 @@ or pulse): {}",reason),
           "invalid {} \"{}\"",KEY_IST_COEF,ist),
 
       CluEError::InvalidPartitionTableEntry(serial,block,reason) => write!(f,
-          "partition_table entry (serial {}, block {}): {}",
+          "cluster_expansion.clustering.partition_table entry (serial {}, \
+block {}): {}",
           serial,block,reason),
 
       CluEError::InvalidPulseStep(index,error) => write!(f,
-          "pulse_sequence[{}]: {}",index,error),
+          "pulse_sequence.sequence[{}]: {}",index,error),
 
       CluEError::InvalidKMeansIterCap => write!(f,
-          "kmeans_iter_cap must be at least 1"),
+          "cluster_expansion.clustering.kmeans_iter_cap must be at least 1"),
 
       CluEError::InvalidKMeansSize => write!(f,
-          "kmeans_size must be at least 1"),
+          "cluster_expansion.clustering.kmeans_size must be at least 1"),
 
       CluEError::InvalidNumberOfKMeansClusters(k,n) => write!(f,
           "k-means cannot split {} points into {} clusters; the number of \
@@ -506,7 +506,7 @@ for example 1H.abundance = 0.7 and 2H.abundance = 0.3",
 
       CluEError::InvalidSelectionElement(key,index,expected,found)
         => write!(f,
-          "selection.{}[{}] must be {}, but got {}",
+          "{}[{}] must be {}, but got {}",
           key, index, expected, found),
 
       CluEError::InvalidSpinGridWeights(sum) => write!(f,
@@ -541,11 +541,13 @@ appear:\n  {}", problems.join("\n  ")),
 
       CluEError::LengthMismatchTimepointsIncrements(suffix,n_dts,dts) 
         => write!(f,
-          "number_timepoints{} has {} entries, but tau{}_increments has {}; \
-they must have the same length", suffix, n_dts, suffix, dts),
+          "pulse_sequence.number_timepoints{} has {} entries, but \
+pulse_sequence.tau{}_increments has {}; they must have the same length", 
+          suffix, n_dts, suffix, dts),
 
       CluEError::MeanFieldECCENotImplemented => write!(f,
-          "mean field averaging is not implemented for ensemble CCE"),
+          "mean field averaging is not implemented for ensemble CCE \
+(cluster_expansion.mean_fields = true with cluster_expansion.ensemble = true)"),
 
       CluEError::MismatchedGroupNames(name0,name1) => write!(f,
           "group names \"{}\" and \"{}\" do not match",name0,name1),
@@ -603,7 +605,8 @@ but there are {} headers and {} columns of data",filename,n_headers,n_cols),
           "neighbor list and partition table are incompatible"),
 
       CluEError::NoApplyPBC => write!(f,
-          "replicate_unit_cell is not set (true, false, or [n1, n2, n3])"),
+          "structure.replicate_unit_cell is not set (true, false, or \
+[n1, n2, n3])"),
 
       CluEError::NoClusterBatchSize => write!(f,
           "batch size for clusters not specified"),
@@ -643,7 +646,7 @@ but there are {} headers and {} columns of data",filename,n_headers,n_cols),
 when the structure is built from the config"),
 
       CluEError::NoEnsembleCCE => write!(f,
-          "ensemble_cce is not set"),
+          "cluster_expansion.ensemble is not set"),
 
       CluEError::NoGMatrixSpecifier => write!(f,
           "no g-matrix specifier"),
@@ -652,16 +655,18 @@ when the structure is built from the config"),
           "no input file"),
 
       CluEError::NoKMeansIterCap => write!(f,
-          "k-means requires kmeans_iter_cap to be set"),
+          "k-means requires cluster_expansion.clustering.kmeans_iter_cap to \
+be set"),
 
       CluEError::NoKMeansSize => write!(f,
-          "k-means requires kmeans_size to be set"),
+          "k-means requires cluster_expansion.clustering.kmeans_size to be \
+set"),
 
       CluEError::NoMagneticField => write!(f,
           "please specify the applied magnetic field"),
 
       CluEError::NoMeanFields => write!(f,
-          "mean_fields is not set"),
+          "cluster_expansion.mean_fields is not set"),
 
       CluEError::NoModelIndex => write!(f,
           "PDB model not selected"),
@@ -673,7 +678,7 @@ when the structure is built from the config"),
           "maximum irreducible spherical tensor rank not set"),
 
       CluEError::NoNumberSystemInstances => write!(f,
-          "number_runs is not set"),
+          "run.number_runs is not set"),
 
       CluEError::NoOrientationGrid => write!(f,
           "orientations.grid is not set"),
@@ -689,7 +694,7 @@ from 1 by more than orientations.weight_tolerance = {}", sum, tolerance),
           "no pulse sequence is defined"),
 
       CluEError::NoRadius => write!(f,
-          "system radius not set"),
+          "structure.radius is not set"),
 
       CluEError::NotA3DRotationMatrix(matrix) => write!(f,
           "the matrix\n{}\ndoes not correspond to a valid rotation matrix", 
@@ -710,7 +715,7 @@ please choose one of {{6, 14, 26, 38, 50, 74, 86, 110, 146, 170, \
           "{} is not a proper subset of {}", subcluster, cluster),
 
       CluEError::NoTemperature => write!(f,
-          "no temperature specified"),
+          "conditions.temperature is not set"),
 
       CluEError::NoTensorSpecifier => write!(f,
           "no specifier for tensor"),
@@ -722,18 +727,18 @@ please choose one of {{6, 14, 26, 38, 50, 74, 86, 110, 146, 170, \
           "the time-axis has not been built"),
 
       CluEError::NoTimeIncrements => write!(f,
-          "tau_increments is not set"),
+          "pulse_sequence.tau_increments is not set"),
 
       CluEError::NoTimeIncrements2 => write!(f,
-          "tau2_increments is not set"),
+          "pulse_sequence.tau2_increments is not set"),
 
       CluEError::NoTimepoints => write!(f,
-          "number_timepoints is not set; please specify how many timepoints \
-there are for each tau increment"),
+          "pulse_sequence.number_timepoints is not set; please specify how \
+many timepoints there are for each tau increment"),
 
       CluEError::NoTimepoints2 => write!(f,
-          "number_timepoints2 is not set; please specify how many timepoints \
-there are for each tau2 increment"),
+          "pulse_sequence.number_timepoints2 is not set; please specify how \
+many timepoints there are for each tau2 increment"),
 
       CluEError::NoUnitOfDistance => write!(f,
           "please specify a unit of distance"),
@@ -748,7 +753,7 @@ there are for each tau2 increment"),
           "please specify a unit of time"),
 
       CluEError::NoRunInParallel => write!(f,
-          "run_in_parallel is not set"),
+          "run.parallel is not set"),
 
       CluEError::NoDensityMatrixWithMultiplicity(spin_multiplicity) => write!(f,
           "no bath-spin-{} density matrices are built for the detected spin", 
@@ -807,9 +812,10 @@ number, as written for numbers above {}, in line \"{}\"",
           group),
 
       CluEError::SpaceGroupNotP1(space_group) => write!(f,
-          "the structure has space group \"{}\", but replicate_unit_cell \
-only applies lattice translations; expand the structure to space group P 1 \
-or set replicate_unit_cell = false",space_group),
+          "the structure has space group \"{}\", but \
+structure.replicate_unit_cell only applies lattice translations; expand the \
+structure to space group P 1 or set structure.replicate_unit_cell = false",
+          space_group),
 
       CluEError::SpinGridWeightsDoNotSumToOne(sum,tolerance) => write!(f,
           "the weights of the detected spin grid sum to {}, which differs \
@@ -827,7 +833,8 @@ correct or remove the unit cell (CRYST1) record",span,axis),
           "no tensor set for particle {}",index),
 
       CluEError::ThermalizationRequiresEnsembleCCE => write!(f,
-          "thermalize_cluster_populations = true requires ensemble_cce = true"),
+          "cluster_expansion.thermalize_cluster_populations = true requires \
+cluster_expansion.ensemble = true"),
 
       CluEError::TooManyAtomsInPDB(filename,max) => write!(f,
           "\"{}\" has more than {} atoms in the selected model, \
@@ -917,11 +924,11 @@ the file was written by a run with a different time axis",
 
       CluEError::WrongNumberOfBatchSignals(filename,found,expected) => write!(f,
           "\"{}\" has {} signals, but the batch has {} clusters; the file was \
-written for a different cluster set or cluster_batch_size",
+written for a different cluster set or run.cluster_batch_size",
           filename, found, expected),
 
       CluEError::ZeroClusterBatchSize => write!(f,
-          "cluster_batch_size must be at least 1"),
+          "run.cluster_batch_size must be at least 1"),
 
       CluEError::ZeroMaxClusterSize => write!(f,
           "the maximum cluster size must be at least 1"),
@@ -970,16 +977,19 @@ position among the active bath particles"),
       (CluEError::CannotFindParticleForRefIndex(7),
        "no active bath particle matches reference index \"7\""),
       (CluEError::PulseSequenceNotSupported(s("lce"),s("hahn")),
-       "cluster method \"lce\" only supports pulse_sequence = \"hahn\""),
+       "cluster method \"lce\" only supports pulse_sequence.sequence = \
+\"hahn\""),
       (CluEError::NoApplyPBC,
-       "replicate_unit_cell is not set (true, false, or [n1, n2, n3])"),
+       "structure.replicate_unit_cell is not set (true, false, or \
+[n1, n2, n3])"),
       (CluEError::NoDetectedSpinIdentity, "detected_spin.identity is not set"),
       (CluEError::NoDetectedSpinPosition, "detected_spin.position is not set"),
       (CluEError::NoDetectedParticle,
        "the structure has no detected spin; the detected spin is added \
 when the structure is built from the config"),
       (CluEError::ThermalizationRequiresEnsembleCCE,
-       "thermalize_cluster_populations = true requires ensemble_cce = true"),
+       "cluster_expansion.thermalize_cluster_populations = true requires \
+cluster_expansion.ensemble = true"),
       (CluEError::InvalidStevensCoefficientShape(1,5,2),
        "Stevens coefficient entry 1 is a 5×2 matrix, but each entry must \
 have one column"),
@@ -1001,23 +1011,25 @@ the grid should be specified as a csv file with one column per dimension, \
 followed by a column for the weights"),
       (CluEError::NoDetectedSpinTransition,
        "detected_spin.transition is not set"),
-      (CluEError::NoEnsembleCCE, "ensemble_cce is not set"),
-      (CluEError::NoMeanFields, "mean_fields is not set"),
-      (CluEError::ZeroClusterBatchSize, "cluster_batch_size must be at least 1"),
+      (CluEError::NoEnsembleCCE, "cluster_expansion.ensemble is not set"),
+      (CluEError::NoMeanFields, "cluster_expansion.mean_fields is not set"),
+      (CluEError::ZeroClusterBatchSize, 
+       "run.cluster_batch_size must be at least 1"),
       (CluEError::WrongNumberOfBatchSignals(s("b.csv"),3,2),
        "\"b.csv\" has 3 signals, but the batch has 2 clusters; the file was \
-written for a different cluster set or cluster_batch_size"),
+written for a different cluster set or run.cluster_batch_size"),
       (CluEError::WrongBatchSignalLength(s("b.csv"),5,8),
        "the signals in \"b.csv\" have 5 time points, but the run has 8; \
 the file was written by a run with a different time axis"),
       (CluEError::NoOrientationGrid, "orientations.grid is not set"),
-      (CluEError::NoTimeIncrements2, "tau2_increments is not set"),
+      (CluEError::NoTimeIncrements2, 
+       "pulse_sequence.tau2_increments is not set"),
       (CluEError::MissingHeader(1,2,s("a.csv")),
        "in \"a.csv\", every entry must have a header, but there are 1 \
 headers and 2 columns of data"),
-      (CluEError::CannotParseCellType(s("all")),
-       "cannot parse \"all\" as a cell type; the options are \"all_cells\", \
-\"primary_cell\", and \"extracells\""),
+      (CluEError::CannotParseCellType(s("all_cells")),
+       "cannot parse \"all_cells\" as cells; the options are \"all\", \
+\"primary\", and \"extra\""),
       (CluEError::DensityMatrixTraceVanishes(s("Tr[exp(-βH)]"),1e-15),
        "cannot normalize the thermal density matrix: |Tr[exp(-βH)]| = 1e-15 \
 is below 1e-12; check the temperature and the energy scale of the \
@@ -1025,7 +1037,8 @@ Hamiltonian"),
       (CluEError::CannotCreateFile(s("out/a.csv"),s("permission denied")),
        "cannot create \"out/a.csv\": permission denied"),
       (CluEError::GroupHasNoSelection(s("methyl")),
-       "group \"methyl\" has no selection"),
+       "group \"methyl\" has no include or exclude table, so it selects no \
+atoms; include = {} selects all atoms (of the cells set by cells)"),
       (CluEError::MutuallyExclusiveKeys(s("exchange_coupling"),
           s("c3_tunnel_splitting")),
        "exchange_coupling and c3_tunnel_splitting are mutually exclusive"),

@@ -933,13 +933,13 @@ mod tests{
   fn get_tempo() -> (AdjacencyList,HamiltonianTensors,Structure,Config)
   {
     let config = Config::from_toml_string(r##"
-      input_structure_file = "./assets/TEMPO.pdb"
+      structure.file = "./assets/TEMPO.pdb"
       detected_spin.position = [28,29]
-      radius = 73.5676
-      magnetic_field = 1.2
-      replicate_unit_cell = false
-      partitioning = "exchange_groups"
-      partition_table = [
+      structure.radius = 73.5676
+      conditions.magnetic_field = 1.2
+      structure.replicate_unit_cell = false
+      cluster_expansion.clustering.partitioning = "exchange_groups"
+      cluster_expansion.clustering.partition_table = [
         3,1,
         4,1,
         5,1,
@@ -948,16 +948,16 @@ mod tests{
         9,1,
       ]
       
-      pulse_sequence = "hahn"
-      tau_increments = [1e-2]
-      number_timepoints = [101]
-      [pair_cutoffs]
+      pulse_sequence.sequence = "hahn"
+      pulse_sequence.tau_increments = [1e-2]
+      pulse_sequence.number_timepoints = [101]
+      [cluster_expansion.clustering.pair_cutoffs]
       hahn_mod_depth = 3.23e-5
       hahn_taylor_4 = 6.416238909177711e-11
       
       [[groups]]
       name = "hydrogens"
-      selection.elements = ["H"]
+      include.elements = ["H"]
       1H.c3_tunnel_splitting = 75e-3
     "##).unwrap();
 
@@ -1024,8 +1024,9 @@ at 1"))),
 
     let err = CluEError::InvalidPartitionTableEntry(999999,2,
         s("no bath particle in the primary cell has this serial number"));
-    assert_eq!(err.to_string(), "partition_table entry (serial 999999, \
-block 2): no bath particle in the primary cell has this serial number");
+    assert_eq!(err.to_string(), "cluster_expansion.clustering.partition_table \
+entry (serial 999999, block 2): no bath particle in the primary cell has \
+this serial number");
   }
   //----------------------------------------------------------------------------
   #[test]

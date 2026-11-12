@@ -1132,39 +1132,39 @@ mod tests{
   fn test_HamiltonianTensors_generate(){
 
     let mut config = Config::from_toml_string(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 18 
-        number_timepoints = [101]
-        tau_increments = [1e-1] 
-        cluster_method = "cce"
-        max_cluster_size = 2
-        magnetic_field = 1.2
-        replicate_unit_cell = true
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 18 
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1] 
+        cluster_expansion.method = "cce"
+        cluster_expansion.max_cluster_size = 2
+        conditions.magnetic_field = 1.2
+        structure.replicate_unit_cell = true
 
         [detected_spin]
         position = [28,29]
 
         [[groups]]
         name = "tempo_h"
-        selection.residues = ["TEM"]
-        selection.elements = ["H"]
+        include.residues = ["TEM"]
+        include.elements = ["H"]
 
         1H.c3_tunnel_splitting = 80e-3
 
         [[groups]]
         name = "tempo_o"
-        selection.residues = ["TEM"]
-        selection.elements = ["O"]
+        include.residues = ["TEM"]
+        include.elements = ["O"]
 
         [[groups]]
         name = "tempo_c"
-        selection.residues = ["TEM"]
-        selection.elements = ["C"]
+        include.residues = ["TEM"]
+        include.elements = ["C"]
 
         [[groups]]
         name = "tempo_n"
-        selection.residues = ["TEM"]
-        selection.elements = ["N"]
+        include.residues = ["TEM"]
+        include.elements = ["N"]
 
         14N.electric_quadrupole.values = [-1.12, -5.88, 7.0]
         14N.electric_quadrupole.axes.x = {to_same_molecule_as = "tempo_o"}

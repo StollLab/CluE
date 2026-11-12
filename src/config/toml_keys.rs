@@ -13,11 +13,9 @@ pub const KEY_CUTOFF_HAHN_TAYLOR_4: &str = "hahn_taylor_4";
 pub const KEY_CUTOFF_DELTA_ZEEMAN: &str = "delta_zeeman";
 
 pub const KEY_OUT_AUX_SIGS: &str = "auxiliary_signals";
-pub const KEY_OUT_CLU_SIGS: &str = "cluster_signals";
 pub const KEY_OUT_BATH: &str = "bath";
 pub const KEY_OUT_DET_SPIN: &str = "detected_spin";
 pub const KEY_OUT_CLUSTERS: &str = "clusters";
-pub const KEY_OUT_CONFIG: &str = "config";
 pub const KEY_OUT_INFO: &str = "info";
 pub const KEY_OUT_EXCHANGE_GROUPS: &str = "exchange_groups";
 pub const KEY_OUT_METHYL_PARTITIONS: &str = "methyl_partitions";
@@ -67,61 +65,23 @@ pub const KEY_ABUNDANCE_TOL: &str = "abundance_tolerance";
 pub const KEY_ISO_COSUBSTITUTE: &str = "cosubstitute";
 
 
-// Filter Keys
-pub const KEY_SELECTION: &str = "selection";
-pub const KEY_CELL_TYPE: &str = "cell_type";
+// Selection Keys
+// The group keys that select particles, and the keys of their tables.
+pub const KEY_CELLS: &str = "cells";
+pub const KEY_INCLUDE: &str = "include";
+pub const KEY_EXCLUDE: &str = "exclude";
+pub const KEY_BONDED_TO: &str = "bonded_to";
 
+pub const KEY_SELE_DISTANCE: &str = "distance";
 
-pub const KEY_SELE_INDICES: &str = "indices";
-pub const KEY_SELE_NOT_INDICES: &str = "not_indices";
-
-pub const KEY_SELE_CELL_IDS: &str = "cell_ids";
-pub const KEY_SELE_NOT_CELL_IDS: &str = "not_cell_ids";
-
+// The atom attributes, used in include, exclude, and their bonded_to tables.
 pub const KEY_SELE_CHAIN_IDS: &str = "chain_ids";
-pub const KEY_SELE_NOT_CHAIN_IDS: &str = "not_chain_ids";
-
-pub const KEY_SELE_PRIMARY_CELL: &str = "primary_cell";
-
 pub const KEY_SELE_ELEMENTS: &str = "elements";
-pub const KEY_SELE_NOT_ELEMENTS: &str = "not_elements";
-
-pub const KEY_SELE_SERIALS: &str = "serials";
-pub const KEY_SELE_NOT_SERIALS: &str = "not_serials";
-
+pub const KEY_SELE_INDICES: &str = "indices";
 pub const KEY_SELE_NAMES: &str = "names";
-pub const KEY_SELE_NOT_NAMES: &str = "not_names";
-
 pub const KEY_SELE_RESIDUES: &str = "residues";
-pub const KEY_SELE_NOT_RESIDUES: &str = "not_residues";
-
-pub const KEY_SELE_RES_SEQ_NUMS: &str = "residue_sequence_numbers";
-pub const KEY_SELE_NOT_RES_SEQ_NUMS: &str = "not_residue_sequence_numbers";
-
-pub const KEY_SELE_BONDED_INDICES: &str = "bonded_indices";
-pub const KEY_SELE_NOT_BONDED_INDICES: &str = "not_bonded_indices";
-
-pub const KEY_SELE_WITHIN_DISTANCE: &str = "within_distance";
-pub const KEY_SELE_NOT_WITHIN_DISTANCE: &str = "not_within_distance";
-
-pub const KEY_SELE_BONDED_CHAIN_IDS: &str = "bonded_chain_ids";
-pub const KEY_SELE_NOT_BONDED_CHAIN_IDS: &str = "not_bonded_chain_ids";
-
-pub const KEY_SELE_BONDED_ELEMENTS: &str = "bonded_elements";
-pub const KEY_SELE_NOT_BONDED_ELEMENTS: &str = "not_bonded_elements";
-
-pub const KEY_SELE_BONDED_SERIALS: &str = "bonded_serials";
-pub const KEY_SELE_NOT_BONDED_SERIALS: &str = "not_bonded_serials";
-
-pub const KEY_SELE_BONDED_NAMES: &str = "bonded_names";
-pub const KEY_SELE_NOT_BONDED_NAMES: &str = "not_bonded_names";
-
-pub const KEY_SELE_BONDED_RESIDUES: &str = "bonded_residues";
-pub const KEY_SELE_NOT_BONDED_RESIDUES: &str = "not_bonded_residues";
-
-pub const KEY_SELE_BONDED_RES_SEQ_NUMS: &str = "bonded_residue_sequence_numbers";
-pub const KEY_SELE_NOT_BONDED_RES_SEQ_NUMS: &str 
-    = "not_bonded_residue_sequence_numbers";
+pub const KEY_SELE_RES_NUMS: &str = "residue_numbers";
+pub const KEY_SELE_SERIALS: &str = "serials";
 
 // Isotope Key
 pub const KEY_ISO_ABUNDACE: &str = "abundance";

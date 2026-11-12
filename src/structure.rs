@@ -773,19 +773,19 @@ mod tests{
   #[test]
   fn test_build_structure(){
     let mut config = Config::from_toml_string(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 20
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 20
         detected_spin.position = [28,29]
-        number_timepoints = [101]
-        tau_increments = [1e-1]
-        cluster_method = "cce"
-        max_cluster_size = 2
-        magnetic_field = 1.2
-        replicate_unit_cell = true
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1]
+        cluster_expansion.method = "cce"
+        cluster_expansion.max_cluster_size = 2
+        conditions.magnetic_field = 1.2
+        structure.replicate_unit_cell = true
 
         [[groups]]
         name = "tempo_h"
-        selection.elements = ["H"]
+        include.elements = ["H"]
 
         1H.c3_tunnel_splitting = 80e-3
         "##).unwrap();
@@ -821,19 +821,19 @@ mod tests{
   #[test]
   fn test_writers_report_write_errors(){
     let mut config = Config::from_toml_string(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 20
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 20
         detected_spin.position = [28,29]
-        number_timepoints = [101]
-        tau_increments = [1e-1]
-        cluster_method = "cce"
-        max_cluster_size = 2
-        magnetic_field = 1.2
-        replicate_unit_cell = false
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1]
+        cluster_expansion.method = "cce"
+        cluster_expansion.max_cluster_size = 2
+        conditions.magnetic_field = 1.2
+        structure.replicate_unit_cell = false
 
         [[groups]]
         name = "tempo_h"
-        selection.elements = ["H"]
+        include.elements = ["H"]
 
         1H.c3_tunnel_splitting = 80e-3
         "##).unwrap();

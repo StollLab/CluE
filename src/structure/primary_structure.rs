@@ -239,7 +239,7 @@ impl Structure{
           _ => ("particles have", "them"),
         };
         println!("Group \"{}\": {} {} no {}, \
-so selection.{} cannot select {}.", 
+so include.{} cannot select {}.", 
             particle_config.label, n_missing, particles_have, field, key, them);
       }
     }
@@ -307,7 +307,7 @@ Molecules will not be made whole across the cell boundary.");
     // unit cell is only used here, so the particles are left in place.
     if let Err(err) = self.check_structure_fits_cell(&reciprocal_vectors){
       if config.replicate_unit_cell == Some(ReplicateUnitCell::No){
-        println!("Warning: {}. Since replicate_unit_cell = false, \
+        println!("Warning: {}. Since structure.replicate_unit_cell = false, \
 molecules will not be made whole across the cell boundary.", err);
         return Ok(());
       }
@@ -838,13 +838,13 @@ mod tests{
         r#"cosubstitute = "same_molecule""#]
     {
       let config = Config::from_toml_string(&format!(r##"
-          input_structure_file = "assets/TEMPO.pdb"
-          radius = 20
+          structure.file = "assets/TEMPO.pdb"
+          structure.radius = 20
           detected_spin.position = [28,29]
-          replicate_unit_cell = false
+          structure.replicate_unit_cell = false
           [[groups]]
           name = "h"
-          selection.elements = ["H"]
+          include.elements = ["H"]
           1H.abundance = 0.5
           2H.abundance = 0.5
           {}
@@ -900,19 +900,19 @@ mod tests{
     std::fs::write(&filename, reordered.join("\n") + "\n").unwrap();
 
     let config = Config::from_toml_string(&format!(r##"
-        input_structure_file = "{}"
-        radius = 50
+        structure.file = "{}"
+        structure.radius = 50
         detected_spin.position = [28,29]
-        replicate_unit_cell = false
+        structure.replicate_unit_cell = false
         [[groups]]
         name = "ch"
-        selection.elements = ["H"]
-        selection.bonded_elements = ["C"]
+        include.elements = ["H"]
+        include.bonded_to.elements = ["C"]
         cosubstitute = "same_molecule"
         [[groups]]
         name = "oh"
-        selection.elements = ["H"]
-        selection.bonded_elements = ["O"]
+        include.elements = ["H"]
+        include.bonded_to.elements = ["O"]
         cosubstitute = "particle"
         "##, filename.display())).unwrap();
     let mut structure = pdb::parse_pdb(filename.to_str().unwrap(),0).unwrap();
@@ -970,16 +970,16 @@ mod tests{
   {
     use crate::io::FromTOMLString;
     let config = Config::from_toml_string(&format!(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 20
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 20
         detected_spin.position = {}
-        replicate_unit_cell = false
+        structure.replicate_unit_cell = false
         [[groups]]
         name = "tempo_n"
-        selection.elements = ["N"]
+        include.elements = ["N"]
         [[groups]]
         name = "nothing"
-        selection.residues = ["XYZ"]
+        include.residues = ["XYZ"]
         {}
         "##, position, groups)).unwrap();
     let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
@@ -1079,9 +1079,9 @@ structure".to_string())));
     use crate::io::FromTOMLString;
     let origin_of = |settings: &str| -> Vector3D{
       let config = Config::from_toml_string(&format!(r##"
-          input_structure_file = "assets/TEMPO.pdb"
-          radius = 2
-          replicate_unit_cell = false
+          structure.file = "assets/TEMPO.pdb"
+          structure.radius = 2
+          structure.replicate_unit_cell = false
           {}
           "##, settings)).unwrap();
       let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();
@@ -1090,12 +1090,12 @@ structure".to_string())));
       structure.pdb_origin
     };
     let r_serials = origin_of("detected_spin.position = [28, 29]");
-    let r_nm = origin_of(r#"unit_of_distance = "nm"
+    let r_nm = origin_of(r#"units.distance = "nm"
           detected_spin.position = [3.5865, 3.6665, 3.7455]"#);
     assert!((&r_nm - &r_serials).norm() < 1e-6*ANGSTROM);
 
     // A one-point grid in nm agrees.
-    let r_grid = origin_of(r#"unit_of_distance = "nm"
+    let r_grid = origin_of(r#"units.distance = "nm"
           detected_spin.position = [[3.5865, 3.6665, 3.7455, 1.0]]"#);
     assert!((&r_grid - &r_serials).norm() < 1e-6*ANGSTROM);
   }

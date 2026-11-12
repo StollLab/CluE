@@ -238,19 +238,19 @@ MD of 2 waters, t= 0.0\n\
   fn test_write_gro_primary_cell(){
     for replicate in ["false","true"]{
       let mut config = Config::from_toml_string(&format!(r##"
-        input_structure_file = "assets/TEMPO.pdb"
-        radius = 80
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 80
+        structure.replicate_unit_cell = {}
         detected_spin.position = [28,29]
-        number_timepoints = [101]
-        tau_increments = [1e-1]
-        cluster_method = "cce"
-        max_cluster_size = 2
-        magnetic_field = 1.2
-        replicate_unit_cell = {}
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1]
+        cluster_expansion.method = "cce"
+        cluster_expansion.max_cluster_size = 2
+        conditions.magnetic_field = 1.2
 
         [[groups]]
         name = "tempo_h"
-        selection.elements = ["H"]
+        include.elements = ["H"]
         "##, replicate)).unwrap();
       config.set_defaults().unwrap();
 

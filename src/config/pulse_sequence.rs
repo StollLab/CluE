@@ -149,7 +149,8 @@ impl PulseSequence{
     match pulse_seq{
       toml::Value::String(ps) => Self::from_str(ps),
       toml::Value::Array(ps) => Self::from_toml_array(ps),  
-      other => Err(CluEError::InvalidTOMLValue("pulse_sequence".to_string(),
+      other => Err(CluEError::InvalidTOMLValue(
+            "pulse_sequence.sequence".to_string(),
             "a string or an array of steps".to_string(),
             other.type_str().to_string())),
     }
@@ -258,6 +259,7 @@ number of time steps, but got \"t\"".to_string(),
     let err = PulseSequence::from_toml_value(&toml::Value::Integer(3))
       .unwrap_err();
     assert_eq!(err.to_string(),
-        "pulse_sequence must be a string or an array of steps, but got integer");
+        "pulse_sequence.sequence must be a string or an array of steps, but \
+got integer");
   }
 }

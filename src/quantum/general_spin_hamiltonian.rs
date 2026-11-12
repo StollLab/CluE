@@ -606,13 +606,13 @@ mod tests{
   #[test]
   fn test_propagate_custom_pulse_sequence(){
     let mut config= Config::from_toml_string(r##"
-       cluster_method = "cce"
-       magnetic_field = 1.2
-       pulse_sequence = "hahn"
-       number_timepoints = [101]
-       tau_increments = [5e-2]
-       populations = "thermal"
-       temperature = 20
+       cluster_expansion.method = "cce"
+       conditions.magnetic_field = 1.2
+       pulse_sequence.sequence = "hahn"
+       pulse_sequence.number_timepoints = [101]
+       pulse_sequence.tau_increments = [5e-2]
+       cluster_expansion.populations = "thermal"
+       conditions.temperature = 20
        [detected_spin]
          transition = [0,1]
      "##).unwrap();
@@ -676,13 +676,13 @@ mod tests{
   #[test]
   fn test_propagate_pulse_sequence(){
     let mut config= Config::from_toml_string(r##"
-       cluster_method = "cce"
-       magnetic_field = 1.2
-       pulse_sequence = "hahn"
-       number_timepoints = [101]
-       tau_increments = [5e-2]
-       populations = "thermal"
-       temperature = 20
+       cluster_expansion.method = "cce"
+       conditions.magnetic_field = 1.2
+       pulse_sequence.sequence = "hahn"
+       pulse_sequence.number_timepoints = [101]
+       pulse_sequence.tau_increments = [5e-2]
+       cluster_expansion.populations = "thermal"
+       conditions.temperature = 20
        [detected_spin]
          transition = [0,1]
      "##).unwrap();
@@ -877,11 +877,11 @@ mod tests{
   #[test]
   fn test_signal_is_trace_of_rho_times_detection_operator(){
     let mut config = Config::from_toml_string(r##"
-      cluster_method = "gcce"
-      magnetic_field = 1.2
-      pulse_sequence = "fid"
-      number_timepoints = [8]
-      tau_increments = [0.125]
+      cluster_expansion.method = "gcce"
+      conditions.magnetic_field = 1.2
+      pulse_sequence.sequence = "fid"
+      pulse_sequence.number_timepoints = [8]
+      pulse_sequence.tau_increments = [0.125]
     "##).unwrap();
     config.set_tau_axis().unwrap();
 

@@ -149,13 +149,18 @@ When adding or renaming a config key:
    `src/structure/particle_filter.rs`); add a `KEY_*` constant to
    `src/config/toml_keys.rs` where the code reads the key by name.
 2. Add the key to the key list of its table in `src/config/validate.rs`
-   (`TOP_LEVEL_KEYS`, `DETECTED_SPIN_KEYS`, `GROUP_KEYS`, `SELECTION_KEYS`,
-   `ISOTOPE_KEYS`, ...) and update the array length (`[&str; N]`). Keys are
-   checked per table, so a missing entry rejects valid configs. For a new
-   table, also add a `Schema` variant, list it in `ALL_SCHEMAS` (the compiler
-   does not catch a missing entry there), and handle it in `Schema::keys`,
-   `Schema::child` (the parent table) and `Schema::description`.
-3. Handle it in `Config::set_from_config_toml` / `set_defaults` in `src/config.rs`.
+   (`TOP_LEVEL_KEYS`, `STRUCTURE_KEYS`, `CLUSTER_EXPANSION_KEYS`,
+   `GROUP_KEYS`, `INCLUDE_KEYS`, `ISOTOPE_KEYS`, ...) and update the array
+   length (`[&str; N]`). Keys are checked per table, so a missing entry
+   rejects valid configs. For a new table, also add a `Schema` variant, list
+   it in `ALL_SCHEMAS`, and handle it in `Schema::keys`, `Schema::child` (the
+   parent table) and `Schema::description`; `test_every_schema_is_reachable`
+   fails if the table is not reachable. When renaming, moving, or removing a
+   key, add the old key to `MOVED_TOP_LEVEL_KEYS` or `REMOVED_KEYS` so that
+   old input files get a hint.
+3. Handle it in `Config::set_from_config_toml` (or the function for its
+   table, such as `set_from_cluster_expansion_toml`) / `set_defaults` in
+   `src/config.rs`.
 4. If a run cannot work without the setting, or it requires or conflicts with
    other settings, report that in `Config::check_completeness`
    (`src/config/validate.rs`), which runs at the start of `clue_oxide::run`

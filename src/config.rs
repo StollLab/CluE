@@ -67,6 +67,11 @@ pub const SAVE_FILE_SANS_SPIN_SIGNALS: &str = "sans_spin_signals";
 pub const SAVE_FILE_STRUCTURE_PDB: &str = "structure_pdb";
 pub const SAVE_FILE_TENSORS: &str = "tensors";
 
+// The paths of input keys that are named in error messages.
+const PATH_PARTITION_TABLE: &str 
+  = "cluster_expansion.clustering.partition_table";
+const PATH_REPLICATE_UNIT_CELL: &str = "structure.replicate_unit_cell";
+
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// Config contains all the setting for CluE.
 #[derive(Debug,Clone,Default)]
@@ -85,7 +90,6 @@ pub struct Config{
   pub detected_spin_transition: Option<[usize;2]>,
   pub detection_operator: Option<DetectionOp>,
   pub detected_spin_zerofield_coupling: Option<TensorSpecifier>,
-  pub detected_spin_quadrupole_coupling: Option<TensorSpecifier>,
   pub mean_fields: Option<bool>,
   pub pulses: HashMap::<String,CxMat>,
 
@@ -117,8 +121,6 @@ pub struct Config{
   pub cluster_method: Option<ClusterMethod>,
   pub ensemble_cce: Option<bool>,
   pub connect_exchange_groups: Option<bool>,
-  pub min_cell_size: Option<usize>,
-  pub max_cell_size: Option<usize>,
   pub max_cluster_size: Option<usize>,
   pub max_spins: Option<usize>,
   pub kmeans_iter_cap: Option<usize>,
@@ -147,8 +149,6 @@ pub struct Config{
   pub write_auxiliary_signals: Option<bool>, 
   pub write_bath: Option<bool>,
   pub write_clusters: Option<bool>,
-  pub write_cluster_signals: Option<bool>, 
-  pub write_config: Option<bool>,
   pub write_detected_spin: Option<bool>,
   pub write_info: Option<bool>,
   pub write_exchange_groups: Option<bool>,
@@ -925,7 +925,7 @@ impl ReplicateUnitCell{
         else { Ok(Self::No)  }
       },
       other => Err(CluEError::InvalidTOMLValue(
-            "replicate_unit_cell".to_string(),
+            PATH_REPLICATE_UNIT_CELL.to_string(),
             "true, false, or [n1, n2, n3]".to_string(),
             other.to_string())),
     }
@@ -935,11 +935,13 @@ impl ReplicateUnitCell{
   {
 
     if array.is_empty(){
-      return Err(CluEError::InvalidTOMLValue("replicate_unit_cell".to_string(),
+      return Err(CluEError::InvalidTOMLValue(
+            PATH_REPLICATE_UNIT_CELL.to_string(),
             "a non-empty array".to_string(), "an empty array".to_string()));
     }
     if !are_all_same_type(&array){
-      return Err(CluEError::InvalidTOMLValue("replicate_unit_cell".to_string(),
+      return Err(CluEError::InvalidTOMLValue(
+            PATH_REPLICATE_UNIT_CELL.to_string(),
             "an array whose elements have the same type".to_string(),
             "an array of mixed types".to_string()));
     }
@@ -952,7 +954,7 @@ impl ReplicateUnitCell{
 0 <= n <= 2147483647";
         if array.len() != 3{
           return Err(CluEError::InvalidTOMLValue(
-                "replicate_unit_cell".to_string(), expected.to_string(),
+                PATH_REPLICATE_UNIT_CELL.to_string(), expected.to_string(),
                 format!("an array of length {}", array.len())));
         }
         let mut nc = [0_usize;3];
@@ -962,7 +964,7 @@ impl ReplicateUnitCell{
             .and_then(|n| usize::try_from(n).ok())
           else{
             return Err(CluEError::InvalidTOMLValue(
-                  format!("replicate_unit_cell[{}]",ii),
+                  format!("{}[{}]",PATH_REPLICATE_UNIT_CELL,ii),
                   "an integer 0 <= n <= 2147483647".to_string(),
                   v.to_string()));
           };
@@ -972,7 +974,7 @@ impl ReplicateUnitCell{
         Ok(Self::Specified(nc))
       },
       _ => Err(CluEError::InvalidTOMLValue(
-            "replicate_unit_cell".to_string(),
+            PATH_REPLICATE_UNIT_CELL.to_string(),
             "true, false, or [n1, n2, n3]".to_string(),
             format!("an array of {}", array[0].type_str()))),
     }
@@ -1018,7 +1020,7 @@ impl PartitionTableConfig{
     match value{
       Value::Array(array) => Self::from_toml_array(array),
       Value::String(s) => Ok(Self::CSV(s.to_string())),
-      other => Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+      other => Err(CluEError::InvalidTOMLValue(PATH_PARTITION_TABLE.to_string(),
             "a csv file name or an array [index0, block0, index1, block1, ...] \
 of integers".to_string(), other.type_str().to_string())),
     }
@@ -1028,18 +1030,19 @@ of integers".to_string(), other.type_str().to_string())),
   {
 
     if array.is_empty(){
-      return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+      return Err(CluEError::InvalidTOMLValue(PATH_PARTITION_TABLE.to_string(),
             "a non-empty array".to_string(), "an empty array".to_string()));
     }
     if !are_all_same_type(&array){
-      return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+      return Err(CluEError::InvalidTOMLValue(PATH_PARTITION_TABLE.to_string(),
             "an array whose elements have the same type".to_string(),
             "an array of mixed types".to_string()));
     }
     match array[0]{
       Value::Integer(_) => {
         if array.len() % 2 != 0{
-          return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+          return Err(CluEError::InvalidTOMLValue(
+                PATH_PARTITION_TABLE.to_string(),
                 "a csv file name or an array [index0, block0, index1, block1, ...] \
 of integers".to_string(),
                 format!("an array of length {}", array.len())));
@@ -1048,7 +1051,8 @@ of integers".to_string(),
         for ii in 0..array.len()/2{
           let (Some(idx),Some(blk)) = (array[2*ii].as_integer(),
               array[2*ii + 1].as_integer()) else{
-            return Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+            return Err(CluEError::InvalidTOMLValue(
+                  PATH_PARTITION_TABLE.to_string(),
                   "a csv file name or an array [index0, block0, index1, block1, ...] \
 of integers".to_string(),
                   format!("the pair [{}, {}]", array[2*ii], array[2*ii + 1])));
@@ -1058,7 +1062,8 @@ of integers".to_string(),
           let (Ok(idx),Ok(blk)) = (usize::try_from(idx),usize::try_from(blk))
           else{
             return Err(CluEError::InvalidTOMLValue(
-                  format!("partition_table[{}..={}]", 2*ii, 2*ii + 1),
+                  format!("{}[{}..={}]", PATH_PARTITION_TABLE, 2*ii, 
+                    2*ii + 1),
                   "a pair [index, block] of non-negative integers".to_string(),
                   format!("[{}, {}]", idx, blk)));
           };
@@ -1067,7 +1072,7 @@ of integers".to_string(),
 
         Ok(Self::IndexBlockList(p_table))
       },
-      _ => Err(CluEError::InvalidTOMLValue("partition_table".to_string(),
+      _ => Err(CluEError::InvalidTOMLValue(PATH_PARTITION_TABLE.to_string(),
             "a csv file name or an array [index0, block0, index1, block1, ...] \
 of integers".to_string(),
             format!("an array of {}", array[0].type_str()))),
@@ -1219,169 +1224,41 @@ impl Config{
   /// the corresponding field in the `Config` will be overwriten,
   /// but the `None`-valued fields in the `ConfigTOML` will not alter the
   /// `Config`.
-  pub fn set_from_config_toml(&mut self, mut config_toml: ConfigTOML) 
+  pub fn set_from_config_toml(&mut self, config_toml: ConfigTOML) 
     -> Result<(),CluEError>
   {
     // Get units. 
-    let unit_of_distance = match &config_toml.unit_of_distance{
+    let units = config_toml.units.unwrap_or_default();
+    let unit_of_distance = match &units.distance{
       Some(u) => distance_unit_to_meters(u)?,
       None => return Err(CluEError::NoUnitOfDistance),
     }; 
-    let unit_of_energy = match &config_toml.unit_of_energy {
+    let unit_of_energy = match &units.energy {
       Some(u) => energy_unit_to_hertz(u)?,
       None => return Err(CluEError::NoUnitOfEnergy),
     }; 
-    let unit_of_magnetic_field = match &config_toml.unit_of_magnetic_field{
+    let unit_of_magnetic_field = match &units.magnetic_field{
       Some(u) => magnetic_field_unit_to_tesla(u)?,
       None => return Err(CluEError::NoUnitOfMagneticField),
     }; 
-    let unit_of_time = match &config_toml.unit_of_time {
+    let unit_of_time = match &units.time {
       Some(u) => time_unit_to_seconds(u)?,
       None => return Err(CluEError::NoUnitOfTime),
     };
     self.unit_of_time_to_seconds = Some(unit_of_time);
- 
 
-    // A--C
-    if let Some(clash_distance) = config_toml.clash_distance{
-      self.clash_distance = Some(clash_distance*unit_of_distance);
+    // [structure]
+    if let Some(structure) = config_toml.structure{
+      self.set_from_structure_toml(structure, unit_of_distance)?;
     }
 
-    if let Some(clash_distance_pbc) = config_toml.clash_distance_pbc{
-      self.clash_distance_pbc = Some(clash_distance_pbc*unit_of_distance);
+    // [detected_spin]
+    if let Some(detected_spin) = config_toml.detected_spin{
+      self.set_from_detected_spin_toml(detected_spin, unit_of_distance,
+          unit_of_energy)?;
     }
 
-    if config_toml.cluster_batch_size.is_some(){
-      self.cluster_batch_size = config_toml.cluster_batch_size;
-    }
-
-    if config_toml.connect_exchange_groups.is_some(){
-      self.connect_exchange_groups = config_toml.connect_exchange_groups;
-    }
-
-
-    if let Some(clu_src) = config_toml.cluster_source{
-      if clu_src.ends_with(".toml") || clu_src.ends_with(".txt"){
-        self.cluster_source = Some(ClusterSource::File(clu_src.to_string()));
-      }else {
-        self.cluster_source 
-          = Some(ClusterSource::OrientationsDir(clu_src.to_string()));
-      }
-    }
-
-    if let Some(method_str) = &config_toml.cluster_method{
-      let cluster_method = ClusterMethod::from(method_str)?;
-      self.cluster_method = Some(cluster_method);
-    }
-
-    // D
-    if let Some(mut detected_spin) = config_toml.detected_spin{
-
-      if let Some(frame) = detected_spin.frame{
-        match frame.as_str(){
-          KEY_DET_FRAME_EIGEN 
-              => self.detected_spin_frame = Some(DetFrame::Eigen),
-          KEY_DET_FRAME_ZEEMAN 
-              => self.detected_spin_frame = Some(DetFrame::Zeeman),
-          _ => return Err(CluEError::InvalidDetectionFrame(frame.to_string())),
-        }
-      }
-      if let Some(toml_value) = detected_spin.g_matrix{
-        self.detected_spin_g_matrix 
-          = Some(TensorSpecifier::from_toml_value(toml_value,1.0,
-                "detected_spin.g_matrix")?);
-      }
-      
-      if let Some(toml_value) = detected_spin.electric_quadrupole{
-        self.detected_spin_quadrupole_coupling 
-          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy,
-                "detected_spin.electric_quadrupole")?);
-      }
-      
-      if let Some(toml_value) = detected_spin.zerofield{
-        self.detected_spin_zerofield_coupling 
-          = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy,
-                "detected_spin.zerofield")?);
-      }
-      
-      if let Some(spin_id) = &detected_spin.identity{                          
-        self.detected_spin_identity =  Some(Isotope::from(spin_id)?);
-      }
-      if let Some(spin_mult) = detected_spin.multiplicity{
-        self.detected_spin_multiplicity = Some(spin_mult);
-      }
-
-      if let Some(toml_value) = detected_spin.position{
-        self.detected_spin_position 
-          = Some(DetectedSpinCoordinates::from_toml_value(
-                toml_value,unit_of_distance)? );
-      }
-
-      if detected_spin.weight_tolerance.is_some(){
-        self.detected_spin_weight_tolerance = detected_spin.weight_tolerance;
-      }
-
-      if detected_spin.transition.is_some(){
-        mem::swap(
-            &mut self.detected_spin_transition, 
-            &mut detected_spin.transition);
-      }
-      if let Some(det_op) = detected_spin.detection_operator{
-        match det_op{
-          toml::Value::Array(array) => {
-
-            if let toml::Value::Integer(_) = array[0]{
-              if array.len() != 2{
-                return Err(CluEError::InvalidTOMLValue(
-                      "detected_spin.detection_operator".to_string(),
-                      "a transition [i, j] of two integers".to_string(),
-                      format!("an array of length {}", array.len())));
-              }
-              let transition = vec_usize_from_toml_array(array)?;
-              self.detection_operator = Some(
-                  DetectionOp::Transition(transition[0],transition[1]));
-            }
-            else{    
-              let op = cxmat_from_toml_array(array.clone())?;
-              self.detection_operator = Some(DetectionOp::Matrix(op));
-            }
-          },
-          toml::Value::String(s) => {
-            let sop = SpinOp::from_str(&s)?;
-            self.detection_operator = Some(DetectionOp::S(sop));
-          },
-          other => return Err(CluEError::InvalidTOMLValue(
-                "detected_spin.detection_operator".to_string(),
-                "a transition [i, j], a matrix, or a spin operator name"
-                .to_string(), other.type_str().to_string())),
-        }
-      }
-      if let Some(rho) = detected_spin.density_matrix{
-        match rho{
-          toml::Value::Array(array) => {
-            let op = cxmat_from_toml_array(array.clone())?;
-            self.detected_population = Some(DetectedPopulation::Matrix(op));
-          },
-          toml::Value::String(s) => {
-            if s == KEY_DENSITY_MATRIX_THERMAL{
-               self.detected_population = Some(DetectedPopulation::Thermal);
-            }else{
-              let sop = SpinOp::from_str(&s)?;
-              self.detected_population = Some(DetectedPopulation::S(sop));
-            }
-          },
-          other => return Err(CluEError::InvalidTOMLValue(
-                "detected_spin.density_matrix".to_string(),
-                format!("a matrix, \"{}\", or a spin operator name",
-                  KEY_DENSITY_MATRIX_THERMAL), other.type_str().to_string())),
-        }
-      }
-    
-    }
-    //E--G
-    if config_toml.ensemble_cce.is_some(){
-      self.ensemble_cce = config_toml.ensemble_cce;
-    }
+    // [[groups]]
     if let Some(groups) = config_toml.groups{
       for value in groups.iter(){
         let Some(group) = value.as_table() else{
@@ -1392,47 +1269,379 @@ impl Config{
         set_particle_configs_from_toml_table(&mut self.particles,
             group.clone(),unit_of_distance,unit_of_energy)?;
       }
+      // A group without include or exclude selects no atoms, so its
+      // settings would be ignored without notice. Entries with the same
+      // name are merged by now, so one of them having a selection suffices.
+      for particle_config in self.particles.iter(){
+        if particle_config.filter.is_none(){
+          return Err(CluEError::GroupHasNoSelection(
+                particle_config.label.to_string()));
+        }
+      }
     }
 
-    //I
-    if config_toml.input_structure_file.is_some(){
-      self.input_structure_file = config_toml.input_structure_file;
+    // [conditions]
+    if let Some(conditions) = config_toml.conditions{
+      if let Some(bz) = conditions.magnetic_field{
+        let mag_field = Vector3D::from([0.0,0.0,bz*unit_of_magnetic_field]);
+        self.magnetic_field = Some(mag_field);
+      }
+      if conditions.temperature.is_some(){
+        self.temperature = conditions.temperature;
+      }
     }
 
-
-    // J--M
-    if let Some(bz) = config_toml.magnetic_field{
-     let mag_field = Vector3D::from([0.0,0.0,bz*unit_of_magnetic_field]);
-     self.magnetic_field = Some(mag_field);
+    // [orientations]
+    if let Some(ori_toml) = config_toml.orientations{
+      if ori_toml.weight_tolerance.is_some(){
+        self.orientation_weight_tolerance = ori_toml.weight_tolerance;
+      }
+      self.orientation_grid 
+          = Some(OrientationAveraging::from_orientations_toml(ori_toml)?); 
     }
 
-    if config_toml.max_cell_size.is_some(){
-      self.max_cell_size = config_toml.max_cell_size;
+    // [pulse_sequence]
+    if let Some(pulse_sequence) = config_toml.pulse_sequence{
+      self.set_from_pulse_sequence_toml(pulse_sequence, unit_of_time)?;
     }
 
-    if config_toml.mean_fields.is_some(){
-      self.mean_fields = config_toml.mean_fields;
+    // [cluster_expansion]
+    if let Some(cluster_expansion) = config_toml.cluster_expansion{
+      self.set_from_cluster_expansion_toml(cluster_expansion, 
+          unit_of_distance, unit_of_energy)?;
     }
 
-    if config_toml.max_cluster_size.is_some(){
-      self.max_cluster_size = config_toml.max_cluster_size;
+    // [run]
+    if let Some(run) = config_toml.run{
+      if run.rng_seed.is_some(){
+        self.rng_seed = run.rng_seed;
+      }
+      if run.number_runs.is_some(){
+        self.number_runs = run.number_runs;
+      }
+      if let Some(b) = run.parallel{
+        self.run_in_parallel = Some(b);
+      }
+      if run.cluster_batch_size.is_some(){
+        self.cluster_batch_size = run.cluster_batch_size;
+      }
     }
 
-    if config_toml.max_spins.is_some(){
-      self.max_spins = config_toml.max_spins;
+    // [output]
+    if let Some(output) = config_toml.output{
+      self.set_from_output_toml(output);
     }
 
-    if config_toml.max_spherical_tensor_rank.is_some(){
-      self.max_spherical_tensor_rank = config_toml.max_spherical_tensor_rank;
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function sets the fields read from the [structure] table.
+  fn set_from_structure_toml(&mut self, structure: StructureTOML,
+      unit_of_distance: f64) -> Result<(),CluEError>
+  {
+    if structure.file.is_some(){
+      self.input_structure_file = structure.file;
     }
 
-    if config_toml.min_cell_size.is_some(){
-      self.min_cell_size = config_toml.min_cell_size;   
+    if structure.pdb_model_index.is_some(){
+      self.pdb_model_index = structure.pdb_model_index;
     }
 
+    if let Some(radius) = structure.radius{
+      self.radius = Some(radius*unit_of_distance);
+    }
 
-    // N
-    if let Some(pair_cutoffs) = &config_toml.pair_cutoffs{
+    if let Some(pbc) = structure.replicate_unit_cell{
+      self.replicate_unit_cell = Some(ReplicateUnitCell::from_toml_value(pbc)?);
+    }
+
+    if let Some(clash_distance) = structure.clash_distance{
+      self.clash_distance = Some(clash_distance*unit_of_distance);
+    }
+
+    if let Some(clash_distance_pbc) = structure.clash_distance_pbc{
+      self.clash_distance_pbc = Some(clash_distance_pbc*unit_of_distance);
+    }
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function sets the fields read from the [detected_spin] table.
+  fn set_from_detected_spin_toml(&mut self, 
+      mut detected_spin: DetectedSpinTOML,
+      unit_of_distance: f64, unit_of_energy: f64) -> Result<(),CluEError>
+  {
+    if let Some(frame) = detected_spin.frame{
+      match frame.as_str(){
+        KEY_DET_FRAME_EIGEN 
+            => self.detected_spin_frame = Some(DetFrame::Eigen),
+        KEY_DET_FRAME_ZEEMAN 
+            => self.detected_spin_frame = Some(DetFrame::Zeeman),
+        _ => return Err(CluEError::InvalidDetectionFrame(frame.to_string())),
+      }
+    }
+    if let Some(toml_value) = detected_spin.g_matrix{
+      self.detected_spin_g_matrix 
+        = Some(TensorSpecifier::from_toml_value(toml_value,1.0,
+              "detected_spin.g_matrix")?);
+    }
+    
+    if let Some(toml_value) = detected_spin.zerofield{
+      self.detected_spin_zerofield_coupling 
+        = Some(TensorSpecifier::from_toml_value(toml_value,unit_of_energy,
+              "detected_spin.zerofield")?);
+    }
+    
+    if let Some(spin_id) = &detected_spin.identity{                          
+      self.detected_spin_identity =  Some(Isotope::from(spin_id)?);
+    }
+    if let Some(spin_mult) = detected_spin.multiplicity{
+      self.detected_spin_multiplicity = Some(spin_mult);
+    }
+
+    if let Some(toml_value) = detected_spin.position{
+      self.detected_spin_position 
+        = Some(DetectedSpinCoordinates::from_toml_value(
+              toml_value,unit_of_distance)? );
+    }
+
+    if detected_spin.weight_tolerance.is_some(){
+      self.detected_spin_weight_tolerance = detected_spin.weight_tolerance;
+    }
+
+    if detected_spin.transition.is_some(){
+      mem::swap(
+          &mut self.detected_spin_transition, 
+          &mut detected_spin.transition);
+    }
+    if let Some(det_op) = detected_spin.detection_operator{
+      match det_op{
+        toml::Value::Array(array) => {
+
+          if let toml::Value::Integer(_) = array[0]{
+            if array.len() != 2{
+              return Err(CluEError::InvalidTOMLValue(
+                    "detected_spin.detection_operator".to_string(),
+                    "a transition [i, j] of two integers".to_string(),
+                    format!("an array of length {}", array.len())));
+            }
+            let transition = vec_usize_from_toml_array(array)?;
+            self.detection_operator = Some(
+                DetectionOp::Transition(transition[0],transition[1]));
+          }
+          else{    
+            let op = cxmat_from_toml_array(array.clone())?;
+            self.detection_operator = Some(DetectionOp::Matrix(op));
+          }
+        },
+        toml::Value::String(s) => {
+          let sop = SpinOp::from_str(&s)?;
+          self.detection_operator = Some(DetectionOp::S(sop));
+        },
+        other => return Err(CluEError::InvalidTOMLValue(
+              "detected_spin.detection_operator".to_string(),
+              "a transition [i, j], a matrix, or a spin operator name"
+              .to_string(), other.type_str().to_string())),
+      }
+    }
+    if let Some(rho) = detected_spin.density_matrix{
+      match rho{
+        toml::Value::Array(array) => {
+          let op = cxmat_from_toml_array(array.clone())?;
+          self.detected_population = Some(DetectedPopulation::Matrix(op));
+        },
+        toml::Value::String(s) => {
+          if s == KEY_DENSITY_MATRIX_THERMAL{
+             self.detected_population = Some(DetectedPopulation::Thermal);
+          }else{
+            let sop = SpinOp::from_str(&s)?;
+            self.detected_population = Some(DetectedPopulation::S(sop));
+          }
+        },
+        other => return Err(CluEError::InvalidTOMLValue(
+              "detected_spin.density_matrix".to_string(),
+              format!("a matrix, \"{}\", or a spin operator name",
+                KEY_DENSITY_MATRIX_THERMAL), other.type_str().to_string())),
+      }
+    }
+
+    // The rank limit also applies to the bath spins
+    // (`build_spin_hamiltonian()`, `ClusterSpinOperators::new()`).
+    if detected_spin.max_spherical_tensor_rank.is_some(){
+      self.max_spherical_tensor_rank = detected_spin.max_spherical_tensor_rank;
+    }
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function sets the fields read from the [pulse_sequence] table.
+  // `unit_of_time` converts the input time unit to seconds.
+  fn set_from_pulse_sequence_toml(&mut self, 
+      mut pulse_sequence: PulseSequenceTOML, unit_of_time: f64) 
+    -> Result<(),CluEError>
+  {
+    if let Some(pulse_seq) = &pulse_sequence.sequence{
+      self.pulse_sequence = Some(PulseSequence::from_toml_value(pulse_seq)?);
+    }
+
+    if let Some(number_timepoints) = &mut pulse_sequence.number_timepoints{
+      mem::swap(&mut self.number_timepoints, number_timepoints);
+    }
+    if let Some(number_timepoints2) = &mut pulse_sequence.number_timepoints2{
+      mem::swap(&mut self.number_timepoints2, number_timepoints2);
+    }
+
+    if let Some(tau_increments) = &mut pulse_sequence.tau_increments{ 
+      for t in tau_increments.iter_mut(){
+        *t *= unit_of_time;
+      }
+      mem::swap(&mut self.tau_increments, tau_increments);
+    }
+    if let Some(tau2_increments) = &mut pulse_sequence.tau2_increments{ 
+      for t in tau2_increments.iter_mut(){
+        *t *= unit_of_time;
+      }
+      mem::swap(&mut self.tau2_increments, tau2_increments);
+    }
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function sets the fields read from the [cluster_expansion] table
+  // and its subtables.
+  fn set_from_cluster_expansion_toml(&mut self, 
+      cluster_expansion: ClusterExpansionTOML,
+      unit_of_distance: f64, unit_of_energy: f64) -> Result<(),CluEError>
+  {
+    if let Some(method_str) = &cluster_expansion.method{
+      let cluster_method = ClusterMethod::from(method_str)?;
+      self.cluster_method = Some(cluster_method);
+    }
+
+    if cluster_expansion.max_cluster_size.is_some(){
+      self.max_cluster_size = cluster_expansion.max_cluster_size;
+    }
+
+    if cluster_expansion.ensemble.is_some(){
+      self.ensemble_cce = cluster_expansion.ensemble;
+    }
+
+    // An unknown value is ignored, and the default is used.
+    if cluster_expansion.populations 
+        == Some(KEY_DENSITY_MATRIX_THERMAL.to_string())
+    {
+      self.cluster_populations = Some(ClusterPopulations::Thermal);
+    }else if cluster_expansion.populations 
+        == Some(KEY_DENSITY_MATRIX_ID.to_string())
+    {
+      self.cluster_populations = Some(ClusterPopulations::Uniform);
+    }else if cluster_expansion.populations 
+        == Some(KEY_DENSITY_MATRIX_RANDOM.to_string())
+    {
+      self.cluster_populations = Some(ClusterPopulations::Random);
+    }else if cluster_expansion.populations 
+        == Some(KEY_DENSITY_MATRIX_ZEEMAN.to_string())
+    {
+      self.cluster_populations = Some(ClusterPopulations::Zeeman);
+    }
+
+    if cluster_expansion.mean_fields.is_some(){
+      self.mean_fields = cluster_expansion.mean_fields;
+    }
+
+    if cluster_expansion.thermalize_cluster_populations.is_some(){
+      self.thermalize_cluster_populations 
+          = cluster_expansion.thermalize_cluster_populations;
+    } 
+
+    if let Some(clustering) = cluster_expansion.clustering{
+      self.set_from_clustering_toml(clustering, unit_of_distance, 
+          unit_of_energy)?;
+    }
+
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function sets the fields read from the 
+  // [cluster_expansion.clustering] table and its pair_cutoffs table.
+  fn set_from_clustering_toml(&mut self, clustering: ClusteringTOML,
+      unit_of_distance: f64, unit_of_energy: f64) -> Result<(),CluEError>
+  {
+    // A path ending in .toml or .txt is a cluster file; anything else is a
+    // directory with one cluster file per orientation.
+    if let Some(clu_src) = clustering.file{
+      if clu_src.ends_with(".toml") || clu_src.ends_with(".txt"){
+        self.cluster_source = Some(ClusterSource::File(clu_src.to_string()));
+      }else {
+        self.cluster_source 
+          = Some(ClusterSource::OrientationsDir(clu_src.to_string()));
+      }
+    }
+
+    if clustering.max_spins.is_some(){
+      self.max_spins = clustering.max_spins;
+    }
+
+    if clustering.partitioning 
+        == Some(KEY_PARTITION_PARTICLE.to_string())
+    {
+      self.partitioning = Some(PartitioningMethod::Particles);
+
+    }
+    else if clustering.partitioning 
+        == Some(KEY_PARTITION_EX_GROUPS.to_string())
+    {
+      self.partitioning 
+          = Some(PartitioningMethod::ExchangeGroupsAndParticles);
+
+    }
+    else if clustering.partitioning
+        == Some(KEY_PARTITION_KMEANS.to_string())
+    { 
+      let Some(kmeans_size) = clustering.kmeans_size else{
+        return Err(CluEError::NoKMeansSize);
+      };
+      if kmeans_size < 1{
+        return Err(CluEError::InvalidKMeansSize);
+      }    
+      self.partitioning 
+          = Some(PartitioningMethod::KMeans(kmeans_size));
+    
+    }
+    else if clustering.partitioning 
+        == Some(KEY_PARTITION_RESTRICTED_KMEANS.to_string())
+    {
+      let Some(kmeans_size) = clustering.kmeans_size else{
+        return Err(CluEError::NoKMeansSize);
+      };
+      if kmeans_size < 1{
+        return Err(CluEError::InvalidKMeansSize);
+      }    
+      self.partitioning 
+          = Some(PartitioningMethod::RestrictedKMeans(kmeans_size));
+    }
+    else if let Some(s) = clustering.partitioning
+    {
+      return Err(CluEError::CannotParsePartitioningMethod(s.to_string()));
+    }
+
+    if let Some(kmeans_iter_cap) = clustering.kmeans_iter_cap{
+      if kmeans_iter_cap < 1{
+        return Err(CluEError::InvalidKMeansIterCap);
+      }
+      self.kmeans_iter_cap = Some(kmeans_iter_cap);
+    }
+
+    if let Some(p_table) = clustering.partition_table{
+      self.partition_table 
+          = Some(PartitionTableConfig::from_toml_value(p_table)?); 
+    }
+
+    if clustering.connect_exchange_groups.is_some(){
+      self.connect_exchange_groups = clustering.connect_exchange_groups;
+    }
+
+    if let Some(pair_cutoffs) = &clustering.pair_cutoffs{
       if let Some(&cutoff) = pair_cutoffs.get(KEY_CUTOFF_COUPLING){ 
         self.neighbor_cutoff_coupling_xx_yy = Some(cutoff*unit_of_energy);
       }
@@ -1464,208 +1673,40 @@ impl Config{
       if let Some(&cutoff) = pair_cutoffs.get(KEY_CUTOFF_DELTA_ZEEMAN){ 
         self.neighbor_cutoff_delta_zeeman = Some(cutoff)
       }
-
-    }
-
-    if config_toml.number_runs.is_some(){
-      self.number_runs = config_toml.number_runs;
-    }
-
-    if let Some(number_timepoints) = &mut config_toml.number_timepoints{
-      mem::swap(&mut self.number_timepoints, number_timepoints);
-    }
-    if let Some(number_timepoints2) = &mut config_toml.number_timepoints2{
-      mem::swap(&mut self.number_timepoints2, number_timepoints2);
-    }
-
-    // O
-    if let Some(ori_toml) = config_toml.orientations{
-      if ori_toml.weight_tolerance.is_some(){
-        self.orientation_weight_tolerance = ori_toml.weight_tolerance;
-      }
-      self.orientation_grid 
-          = Some(OrientationAveraging::from_orientations_toml(ori_toml)?); 
-    }
-
-    // P--Q
-    if config_toml.partitioning 
-        == Some(KEY_PARTITION_PARTICLE.to_string())
-    {
-      self.partitioning = Some(PartitioningMethod::Particles);
-
-    }
-    else if config_toml.partitioning 
-        == Some(KEY_PARTITION_EX_GROUPS.to_string())
-    {
-      self.partitioning 
-          = Some(PartitioningMethod::ExchangeGroupsAndParticles);
-
-    }
-    else if config_toml.partitioning
-        == Some(KEY_PARTITION_KMEANS.to_string())
-    { 
-      let Some(kmeans_size) = config_toml.kmeans_size else{
-        return Err(CluEError::NoKMeansSize);
-      };
-      if kmeans_size < 1{
-        return Err(CluEError::InvalidKMeansSize);
-      }    
-      self.partitioning 
-          = Some(PartitioningMethod::KMeans(kmeans_size));
-    
-    }
-    else if config_toml.partitioning 
-        == Some(KEY_PARTITION_RESTRICTED_KMEANS.to_string())
-    {
-      let Some(kmeans_size) = config_toml.kmeans_size else{
-        return Err(CluEError::NoKMeansSize);
-      };
-      if kmeans_size < 1{
-        return Err(CluEError::InvalidKMeansSize);
-      }    
-      self.partitioning 
-          = Some(PartitioningMethod::RestrictedKMeans(kmeans_size));
-    }
-    else if let Some(s) = config_toml.partitioning
-    {
-      return Err(CluEError::CannotParsePartitioningMethod(s.to_string()));
-    }
-
-    if let Some(kmeans_iter_cap) = config_toml.kmeans_iter_cap{
-      if kmeans_iter_cap < 1{
-        return Err(CluEError::InvalidKMeansIterCap);
-      }
-      self.kmeans_iter_cap = Some(kmeans_iter_cap);
-    }
-
-    if let Some(p_table) = config_toml.partition_table{
-      self.partition_table 
-          = Some(PartitionTableConfig::from_toml_value(p_table)?); 
-    }
-
-    if config_toml.pdb_model_index.is_some(){
-      self.pdb_model_index = config_toml.pdb_model_index;
-    }
-    if let Some(pulse_seq) = &config_toml.pulse_sequence{
-      self.pulse_sequence = Some(PulseSequence::from_toml_value(pulse_seq)?);
-    }
-
-    // R--S
-    if let Some(radius) = config_toml.radius{
-      self.radius = Some(radius*unit_of_distance);
-    }
-    if let Some(b) = config_toml.run_in_parallel{
-      self.run_in_parallel = Some(b);
-    }
-
-    if let Some(pbc) = config_toml.replicate_unit_cell{
-      self.replicate_unit_cell = Some(ReplicateUnitCell::from_toml_value(pbc)?);
-    }
-
-    if config_toml.rng_seed.is_some(){
-      self.rng_seed = config_toml.rng_seed;
-    }
-
-    if config_toml.output_directory.is_some(){
-      mem::swap(&mut self.output_directory, &mut config_toml.output_directory);
-    }
-
-    if config_toml.run_name.is_some(){
-      mem::swap(&mut self.run_name, &mut config_toml.run_name);
-    }
-
-    // T--V
-    if config_toml.temperature.is_some(){
-      self.temperature = config_toml.temperature;
-    }
-
-    if config_toml.populations 
-        == Some(KEY_DENSITY_MATRIX_THERMAL.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Thermal);
-    }else if config_toml.populations 
-        == Some(KEY_DENSITY_MATRIX_ID.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Uniform);
-    }else if config_toml.populations 
-        == Some(KEY_DENSITY_MATRIX_RANDOM.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Random);
-    }else if config_toml.populations 
-        == Some(KEY_DENSITY_MATRIX_ZEEMAN.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Zeeman);
-    }
-
-
-    if let Some(tau_increments) = &mut config_toml.tau_increments{ 
-      for t in tau_increments.iter_mut(){
-        *t *= unit_of_time;
-      }
-      mem::swap(&mut self.tau_increments, tau_increments);
-    }
-    if let Some(tau2_increments) = &mut config_toml.tau2_increments{ 
-      for t in tau2_increments.iter_mut(){
-        *t *= unit_of_time;
-      }
-      mem::swap(&mut self.tau2_increments, tau2_increments);
-    }
-    
-    if config_toml.thermalize_cluster_populations.is_some(){
-      self.thermalize_cluster_populations 
-          = config_toml.thermalize_cluster_populations;
-    } 
-
-    // W--Z
-    if let Some(output) = config_toml.output{
-      if let Some(&b) = output.get(KEY_OUT_AUX_SIGS){ 
-        self.write_auxiliary_signals = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_BATH){ 
-        self.write_bath = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_CLU_SIGS){ 
-        self.write_cluster_signals = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_DET_SPIN){ 
-        self.write_detected_spin = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_CLUSTERS){ 
-        self.write_clusters = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_CONFIG){ 
-        self.write_config = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_INFO){ 
-        self.write_info = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_EXCHANGE_GROUPS){ 
-        self.write_exchange_groups = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_METHYL_PARTITIONS){ 
-        self.write_methyl_partitions = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_ORI_GRID){ 
-        self.write_orientation_grid = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_ORI_SIGS){ 
-        self.write_orientation_signals = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_PART_TAB){ 
-        self.write_partition_table = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_SANS_SPIN_SIGS){ 
-        self.write_sans_spin_signals = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_STRUC_PDB){ 
-        self.write_structure_pdb = Some(b);
-      }
-      if let Some(&b) = output.get(KEY_OUT_TENSORS){ 
-        self.write_tensors = Some(b);
-      }
     }
 
     Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function sets the fields read from the [output] table.
+  fn set_from_output_toml(&mut self, mut output: OutputTOML){
+    if output.directory.is_some(){
+      mem::swap(&mut self.output_directory, &mut output.directory);
+    }
+    if output.run_name.is_some(){
+      mem::swap(&mut self.run_name, &mut output.run_name);
+    }
+
+    let switches = [
+      (output.auxiliary_signals, &mut self.write_auxiliary_signals),
+      (output.bath, &mut self.write_bath),
+      (output.clusters, &mut self.write_clusters),
+      (output.detected_spin, &mut self.write_detected_spin),
+      (output.exchange_groups, &mut self.write_exchange_groups),
+      (output.info, &mut self.write_info),
+      (output.methyl_partitions, &mut self.write_methyl_partitions),
+      (output.orientation_grid, &mut self.write_orientation_grid),
+      (output.orientation_signals, &mut self.write_orientation_signals),
+      (output.partition_table, &mut self.write_partition_table),
+      (output.sans_spin_signals, &mut self.write_sans_spin_signals),
+      (output.structure_pdb, &mut self.write_structure_pdb),
+      (output.tensors, &mut self.write_tensors),
+    ];
+    for (value, field) in switches{
+      if value.is_some(){
+        *field = value;
+      }
+    }
   }
   //----------------------------------------------------------------------------
 
@@ -1729,42 +1770,36 @@ mod tests{
   fn test_config_from_toml(){
   
     let config = Config::from_toml_string(r##"
-      clash_distance = 0.1
-      clash_distance_pbc = 0.1
-      cluster_batch_size = 20000
-      connect_exchange_groups = true
-      populations = "thermal"
-      cluster_method = "cce"
-      cluster_source = "clusters_file.toml"
-      input_structure_file = "../../assets/TEMPO_wat_gly_70A.pdb"
-      magnetic_field = 1.2 # T
-      max_cell_size = 2
-      max_cluster_size = 4
-      max_spins = 8
-      min_cell_size = 1
-      number_runs = 2
-      replicate_unit_cell = false    
-      partitioning = "exchange_groups"
-      partition_table = [
+      structure.clash_distance = 0.1
+      structure.clash_distance_pbc = 0.1
+      run.cluster_batch_size = 20000
+      cluster_expansion.clustering.connect_exchange_groups = true
+      cluster_expansion.populations = "thermal"
+      cluster_expansion.method = "cce"
+      cluster_expansion.clustering.file = "clusters_file.toml"
+      structure.file = "../../assets/TEMPO_wat_gly_70A.pdb"
+      conditions.magnetic_field = 1.2 # T
+      cluster_expansion.max_cluster_size = 4
+      cluster_expansion.clustering.max_spins = 8
+      run.number_runs = 2
+      structure.replicate_unit_cell = false    
+      cluster_expansion.clustering.partitioning = "exchange_groups"
+      cluster_expansion.clustering.partition_table = [
         1,1,
         2,1,
         3,2,
         4,2,
       ]
-      radius = 80 # Å
-      rng_seed = 42
-      output_directory = "save_directory"
-      # TODO: remove run_name and automate hash remove
-      # TODO: rework hash vs run number system
-      run_name = "system"
-      temperature = 20
+      structure.radius = 80 # Å
+      run.rng_seed = 42
+      conditions.temperature = 20
 
-      pulse_sequence = "cp-1"
-      tau_increments = [1e-3,5e-1] # μs
-      number_timepoints = [40,60]
+      pulse_sequence.sequence = "cp-1"
+      pulse_sequence.tau_increments = [1e-3,5e-1] # μs
+      pulse_sequence.number_timepoints = [40,60]
 
 
-      [pair_cutoffs]
+      [cluster_expansion.clustering.pair_cutoffs]
         coupling_xx_yy = 1e-3 # MHz
         delta_hyperfine_zz = 1e-2 # MHz
         point_dipole_perpendicular = 1e-4 # MHz
@@ -1784,6 +1819,10 @@ mod tests{
       g_matrix.axes.y = [-1.1500, -0.4700, 0.7100]
 
       [output]
+      directory = "save_directory"
+      # TODO: remove run_name and automate hash remove
+      # TODO: rework hash vs run number system
+      run_name = "system"
       auxiliary_signals = true
       bath = true
       clusters = true
@@ -1797,15 +1836,15 @@ mod tests{
 
       [[groups]]
       name = "tempo_c1"
-      selection = {elements = ["C"], serials = [1]}
+      include = {elements = ["C"], serials = [1]}
 
       [[groups]]
       name = "tempo_c19"
-      selection = {elements = ["C"], serials = [19]}
+      include = {elements = ["C"], serials = [19]}
 
       [[groups]]
       name = "tempo_n"
-      selection = {elements = ["N"]}
+      include = {elements = ["N"]}
 
       [groups.14N]
       hyperfine.values = [20.0,20.0,100.0] # MHz
@@ -1818,20 +1857,20 @@ mod tests{
 
       [[groups]]
         name = "tempo_o"
-        selection = {elements = ["O"]}
+        include = {elements = ["O"]}
 
       [[groups]]
         name = "tempo_h"
-        selection = {elements = ["H"]}
+        include = {elements = ["H"]}
         1H.c3_tunnel_splitting = 0.120 # MHz
 
       [[groups]]
         name = "glycerol_oh"
         drop_probability = 0.5
-        [groups.selection]
+        [groups.include]
           elements = ["H"]
           residues = ["GLY"]
-          bonded_elements = ["O"]
+          bonded_to.elements = ["O"]
 
       [[groups]]
         name = "glycerol_ch"
@@ -1841,10 +1880,10 @@ mod tests{
         1H.abundance = 0.5
         2H.abundance = 0.5
 
-        [groups.selection]
+        [groups.include]
           elements = ["H"]
           residues = ["GLY"]
-          bonded_elements = ["C"]
+          bonded_to.elements = ["C"]
 
     "##).unwrap();
 
@@ -1887,11 +1926,9 @@ mod tests{
          Some(ClusterSource::File("clusters_file.toml".to_string())));
     assert_eq!(config.connect_exchange_groups,Some(true));
 
-    assert_eq!(config.max_cell_size, Some(2));
     assert_eq!(config.magnetic_field, Some(Vector3D::from([0.0,0.0,1.2])));
     assert_eq!(config.max_cluster_size, Some(4));
     assert_eq!(config.max_spins, Some(8));
-    assert_eq!(config.min_cell_size, Some(1));
     assert_eq!(config.neighbor_cutoff_delta_hyperfine_zz, Some(1e4));
     assert_eq!(config.neighbor_cutoff_coupling_xx_yy, Some(1e3));
     assert_eq!(config.neighbor_cutoff_point_dipole_perpendicular, Some(1e2));
@@ -2006,13 +2043,251 @@ mod tests{
 
   }
   //----------------------------------------------------------------------------
+  #[test]
+  fn test_config_tables_set_their_fields(){
+    // Every key of the tables added by the input redesign sets its field,
+    // in the units of [units].
+    let config = Config::from_toml_string(r##"
+        [units]
+        distance = "nm"
+        energy = "kHz"
+        magnetic_field = "mT"
+        time = "ns"
+
+        [structure]
+        file = "a.pdb"
+        pdb_model_index = 2
+        radius = 3
+        replicate_unit_cell = [1, 2, 1]
+        clash_distance = 0.5
+        clash_distance_pbc = 0.25
+
+        [detected_spin]
+        position = [0.0, 0.0, 0.0]
+        max_spherical_tensor_rank = 4
+
+        [conditions]
+        magnetic_field = 350
+        temperature = 80
+
+        [pulse_sequence]
+        sequence = "hahn"
+        number_timepoints = [10, 20]
+        tau_increments = [2, 4]
+        number_timepoints2 = [3]
+        tau2_increments = [8]
+
+        [cluster_expansion]
+        method = "gcce"
+        max_cluster_size = 3
+        ensemble = true
+        populations = "zeeman"
+        mean_fields = false
+        thermalize_cluster_populations = true
+
+        [cluster_expansion.clustering]
+        file = "previous_run/orientations"
+        max_spins = 6
+        partitioning = "kmeans"
+        kmeans_size = 4
+        kmeans_iter_cap = 50
+        partition_table = [1, 1, 2, 1]
+        connect_exchange_groups = true
+
+        [cluster_expansion.clustering.pair_cutoffs]
+        distance = 1
+        coupling_xx_yy = 5
+        delta_zeeman = 1e-3
+
+        [run]
+        rng_seed = 7
+        number_runs = 3
+        parallel = false
+        cluster_batch_size = 12
+
+        [output]
+        directory = "out"
+        run_name = "sys"
+        auxiliary_signals = true
+        bath = false
+        clusters = true
+        detected_spin = false
+        exchange_groups = false
+        info = false
+        methyl_partitions = true
+        orientation_grid = false
+        orientation_signals = false
+        partition_table = true
+        sans_spin_signals = true
+        structure_pdb = false
+        tensors = true
+        "##).unwrap();
+
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-12*b.abs();
+
+    // [units] and [structure]
+    assert_eq!(config.unit_of_time_to_seconds, Some(1e-9));
+    assert_eq!(config.input_structure_file, Some("a.pdb".to_string()));
+    assert_eq!(config.pdb_model_index, Some(2));
+    assert!(close(config.radius.unwrap(), 3e-9));
+    assert_eq!(config.replicate_unit_cell, 
+        Some(ReplicateUnitCell::Specified([1,2,1])));
+    assert!(close(config.clash_distance.unwrap(), 0.5e-9));
+    assert!(close(config.clash_distance_pbc.unwrap(), 0.25e-9));
+
+    // [detected_spin] and [conditions]
+    assert_eq!(config.max_spherical_tensor_rank, Some(4));
+    assert!(close(config.magnetic_field.as_ref().unwrap().z(), 0.35));
+    assert_eq!(config.temperature, Some(80.0));
+
+    // [pulse_sequence]
+    assert_eq!(config.pulse_sequence, Some(PulseSequence::CarrPurcell(1)));
+    assert_eq!(config.number_timepoints, vec![10,20]);
+    assert!(close(config.tau_increments[1], 4e-9));
+    assert_eq!(config.number_timepoints2, vec![3]);
+    assert!(close(config.tau2_increments[0], 8e-9));
+
+    // [cluster_expansion]
+    assert_eq!(config.cluster_method, Some(ClusterMethod::GCCE));
+    assert_eq!(config.max_cluster_size, Some(3));
+    assert_eq!(config.ensemble_cce, Some(true));
+    assert_eq!(config.cluster_populations, Some(ClusterPopulations::Zeeman));
+    assert_eq!(config.mean_fields, Some(false));
+    assert_eq!(config.thermalize_cluster_populations, Some(true));
+
+    // [cluster_expansion.clustering] and its pair_cutoffs
+    assert_eq!(config.cluster_source, Some(ClusterSource::OrientationsDir(
+            "previous_run/orientations".to_string())));
+    assert_eq!(config.max_spins, Some(6));
+    assert_eq!(config.partitioning, Some(PartitioningMethod::KMeans(4)));
+    assert_eq!(config.kmeans_iter_cap, Some(50));
+    assert_eq!(config.partition_table, 
+        Some(PartitionTableConfig::IndexBlockList(vec![(1,1),(2,1)])));
+    assert_eq!(config.connect_exchange_groups, Some(true));
+    assert!(close(config.neighbor_cutoff_distance.unwrap(), 1e-9));
+    assert!(close(config.neighbor_cutoff_coupling_xx_yy.unwrap(), 5e3));
+    // delta_zeeman is in Hz and not converted.
+    assert_eq!(config.neighbor_cutoff_delta_zeeman, Some(1e-3));
+
+    // [run]
+    assert_eq!(config.rng_seed, Some(7));
+    assert_eq!(config.number_runs, Some(3));
+    assert_eq!(config.run_in_parallel, Some(false));
+    assert_eq!(config.cluster_batch_size, Some(12));
+
+    // [output]
+    assert_eq!(config.output_directory, Some("out".to_string()));
+    assert_eq!(config.run_name, Some("sys".to_string()));
+    assert_eq!([config.write_auxiliary_signals, config.write_bath,
+        config.write_clusters, config.write_detected_spin, 
+        config.write_exchange_groups, config.write_info,
+        config.write_methyl_partitions, config.write_orientation_grid,
+        config.write_orientation_signals, config.write_partition_table,
+        config.write_sans_spin_signals, config.write_structure_pdb,
+        config.write_tensors], 
+      [Some(true), Some(false), Some(true), Some(false), Some(false),
+        Some(false), Some(true), Some(false), Some(false), Some(true),
+        Some(true), Some(false), Some(true)]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_group_cells(){
+    // cells puts a group in the primary cell list, the extracell list, 
+    // or both (`set_extracell_particles()`).
+    let config = Config::from_toml_string(r##"
+        [[groups]]
+        name = "a"
+        include.elements = "H"
+        [[groups]]
+        name = "p"
+        include.elements = "C"
+        cells = "primary"
+        [[groups]]
+        name = "x"
+        include.elements = "C"
+        cells = "extra"
+        [[groups]]
+        name = "b"
+        include.elements = "N"
+        cells = "all"
+        "##).unwrap();
+    let labels = |p_cfgs: &[ParticleConfig]| p_cfgs.iter()
+      .map(|p| p.label.clone()).collect::<Vec::<String>>();
+    assert_eq!(labels(&config.particles), vec!["a", "p", "b"]);
+    assert_eq!(labels(&config.extracell_particles), vec!["a", "x", "b"]);
+
+    let s = |x: &str| x.to_string();
+    let cases = [
+      ("cells = \"primary_cell\"", 
+       CluEError::CannotParseCellType(s("primary_cell"))),
+      ("cells = true", CluEError::InvalidTOMLValue(s("group \"g\": cells"),
+          s("a string"), s("boolean"))),
+      ("include = 1", CluEError::InvalidTOMLValue(s("group \"g\": include"),
+          s("a table"), s("integer"))),
+      ("exclude = [\"H\"]", CluEError::InvalidTOMLValue(
+          s("group \"g\": exclude"), s("a table"), s("array"))),
+    ];
+    for (settings, expected) in cases{
+      let result = Config::from_toml_string(&format!(
+            "[[groups]]\nname = \"g\"\n{}", settings));
+      assert_eq!(result.err(), Some(expected), "{}", settings);
+    }
+
+    // A group without include or exclude would select no atoms, so it is
+    // rejected, also when it has cells; include = {} selects all atoms.
+    for settings in ["cells = \"primary\"", "cells = \"extra\"",
+        "1H.active = false"]
+    {
+      let result = Config::from_toml_string(&format!(
+            "[[groups]]\nname = \"g\"\n{}", settings));
+      assert_eq!(result.err(), Some(CluEError::GroupHasNoSelection(s("g"))),
+          "{}", settings);
+    }
+    let config = Config::from_toml_string(
+        "[[groups]]\nname = \"g\"\ncells = \"primary\"\ninclude = {}")
+      .unwrap();
+    assert_eq!(config.particles[0].filter, Some(
+        crate::structure::particle_filter::ParticleFilter::new()));
+
+    // One entry of a group with a selection is enough.
+    let config = Config::from_toml_string(r##"
+        [[groups]]
+        name = "g"
+        cells = "primary"
+        [[groups]]
+        name = "g"
+        include.elements = "H"
+        "##).unwrap();
+    assert_eq!(config.particles[0].cell_type,
+        crate::config::particle_config::CellType::PrimaryCell);
+    assert!(config.particles[0].filter.is_some());
+
+    // Entries with the same name add to the filter; 
+    // a later value of the same key replaces the earlier one.
+    let config = Config::from_toml_string(r##"
+        [[groups]]
+        name = "g"
+        include.elements = "H"
+        include.distance = [1.0, 5.0]
+        [[groups]]
+        name = "g"
+        exclude.residues = "SOL"
+        include.distance = [0.0, 3.0]
+        "##).unwrap();
+    let filter = config.particles[0].filter.as_ref().unwrap();
+    assert_eq!(filter.elements, vec![crate::elements::Element::Hydrogen]);
+    assert_eq!(filter.not_residues, vec!["SOL".to_string()]);
+    assert_eq!(filter.not_within_distance, None);
+    assert_eq!(filter.within_distance, Some(3e-10));
+  }
+  //----------------------------------------------------------------------------
   // This function reads a config with one group "g" with the settings 
   // `settings`.
   fn config_with_group(settings: &str) -> Result<Config,CluEError>{
     Config::from_toml_string(&format!(r##"
         [[groups]]
         name = "g"
-        selection.elements = ["C"]
+        include.elements = ["C"]
         {}
         "##, settings))
   }
@@ -2216,7 +2491,7 @@ mod tests{
   fn test_detected_spin_position_unit_of_distance(){
     // Coordinates are in unit_of_distance, as grid points are.
     let config = Config::from_toml_string(r##"
-        unit_of_distance = "nm"
+        units.distance = "nm"
         detected_spin.position = [1.0, 2.0, 3.0]
         "##).unwrap();
     assert_eq!(config.detected_spin_position,
@@ -2224,7 +2499,7 @@ mod tests{
             Vector3D::from([10.0, 20.0, 30.0]).scale(ANGSTROM))));
 
     let config = Config::from_toml_string(r##"
-        unit_of_distance = "nm"
+        units.distance = "nm"
         detected_spin.position = [[1.0, 2.0, 3.0, 1.0]]
         "##).unwrap();
     let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid))
@@ -2269,19 +2544,20 @@ mod tests{
 
     // Set from TOML.
     let config = Config::from_toml_string(r##"
-        partitioning = "restricted_kmeans"
-        kmeans_size = 3
-        kmeans_iter_cap = 25
+        cluster_expansion.clustering.partitioning = "restricted_kmeans"
+        cluster_expansion.clustering.kmeans_size = 3
+        cluster_expansion.clustering.kmeans_iter_cap = 25
         "##).unwrap();
     assert_eq!(config.kmeans_iter_cap, Some(25));
     assert_eq!(config.partitioning, 
         Some(PartitioningMethod::RestrictedKMeans(3)));
 
     // Zero is rejected.
-    assert_eq!(Config::from_toml_string("kmeans_iter_cap = 0").err(),
+    assert_eq!(Config::from_toml_string(
+          "cluster_expansion.clustering.kmeans_iter_cap = 0").err(),
         Some(CluEError::InvalidKMeansIterCap));
     assert_eq!(CluEError::InvalidKMeansIterCap.to_string(),
-        "kmeans_iter_cap must be at least 1");
+        "cluster_expansion.clustering.kmeans_iter_cap must be at least 1");
   }
   //----------------------------------------------------------------------------
   #[test]
@@ -2295,7 +2571,7 @@ mod tests{
       let config = Config::from_toml_string(&format!(r##"
           [[groups]]
           name = "methyl"
-          selection.elements = ["H"]
+          include.elements = ["H"]
           cosubstitute = "{}"
           "##, value)).unwrap();
       assert_eq!(config.particles[0].properties.as_ref().unwrap().cosubstitute,
@@ -2308,7 +2584,7 @@ mod tests{
       let result = Config::from_toml_string(&format!(r##"
           [[groups]]
           name = "methyl"
-          selection.elements = ["H"]
+          include.elements = ["H"]
           cosubstitute = "{}"
           "##, value));
       assert_eq!(result.err(), Some(CluEError::CannotParseCosubstitute(
@@ -2320,15 +2596,15 @@ mod tests{
   fn test_isotope_selections_are_rejected(){
     // Groups are selected before isotopes are drawn, so selections by
     // isotope were removed; the keys are invalid.
-    for (key, value) in [("isotopes", "2H"), ("not_isotopes", "1H")]{
+    for (table, value) in [("include", "2H"), ("exclude", "1H")]{
       let result = Config::from_toml_string(&format!(r##"
           [[groups]]
           name = "deuterons"
-          selection.{} = ["{}"]
-          "##, key, value));
+          {}.isotopes = ["{}"]
+          "##, table, value));
       assert_eq!(result.err(), Some(CluEError::InvalidTOMLKeys(vec![
-              format!("groups[0].selection.{} (group \"deuterons\"): \
-unknown key", key)])));
+              format!("groups[0].{}.isotopes (group \"deuterons\"): \
+unknown key", table)])));
     }
   }
   //----------------------------------------------------------------------------
@@ -2359,8 +2635,8 @@ unknown key", key)])));
   fn test_config_errors_name_the_key(){
     let s = |x: &str| x.to_string();
     let cases = vec![
-      ("replicate_unit_cell = \"auto\"",
-       CluEError::InvalidTOMLValue(s("replicate_unit_cell"),
+      ("structure.replicate_unit_cell = \"auto\"",
+       CluEError::InvalidTOMLValue(s("structure.replicate_unit_cell"),
          s("true, false, or [n1, n2, n3]"), s("\"auto\""))),
       ("orientations.grid = \"lebedev\"",
        CluEError::MissingTOMLKey(s("orientations.number"),
@@ -2376,13 +2652,15 @@ unknown key", key)])));
        CluEError::InvalidTOMLValue(s("detected_spin.detection_operator"),
          s("a transition [i, j], a matrix, or a spin operator name"),
          s("boolean"))),
-      ("partitioning = \"pairs\"",
+      ("cluster_expansion.clustering.partitioning = \"pairs\"",
        CluEError::CannotParsePartitioningMethod(s("pairs"))),
-      ("partition_table = [1, 2, 3]",
-       CluEError::InvalidTOMLValue(s("partition_table"),
+      ("cluster_expansion.clustering.partition_table = [1, 2, 3]",
+       CluEError::InvalidTOMLValue(
+         s("cluster_expansion.clustering.partition_table"),
          s("a csv file name or an array [index0, block0, index1, block1, ...] \
 of integers"), s("an array of length 3"))),
-      ("pulse_sequence = [[\"pulse\", \"pi/2\"], [\"delay2\", \"tau\"]]",
+      ("pulse_sequence.sequence = [[\"pulse\", \"pi/2\"], \
+[\"delay2\", \"tau\"]]",
        CluEError::InvalidPulseStep(1,
          Box::new(CluEError::WrongTauDimension(2,1)))),
       ("[[groups]]\nname = \"g\"\ndrop_probability = \"high\"",
@@ -2405,12 +2683,14 @@ of integers"), s("an array of length 3"))),
         drop_probability = \"high\"").unwrap_err();
     assert_eq!(err.to_string(),
         "group \"g\": drop_probability must be a float, but got string");
-    let err = Config::from_toml_string("pulse_sequence = [[\"delay2\", \"tau\"]]")
-      .unwrap_err();
-    assert_eq!(err.to_string(), "pulse_sequence[0]: \"delay2\" cannot be used \
+    let err = Config::from_toml_string(
+        "pulse_sequence.sequence = [[\"delay2\", \"tau\"]]").unwrap_err();
+    assert_eq!(err.to_string(), "pulse_sequence.sequence[0]: \"delay2\" \
+cannot be used \
 with \"tau\"; use \"delay\" with \"tau\" or \"-tau\", and \"delay2\" with \
 \"tau2\" or \"-tau2\"");
-    let err = Config::from_toml_string("cluster_method = \"dmrg\"").unwrap_err();
+    let err = Config::from_toml_string("cluster_expansion.method = \"dmrg\"")
+      .unwrap_err();
     assert_eq!(err.to_string(), "cannot parse \"dmrg\" as a cluster method; \
 the options are \"cce\", \"gcce\", \"appa\", and \"lce\"");
 
@@ -2418,8 +2698,9 @@ the options are \"cce\", \"gcce\", \"appa\", and \"lce\"");
     let (result, _) = Config::construct_tau_axis(&[10, 10], &[1e-8], "2");
     assert_eq!(result, Err(CluEError::LengthMismatchTimepointsIncrements(
             s("2"), 2, 1)));
-    assert_eq!(result.unwrap_err().to_string(), "number_timepoints2 has 2 \
-entries, but tau2_increments has 1; they must have the same length");
+    assert_eq!(result.unwrap_err().to_string(), 
+        "pulse_sequence.number_timepoints2 has 2 entries, but \
+pulse_sequence.tau2_increments has 1; they must have the same length");
   }
   //----------------------------------------------------------------------------
   // Integer arrays in replicate_unit_cell, detected_spin.position, and
@@ -2431,18 +2712,20 @@ entries, but tau2_increments has 1; they must have the same length");
     let rep_el = "an integer 0 <= n <= 2147483647";
     let cases = vec![
       // Wrong lengths (index out of bounds, or entries ignored).
-      ("replicate_unit_cell = [2, 2]",
-       CluEError::InvalidTOMLValue(s("replicate_unit_cell"), s(rep),
+      ("structure.replicate_unit_cell = [2, 2]",
+       CluEError::InvalidTOMLValue(s("structure.replicate_unit_cell"), s(rep),
          s("an array of length 2"))),
-      ("replicate_unit_cell = [1, 1, 1, 7]",
-       CluEError::InvalidTOMLValue(s("replicate_unit_cell"), s(rep),
+      ("structure.replicate_unit_cell = [1, 1, 1, 7]",
+       CluEError::InvalidTOMLValue(s("structure.replicate_unit_cell"), s(rep),
          s("an array of length 4"))),
       // Negative and too large (wrapped around).
-      ("replicate_unit_cell = [1, -1, 1]",
-       CluEError::InvalidTOMLValue(s("replicate_unit_cell[1]"), s(rep_el),
+      ("structure.replicate_unit_cell = [1, -1, 1]",
+       CluEError::InvalidTOMLValue(s("structure.replicate_unit_cell[1]"), 
+         s(rep_el),
          s("-1"))),
-      ("replicate_unit_cell = [0, 0, 2147483648]",
-       CluEError::InvalidTOMLValue(s("replicate_unit_cell[2]"), s(rep_el),
+      ("structure.replicate_unit_cell = [0, 0, 2147483648]",
+       CluEError::InvalidTOMLValue(s("structure.replicate_unit_cell[2]"), 
+         s(rep_el),
          s("2147483648"))),
       ("detected_spin.position = [12, -5]",
        CluEError::InvalidTOMLValue(s("detected_spin.position[1]"),
@@ -2450,11 +2733,13 @@ entries, but tau2_increments has 1; they must have the same length");
       ("detected_spin.position = [4294967296]",
        CluEError::InvalidTOMLValue(s("detected_spin.position[0]"),
          s("a serial number 0 <= n <= 4294967295"), s("4294967296"))),
-      ("partition_table = [10, 1, -1, 5]",
-       CluEError::InvalidTOMLValue(s("partition_table[2..=3]"),
+      ("cluster_expansion.clustering.partition_table = [10, 1, -1, 5]",
+       CluEError::InvalidTOMLValue(
+         s("cluster_expansion.clustering.partition_table[2..=3]"),
          s("a pair [index, block] of non-negative integers"), s("[-1, 5]"))),
-      ("partition_table = [10, -1]",
-       CluEError::InvalidTOMLValue(s("partition_table[0..=1]"),
+      ("cluster_expansion.clustering.partition_table = [10, -1]",
+       CluEError::InvalidTOMLValue(
+         s("cluster_expansion.clustering.partition_table[0..=1]"),
          s("a pair [index, block] of non-negative integers"), s("[10, -1]"))),
     ];
     for (toml_str, expected) in cases{
@@ -2464,7 +2749,7 @@ entries, but tau2_increments has 1; they must have the same length");
 
     // Valid input, including the bounds, is read as before.
     let config = Config::from_toml_string(
-        "replicate_unit_cell = [0, 3, 2147483647]").unwrap();
+        "structure.replicate_unit_cell = [0, 3, 2147483647]").unwrap();
     assert_eq!(config.replicate_unit_cell,
         Some(ReplicateUnitCell::Specified([0, 3, 2147483647])));
     let config = Config::from_toml_string(
@@ -2473,14 +2758,16 @@ entries, but tau2_increments has 1; they must have the same length");
         Some(DetectedSpinCoordinates::CentroidOverSerials(
             vec![0, 28, 4294967295])));
     let config = Config::from_toml_string(
-        "partition_table = [10, 1, 0, 0, 4294967296, 2]").unwrap();
+        "cluster_expansion.clustering.partition_table = \
+[10, 1, 0, 0, 4294967296, 2]").unwrap();
     assert_eq!(config.partition_table,
         Some(PartitionTableConfig::IndexBlockList(
             vec![(10, 1), (0, 0), (4294967296, 2)])));
 
-    let err = Config::from_toml_string("replicate_unit_cell = [2, 2]")
-      .unwrap_err();
-    assert_eq!(err.to_string(), "replicate_unit_cell must be true, false, \
+    let err = Config::from_toml_string(
+        "structure.replicate_unit_cell = [2, 2]").unwrap_err();
+    assert_eq!(err.to_string(), "structure.replicate_unit_cell must be true, \
+false, \
 or [n1, n2, n3] with integers 0 <= n <= 2147483647, but got an array of \
 length 2");
   }
