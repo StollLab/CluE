@@ -96,7 +96,6 @@ src/
 tests/test_1omp.rs   integration test: compares a full run to a reference signal
 tests/test_gcce.rs   integration test: gCCE run against the same reference (looser tolerance)
 assets/              structures, TOML configs, and reference CSVs used by tests
-examples/            example inputs and plotting scripts (not maintained by tests)
 pyclue/src/          current Python bindings (py_*.rs wrappers around the core crate)
 pyclue/dev_src/, pyclue/old_src/  older/experimental copies; do not edit unless asked
 manual/              LaTeX manual
@@ -140,8 +139,8 @@ The CLI takes a single TOML config file (`clue_oxide config.toml`).
 it parses the file (including the key check), sets the defaults, and runs
 `Config::check_completeness`, then prints `<file>: OK` or the errors. See
 `assets/1omp_K26R1_0.003228966616048703.toml` for a representative example. The
-old `.clue` token format was removed in 0.2.3-alpha.1; files such as
-`examples/*/sim.clue` use the old format and no longer run.
+old `.clue` token format was removed in 0.2.3-alpha.1; files in that
+format no longer run.
 
 When adding or renaming a config key:
 1. Add the field to the serde structs in `src/config/config_toml.rs` (or, for

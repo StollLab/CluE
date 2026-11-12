@@ -1,6 +1,15 @@
 --------------------------------------------------------------------------------
 CluE Oxide: 1.0.0-dev
 
+NOTE:
+  This version changes the layout of the input file (see the CHANGED
+  entries "The input file has a new layout" and "In [[groups]], the table
+  selection is replaced"). The entries of this version that were written
+  before that change name input keys by their old names, such as
+  cluster_method, ensemble_cce, selection.within_distance, and cell_type;
+  those two entries give the new name of each key. Some of the old keys,
+  such as cell_ids and primary_cell, were removed (see REMOVED).
+
 ADDED:
   The key kmeans_iter_cap (default 1000, must be at least 1) sets the
   maximum number of k-means iterations for partitioning = "kmeans" and
@@ -480,6 +489,14 @@ CHANGED:
   hint for these keys says so. Otherwise the same atoms are selected as
   before. A list can now also be given as a single value without brackets
   (elements = "H"). Each old selection key is rejected with its new key.
+  The keys combine as the old keys did. An atom must meet every key of
+  include. Each key of exclude excludes on its own:
+  exclude = {elements = "N", residues = "PRO"} excludes all nitrogen
+  atoms and all atoms of PRO residues, not only the nitrogen atoms of
+  PRO. Each key of bonded_to is a separate condition that can be met by a
+  different bonded atom: include.bonded_to = {elements = "C",
+  residues = "SOL"} requires a bonded carbon and a bonded atom of SOL,
+  not one bonded carbon of SOL.
 
   A group with neither include nor exclude is now an error that names the
   group. Such a group selected no atoms, so its settings were ignored
