@@ -138,7 +138,6 @@ pub struct RunTOML{
 #[derive(Debug,Clone,Default,Serialize,Deserialize)]
 pub struct OutputTOML{
   pub directory: Option<String>,
-  pub run_name: Option<String>,
   pub auxiliary_signals: Option<bool>,
   pub bath: Option<bool>,
   pub clusters: Option<bool>,

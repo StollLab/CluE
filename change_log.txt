@@ -11,6 +11,62 @@ NOTE:
   such as cell_ids and primary_cell, were removed (see REMOVED).
 
 ADDED:
+  Output directories can be resumed. Each output directory has a record,
+  clue_manifest.toml, with the CluE version, the version of the Rust 
+  compiler that built CluE, the main seed, run.cluster_batch_size, a 
+  fingerprint of the settings that affect the computed signals, the 
+  hashes of the files read during the run (cluster files and 
+  partition-table csv files), and the progress of every structure, 
+  instance, and orientation. A run into an existing output directory
+  * loads the saved signal and prints "Output in <dir> is already 
+    complete; no calculations are needed." if everything is computed and
+    every requested file is present;
+  * otherwise resumes it: complete instances and orientations are loaded,
+    saved auxiliary-signal batches are reused, and the rest is computed.
+    Instances or orientations whose requested files are missing (for 
+    example methyl_partitions = true after a run without it) are computed
+    again, with the same result;
+  * stops with an error if the directory holds the output of a different
+    simulation: another CluE version, other settings or input-file 
+    contents (the differing settings are listed; if the output was 
+    written by a build with another Rust compiler, the message says that
+    the differences may be formatting only), another or a missing 
+    run.rng_seed (the message gives the recorded seed), a structure that 
+    is no longer an input or whose file contents changed, fewer 
+    run.number_runs than recorded, or a different run.cluster_batch_size
+    while the output is incomplete. A directory that is not empty but has
+    no clue_manifest.toml (for example the output of an earlier version)
+    is also an error.
+  run.number_runs can be increased to add instances to an output; the 
+  first instances are the same as before. Changing output switches does 
+  not start a new simulation.
+
+  The main seed is always written to <output>/rng_seed.txt and printed. 
+  Without run.rng_seed, it is drawn from the operating system's entropy
+  (at most 2^63 - 1, so that it can be given as rng_seed in the input).
+
+  clue_oxide -c (--check) now also checks the existing output directory
+  after the input file, without writing anything, and prints one line for
+  each, for example
+    in.toml: input OK
+    in.toml: output out: complete; a run will do no calculations
+  The output line says whether a run would start a new simulation, find a
+  complete output, resume (with the number of complete instances and 
+  orientations), or stop, with the error the run would give. If the input
+  has errors, the output is not checked. The exit code is 0 only if both
+  are fine. Previously the only output line was "<file>: OK".
+  Library: clue_oxide::check() and CheckReport.
+
+  Library: output_manifest::inspect_output() reports what a run would do
+  with its output directory, io::structure_output_dirs() lists the 
+  structures of an output directory with their directories, 
+  Config::physics_fingerprint(), Config::structure_inputs(),
+  Structure::build_structure_from_file(), io::write_atomically(), and
+  math::fnv1a_64() (64-bit FNV-1a hash).
+
+  A build script (build.rs) records the version of the Rust compiler 
+  (CLUE_RUSTC_VERSION) for clue_manifest.toml.
+
   The key kmeans_iter_cap (default 1000, must be at least 1) sets the
   maximum number of k-means iterations for partitioning = "kmeans" and
   "restricted_kmeans". If k-means has not converged by then, a warning is
@@ -39,6 +95,57 @@ ADDED:
   overlapping groups, empty selections) are still found only by a run.
 
 CHANGED:
+  New layout of output directories. Each instance of run.number_runs has
+  its own directory (fixes N04 of report.md: with number_runs > 1, all
+  instances shared one directory, so with auxiliary_signals = true every
+  instance reloaded the checkpoints of the first, and the average equalled
+  the first instance):
+    <output>/clue_manifest.toml, rng_seed.txt, tau_axis.csv, signal.csv
+    <output>/structures.csv   (id, file, content_hash, weight, 
+                               number_runs, directory)
+    <output>/structures/<id>/signal.csv   (average over the instances)
+    <output>/structures/<id>/instance_<k>/signal.csv, info/, 
+      orientations/theta_<θ>deg_phi_<φ>deg/
+  <id> is s_<16 hex digits of the FNV-1a hash of the structure file
+  contents>. Previously instances were written to <output>/<run_name> or
+  <output>/run-<hash of the structure>. A cluster_expansion.clustering.file
+  directory taken from an earlier run is now 
+  <output>/structures/<id>/instance_<k>/orientations.
+
+  Seeds. Each structure has a seed derived from the main seed and the hash
+  of its file contents, each instance a seed drawn from the structure 
+  seed, and each orientation a seed drawn from the instance generator 
+  after the structure, the coupling tensors, and the orientation grid are
+  built. The bath populations, mean fields, and k-means partitions of an 
+  orientation use its own seed, so orientations do not depend on the order
+  in which they are computed. Results with a given rng_seed therefore 
+  differ from earlier versions (statistically equivalent); results that do
+  not depend on the seed, such as the 1omp test, are unchanged.
+
+  The default output directory (no output.directory) is now 
+  CluE-<16 hex digits>, the FNV-1a hash of the settings and the main seed.
+  It no longer depends on the Rust release (math::str_hash used
+  DefaultHasher; O07 of report.md), on output switches, on 
+  run.number_runs, or on the structure file name. Without run.rng_seed, 
+  each run therefore gets a new default directory.
+
+  Signal, batch, tau-axis, and record files are written to <file>.tmp and
+  then renamed, so an interrupted run never leaves a partly written file.
+  A saved auxiliary-signal batch file that does not match its batch (wrong
+  number of signals or time points, or unreadable) is computed again and
+  overwritten, with a message, instead of stopping the run.
+
+  The group isotope tables (ParticleProperties::isotope_properties) are
+  kept in a BTreeMap instead of a HashMap, so that the settings 
+  fingerprint does not depend on the order of a hash map.
+
+  Library: signal::calculate_signal::calculate_signals() takes the config
+  and an output_manifest::OutputState instead of a random number generator
+  and a save path. Structure::build_structure() is unchanged.
+
+  The integration tests write to temporary directories instead of 
+  CluE-<hash> directories in the working directory.
+
   Molecules are now always the complete sets of bonded atoms (from the
   CONECT records). Previously an atom bonded to two atoms that were each
   not bonded to any earlier atom in the file left the molecule split into
@@ -508,6 +615,13 @@ CHANGED:
   were removed from it.
 
 REMOVED:
+  The key output.run_name. Output directories are now named 
+  automatically (see the new layout under CHANGED). output.run_name, and
+  run_name at the top level of the old layout, are reported as removed.
+  The test assets no longer set it.
+
+  math::str_hash(), replaced by math::fnv1a_64().
+
   cosubstitute = "bonded", which did not group particles as intended, is 
   now an error that names the group. The options are "same_molecule", 
   "group" (or "filter"), and "particle". Tensor axes can still use 

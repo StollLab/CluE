@@ -192,8 +192,9 @@ impl Structure{
 
   }
   //----------------------------------------------------------------------------
-  /// This function builds a `Structure` from info in `Config`.
-  pub fn build_structure(rng: &mut ChaCha20Rng, config: &Config) 
+  /// This function builds a `Structure` from info in `Config`,
+  /// from the structure file `structure.file`.
+  pub fn build_structure(rng: &mut ChaCha20Rng, config: &Config)
     -> Result<Self,CluEError>
   {
 
@@ -201,6 +202,14 @@ impl Structure{
       return Err(CluEError::NoStructureFile);
     };
 
+    Self::build_structure_from_file(rng, config, filename)
+  }
+  //----------------------------------------------------------------------------
+  /// This function builds a `Structure` from the structure file `filename`
+  /// with the other info in `Config`.
+  pub fn build_structure_from_file(rng: &mut ChaCha20Rng, config: &Config,
+      filename: &str) -> Result<Self,CluEError>
+  {
     let Some(model_idx) = config.pdb_model_index else{
       return Err(CluEError::NoModelIndex);
     };

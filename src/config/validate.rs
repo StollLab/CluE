@@ -123,9 +123,8 @@ const RUN_KEYS: [&str; 4] = [
   "cluster_batch_size",
 ];
 
-const OUTPUT_KEYS: [&str; 15] = [
+const OUTPUT_KEYS: [&str; 14] = [
   "directory",
-  "run_name",
   KEY_OUT_AUX_SIGS,
   KEY_OUT_BATH,
   KEY_OUT_CLUSTERS,
@@ -221,7 +220,7 @@ const AXIS_KEYS: [&str; 6] = [
 // what replaced them.
 
 // The top-level keys and tables of the old format, and where they moved.
-const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 37] = [
+const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 36] = [
   ("clash_distance", "structure.clash_distance"),
   ("clash_distance_pbc", "structure.clash_distance_pbc"),
   ("cluster_batch_size", "run.cluster_batch_size"),
@@ -250,7 +249,6 @@ const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 37] = [
   ("replicate_unit_cell", "structure.replicate_unit_cell"),
   ("rng_seed", "run.rng_seed"),
   ("run_in_parallel", "run.parallel"),
-  ("run_name", "output.run_name"),
   ("tau_increments", "pulse_sequence.tau_increments"),
   ("tau2_increments", "pulse_sequence.tau2_increments"),
   ("temperature", "conditions.temperature"),
@@ -269,7 +267,7 @@ const OLD_KEY_PULSE_SEQUENCE: &str = "pulse_sequence";
 
 // The keys that were removed because the code did not use them, 
 // by the table they were in, with the reason.
-const REMOVED_KEYS: [(Schema,&str,&str); 7] = [
+const REMOVED_KEYS: [(Schema,&str,&str); 9] = [
   (Schema::TopLevel, "min_cell_size", "it was read but never used"),
   (Schema::TopLevel, "max_cell_size", "it was read but never used"),
   (Schema::TopLevel, "pulses", "[[pulses]] was read but never used; the \
@@ -281,7 +279,14 @@ is coupling_xx_yy"),
   (Schema::Output, "cluster_signals", "it was read but never used; cluster \
 signals are written with auxiliary_signals"),
   (Schema::Output, "config", "it was read but never used"),
+  (Schema::TopLevel, "run_name", REMOVED_RUN_NAME),
+  (Schema::Output, "run_name", REMOVED_RUN_NAME),
 ];
+
+// Why run_name was removed.
+const REMOVED_RUN_NAME: &str = "output directories are now named \
+automatically: each structure and instance gets its own directory under \
+structures/ (see the change log of 1.0.0-dev)";
 
 // The old group table that the include and exclude tables and the group
 // key cells replace.
@@ -978,7 +983,6 @@ mod tests{
         cluster_batch_size = 10
         [output]
         directory = "out"
-        run_name = "system"
         bath = true
         partition_table = true
         detected_spin = true
@@ -1099,6 +1103,7 @@ belongs in [conditions]".to_string(),
         [output]
         cluster_signals = true
         config = true
+        run_name = "system"
         [[pulses]]
         name = "pi"
         [cluster_expansion.clustering.pair_cutoffs]
@@ -1120,6 +1125,7 @@ used; the isotope key electric_quadrupole of [[groups]] is unchanged"
         "output.cluster_signals: removed; it was read but never used; \
 cluster signals are written with auxiliary_signals".to_string(),
         "output.config: removed; it was read but never used".to_string(),
+        format!("output.run_name: removed; {}", REMOVED_RUN_NAME),
         "pair_cutoffs: moved to cluster_expansion.clustering.pair_cutoffs"
           .to_string(),
         "partitioning: moved to cluster_expansion.clustering.partitioning"
@@ -1128,7 +1134,7 @@ cluster signals are written with auxiliary_signals".to_string(),
         "pulse_sequence: moved to pulse_sequence.sequence".to_string(),
         "pulses: removed; [[pulses]] was read but never used; the pulses are \
 built from detected_spin.transition".to_string(),
-        "run_name: moved to output.run_name".to_string(),
+        format!("run_name: removed; {}", REMOVED_RUN_NAME),
         "unit_of_time: moved to units.time".to_string(),
     ]);
 

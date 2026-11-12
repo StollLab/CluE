@@ -13,7 +13,7 @@ use crate::physical_constants::{
 };
 use crate::space_3d::SymmetricTensor3D;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use strum::IntoEnumIterator;
 
 use num_complex::Complex64;
@@ -308,7 +308,7 @@ pub struct ParticleProperties{
   // TODO: move the fields of isotopic_distribution to ParticleProperties,
   // to avoid the subtable.
   pub isotopic_distribution:  IsotopeDistribution,
-  pub isotope_properties: HashMap::<String,IsotopeProperties>,
+  pub isotope_properties: BTreeMap::<String,IsotopeProperties>,
 }
 
 impl ParticleProperties{

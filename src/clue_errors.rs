@@ -31,6 +31,7 @@ pub enum CluEError{
   CannotParseGridEntry(String,usize,String),
   CannotParseLine(String),
   CannotParseLineInFile(String,usize,String),
+  CannotParseManifest(String,String),
   CannotParseSignalEntry(String,usize,String),
   CannotParseIsotope(String),
   CannotParseOrientations(String),
@@ -139,10 +140,19 @@ pub enum CluEError{
   NoNumberSystemInstances,
   NoOrientationGrid,
   OrientationGridWeightsDoNotSumToOne(f64,f64),
+  OutputBatchSizeMismatch(String,usize,usize),
+  OutputConfigMismatch(String,Vec::<String>,Option<(String,String)>),
+  OutputFewerRuns(String,String,usize,usize),
+  OutputNeedsSeed(String,u64),
+  OutputSeedMismatch(String,u64,u64),
+  OutputSeedSequenceChanged(String,String),
+  OutputStructureRemoved(String,String,String),
+  OutputVersionMismatch(String,String,String),
   NoPartitioningMethod,
   NoPulseSequence,
   NoRadius,
   NoRunInParallel,
+  NoRngSeed,
   NoDensityMatrixWithMultiplicity(usize),
   NoDetOpWithMultiplicity(usize),
   NoPulseOpWithMultiplicity(String,usize),
@@ -194,6 +204,7 @@ pub enum CluEError{
   UnexpectedPulseStep(usize,String),
   UnknownPulse(String),
   UnrecognizedOption(String),
+  UnrecognizedOutput(String,Vec::<String>),
   UnrecognizedVectorSpecifier(String),
   UnrecognizedUnit(String,String,String),
   VectorSpecifierDoesNotSpecifyUniqueVector(String),
@@ -755,6 +766,69 @@ many timepoints there are for each tau2 increment"),
       CluEError::NoRunInParallel => write!(f,
           "run.parallel is not set"),
 
+      CluEError::NoRngSeed => write!(f,
+          "run.rng_seed is not set"),
+
+      CluEError::CannotParseManifest(filename,reason) => write!(f,
+          "cannot read the output record \"{}\": {}", filename, reason),
+
+      CluEError::UnrecognizedOutput(dir,listing) => write!(f,
+          "the output directory \"{}\" is not empty, but it has no {}, so \
+it was not written by this version of CluE; it contains {}; move these \
+files or set a different output.directory", dir, 
+          crate::output_manifest::MANIFEST_FILE, listing.join(", ")),
+
+      CluEError::OutputVersionMismatch(dir,old,new) => write!(f,
+          "the output in \"{}\" was written by CluE {}, but this is CluE {}; \
+move it or set a different output.directory", dir, old, new),
+
+      CluEError::OutputConfigMismatch(dir,differences,rustc) => {
+        write!(f, "the output in \"{}\" belongs to a different simulation; \
+the settings differ (- recorded, + now):\n  {}", dir, 
+            differences.join("\n  "))?;
+        match rustc{
+          Some((old,new)) => write!(f, "\nThis output was written by a CluE \
+build compiled with {}; this build uses {}. Different Rust compilers can \
+format the configuration differently, so the differences listed above may \
+be formatting only. If so, the existing output is still valid; move it or \
+set a different output.directory", old, new),
+          None => write!(f, "\nMove the output or set a different \
+output.directory"),
+        }
+      },
+
+      CluEError::OutputNeedsSeed(dir,seed) => write!(f,
+          "the output in \"{}\" was computed with run.rng_seed = {}, but \
+run.rng_seed is not set; set rng_seed = {} in the [run] table to resume it, \
+or set a different output.directory", dir, seed, seed),
+
+      CluEError::OutputSeedMismatch(dir,old,new) => write!(f,
+          "the output in \"{}\" was computed with run.rng_seed = {}, but \
+run.rng_seed is {}; set rng_seed = {} to resume it, or set a different \
+output.directory", dir, old, new, old),
+
+      CluEError::OutputStructureRemoved(dir,file,id) => write!(f,
+          "the output in \"{}\" contains structure \"{}\" ({}), which is \
+not an input structure, or whose file contents changed; structures can be \
+added to an output, but not removed or changed; restore the structure file \
+or set a different output.directory", dir, file, id),
+
+      CluEError::OutputFewerRuns(dir,file,old,new) => write!(f,
+          "the output in \"{}\" has {} instances of structure \"{}\", but \
+run.number_runs = {}; number_runs can be increased to resume an output, but \
+not decreased; set number_runs to at least {} or set a different \
+output.directory", dir, old, file, new, old),
+
+      CluEError::OutputSeedSequenceChanged(dir,detail) => write!(f,
+          "the seeds recorded in \"{}\" differ from the seeds this build \
+derives from run.rng_seed ({}), so the output cannot be resumed; move it or \
+set a different output.directory", dir, detail),
+
+      CluEError::OutputBatchSizeMismatch(dir,old,new) => write!(f,
+          "the auxiliary signals in \"{}\" were saved in batches of \
+run.cluster_batch_size = {}, but it is {}; set cluster_batch_size = {} to \
+resume the output", dir, old, new, old),
+
       CluEError::NoDensityMatrixWithMultiplicity(spin_multiplicity) => write!(f,
           "no bath-spin-{} density matrices are built for the detected spin", 
           (*spin_multiplicity as f64 - 1.0)/2.0),
@@ -1056,6 +1130,57 @@ atoms; include = {} selects all atoms (of the cells set by cells)"),
        "expected 3 unit cell edges, but got 2"),
       (CluEError::CannotParseLineInFile(s("a.pdb"),5,s("CONECT x")),
        "cannot parse line 5 of \"a.pdb\": \"CONECT x\""),
+      (CluEError::NoRngSeed, "run.rng_seed is not set"),
+      (CluEError::CannotParseManifest(s("out/clue_manifest.toml"),
+          s("missing field `rng_seed`")),
+       "cannot read the output record \"out/clue_manifest.toml\": missing \
+field `rng_seed`"),
+      (CluEError::UnrecognizedOutput(s("out"),vec![s("a.csv"),s("b")]),
+       "the output directory \"out\" is not empty, but it has no \
+clue_manifest.toml, so it was not written by this version of CluE; it \
+contains a.csv, b; move these files or set a different output.directory"),
+      (CluEError::OutputVersionMismatch(s("out"),s("0.9.0"),s("1.0.0")),
+       "the output in \"out\" was written by CluE 0.9.0, but this is CluE \
+1.0.0; move it or set a different output.directory"),
+      (CluEError::OutputConfigMismatch(s("out"),
+          vec![s("radius:"),s("  - 8.0,"),s("  + 9.0,")], None),
+       "the output in \"out\" belongs to a different simulation; the \
+settings differ (- recorded, + now):\n  radius:\n    - 8.0,\n    + 9.0,\n\
+Move the output or set a different output.directory"),
+      (CluEError::OutputConfigMismatch(s("out"), vec![s("  + x,")], 
+          Some((s("rustc 1.0.0"),s("rustc 2.0.0")))),
+       "the output in \"out\" belongs to a different simulation; the \
+settings differ (- recorded, + now):\n    + x,\nThis output was written by \
+a CluE build compiled with rustc 1.0.0; this build uses rustc 2.0.0. \
+Different Rust compilers can format the configuration differently, so the \
+differences listed above may be formatting only. If so, the existing output \
+is still valid; move it or set a different output.directory"),
+      (CluEError::OutputNeedsSeed(s("out"),42),
+       "the output in \"out\" was computed with run.rng_seed = 42, but \
+run.rng_seed is not set; set rng_seed = 42 in the [run] table to resume it, \
+or set a different output.directory"),
+      (CluEError::OutputSeedMismatch(s("out"),42,7),
+       "the output in \"out\" was computed with run.rng_seed = 42, but \
+run.rng_seed is 7; set rng_seed = 42 to resume it, or set a different \
+output.directory"),
+      (CluEError::OutputStructureRemoved(s("out"),s("a.pdb"),s("s_01")),
+       "the output in \"out\" contains structure \"a.pdb\" (s_01), which is \
+not an input structure, or whose file contents changed; structures can be \
+added to an output, but not removed or changed; restore the structure file \
+or set a different output.directory"),
+      (CluEError::OutputFewerRuns(s("out"),s("a.pdb"),3,2),
+       "the output in \"out\" has 3 instances of structure \"a.pdb\", but \
+run.number_runs = 2; number_runs can be increased to resume an output, but \
+not decreased; set number_runs to at least 3 or set a different \
+output.directory"),
+      (CluEError::OutputSeedSequenceChanged(s("out"),s("instance 2")),
+       "the seeds recorded in \"out\" differ from the seeds this build \
+derives from run.rng_seed (instance 2), so the output cannot be resumed; \
+move it or set a different output.directory"),
+      (CluEError::OutputBatchSizeMismatch(s("out"),1000,500),
+       "the auxiliary signals in \"out\" were saved in batches of \
+run.cluster_batch_size = 1000, but it is 500; set cluster_batch_size = 1000 \
+to resume the output"),
     ];
     for (error, message) in cases{
       assert_eq!(error.to_string(), message, "{:?}", error);

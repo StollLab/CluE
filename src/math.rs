@@ -1,9 +1,6 @@
 use crate::CluEError;
 
 use std::collections::HashSet;
-use std::fmt::Debug;
-use std::hash::{Hash,Hasher};
-use std::collections::hash_map::DefaultHasher;
 
 use num_complex::Complex64;
 use ndarray::{array,Array1,Array2,s};
@@ -66,12 +63,23 @@ where T: std::cmp::Eq  + std::hash::Hash + std::cmp::Ord
   out
 }
 //------------------------------------------------------------------------------
-/// This function converts `input` to a `u64` via a `String` intermediary.
-pub fn str_hash<T: Debug>(input: &T) -> u64 {
-  let in_str = format!("{:?}",input);
-  let mut out = DefaultHasher::new();
-  in_str.hash(&mut out);
-  out.finish()
+/// This function returns the 64-bit FNV-1a hash of `bytes`.
+/// FNV-1a (Fowler–Noll–Vo) starts from the offset basis 
+/// 0xcbf29ce484222325 and, for each byte, XORs the byte into the hash and
+/// multiplies by the prime 0x100000001b3 modulo 2^64; see G. Fowler, 
+/// L. C. Noll, K.-P. Vo, and D. Eastlake, "The FNV Non-Cryptographic Hash
+/// Algorithm", IETF draft-eastlake-fnv.
+/// Unlike `std::collections::hash_map::DefaultHasher`, the result does not
+/// depend on the Rust release, so it can name files and be stored.
+pub fn fnv1a_64(bytes: &[u8]) -> u64 {
+  const OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+  const PRIME: u64 = 0x100000001b3;
+  let mut hash = OFFSET_BASIS;
+  for &byte in bytes.iter(){
+    hash ^= byte as u64;
+    hash = hash.wrapping_mul(PRIME);
+  }
+  hash
 }
 //------------------------------------------------------------------------------
 /*   
@@ -264,6 +272,14 @@ mod tests{
     let a = vec![1,1,2,3,2];
     let a = unique(a);
     assert_eq!(a,vec![1,2,3]);
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_fnv1a_64(){
+    // Test vectors of the FNV reference implementation (L. C. Noll).
+    assert_eq!(fnv1a_64(b""), 0xcbf29ce484222325);
+    assert_eq!(fnv1a_64(b"a"), 0xaf63dc4c8601ec8c);
+    assert_eq!(fnv1a_64(b"foobar"), 0x85944171f73967e8);
   }
   //----------------------------------------------------------------------------
   /*

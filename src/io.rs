@@ -3,6 +3,7 @@ use crate::cluster::cluster_set::ClusterSet;
 use crate::config::Config;
 use crate::math;
 use crate::signal::load_batch_signals;
+pub use crate::output_manifest::structure_output_dirs;
 
 use std::{
   collections::HashMap,
@@ -158,6 +159,28 @@ fn read_single_vec_of_floats_from_csv(filename: &str)
   Ok(time_axis)
 }
 //------------------------------------------------------------------------------
+/// This function writes `filename` through the temporary file 
+/// `<filename>.tmp`: `write` writes the temporary file, which is then 
+/// renamed to `filename`. An interrupted write therefore never leaves a 
+/// partly written `filename`, only a `.tmp` file.
+/// If `write` fails, the temporary file is removed and the error of 
+/// `write` is returned.
+pub fn write_atomically<F>(filename: &str, write: F) -> Result<(),CluEError>
+where F: FnOnce(&str) -> Result<(),CluEError>
+{
+  let tmp_file = format!("{}.tmp", filename);
+  if let Err(err) = write(&tmp_file){
+    let _ = std::fs::remove_file(&tmp_file);
+    return Err(err);
+  }
+  if let Err(err) = std::fs::rename(&tmp_file, filename){
+    let _ = std::fs::remove_file(&tmp_file);
+    return Err(CluEError::CannotWriteFile(filename.to_string(), 
+          err.to_string()));
+  }
+  Ok(())
+}
+//------------------------------------------------------------------------------
 /// This function writes signal data to a csv.
 pub fn write_data<T>(data: &[Vec::<T>], filename: &str,
     headers: Vec::<String>) -> Result<(),CluEError> where T: std::fmt::Display
@@ -173,11 +196,13 @@ pub fn write_data<T>(data: &[Vec::<T>], filename: &str,
      }
    }
 
-    match write_vecs_to_csv(data,filename,headers){
-      Ok(()) => Ok(()),
-      Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
-            err.to_string())),
-    }
+    write_atomically(filename, |tmp_file|
+      match write_vecs_to_csv(data,tmp_file,headers){
+        Ok(()) => Ok(()),
+        Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
+              err.to_string())),
+      }
+    )
 }
 //------------------------------------------------------------------------------
 // This function writes signal data to a csv.
@@ -260,21 +285,30 @@ mod tests{
       .replace("number_timepoints = [301]","number_timepoints = [11]")
       .replace("auxiliary_signals = false",
           &format!("auxiliary_signals = true\n  directory = \"{}\"",out));
-    let toml = format!("{}\n[run]\n  cluster_batch_size = 2\n",toml);
+    let toml = format!("{}\n[run]\n  cluster_batch_size = 2\n  \
+rng_seed = 5\n",toml);
     let config = Config::from_toml_string(&toml).unwrap();
     assert_eq!(config.output_directory, Some(out.clone()));
     let (_, signal_first) = crate::run(config.clone()).unwrap();
-    // A second run into the same directory reloads every batch, including
-    // the empty cluster's, through the checkpoint path.
-    let (_, signal_second) = crate::run(config.clone()).unwrap();
-    assert_eq!(signal_first, signal_second);
 
-    // The run_name of the asset is "system"; there is one orientation.
-    let ori_root = format!("{}/system/{}",out,SAVE_DIR_ORIENTATION_SIGNALS);
+    // There is one structure, one instance, and one orientation.
+    let structure_dirs = structure_output_dirs(&out).unwrap();
+    assert_eq!(structure_dirs.len(),1);
+    let ori_root = format!("{}/instance_1/{}",structure_dirs[0].2,
+        SAVE_DIR_ORIENTATION_SIGNALS);
     let entries = std::fs::read_dir(&ori_root).unwrap()
       .map(|e| e.unwrap().path()).collect::<Vec::<_>>();
     assert_eq!(entries.len(),1);
     let ori_dir = entries[0].to_str().unwrap().to_string();
+
+    // Without the orientation's signal, a second run into the same 
+    // directory computes the orientation again and reloads every batch,
+    // including the empty cluster's, through the checkpoint path.
+    let ori_signal = format!("{}/signal.csv",ori_dir);
+    std::fs::remove_file(&ori_signal).unwrap();
+    let (_, signal_second) = crate::run(config.clone()).unwrap();
+    assert_eq!(signal_first, signal_second);
+    assert!(std::path::Path::new(&ori_signal).exists());
 
     let mut rng = ChaCha20Rng::seed_from_u64(0);
     let structure = Structure::build_structure(&mut rng,&config).unwrap();

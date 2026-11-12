@@ -38,7 +38,6 @@
   vector = [0.67436015, 0.67436015, 0.3007936 ]
   
 [output]
-  run_name = "system"
   auxiliary_signals = false
   bath = true
   clusters = true

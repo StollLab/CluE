@@ -95,31 +95,32 @@ fn main() {
   eprintln!("CluE successfully completed in {} s.", elapsed_time.as_secs());
 }
 //------------------------------------------------------------------------------
-// This function reads and checks the input file named in `input` without 
-// running it: it parses the file, sets the defaults, and runs 
-// `Config::check_completeness()`.
-// It prints "<file>: OK" and exits with 0, or prints the error and exits
-// with 1.
+// This function checks the input file named in `input` without running
+// it, and then the output directory the run would use 
+// (`clue_oxide::check()`). It prints one line for the input and one for 
+// the output, each starting with "<file>: ", errors to stderr and the 
+// rest to stdout, and exits with 0 if both are fine, and with 1 otherwise.
+// Nothing is written.
 fn check_input(input: CommandLineInput) -> !{
   let prefix = match &input.config_file{
     Some(filename) => format!("{}: ", filename),
     None => String::new(),
   };
 
-  let result = Config::read_input(input).and_then(|mut config|{
-    config.set_defaults()?;
-    config.check_completeness()
-  });
+  let report = clue_oxide::check(input);
 
-  match result{
-    Ok(()) => {
-      println!("{}OK", prefix);
-      std::process::exit(0);
-    },
-    Err(err) => {
-      eprintln!("{}CluE Error: {}.", prefix, err);
-      std::process::exit(1);
-    },
+  for (is_error, message) in report.messages(){
+    if is_error{
+      eprintln!("{}{}", prefix, message);
+    }else{
+      println!("{}{}", prefix, message);
+    }
+  }
+
+  if report.is_ok(){
+    std::process::exit(0);
+  }else{
+    std::process::exit(1);
   }
 }
 //------------------------------------------------------------------------------

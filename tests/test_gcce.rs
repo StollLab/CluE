@@ -10,7 +10,14 @@ fn int_test_gcce(){
  config.cluster_method = Some(ClusterMethod::GCCE);
  config.detected_spin_multiplicity = Some(2);
 
+ // A fresh output directory, so that the run computes the signal.
+ let out_dir = std::env::temp_dir().join(format!(
+       "clue_oxide_int_test_gcce_{}", std::process::id()));
+ let _ = std::fs::remove_dir_all(&out_dir);
+ config.output_directory = Some(out_dir.to_str().unwrap().to_string());
+
  let (_time_axis,signal) = run(config).unwrap();
+ let _ = std::fs::remove_dir_all(&out_dir);
 
  let signal = Signal{data: signal};
 

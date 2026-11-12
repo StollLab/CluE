@@ -3,6 +3,7 @@ pub mod calculate_signal;
 
 use crate::CluEError;
 use crate::cluster::Cluster;
+use crate::io::write_atomically;
 use crate::structure::Structure;
 
 use std::ops::{Add,Sub,Mul,Div};
@@ -89,11 +90,13 @@ impl Signal{
   /// This function tries to write a `Signal` ro csv file.  
   /// It will return an `Err(CluEError)` if it fails. 
   pub fn write_to_csv(&self, filename: &str) -> Result<(),CluEError>{
-    match self.write_single_signal_to_csv(filename){
-      Ok(()) => Ok(()),
-      Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
-            err.to_string())),
-    }
+    write_atomically(filename, |tmp_file|
+      match self.write_single_signal_to_csv(tmp_file){
+        Ok(()) => Ok(()),
+        Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
+              err.to_string())),
+      }
+    )
   }
   //----------------------------------------------------------------------------
   // This function tries to write a `Signal` ro csv file.  
@@ -148,11 +151,13 @@ pub fn write_vec_signals(signals: &[Signal],
      }
    }
 
-    match write_vec_signals_to_csv(signals,filename,headers){
-      Ok(()) => Ok(()),
-      Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
-            err.to_string())),
-    }
+    write_atomically(filename, |tmp_file|
+      match write_vec_signals_to_csv(signals,tmp_file,headers){
+        Ok(()) => Ok(()),
+        Err(err) => Err(CluEError::CannotWriteCSV(filename.to_string(),
+              err.to_string())),
+      }
+    )
 }
 //------------------------------------------------------------------------------
 // This function is the back end to `write_vec_signals()`, and saves a 
@@ -284,9 +289,24 @@ pub fn load_batch_signals(clusters: &mut [Cluster],
 /// The file is assummed to be saved from CluE Oxide as part of the
 /// checkpointing process.
 /// This function will return an error if it cannot write the file.
+/// The file is written through a temporary file (`io::write_atomically()`),
+/// so an interrupted run never leaves a partly written batch file.
 pub fn write_batch_signals(clusters: &[Cluster], 
     n_data: usize, idx: usize, batch_size: usize, 
     filename: &str, structure: &Structure) -> Result<(),CluEError>
+{
+  write_atomically(filename, |tmp_file| 
+    write_batch_signals_to_file(clusters, n_data, idx, batch_size, filename,
+        tmp_file, structure)
+  )
+}
+//------------------------------------------------------------------------------
+// This function is the back end of `write_batch_signals()`: it writes the
+// batch to `tmp_file`; errors name `filename`.
+fn write_batch_signals_to_file(clusters: &[Cluster], 
+    n_data: usize, idx: usize, batch_size: usize, 
+    filename: &str, tmp_file: &str, structure: &Structure) 
+  -> Result<(),CluEError>
 {
 
   let mut headers = Vec::<String>::with_capacity(batch_size);
@@ -296,7 +316,7 @@ pub fn write_batch_signals(clusters: &[Cluster],
     headers.push(header);
   }
 
-  let mut wtr = match csv::Writer::from_path(filename){
+  let mut wtr = match csv::Writer::from_path(tmp_file){
     Ok(wtr) => wtr,
     Err(err) => return Err(CluEError::CannotCreateFile(filename.to_string(),
           err.to_string())),
@@ -510,6 +530,33 @@ mod tests{
   //----------------------------------------------------------------------------
   // Writing into a directory that does not exist gives CannotWriteCSV with
   // the file name and the reason from the operating system.
+  #[test]
+  fn test_signal_csv_round_trip_is_exact(){
+    // Resuming an output loads saved signals instead of computing them, 
+    // so a written and read signal must have the same bits.
+    let values = [0.0, -0.0, 1.0/3.0, 0.1 + 0.2, -1e300, 5e-324, 
+      -2.2250738585072014e-308, 1.6562997521730228e-32, f64::MAX];
+    let mut data = Vec::<Complex64>::new();
+    for &re in values.iter(){
+      for &im in values.iter(){
+        data.push(Complex64::new(re, im));
+      }
+    }
+    let signal = Signal{data};
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_round_trip_{}.csv", std::process::id()));
+    let filename = filename.to_str().unwrap().to_string();
+    write_vec_signals(&[signal.clone()], vec!["signal_0".to_string()],
+        &filename).unwrap();
+    let read = load_csv_to_vec_signals(&filename).unwrap();
+    std::fs::remove_file(&filename).unwrap();
+    assert_eq!(read.len(), 1);
+    for (a, b) in signal.data.iter().zip(read[0].data.iter()){
+      assert_eq!((a.re.to_bits(), a.im.to_bits()), 
+          (b.re.to_bits(), b.im.to_bits()), "{} read as {}", a, b);
+    }
+  }
+  //----------------------------------------------------------------------------
   #[test]
   fn test_write_csv_errors_give_the_reason(){
     let dir = std::env::temp_dir().join(format!(

@@ -122,11 +122,25 @@ fn calculate_auxiliary_signals(
           let aux_filename = format!("{}/cluster_size_{}_batch_{}.csv",
               load_dir, cluster_size,ibatch);
 
+          // The record of the output directory (clue_manifest.toml)
+          // guarantees that saved batches belong to this run (same
+          // config, seed, and batch size). A file that does not match the
+          // batch, for example one left incomplete by an older version,
+          // is recomputed and overwritten.
           if Path::new(&aux_filename).exists(){
-             load_batch_signals(&mut clusters[cluster_size],
-                 idx,batch_size,n_tot,&aux_filename)?;
-
-             continue;
+             match load_batch_signals(&mut clusters[cluster_size],
+                 idx,batch_size,n_tot,&aux_filename)
+             {
+               Ok(()) => continue,
+               Err(err @ CluEError::WrongNumberOfBatchSignals(..))
+               | Err(err @ CluEError::WrongBatchSignalLength(..))
+               | Err(err @ CluEError::CannotParseSignalEntry(..))
+               | Err(err @ CluEError::CannotReadFile(..)) => {
+                 println!("Recomputing batch {} of the clusters of size {}: \
+{}.", ibatch, cluster_size, err);
+               },
+               Err(err) => return Err(err),
+             }
           }
         }
       }

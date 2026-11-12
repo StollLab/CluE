@@ -36,7 +36,6 @@ grid = "random"
 number = 1
 
 [output]
-  run_name = "system"
   auxiliary_signals = false
   bath = true
   clusters = false

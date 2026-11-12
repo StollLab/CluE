@@ -145,7 +145,6 @@ pub struct Config{
 
   // Output
   pub output_directory: Option<String>,
-  pub run_name: Option<String>,
   pub write_auxiliary_signals: Option<bool>, 
   pub write_bath: Option<bool>,
   pub write_clusters: Option<bool>,
@@ -172,6 +171,48 @@ pub const DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 /// The default allowed difference between one and the sum of the weights of 
 /// an orientation grid.
 pub const DEFAULT_ORIENTATION_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/// `StructureInput` is one input structure of a run.
+/// `file` is the structure file, `content_hash` the FNV-1a hash of its
+/// contents, `id` the name of its output directory
+/// (`s_<content_hash in hex>`), and `weight` its weight in the average
+/// over structures.
+/// The id depends only on the file contents, not on the file name or on
+/// the position of the structure in a list of structures.
+#[derive(Debug,Clone,PartialEq)]
+pub struct StructureInput{
+  pub file: String,
+  pub content_hash: u64,
+  pub id: String,
+  pub weight: f64,
+}
+
+impl StructureInput{
+  //----------------------------------------------------------------------------
+  /// This function reads `file` and returns its `StructureInput`.
+  pub fn from_file(file: &str, weight: f64) -> Result<Self,CluEError>{
+    let contents = match fs::read(file){
+      Ok(contents) => contents,
+      Err(err) => return Err(CluEError::CannotOpenFile(file.to_string(),
+            err.to_string())),
+    };
+    let content_hash = crate::math::fnv1a_64(&contents);
+    Ok(StructureInput{
+      file: file.to_string(),
+      content_hash,
+      id: format!("s_{:016x}", content_hash),
+      weight,
+    })
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns the content hash as 16 hexadecimal digits.
+  pub fn content_hash_hex(&self) -> String{
+    format!("{:016x}", self.content_hash)
+  }
+  //----------------------------------------------------------------------------
+}
+//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 impl FromTOMLString for Config{
   fn from_toml_string(toml_str: &str) -> Result<Self,CluEError>{
@@ -608,6 +649,51 @@ they were normalized to ({}).", label, original, sum, list(abundances));
   //----------------------------------------------------------------------------
   pub fn get_total_number_timesteps(&self) -> usize{
     self.total_number_timepoints
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns the fingerprint of the simulation that the
+  /// config describes: the pretty-printed `Debug` text of the config,
+  /// with the fields cleared that do not change the computed signals or
+  /// that the record of an output directory (`clue_manifest.toml`) keeps
+  /// separately. These are the [output] settings, run.parallel,
+  /// run.cluster_batch_size, run.number_runs, run.rng_seed, and
+  /// structure.file.
+  /// Files that are read during a run (cluster files and partition-table
+  /// csv files) enter only by name; their contents are recorded separately.
+  pub fn physics_fingerprint(&self) -> String{
+    let mut config = self.clone();
+
+    config.output_directory = None;
+    for switch in [&mut config.write_auxiliary_signals,
+      &mut config.write_bath, &mut config.write_clusters,
+      &mut config.write_detected_spin, &mut config.write_info,
+      &mut config.write_exchange_groups, &mut config.write_methyl_partitions,
+      &mut config.write_orientation_grid,
+      &mut config.write_orientation_signals,
+      &mut config.write_partition_table, &mut config.write_sans_spin_signals,
+      &mut config.write_structure_pdb, &mut config.write_tensors]
+    {
+      *switch = None;
+    }
+
+    config.run_in_parallel = None;
+    config.cluster_batch_size = None;
+    config.number_runs = None;
+    config.rng_seed = None;
+    config.input_structure_file = None;
+
+    format!("{:#?}", config)
+  }
+  //----------------------------------------------------------------------------
+  /// This function returns the input structures of the run, each with the
+  /// hash of its file contents and its weight in the average over
+  /// structures.
+  /// There is one structure, structure.file, with weight 1.
+  pub fn structure_inputs(&self) -> Result<Vec::<StructureInput>,CluEError>{
+    let Some(file) = &self.input_structure_file else{
+      return Err(CluEError::NoStructureFile);
+    };
+    Ok(vec![StructureInput::from_file(file, 1.0)?])
   }
   //----------------------------------------------------------------------------
   /*
@@ -1683,9 +1769,6 @@ impl Config{
     if output.directory.is_some(){
       mem::swap(&mut self.output_directory, &mut output.directory);
     }
-    if output.run_name.is_some(){
-      mem::swap(&mut self.run_name, &mut output.run_name);
-    }
 
     let switches = [
       (output.auxiliary_signals, &mut self.write_auxiliary_signals),
@@ -1820,9 +1903,6 @@ mod tests{
 
       [output]
       directory = "save_directory"
-      # TODO: remove run_name and automate hash remove
-      # TODO: rework hash vs run number system
-      run_name = "system"
       auxiliary_signals = true
       bath = true
       clusters = true
@@ -1945,7 +2025,6 @@ mod tests{
     assert_eq!(config.radius, Some(80.0e-10));
     assert_eq!(config.rng_seed, Some(42));
     assert_eq!(config.output_directory, Some(String::from("save_directory")));
-    assert_eq!(config.run_name, Some(String::from("system")));
     assert_eq!(config.tau_increments, vec![1e-9,5e-7]);
     assert_eq!(config.write_auxiliary_signals, Some(true));
     assert_eq!(config.write_bath, Some(true));
@@ -2107,7 +2186,6 @@ mod tests{
 
         [output]
         directory = "out"
-        run_name = "sys"
         auxiliary_signals = true
         bath = false
         clusters = true
@@ -2177,7 +2255,6 @@ mod tests{
 
     // [output]
     assert_eq!(config.output_directory, Some("out".to_string()));
-    assert_eq!(config.run_name, Some("sys".to_string()));
     assert_eq!([config.write_auxiliary_signals, config.write_bath,
         config.write_clusters, config.write_detected_spin, 
         config.write_exchange_groups, config.write_info,

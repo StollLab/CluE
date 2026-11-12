@@ -74,7 +74,11 @@ under the rug, hallucinated, or did not complete.
 ```
 src/
   main.rs            CLI entry point: parse args -> Config -> clue_oxide::run
-  lib.rs             `run(config)`: time axis, output dir, calculate signals, write CSVs
+  lib.rs             `run(config)`: time axis, output dir, calculate signals, write CSVs;
+                     `check(input)` for `--check`
+  output_manifest.rs output-directory record (`clue_manifest.toml`), seeds of
+                     structures/instances/orientations, resume decision
+                     (`inspect_output`) and progress (`OutputState`)
   config.rs          `Config` struct, defaults, enums (ClusterMethod, PulseSequence, ...)
   config/
     config_toml.rs   serde TOML structs (`ConfigTOML`); parsing runs the key check
@@ -93,6 +97,7 @@ src/
   isotopes.rs, elements.rs, physical_constants.rs  physical data tables
   space_3d.rs, math.rs, kmeans.rs, integration_grid.rs, symmetric_list_2d.rs
   info/              --help, --license, --version, --warranty text
+build.rs             records the rustc version (`CLUE_RUSTC_VERSION`) for the manifest
 tests/test_1omp.rs   integration test: compares a full run to a reference signal
 tests/test_gcce.rs   integration test: gCCE run against the same reference (looser tolerance)
 assets/              structures, TOML configs, and reference CSVs used by tests
@@ -137,7 +142,11 @@ pyclue is a separate crate and is not compiled by `cargo test` at the root.
 The CLI takes a single TOML config file (`clue_oxide config.toml`).
 `clue_oxide -c config.toml` (`--check`) checks the file without running it:
 it parses the file (including the key check), sets the defaults, and runs
-`Config::check_completeness`, then prints `<file>: OK` or the errors. See
+`Config::check_completeness`; if the input is valid, it then checks the
+output directory with `output_manifest::inspect_output` (read-only). It
+prints one line for the input (`<file>: input OK` or the error) and one for
+the output (new, complete, resumes, or the error a run would stop with);
+the logic is `clue_oxide::check`. See
 `assets/1omp_K26R1_0.003228966616048703.toml` for a representative example. The
 old `.clue` token format was removed in 0.2.3-alpha.1; files in that
 format no longer run.
