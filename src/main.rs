@@ -54,6 +54,10 @@ fn main() {
     return;
   }
 
+  if input.check_only{
+    check_input(input);
+  }
+
   if input.show_title{
     info::title::print_title();
   }
@@ -90,7 +94,32 @@ fn main() {
   let elapsed_time = now.elapsed();
   eprintln!("CluE successfully completed in {} s.", elapsed_time.as_secs());
 }
+//------------------------------------------------------------------------------
+// This function reads and checks the input file named in `input` without 
+// running it: it parses the file, sets the defaults, and runs 
+// `Config::check_completeness()`.
+// It prints "<file>: OK" and exits with 0, or prints the error and exits
+// with 1.
+fn check_input(input: CommandLineInput) -> !{
+  let prefix = match &input.config_file{
+    Some(filename) => format!("{}: ", filename),
+    None => String::new(),
+  };
 
+  let result = Config::read_input(input).and_then(|mut config|{
+    config.set_defaults()?;
+    config.check_completeness()
+  });
 
-
-
+  match result{
+    Ok(()) => {
+      println!("{}OK", prefix);
+      std::process::exit(0);
+    },
+    Err(err) => {
+      eprintln!("{}CluE Error: {}.", prefix, err);
+      std::process::exit(1);
+    },
+  }
+}
+//------------------------------------------------------------------------------

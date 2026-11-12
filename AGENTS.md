@@ -77,9 +77,12 @@ src/
   lib.rs             `run(config)`: time axis, output dir, calculate signals, write CSVs
   config.rs          `Config` struct, defaults, enums (ClusterMethod, PulseSequence, ...)
   config/
-    config_toml.rs   serde TOML schema + ALLOWED_KEYS list (unknown keys are errors)
+    config_toml.rs   serde TOML structs (`ConfigTOML`); parsing runs the key check
+    toml_keys.rs     `KEY_*` key-name constants and default units
+    validate.rs      per-table key check (`check_toml_keys`: unknown or misplaced
+                     keys are errors) and `Config::check_completeness`
     particle_config.rs  per-group / per-isotope particle settings
-    command_line_input.rs  CLI flags (-h, -l, -V, -W, -H, -O)
+    command_line_input.rs  CLI flags (-c, -h, -l, -V, -W, -H, -O)
   structure/         structure input (pdb.rs, gro.rs), particle filters,
                      exchange groups, extended (periodic) structures
   cluster/           adjacency lists, cluster finding, partitioning
@@ -91,6 +94,7 @@ src/
   space_3d.rs, math.rs, kmeans.rs, integration_grid.rs, symmetric_list_2d.rs
   info/              --help, --license, --version, --warranty text
 tests/test_1omp.rs   integration test: compares a full run to a reference signal
+tests/test_gcce.rs   integration test: gCCE run against the same reference (looser tolerance)
 assets/              structures, TOML configs, and reference CSVs used by tests
 examples/            example inputs and plotting scripts (not maintained by tests)
 pyclue/src/          current Python bindings (py_*.rs wrappers around the core crate)
@@ -105,7 +109,7 @@ test load files via relative paths such as `assets/TEMPO.pdb`.
 
 ```sh
 cargo build --release     # binary at target/release/clue_oxide
-cargo test                # unit tests (in-module #[cfg(test)]) + tests/test_1omp.rs
+cargo test                # unit tests (in-module #[cfg(test)]) + tests/test_1omp.rs, tests/test_gcce.rs
 ./clean_test_output.sh    # removes CluE-* output directories created by runs/tests
 ```
 
@@ -131,18 +135,33 @@ pyclue is a separate crate and is not compiled by `cargo test` at the root.
 
 ## Input format
 
-The CLI takes a single TOML config file (`clue_oxide config.toml`). See
+The CLI takes a single TOML config file (`clue_oxide config.toml`).
+`clue_oxide -c config.toml` (`--check`) checks the file without running it:
+it parses the file (including the key check), sets the defaults, and runs
+`Config::check_completeness`, then prints `<file>: OK` or the errors. See
 `assets/1omp_K26R1_0.003228966616048703.toml` for a representative example. The
 old `.clue` token format was removed in 0.2.3-alpha.1; files such as
 `examples/*/sim.clue` use the old format and no longer run.
 
 When adding or renaming a config key:
-1. Add the field to the serde structs in `src/config/config_toml.rs`.
-2. Add the key to `ALLOWED_KEYS` in the same file and update the array length
-   (`[&str; N]`). Unknown keys are reported as errors, so a missing entry
-   breaks valid configs.
+1. Add the field to the serde structs in `src/config/config_toml.rs` (or, for
+   `[[groups]]` keys, read it in `src/config/particle_config.rs` or
+   `src/structure/particle_filter.rs`); add a `KEY_*` constant to
+   `src/config/toml_keys.rs` where the code reads the key by name.
+2. Add the key to the key list of its table in `src/config/validate.rs`
+   (`TOP_LEVEL_KEYS`, `DETECTED_SPIN_KEYS`, `GROUP_KEYS`, `SELECTION_KEYS`,
+   `ISOTOPE_KEYS`, ...) and update the array length (`[&str; N]`). Keys are
+   checked per table, so a missing entry rejects valid configs. For a new
+   table, also add a `Schema` variant, list it in `ALL_SCHEMAS` (the compiler
+   does not catch a missing entry there), and handle it in `Schema::keys`,
+   `Schema::child` (the parent table) and `Schema::description`.
 3. Handle it in `Config::set_from_config_toml` / `set_defaults` in `src/config.rs`.
-4. Document it in `manual/CluE_Oxide.tex` and `change_log.txt`.
+4. If a run cannot work without the setting, or it requires or conflicts with
+   other settings, report that in `Config::check_completeness`
+   (`src/config/validate.rs`), which runs at the start of `clue_oxide::run`
+   and in `--check`.
+5. Document it in `change_log.txt`, and record in `report_manual.md` that the
+   manual is out of sync (the manual itself is not edited; see "Manual").
 
 ## Code conventions
 

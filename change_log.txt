@@ -23,6 +23,12 @@ ADDED:
   error; weights within the tolerance are normalized. Previously the 
   weights were used as given, and the signal was scaled by their sum.
 
+  The command line option -c, --check reads and checks an input file
+  without running it: it reports unknown or misplaced keys, missing
+  settings, and missing files, prints "<file>: OK" or the errors, and
+  exits with 0 or 1. Errors that depend on the structure (group names,
+  overlapping groups, empty selections) are still found only by a run.
+
 CHANGED:
   Molecules are now always the complete sets of bonded atoms (from the
   CONECT records). Previously an atom bonded to two atoms that were each
@@ -396,6 +402,39 @@ CHANGED:
   Previously the signals were attached by position without checks, which
   could attach wrong signals or panic. cluster_batch_size = 0 is now an
   error; previously the run never finished.
+
+  Input keys are now checked per table. Previously a key was accepted if
+  its name was allowed anywhere in the input, so a key in the wrong table
+  (for example radius under [detected_spin]) or an option value used as a
+  key (lebedev = 1) was ignored without an error. Every key that is not
+  allowed in its table is now reported, all together, with its full path
+  (for example groups[2].selection.not_elemnts, counting [[groups]]
+  entries from 0) and, for a known key, the table it belongs in. Input
+  files that worked only because such a key was ignored now stop with an
+  error.
+
+  A run now first checks that the settings it needs are set (for example
+  input_structure_file, radius, magnetic_field, detected_spin.position,
+  pulse_sequence, number_timepoints, tau_increments, cluster_method,
+  max_cluster_size), that settings required by other settings are set
+  (temperature for populations = "thermal"; for cluster_method = "gcce",
+  detected_spin.detection_operator, detected_spin.density_matrix, and the
+  temperature they or thermalize_cluster_populations need), that settings
+  do not conflict (mean_fields = true with ensemble_cce = true), and that
+  the structure file, the cluster file or directory, and a csv
+  partition_table exist. All problems are reported together before any
+  work is done. Previously each was found on its own, partway through the
+  run. This also applies to pyCluE's PyConfig.run.
+
+  The detected spin is checked before a run. detected_spin.multiplicity
+  must be at least 2 (a spin-0 detected_spin.identity gives 1); 
+  previously gCCE then panicked. For CCE and gCCE, detected_spin.transition
+  is required when the multiplicity is not 2, and must name two different
+  levels from 0 to multiplicity - 1; previously a missing transition 
+  stopped the run after the clusters were built, a level out of range 
+  panicked, and two equal levels gave a misleading error (CCE) or 
+  meaningless signals with no error (gCCE). For gCCE, the levels of a
+  detection_operator = [i, j] must also be in range.
 
 REMOVED:
   cosubstitute = "bonded", which did not group particles as intended, is 

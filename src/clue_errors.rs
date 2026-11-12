@@ -71,6 +71,7 @@ pub enum CluEError{
   FiltersOverlap(String,String),
   GroupHasNoSelection(String),
   InvalidGroBox(String),
+  IncompleteConfig(Vec::<String>),
   IncorrectNumberOfCellOffsets(usize,usize),
   InvalidAxes,
   InvalidClusterPartitionKey,
@@ -93,7 +94,7 @@ pub enum CluEError{
   IsotopeAbundancesDoNotSumToOne(String,String,f64,f64),
   InvalidStevens(String),
   InvalidStevensCoefficientShape(usize,usize,usize),
-  InvalidTOMLKey(String),
+  InvalidTOMLKeys(Vec::<String>),
   InvalidTOMLValue(String,String,String),
   LengthMismatchTimepointsIncrements(String,usize,usize),
   MeanFieldECCENotImplemented,
@@ -444,6 +445,9 @@ particles must not reside in more than one group",label0,label1),
 which needs the first edge along x and the second edge in the xy plane",
           edges),
 
+      CluEError::IncompleteConfig(problems) => write!(f,
+          "the input is incomplete:\n  {}", problems.join("\n  ")),
+
       CluEError::IncorrectNumberOfCellOffsets(n,n_ref)=> write!(f,
           "expected {} cell offsets, but {} were provided",n_ref, n),
 
@@ -528,8 +532,9 @@ than 1", tolerance),
           "Stevens coefficient entry {} is a {}×{} matrix, but each entry \
 must have one column", index, n_rows, n_cols),
 
-      CluEError::InvalidTOMLKey(key) => write!(f,
-          "invalid key \"{}\"",key),
+      CluEError::InvalidTOMLKeys(problems) => write!(f,
+          "the input contains keys that are not allowed where they \
+appear:\n  {}", problems.join("\n  ")),
 
       CluEError::InvalidTOMLValue(key,expected,found) => write!(f,
           "{} must be {}, but got {}",key,expected,found),

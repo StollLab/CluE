@@ -1,5 +1,6 @@
 use crate::clue_errors::CluEError;
 use crate::io::FromTOMLString;
+use crate::config::validate::check_toml_keys;
 
 use std::fmt;
 use std::collections::HashMap;
@@ -135,48 +136,15 @@ impl ConfigTOML{
 }
 
 //------------------------------------------------------------------------------
+// This function parses `toml_str` and checks that every key is allowed in
+// the table that contains it (`check_toml_keys()`).
 fn check_toml_str(toml_str: &str) -> Result<(),CluEError>{
   let config: toml::Table = match toml::from_str(toml_str){
     Ok(cfg) => cfg,
     Err(err) => return Err(CluEError::CannotReadTOMLFile( format!("{}",err) )), 
   };
 
-  check_toml_table(&config, 1)
-}
-//------------------------------------------------------------------------------
-const MAX_DEPTH: usize = 10;
-
-fn check_toml_table(config: &toml::Table, depth: usize) -> Result<(),CluEError>{  
-  assert!(depth <= MAX_DEPTH);
-
-  for (key, value) in config.iter(){
-    if !ALLOWED_KEYS.contains( &&key[..] ){
-      return Err(CluEError::InvalidTOMLKey(key.to_string()));
-    }
-
-    if let toml::Value::Table(table) = value{
-      check_toml_table(table,depth +1)?;
-    } 
-    if let toml::Value::Array(array) = value{
-      check_toml_array(array,depth +1)?;
-    }
-  }
-
-  Ok(())
-}
-//------------------------------------------------------------------------------
-fn check_toml_array(config: &[toml::Value], depth: usize) -> Result<(),CluEError>
-{  
-  assert!(depth <= MAX_DEPTH);
-
-  for el in config.iter(){
-    match el{
-      toml::Value::Table(table) => check_toml_table(table,depth +1)?,
-      toml::Value::Array(array) => check_toml_array(array,depth +1)?,
-      _ => (),  
-    } 
-  }
-  Ok(())
+  check_toml_keys(&config)
 }
 //------------------------------------------------------------------------------
 

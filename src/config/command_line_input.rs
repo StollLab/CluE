@@ -6,6 +6,7 @@ pub struct CommandLineInput{
   pub config_file: Option<String>,
   //pub output_file: Option<String>,
   pub config_options: Option<String>,
+  pub check_only: bool,
   pub show_help: bool,
   pub show_license: bool,
   pub show_title: bool,
@@ -30,6 +31,7 @@ impl CommandLineInput{
       config_file: None,
       //output_file: None,
       config_options: None,
+      check_only: false,
       show_help: false,
       show_license: false,
       show_title: true,
@@ -87,6 +89,7 @@ impl CommandLineInput{
   fn parse_long_option(&mut self, option: &str) -> Result<(),CluEError>{
   
     match option {
+      "--check" => self.check_only = true,
       "--help" => self.show_help = true,
       "--license" => self.show_license = true,
       "--hide-title" => self.show_title = false,
@@ -117,6 +120,7 @@ impl CommandLineInput{
   fn parse_short_option(&mut self, option: &str) ->  Result<(),CluEError>{
 
     match option{
+      "c" => self.check_only = true,
       "h" => self.show_help = true,
       "l" => self.show_license = true,
       "H" => self.show_title = false,
@@ -128,5 +132,36 @@ impl CommandLineInput{
     }
     Ok(())
   }  
+  //----------------------------------------------------------------------------
+}
+
+//==============================================================================
+#[cfg(test)]
+mod tests{
+  use super::*;
+
+  // This function parses `args` as if given after the program name.
+  fn parse(args: &[&str]) -> Result<CommandLineInput,CluEError>{
+    let mut all = vec!["clue_oxide".to_string()];
+    all.extend(args.iter().map(|s| s.to_string()));
+    CommandLineInput::new(all)
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_check_option(){
+    for args in [vec!["--check", "in.toml"], vec!["in.toml", "-c"],
+        vec!["-Hc", "in.toml"]]
+    {
+      let cli = parse(&args).unwrap();
+      assert!(cli.check_only, "{:?}", args);
+      assert_eq!(cli.config_file, Some("in.toml".to_string()));
+    }
+
+    let cli = parse(&["in.toml"]).unwrap();
+    assert!(!cli.check_only);
+
+    assert_eq!(parse(&["--chek", "in.toml"]).err(), 
+        Some(CluEError::UnrecognizedOption("--chek".to_string())));
+  }
   //----------------------------------------------------------------------------
 }

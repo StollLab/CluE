@@ -41,9 +41,13 @@ use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 
 /// This function follows the config instruction to central simulate spin 
 /// decoherence.
+/// It first checks the config with `Config::check_completeness()`.
 pub fn run(mut config: Config) 
   -> Result<( Vec::<f64>, Vec::<Complex::<f64>> ),CluEError>
 {
+
+  // Report missing settings and files before any work is done.
+  config.check_completeness()?;
 
   config.set_tau_axis()?;
 

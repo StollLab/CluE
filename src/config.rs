@@ -48,6 +48,7 @@ pub mod config_toml;
 pub mod particle_config;
 pub mod toml_keys;
 pub mod pulse_sequence;
+pub mod validate;
 
 
 // Define the directory and file names used to save outputs.
@@ -2325,8 +2326,9 @@ mod tests{
           name = "deuterons"
           selection.{} = ["{}"]
           "##, key, value));
-      assert_eq!(result.err(), Some(CluEError::InvalidTOMLKey(
-              key.to_string())));
+      assert_eq!(result.err(), Some(CluEError::InvalidTOMLKeys(vec![
+              format!("groups[0].selection.{} (group \"deuterons\"): \
+unknown key", key)])));
     }
   }
   //----------------------------------------------------------------------------
