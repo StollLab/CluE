@@ -65,8 +65,9 @@ pub fn get_kmeans_partition(
 
   // Every assignment is a valid partition, so the last one is used.
   if !is_converged{
-    println!("Warning: k-means did not converge within kmeans_iter_cap = {} \
-iterations; the last assignment is used.", iter_cap);
+    println!("Warning: k-means did not converge within \
+cluster_expansion.clustering.kmeans_iter_cap = {} iterations; the last \
+assignment is used.", iter_cap);
   }
 
   let mut element_to_block = (0..data.len()).map(|_| 0)

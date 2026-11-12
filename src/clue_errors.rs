@@ -386,8 +386,8 @@ size 1 to clusters of size n", file),
 
       CluEError::CentroidGroupHasDistanceSelection(label) => write!(f,
           "group \"{}\" is used to place the detected spin and cannot use \
-\"within_distance\" or \"not_within_distance\", since distances are \
-measured from the detected spin",label),
+include.distance, since distances are measured from the detected spin",
+          label),
 
       CluEError::PulseSequenceNotSupported(method,seq) => write!(f,
         "cluster method \"{}\" only supports pulse_sequence.sequence = \
@@ -799,8 +799,8 @@ respectively: they must have the same dimension",
 
       CluEError::PartitionIsIncomplete => write!(f,
           "the partition must assign every spin to a block, with blocks \
-numbered 0, 1, ..., n-1 without gaps; block numbers in partition_table must \
-be 1, 2, ..., k"),
+numbered 0, 1, ..., n-1 without gaps; block numbers in \
+cluster_expansion.clustering.partition_table must be 1, 2, ..., k"),
 
       CluEError::ResidueNumberAboveMaxInPDB(filename,line,max) => write!(f,
           "\"{}\" has a residue sequence number that is not a decimal \
@@ -982,6 +982,13 @@ position among the active bath particles"),
       (CluEError::NoApplyPBC,
        "structure.replicate_unit_cell is not set (true, false, or \
 [n1, n2, n3])"),
+      (CluEError::CentroidGroupHasDistanceSelection(s("ring")),
+       "group \"ring\" is used to place the detected spin and cannot use \
+include.distance, since distances are measured from the detected spin"),
+      (CluEError::PartitionIsIncomplete,
+       "the partition must assign every spin to a block, with blocks \
+numbered 0, 1, ..., n-1 without gaps; block numbers in \
+cluster_expansion.clustering.partition_table must be 1, 2, ..., k"),
       (CluEError::NoDetectedSpinIdentity, "detected_spin.identity is not set"),
       (CluEError::NoDetectedSpinPosition, "detected_spin.position is not set"),
       (CluEError::NoDetectedParticle,
