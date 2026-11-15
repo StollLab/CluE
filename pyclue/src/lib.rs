@@ -66,7 +66,7 @@ fn clue_odide(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function( wrap_pyfunction!(run,m)? )?;
     m.add_function( wrap_pyfunction!(build_lebedev,m)? )?;
     m.add_function( wrap_pyfunction!(dict_to_toml_string,m)? )?;
-    m.add_function( wrap_pyfunction!(load_time_axis,m)? )?;
+    m.add_function( wrap_pyfunction!(load_tau_axes,m)? )?;
     m.add_function( wrap_pyfunction!(load_signal,m)? )?;
     m.add_function( wrap_pyfunction!(load_auxiliary_signals,m)? )?;
     m.add_function( wrap_pyfunction!(appa_hahn_modulation_depth,m)? )?;

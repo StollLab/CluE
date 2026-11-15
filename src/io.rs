@@ -15,16 +15,6 @@ use std::{
 pub trait FromTOMLString{
   fn from_toml_string(s: &str) -> Result<Self,CluEError> where Self: Sized;
 } 
-//------------------------------------------------------------------------------
-/// This function reads in the time_axis.csv file.
-pub fn read_time_axis(filename: &str) -> Result<Vec::<f64>, CluEError >
-{
-  match read_single_vec_of_floats_from_csv(filename){
-    Ok(data) => Ok(data),
-    Err(err) => Err(CluEError::CannotReadFile(
-        filename.to_string(), err.to_string())),
-  }
-}
 //----------------------------------------------------------------------------
 /// This function loads auxiliary signals from 'load_dir' into a `ClusterSet`.
 /// The files are those written by `calculate_auxiliary_signals`:
@@ -130,33 +120,6 @@ fn read_csv_to_hashmap<T>(filename: &str)
     }
   }
   Ok(data)
-}
-//----------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------
-// This function tries to read a csv file into an `Ok(Vec::<Complex<f64>>)`.
-// This is the back end to `read_from_csv()`. 
-fn read_single_vec_of_floats_from_csv(filename: &str)
-  -> Result<Vec::<f64>,Box<dyn Error>>
-{
-  // Count data points.
-  let mut rdr = csv::Reader::from_path(filename)?;
-  let mut num_data = 0;
-  for _result in rdr.records() {
-      num_data += 1;
-  }
-
-  // Load signal.
-  let mut time_axis = Vec::<f64>::with_capacity(num_data);
-  let mut rdr = csv::Reader::from_path(filename)?;
-  for result in rdr.records() {
-      let record = result?;
-      if let Some(t) = record.get(0){
-        let t = t.parse::<f64>()?;
-        time_axis.push(t);
-      }
-  }
-  Ok(time_axis)
 }
 //------------------------------------------------------------------------------
 /// This function writes `filename` through the temporary file 
@@ -338,7 +301,7 @@ rng_seed = 5\n",toml);
     assert_eq!(cluster_set.clusters[0][0].signal.as_ref().unwrap()
         .as_ref().unwrap().len(), n_tot);
 
-    let run_signals = load_csv_to_vec_signals(
+    let (_tau_axes, run_signals) = load_csv_to_vec_signals(
         &format!("{}/signal.csv",ori_dir)).unwrap();
     let reference = &run_signals[run_signals.len()-1];
     for (v,v0) in product.data.iter().zip(reference.data.iter()){

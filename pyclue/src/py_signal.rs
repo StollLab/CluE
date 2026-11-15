@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use clue_oxide::signal::Signal;
+use clue_oxide::signal::{Signal,TauAxes};
 use clue_oxide::signal::load_csv_to_vec_signals;
 
 use crate::py_clue_errors::PyCluEError;
@@ -48,9 +48,12 @@ impl PySignal{
     Self{signal: Signal::zeros(n) }
   }
   //----------------------------------------------------------------------------
-  pub fn write_to_csv(&self, filename: String) -> Result<(),PyCluEError>
+  /// This function writes the signal to a csv file with the columns `tau`,
+  /// `tau2`, and `signal`; `tau` and `tau2` need one entry per point.
+  pub fn write_to_csv(&self, filename: String, tau: Vec::<f64>, 
+      tau2: Vec::<f64>) -> Result<(),PyCluEError>
   {
-    Ok(self.signal.write_to_csv(&filename)?)
+    Ok(self.signal.write_to_csv(&TauAxes{tau, tau2}, &filename)?)
   }
   //----------------------------------------------------------------------------
   pub fn len(&self) -> usize{
@@ -167,7 +170,8 @@ pub struct PySignals{
 impl PySignals{
   #[staticmethod]
   pub fn load_from_csv(filename: String) -> Result<PySignals,PyCluEError>{
-    let signals = load_csv_to_vec_signals(&filename)?;
+    // The time columns are not signals.
+    let (_tau_axes, signals) = load_csv_to_vec_signals(&filename)?;
 
     Ok(PySignals{signals})
   }

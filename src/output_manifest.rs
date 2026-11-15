@@ -8,7 +8,6 @@
 //! <output>/
 //!   clue_manifest.toml   this record
 //!   rng_seed.txt         main seed
-//!   tau_axis.csv
 //!   signal.csv           weighted average over the structures
 //!   structures.csv       directory, file, relative_weight, absolute_weight,
 //!                        content_hash, number_runs
@@ -21,6 +20,8 @@
 //!       orientation_grid_polar.csv
 //!       ori_theta_<θ>deg_phi_<φ>deg/
 //! ```
+//! Every signal.csv starts with the time columns `tau` and `tau2` (in
+//! units.time), followed by the columns `signal_0`, `signal_1`, ...
 use crate::clue_errors::CluEError;
 use crate::config::{
   ClusterSource, Config, PartitionTableConfig, StructureInput,
@@ -49,8 +50,6 @@ pub const STRUCTURE_DIR_PREFIX: &str = "structure_";
 pub const INSTANCE_DIR_PREFIX: &str = "run_";
 /// The name of the signal files.
 pub const SIGNAL_FILE: &str = "signal.csv";
-/// The name of the time axis file.
-pub const TAU_AXIS_FILE: &str = "tau_axis.csv";
 
 // The version of the layout of `clue_manifest.toml`.
 const MANIFEST_FORMAT: u32 = 2;
@@ -704,7 +703,7 @@ fn completeness(manifest: &Manifest, config: &Config, dir: &str)
   let inst_outputs = instance_outputs(config);
   let ori_outputs = orientation_outputs(config);
 
-  let mut complete = [RNG_SEED_FILE, TAU_AXIS_FILE, SIGNAL_FILE, 
+  let mut complete = [RNG_SEED_FILE, SIGNAL_FILE, 
     STRUCTURES_FILE].iter()
     .all(|file| Path::new(dir).join(file).is_file());
 
@@ -1365,7 +1364,7 @@ mod tests{
   use crate::config::command_line_input::CommandLineInput;
   use crate::io::FromTOMLString;
   use crate::physical_constants::ONE;
-  use crate::signal::{Signal,load_csv_to_vec_signals};
+  use crate::signal::{Signal,TauAxes,load_csv_to_vec_signals,write_vec_signals};
 
   const ASSET: &str = "assets/1omp_K26R1_0.003228966616048703.toml";
 
@@ -1414,7 +1413,7 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   fn read_signals(filename: &str) -> Vec::<Signal>{
-    load_csv_to_vec_signals(filename).unwrap()
+    load_csv_to_vec_signals(filename).unwrap().1
   }
   //----------------------------------------------------------------------------
   // This function returns the directory of instance `k` (from 1) of the 
@@ -1989,7 +1988,7 @@ label: \"h\",\n        },\n    ],\n}";
     crate::run(config.clone()).unwrap();
 
     assert_eq!(entry_names(&out), vec![MANIFEST_FILE, RNG_SEED_FILE, 
-        SIGNAL_FILE, "structure_1", STRUCTURES_FILE, TAU_AXIS_FILE]);
+        SIGNAL_FILE, "structure_1", STRUCTURES_FILE]);
     let structure_dir = format!("{}/structure_1", out);
     assert_eq!(entry_names(&structure_dir), vec!["run_1", "run_2", 
         SIGNAL_FILE]);
@@ -2126,6 +2125,160 @@ instances under structures/; set a different output.directory".to_string());
     assert_eq!(summaries.len(), 1);
     assert!(summaries[0].new_structure);
     assert_eq!(summaries[0].id, "structure_1");
+  }
+  //----------------------------------------------------------------------------
+  // Every signal file starts with the time columns tau and tau2 of the run,
+  // which `run` also returns; there is no tau_axis.csv, and the sans-spin
+  // signals are written to sans_spin_signals.csv.
+  #[test]
+  fn test_signal_files_have_time_columns(){
+    let out = temp_dir("time_columns");
+    let config = small_config(&out, "number_runs = 2\nrng_seed = 5", 
+        &[("methyl_partitions = true", 
+           "methyl_partitions = true\n  sans_spin_signals = true")]);
+    let tau_axes = TauAxes::from_config(&config).unwrap();
+    let (returned_axes, signal) = crate::run(config.clone()).unwrap();
+    assert_eq!(returned_axes, tau_axes);
+    assert_eq!(tau_axes.tau.len(), signal.len());
+    assert_eq!(tau_axes.tau.len(), config.get_total_number_timesteps());
+    // A Hahn echo has no tau2 axis: tau2 is zero in every row.
+    assert!(tau_axes.tau2.iter().all(|&t| t == 0.0));
+
+    let files = list_files(&out, None).unwrap();
+    assert!(!files.iter().any(|f| f.ends_with("tau_axis.csv")), "{:?}", files);
+
+    // Top level, structure, two runs, and one orientation per run.
+    let signal_files = files.iter()
+      .filter(|f| f.ends_with(SIGNAL_FILE))
+      .collect::<Vec::<&String>>();
+    assert_eq!(signal_files.len(), 6, "{:?}", signal_files);
+    for file in signal_files.iter(){
+      let path = format!("{}/{}", out, file);
+      let text = std::fs::read_to_string(&path).unwrap();
+      assert!(text.starts_with("tau,tau2,signal_0,signal_1,signal_2\n"), 
+          "{}", file);
+      let (axes, signals) = load_csv_to_vec_signals(&path).unwrap();
+      assert_eq!(axes.as_ref(), Some(&tau_axes), "{}", file);
+      assert_eq!(signals.len(), 3);
+    }
+    let top = read_signals(&format!("{}/{}", out, SIGNAL_FILE));
+    assert_eq!(top[2].data, signal);
+
+    // The sans-spin and methyl-partition signal files.
+    let sans = files.iter()
+      .filter(|f| f.ends_with("/sans_spin_signals.csv"))
+      .collect::<Vec::<&String>>();
+    assert_eq!(sans.len(), 2, "{:?}", files);
+    assert!(!files.iter().any(|f| f.ends_with("/sans_spin_signals")));
+    for file in sans.iter(){
+      let path = format!("{}/{}", out, file);
+      assert!(std::fs::read_to_string(&path).unwrap()
+          .starts_with("tau,tau2,sans_"), "{}", file);
+      let (axes, signals) = load_csv_to_vec_signals(&path).unwrap();
+      assert_eq!(axes.as_ref(), Some(&tau_axes));
+      assert!(!signals.is_empty());
+    }
+    let methyl = files.iter()
+      .filter(|f| f.contains("/methyl_partitions/"))
+      .collect::<Vec::<&String>>();
+    assert!(!methyl.is_empty(), "{:?}", files);
+    for file in methyl.iter(){
+      let path = format!("{}/{}", out, file);
+      assert!(std::fs::read_to_string(&path).unwrap()
+          .starts_with("tau,tau2,signal\n"), "{}", file);
+      assert_eq!(load_csv_to_vec_signals(&path).unwrap().0.as_ref(), 
+          Some(&tau_axes));
+    }
+
+    // The orientation records list the new file name.
+    let manifest = read_manifest(&out).unwrap().unwrap();
+    for instance in manifest.structures[0].instances.iter(){
+      for orientation in instance.orientations.iter(){
+        assert!(orientation.files
+            .contains(&"sans_spin_signals.csv".to_string()),
+            "{:?}", orientation.files);
+      }
+    }
+
+    // A complete output returns the same time columns and signal.
+    let (axes_again, signal_again) = crate::run(config).unwrap();
+    assert_eq!(axes_again, tau_axes);
+    assert_eq!(signal_again, signal);
+
+    let _ = std::fs::remove_dir_all(&out);
+  }
+  //----------------------------------------------------------------------------
+  // A saved signal file whose time columns differ from those of the run is
+  // not loaded: an instance signal is computed again, and the top-level 
+  // signal is averaged again; both are rewritten with the run's columns.
+  #[test]
+  fn test_edited_time_columns_are_not_loaded(){
+    let out = temp_dir("edited_time_columns");
+    let config = small_config(&out, "number_runs = 1\nrng_seed = 6", &[]);
+    let tau_axes = TauAxes::from_config(&config).unwrap();
+    let (_, signal) = crate::run(config.clone()).unwrap();
+
+    let run_signal = format!("{}/{}", instance_dir(&out, 1), SIGNAL_FILE);
+    let top_signal = format!("{}/{}", out, SIGNAL_FILE);
+    let run_text = std::fs::read_to_string(&run_signal).unwrap();
+    let top_text = std::fs::read_to_string(&top_signal).unwrap();
+
+    for file in [&run_signal, &top_signal]{
+      let (axes, signals) = load_csv_to_vec_signals(file).unwrap();
+      let mut edited = axes.unwrap();
+      edited.tau[1] += 1.0;
+      let headers = (0..signals.len()).map(|ii| format!("signal_{}", ii))
+        .collect::<Vec::<String>>();
+      write_vec_signals(&edited, &signals, headers, file).unwrap();
+      assert_eq!(load_csv_to_vec_signals(file).unwrap().0, Some(edited));
+    }
+
+    let (axes_again, signal_again) = crate::run(config).unwrap();
+    assert_eq!(axes_again, tau_axes);
+    assert_eq!(signal_again, signal);
+    assert_eq!(std::fs::read_to_string(&run_signal).unwrap(), run_text);
+    assert_eq!(std::fs::read_to_string(&top_signal).unwrap(), top_text);
+
+    let _ = std::fs::remove_dir_all(&out);
+  }
+  //----------------------------------------------------------------------------
+  // With a tau2 axis, the time columns have n1·n2 rows, tau in the outer 
+  // loop and tau2 in the inner loop, and `run` returns one entry per point
+  // of the signal.
+  #[test]
+  fn test_time_columns_with_a_tau2_axis(){
+    let out = temp_dir("tau2_columns");
+    let config = small_config(&out, "number_runs = 1\nrng_seed = 4", 
+        &[("sequence = \"hahn\"", "sequence = [[\"pulse\", \"pi/2\"], \
+[\"delay\", \"tau\"], [\"pulse\", \"pi\"], [\"delay2\", \"tau2\"], \
+[\"detect\"]]\n  number_timepoints2 = [3]\n  tau2_increments = [8e-2]"),
+          // The block-diagonal propagation of method "cce" supports only
+          // the standard sequences.
+          // gCCE settings of assets/1omp_K26R1_0.003228966616048703_gcce.toml.
+          ("method = \"cce\"", "method = \"gcce\"\n  \
+thermalize_cluster_populations = true"),
+          ("g_matrix.values", "detection_operator = [[0.0,1.0],[0.0,0.0]]\n  \
+density_matrix = \"thermal\"\n  g_matrix.values")]);
+    let n1 = config.get_tau_axis().unwrap().len();
+    assert_eq!(config.get_total_number_timesteps(), n1*3);
+    let tau_axes = TauAxes::from_config(&config).unwrap();
+    let (returned_axes, signal) = crate::run(config).unwrap();
+    assert_eq!(returned_axes, tau_axes);
+    assert_eq!(signal.len(), n1*3);
+    assert_eq!(tau_axes.tau.len(), n1*3);
+    for ii in 0..n1*3{
+      assert_eq!(tau_axes.tau[ii], tau_axes.tau[3*(ii/3)]);
+      assert_eq!(tau_axes.tau2[ii], tau_axes.tau2[ii%3]);
+    }
+    assert!(tau_axes.tau[3] > tau_axes.tau[0]);
+    assert!(tau_axes.tau2[1] > tau_axes.tau2[0]);
+
+    let (axes, signals) = load_csv_to_vec_signals(
+        &format!("{}/{}", out, SIGNAL_FILE)).unwrap();
+    assert_eq!(axes, Some(tau_axes));
+    assert_eq!(signals[signals.len() - 1].data, signal);
+
+    let _ = std::fs::remove_dir_all(&out);
   }
   //----------------------------------------------------------------------------
 }

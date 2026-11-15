@@ -37,11 +37,11 @@ use crate::cluster::build_adjacency_list::build_adjacency_list;
 use crate::cluster::find_clusters::find_clusters;
 use crate::output_manifest::{
   OutputState, OutputStatus, ResumeSummary,
-  RNG_SEED_FILE, SIGNAL_FILE, TAU_AXIS_FILE,
+  RNG_SEED_FILE, SIGNAL_FILE,
   draw_main_seed, inspect_output,
 };
 use crate::signal::calculate_signal;
-use crate::signal::{load_csv_to_vec_signals,write_vec_signals};
+use crate::signal::{TauAxes,load_csv_to_vec_signals,write_vec_signals};
 
 use num_complex::Complex;
 
@@ -55,8 +55,11 @@ use num_complex::Complex;
 /// error.
 /// Without `run.rng_seed`, the main seed is drawn from the operating 
 /// system's entropy; it is printed and saved in `rng_seed.txt`.
+/// It returns the time columns of the run (`TauAxes`, in units.time) and
+/// the highest-order signal: `tau_axes.tau[i]` and `tau_axes.tau2[i]` are
+/// the delays of `signal[i]`, as in the columns of the signal files.
 pub fn run(mut config: Config) 
-  -> Result<( Vec::<f64>, Vec::<Complex::<f64>> ),CluEError>
+  -> Result<( TauAxes, Vec::<Complex::<f64>> ),CluEError>
 {
 
   // Report missing settings and files before any work is done.
@@ -77,27 +80,15 @@ pub fn run(mut config: Config)
     return Err(CluEError::NoRngSeed);
   };
 
-  let seconds_to_unit_of_time = match config.unit_of_time_to_seconds{
-    Some(unit_of_time_to_seconds) => 1.0/unit_of_time_to_seconds,
-    None => return Err(CluEError::NoUnitOfTime),
-  };
-
-  let mut tau_axis = config.get_tau_axis()?;
-  for t in tau_axis.iter_mut(){
-    *t *= seconds_to_unit_of_time; 
-  }
-
-  let mut tau2_axis = config.get_tau2_axis()?;
-  for t in tau2_axis.iter_mut(){
-    *t *= seconds_to_unit_of_time; 
-  }
+  // The time columns of the signal files, in units.time.
+  let tau_axes = TauAxes::from_config(&config)?;
 
   if let OutputStatus::Complete(dir) = &status{
     println!("Random number seed: {}.", main_seed);
-    if let Some(signal) = load_complete_signal(dir, &config){
+    if let Some(signal) = load_complete_signal(dir, &config, &tau_axes){
       println!("Output in {} is already complete; no calculations are \
 needed.", dir);
-      return Ok((tau_axis, signal));
+      return Ok((tau_axes, signal));
     }
     println!("The signal in {} cannot be read; it is averaged again from \
 the saved instances.", dir);
@@ -111,33 +102,8 @@ the saved instances.", dir);
     None => println!("Random number seed: {}.", main_seed),
   }
 
-  if let Some(save_path) = output.directory(){
-    if tau2_axis.is_empty(){
-      io::write_data(&[tau_axis.clone()],
-          &format!("{}/{}",save_path,TAU_AXIS_FILE), 
-          vec!["tau_axis".to_string()])?;
-    }else{
-      let n = tau_axis.len()*tau2_axis.len();
-
-      let mut tau1 = Vec::<f64>::with_capacity(n);
-      let mut tau2 = Vec::<f64>::with_capacity(n);
-
-      for t1 in tau_axis.iter(){
-        for t2 in tau2_axis.iter(){
-          tau1.push(*t1);
-          tau2.push(*t2);  
-        }
-      } 
-
-      io::write_data(&[tau1,tau2],
-          &format!("{}/{}",save_path,TAU_AXIS_FILE), 
-          vec!["tau1_axis".to_string(),"tau2_axis".to_string() ])?;
-    
-    }
-  }
-
   let order_n_signals 
-    = calculate_signal::calculate_signals(&config, &mut output)?;
+    = calculate_signal::calculate_signals(&config, &mut output, &tau_axes)?;
 
   let max_size = order_n_signals.len();
 
@@ -146,25 +112,27 @@ the saved instances.", dir);
     let headers = (0..max_size)
       .map(|ii| format!("signal_{}",ii))
       .collect::<Vec::<String>>();
-    write_vec_signals(&order_n_signals, headers, &save_path)?;
+    write_vec_signals(&tau_axes, &order_n_signals, headers, &save_path)?;
   }
 
-  Ok((tau_axis.clone(), order_n_signals[max_size-1].data.clone()))
+  let signal = order_n_signals[max_size-1].data.clone();
+  Ok((tau_axes, signal))
 }
 //------------------------------------------------------------------------------
 // This function loads the highest-order signal from the signal.csv of the
 // complete output in `dir`, or returns `None` if the file does not have the
 // signals of orders 0, ..., max_cluster_size with the run's number of time
-// points.
-fn load_complete_signal(dir: &str, config: &Config) 
+// points, or does not have the time columns `tau_axes` of the run.
+fn load_complete_signal(dir: &str, config: &Config, tau_axes: &TauAxes) 
   -> Option<Vec::<Complex::<f64>>>
 {
   let max_cluster_size = config.max_cluster_size?;
   let n_tot = config.get_total_number_timesteps();
-  let signals = load_csv_to_vec_signals(&format!("{}/{}", dir, SIGNAL_FILE))
-    .ok()?;
+  let (read_axes, signals) 
+    = load_csv_to_vec_signals(&format!("{}/{}", dir, SIGNAL_FILE)).ok()?;
   if signals.len() != max_cluster_size + 1 
     || signals.iter().any(|s| s.len() != n_tot)
+    || read_axes.as_ref() != Some(tau_axes)
   {
     return None;
   }

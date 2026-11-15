@@ -103,7 +103,7 @@ CHANGED:
   instances shared one directory, so with auxiliary_signals = true every
   instance reloaded the checkpoints of the first, and the average equalled
   the first instance):
-    <output>/clue_manifest.toml, rng_seed.txt, tau_axis.csv, signal.csv
+    <output>/clue_manifest.toml, rng_seed.txt, signal.csv
     <output>/structures.csv   (directory, file, relative_weight, 
                                absolute_weight, content_hash, number_runs)
     <output>/structure_<n>/signal.csv   (average over the instances)
@@ -138,6 +138,56 @@ CHANGED:
   SAVE_DIR_ORIENTATION_PREFIX (config); new functions 
   output_manifest::structure_id(), next_structure_number(), and
   instance_dir_name().
+
+  Every signal file starts with the time columns tau and tau2, followed by
+  the signals (breaking change of the output format): the signal.csv 
+  files of the output, the structure, the runs, and the orientations
+  (tau,tau2,signal_0,...,signal_N), sans_spin_signals.csv 
+  (tau,tau2,sans_<i>,...), and the methyl_partitions/<key>.csv files 
+  (tau,tau2,signal). There is one row per time point, with tau in the 
+  outer loop and tau2 in the inner loop; the times are in units.time. A 
+  sequence without a tau2 axis, such as a Hahn echo, has tau2 = 0 in every
+  row. The values equal those of the former tau_axis.csv bit for bit, and
+  the signal values are unchanged. The checkpoint batch files 
+  (auxiliary_signals/, cluster_signals/) have no time columns. Signal 
+  files without time columns, such as the test reference signals, are 
+  still read. A saved signal.csv whose time columns differ from those of 
+  the run is not loaded: an instance or orientation is computed again 
+  ("... does not have the time columns of this run; it is computed 
+  again."), and the top-level signal is averaged again from the instances.
+  An output written by an earlier 1.0.0-dev build with manifest_format = 2
+  (signal files without time columns) is therefore computed again; its 
+  tau_axis.csv and sans_spin_signals files stay in the directory unused.
+
+  The sans-spin signal file (output.sans_spin_signals = true) is now
+  ori_.../sans_spin_signals.csv; it was sans_spin_signals without an 
+  extension. Its contents were always csv.
+
+  clue_oxide::run() returns (TauAxes, signal) instead of 
+  (tau axis, signal): TauAxes has the fields tau and tau2, each with one 
+  entry per point of the signal, as in the signal files. Previously the
+  tau axis alone was returned, with fewer entries than the signal when 
+  there was a tau2 axis. For a sequence without a tau2 axis, .tau equals 
+  the former return value.
+  pyCluE (breaking): run() and Config.run() return (tau, tau2, signal) 
+  instead of (time_axis, signal); Signal.write_to_csv(filename, tau, tau2)
+  takes the time columns; load_time_axis() is replaced by 
+  load_tau_axes(filename), which returns the tau and tau2 columns of a 
+  signal file (an error if it has none); load_signal() and 
+  Signals.load_from_csv() return only the signal columns.
+  Library: signal::TauAxes with TauAxes::from_config(); 
+  write_vec_signals() and Signal::write_to_csv() take the time columns as
+  their first argument and return the new error SignalTauAxesLength if 
+  they do not have one entry per point of the signals; 
+  load_csv_to_vec_signals() returns (Option<TauAxes>, Vec<Signal>), with 
+  the time columns if the file starts with tau and tau2, and gives 
+  CannotReadFile if a column tau or tau2 is elsewhere; 
+  Signal::read_from_csv() returns the last signal column, and gives 
+  CannotReadFile instead of panicking if the file has no signal column;
+  calculate_signals() takes the time columns as a third argument.
+  write_vec_signals() with no signals writes only the time columns; it 
+  previously panicked (for example, sans_spin_signals = true with no 
+  active bath spin).
 
   The group tables include and exclude are renamed to require and forbid
   (require.X, forbid.X, require.bonded_to.X, forbid.bonded_to.X, 
@@ -651,6 +701,10 @@ CHANGED:
   were removed from it.
 
 REMOVED:
+  <output>/tau_axis.csv: the time axes are the tau and tau2 columns of 
+  every signal file (see CHANGED). Library: io::read_time_axis() and the
+  constant output_manifest::TAU_AXIS_FILE.
+
   The command line option -H, --hide-title. The title is always printed;
   -H and --hide-title are reported as unrecognized options. Library: the
   field CommandLineInput::show_title. pyCluE prints the title for every 

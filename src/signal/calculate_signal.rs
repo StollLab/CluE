@@ -35,6 +35,7 @@ use crate::integration_grid::IntegrationGrid;
 use crate::physical_constants::{ANGSTROM,ONE,PI};
 use crate::signal::{
   Signal,
+  TauAxes,
   load_csv_to_vec_signals,
   write_vec_signals,
   cluster_signals::calculate_cluster_signals,
@@ -71,7 +72,11 @@ use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 /// coupling tensors, and the orientation grid are built.
 /// `output` records the progress; complete instances and orientations
 /// whose files are present are loaded instead of computed.
-pub fn calculate_signals(config: &Config, output: &mut OutputState) 
+/// `tau_axes` are the time columns of the run (`TauAxes::from_config()`):
+/// they are written into every signal file, and a saved signal file is 
+/// loaded only if its time columns equal them.
+pub fn calculate_signals(config: &Config, output: &mut OutputState,
+    tau_axes: &TauAxes) 
   -> Result<Vec::<Signal>,CluEError>
 {
   let Some(max_cluster_size) = config.max_cluster_size else {
@@ -109,7 +114,7 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState)
       let saved_signals = if output.instance_is_complete(s_idx, ii){
         output.instance_dir(s_idx, ii).and_then(|dir| 
             load_saved_signals(&format!("{}/{}", dir, SIGNAL_FILE),
-              max_cluster_size, n_tot))
+              max_cluster_size, n_tot, tau_axes))
       }else{
         None
       };
@@ -120,7 +125,7 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState)
           signals
         },
         None => calculate_structure_signal(seed, config, structure_input,
-            s_idx, ii, output)?,
+            s_idx, ii, output, tau_axes)?,
       };
 
       for (order_idx, sig) in inst_signals.iter().enumerate(){
@@ -133,7 +138,7 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState)
     }
 
     if let Some(structure_dir) = output.structure_dir(s_idx){
-      write_signals(&structure_signals, 
+      write_signals(tau_axes, &structure_signals, 
           &format!("{}/{}", structure_dir, SIGNAL_FILE))?;
     }
 
@@ -151,22 +156,28 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState)
 //------------------------------------------------------------------------------
 // This function loads saved signals of orders 0, ..., `max_cluster_size` 
 // from `filename`. It returns `None`, with a message, if the file cannot be
-// read or does not have that many signals with `n_tot` time points each;
-// the signals are then computed again.
-fn load_saved_signals(filename: &str, max_cluster_size: usize, n_tot: usize)
+// read, does not have that many signals with `n_tot` time points each, or
+// does not have the time columns `tau_axes` of the run; the signals are 
+// then computed again.
+fn load_saved_signals(filename: &str, max_cluster_size: usize, n_tot: usize,
+    tau_axes: &TauAxes)
   -> Option<Vec::<Signal>>
 {
   match load_csv_to_vec_signals(filename){
-    Ok(mut signals) => {
-      if signals.len() > max_cluster_size 
-        && signals.iter().all(|s| s.len() == n_tot)
+    Ok((read_axes, mut signals)) => {
+      if signals.len() <= max_cluster_size 
+        || signals.iter().any(|s| s.len() != n_tot)
       {
-        signals.truncate(max_cluster_size + 1);
-        Some(signals)
-      }else{
         println!("\"{}\" does not have {} signals of {} time points; \
 it is computed again.", filename, max_cluster_size + 1, n_tot);
         None
+      }else if read_axes.as_ref() != Some(tau_axes){
+        println!("\"{}\" does not have the time columns of this run; \
+it is computed again.", filename);
+        None
+      }else{
+        signals.truncate(max_cluster_size + 1);
+        Some(signals)
       }
     },
     Err(err) => {
@@ -176,12 +187,15 @@ it is computed again.", filename, max_cluster_size + 1, n_tot);
   }
 }
 //------------------------------------------------------------------------------
-// This function writes the signals of orders 0, 1, ..., to `filename`.
-fn write_signals(signals: &[Signal], filename: &str) -> Result<(),CluEError>{
+// This function writes the time columns and the signals of orders 
+// 0, 1, ..., to `filename`.
+fn write_signals(tau_axes: &TauAxes, signals: &[Signal], filename: &str) 
+  -> Result<(),CluEError>
+{
   let headers = (0..signals.len())
     .map(|ii| format!("signal_{}",ii))
     .collect::<Vec::<String>>();
-  write_vec_signals(signals, headers, filename)
+  write_vec_signals(tau_axes, signals, headers, filename)
 }
 //------------------------------------------------------------------------------
 // This function builds instance `k` (from 0) of structure `structure_input`
@@ -190,7 +204,8 @@ fn write_signals(signals: &[Signal], filename: &str) -> Result<(),CluEError>{
 // Orientations that `output` records as complete are loaded.
 fn calculate_structure_signal(seed: u64, config: &Config, 
     structure_input: &StructureInput, s_idx: usize, k: usize,
-    output: &mut OutputState) -> Result<Vec::<Signal>,CluEError>
+    output: &mut OutputState, tau_axes: &TauAxes) 
+  -> Result<Vec::<Signal>,CluEError>
 {
   let mut rng = ChaCha20Rng::seed_from_u64(seed);
   output.begin_instance(s_idx, k)?;
@@ -309,7 +324,7 @@ fn calculate_structure_signal(seed: u64, config: &Config,
     let saved_signals = if output.orientation_is_complete(s_idx, k, iori){
       ori_path_opt.as_ref().and_then(|dir| 
           load_saved_signals(&format!("{}/{}", dir, SIGNAL_FILE),
-            max_cluster_size, n_tot))
+            max_cluster_size, n_tot, tau_axes))
     }else{
       None
     };
@@ -324,7 +339,7 @@ fn calculate_structure_signal(seed: u64, config: &Config,
         let mut ori_rng = ChaCha20Rng::seed_from_u64(orientation_seeds[iori]);
         let signals = calculate_signal_at_orientation(&mut ori_rng, rot_dir,
             &spin_ops,tensors.clone(), &structure,config, &ori_name,
-            &ori_path_opt)?;
+            &ori_path_opt, tau_axes)?;
         output.finish_orientation(s_idx, k, iori, &ori_path_opt)?;
         signals
       },
@@ -343,7 +358,8 @@ fn calculate_structure_signal(seed: u64, config: &Config,
 
   // Optionally save signals.
   if let Some(save_dir) =  &save_dir_opt{
-    write_signals(&order_n_signals, &format!("{}/{}", save_dir, SIGNAL_FILE))?;
+    write_signals(tau_axes, &order_n_signals, 
+        &format!("{}/{}", save_dir, SIGNAL_FILE))?;
   }
   output.finish_instance(s_idx, k)?;
 
@@ -353,12 +369,14 @@ fn calculate_structure_signal(seed: u64, config: &Config,
 // This function calculates the signal for the input structure at the input
 // orientation.
 // `save_dir` is the name of the orientation directory, and `save_path_opt`
-// its path, if the orientation's files are saved.
+// its path, if the orientation's files are saved; `tau_axes` are the time
+// columns of the saved signal files.
 fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng, 
     rot_dir: UnitSpherePoint,
     spin_ops: &ClusterSpinOperators,
     mut tensors: HamiltonianTensors, structure: &Structure,
-    config: &Config, save_dir: &str, save_path_opt: &Option<String>)
+    config: &Config, save_dir: &str, save_path_opt: &Option<String>,
+    tau_axes: &TauAxes)
   -> Result<Vec::<Signal>,CluEError>
 {
 
@@ -466,13 +484,14 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
       .map(|ii| format!("signal_{}",ii))
       .collect::<Vec::<String>>();
 
-    write_vec_signals(&order_n_signals, headers, &save_path)?;
+    write_vec_signals(tau_axes, &order_n_signals, headers, &save_path)?;
 
     if config.write_sans_spin_signals == Some(true){
-      let save_path = format!("{}/{}",save_dir,SAVE_FILE_SANS_SPIN_SIGNALS);
+      let save_path = format!("{}/{}.csv",save_dir,
+          SAVE_FILE_SANS_SPIN_SIGNALS);
 
       caculate_sans_spin_signals(&order_n_signals[max_cluster_size - 1],
-        &cluster_set, structure, config, &save_path)?;
+        &cluster_set, structure, config, &save_path, tau_axes)?;
     }
 
 
@@ -480,7 +499,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
       let save_path = format!("{}/{}",save_dir,SAVE_FILE_METHYL_PARTITIONS);
       
       calculate_methyl_partition_cce(cluster_set, structure, config, 
-          &save_path)?;
+          &save_path, tau_axes)?;
     }
   }
 
@@ -491,7 +510,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
 // where the spin is dropped. 
 fn caculate_sans_spin_signals(ref_signal: &Signal,
     cluster_set: &ClusterSet, structure: &Structure, config: &Config, 
-    save_path: &str)
+    save_path: &str, tau_axes: &TauAxes)
   -> Result<(),CluEError>
 {
   
@@ -511,7 +530,7 @@ fn caculate_sans_spin_signals(ref_signal: &Signal,
         }
     ).collect::< Vec::<String> >();
 
-  write_vec_signals(&spin_signals,headers,save_path)
+  write_vec_signals(tau_axes,&spin_signals,headers,save_path)
 }
 //------------------------------------------------------------------------------
 // For each active spin in structure, this function calculates the product of
@@ -569,7 +588,7 @@ fn caculate_bath_spin_contributions(
 // contribute to them and saves the partitions to csv files.
 fn calculate_methyl_partition_cce(
     cluster_set: ClusterSet, structure: &Structure, config: &Config, 
-    save_path: &str)
+    save_path: &str, tau_axes: &TauAxes)
   -> Result<(),CluEError>
 {
   match std::fs::create_dir_all(save_path){
@@ -599,7 +618,7 @@ fn calculate_methyl_partition_cce(
 
       let part_save_path = format!("{}/{}.csv",
           save_path,key_name);
-      part_signal.write_to_csv(&part_save_path)?;
+      part_signal.write_to_csv(tau_axes, &part_save_path)?;
     }
   }
 

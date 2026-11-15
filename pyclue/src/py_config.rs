@@ -35,25 +35,31 @@ impl PyConfig{
     println!("{:?}",self);
   }
   //----------------------------------------------------------------------------
+  /// This function runs the simulation and returns `(tau, tau2, signal)`:
+  /// the time columns of the run, in units.time, and the highest-order 
+  /// signal, with one entry per time point each.
   pub fn run(&self)
       -> Result<
-          (Py<PyArray<f64,Ix1>>,Py<PyArray<Complex::<f64>,Ix1>>),
+          (Py<PyArray<f64,Ix1>>,Py<PyArray<f64,Ix1>>,
+           Py<PyArray<Complex::<f64>,Ix1>>),
           PyCluEError
          >
   {
-    let (time_axis,signal) = clue_oxide::run(self.config.clone())?;
+    let (tau_axes,signal) = clue_oxide::run(self.config.clone())?;
 
-    let time_axis = Array1::from_vec(time_axis);
+    let tau = Array1::from_vec(tau_axes.tau);
+    let tau2 = Array1::from_vec(tau_axes.tau2);
 
     let signal = Array1::from_vec(signal);
 
-    let time_axis = Python::with_gil(|py|{
-        PyArray::from_owned_array(py, time_axis).unbind()
+    let (tau, tau2) = Python::with_gil(|py|{
+        (PyArray::from_owned_array(py, tau).unbind(),
+         PyArray::from_owned_array(py, tau2).unbind())
     });
     let signal = Python::with_gil(|py|{
         PyArray::from_owned_array(py, signal).unbind()
     });
-    Ok( (time_axis, signal) )
+    Ok( (tau, tau2, signal) )
   }
   //----------------------------------------------------------------------------
   #[staticmethod]

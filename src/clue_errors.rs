@@ -183,6 +183,7 @@ pub enum CluEError{
   PartitionIsIncomplete,
   ResidueNumberAboveMaxInPDB(String,String,usize),
   SecondaryFilterRequiresAnIndex(String),
+  SignalTauAxesLength(String,usize,usize,usize),
   SpaceGroupNotP1(String),
   SpinGridWeightsDoNotSumToOne(f64,f64),
   SpinAlreadyPartitioned(usize,i32),
@@ -885,6 +886,12 @@ number, as written for numbers above {}, in line \"{}\"",
           "secondary particle group, \"{}\", requires a particle index",
           group),
 
+      CluEError::SignalTauAxesLength(filename,n_tau,n_tau2,n_data) 
+        => write!(f,
+          "cannot write \"{}\": the time columns have {} (tau) and {} (tau2) \
+entries, but the signals have {} time points", 
+          filename, n_tau, n_tau2, n_data),
+
       CluEError::SpaceGroupNotP1(space_group) => write!(f,
           "the structure has space group \"{}\", but \
 structure.replicate_unit_cell only applies lattice translations; expand the \
@@ -1105,6 +1112,9 @@ the file was written by a run with a different time axis"),
       (CluEError::NoOrientationGrid, "orientations.grid is not set"),
       (CluEError::NoTimeIncrements2, 
        "pulse_sequence.tau2_increments is not set"),
+      (CluEError::SignalTauAxesLength(s("a.csv"),3,4,5),
+       "cannot write \"a.csv\": the time columns have 3 (tau) and 4 (tau2) \
+entries, but the signals have 5 time points"),
       (CluEError::MissingHeader(1,2,s("a.csv")),
        "in \"a.csv\", every entry must have a header, but there are 1 \
 headers and 2 columns of data"),

@@ -14,7 +14,7 @@ fn int_test_1omp(){
  let _ = std::fs::remove_dir_all(&out_dir);
  config.output_directory = Some(out_dir.to_str().unwrap().to_string());
  
- let (_time_axis,signal) = run(config).unwrap();
+ let (_tau_axes,signal) = run(config).unwrap();
  let _ = std::fs::remove_dir_all(&out_dir);
 
  let signal = Signal{data: signal};
