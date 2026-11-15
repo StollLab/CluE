@@ -1,4 +1,5 @@
 
+use crate::clue_println;
 use crate::build_adjacency_list;
 use crate::find_clusters;
 use crate::config::{
@@ -109,7 +110,7 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState,
 
     for (ii,&seed) in new_seeds.iter().enumerate(){
 
-      println!("\nSystem instance: {}/{}.", ii+1, number_runs);
+      clue_println!("\nSystem instance: {}/{}.", ii+1, number_runs);
 
       let saved_signals = if output.instance_is_complete(s_idx, ii){
         output.instance_dir(s_idx, ii).and_then(|dir| 
@@ -121,7 +122,7 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState,
 
       let inst_signals = match saved_signals{
         Some(signals) => {
-          println!("Loaded the saved signal of this instance.");
+          clue_println!("Loaded the saved signal of this instance.");
           signals
         },
         None => calculate_structure_signal(seed, config, structure_input,
@@ -168,11 +169,11 @@ fn load_saved_signals(filename: &str, max_cluster_size: usize, n_tot: usize,
       if signals.len() <= max_cluster_size 
         || signals.iter().any(|s| s.len() != n_tot)
       {
-        println!("\"{}\" does not have {} signals of {} time points; \
+        clue_println!("\"{}\" does not have {} signals of {} time points; \
 it is computed again.", filename, max_cluster_size + 1, n_tot);
         None
       }else if read_axes.as_ref() != Some(tau_axes){
-        println!("\"{}\" does not have the time columns of this run; \
+        clue_println!("\"{}\" does not have the time columns of this run; \
 it is computed again.", filename);
         None
       }else{
@@ -181,7 +182,7 @@ it is computed again.", filename);
       }
     },
     Err(err) => {
-      println!("{}; it is computed again.", err);
+      clue_println!("{}; it is computed again.", err);
       None
     },
   }
@@ -331,7 +332,7 @@ fn calculate_structure_signal(seed: u64, config: &Config,
     
     let mut ori_sigs = match saved_signals{
       Some(signals) => {
-        println!("Loaded the saved signal of this orientation.");
+        clue_println!("Loaded the saved signal of this orientation.");
         signals
       },
       None => {
@@ -455,7 +456,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
   for (size_idx,clusters_of_size) in cluster_set.clusters
       .iter().enumerate().skip(1)
   {
-    println!("Found {} clusters of size {}.",clusters_of_size.len(),size_idx);
+    clue_println!("Found {} clusters of size {}.",clusters_of_size.len(),size_idx);
   }
 
   if let Some(path) = &save_path_opt{
@@ -710,7 +711,7 @@ fn get_orientation_save_dir(
   let phi_degrees = rot_dir.phi()*180.0/PI;
   let save_dir = format!("{}theta_{}deg_phi_{}deg", 
       SAVE_DIR_ORIENTATION_PREFIX, theta_degrees, phi_degrees);
-  println!(
+  clue_println!(
       "\nMagnetic field orientation: θ = {} degrees; φ = {} degrees.", 
       theta_degrees, phi_degrees);
   // Determine if/where to save results.

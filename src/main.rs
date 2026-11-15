@@ -16,6 +16,8 @@
 use clue_oxide::config::command_line_input::CommandLineInput;
 use clue_oxide::config::Config;
 use clue_oxide::info;
+use clue_oxide::output_log;
+use clue_oxide::clue_eprintln;
 
 use std::time::Instant;
 fn main() {
@@ -64,13 +66,15 @@ fn main() {
   // Parse input files.
   let mut config = Config::read_input(input).unwrap_or_else(
       |err| {
-        eprintln!("CluE Error: {}.",err);
+        clue_eprintln!("CluE Error: {}.",err);
+        output_log::finish();
         std::process::exit(1);
       });
 
   config.set_defaults().unwrap_or_else(
       |err| {
-        eprintln!("CluE Error: {}.",err);
+        clue_eprintln!("CluE Error: {}.",err);
+        output_log::finish();
         std::process::exit(1);
       });
 
@@ -84,13 +88,18 @@ fn main() {
   // Run simulations.
   clue_oxide::run(config).unwrap_or_else(
       |err| {
-        eprintln!("CluE Error: {}.",err);
+        clue_eprintln!("CluE Error: {}.",err);
+        output_log::finish();
         std::process::exit(1);
       });
 
   // Exit.
   let elapsed_time = now.elapsed();
-  eprintln!("CluE successfully completed in {} s.", elapsed_time.as_secs());
+  clue_eprintln!("CluE successfully completed in {} s.", 
+      elapsed_time.as_secs());
+
+  // Close the output log (output_log.txt), if the run opened one.
+  output_log::finish();
 }
 //------------------------------------------------------------------------------
 // This function checks the input file named in `input` without running

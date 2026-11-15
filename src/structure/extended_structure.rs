@@ -1,3 +1,4 @@
+use crate::clue_println;
 use crate::clue_errors::CluEError;
 use crate::config::Config;
 use crate::config::ReplicateUnitCell;
@@ -798,7 +799,7 @@ impl Structure{
 
     if cell_edges.is_empty(){
       self.cell_offsets = vec![Vector3D::zeros()];
-      println!("No unit cell information found. \
+      clue_println!("No unit cell information found. \
 Periodic boudary conditions will not be applied.");
       return Ok(());
     }else if cell_edges.len() != 3 {
@@ -815,7 +816,7 @@ Periodic boudary conditions will not be applied.");
 
     let Some(reciprocal_vectors) = reciprocal_vectors(&cell_edges) else{
       self.cell_offsets = vec![Vector3D::zeros()];
-      println!("The unit cell has no volume. \
+      clue_println!("The unit cell has no volume. \
 Periodic boudary conditions will not be applied.");
       return Ok(());
     };
@@ -856,7 +857,7 @@ Periodic boudary conditions will not be applied.");
           let n_required = required_extra_cells_per_dim(reciprocal_vectors,
               &positions, radius + delta);
           if (0..3).any(|ii| n_cells_per_dim[ii] < n_required[ii]){
-            println!("structure.replicate_unit_cell = [{}, {}, {}] is less \
+            clue_println!("structure.replicate_unit_cell = [{}, {}, {}] is less \
 than the [{}, {}, {}] unit cells needed to fill the radius.",
                 n_cells_per_dim[0], n_cells_per_dim[1], n_cells_per_dim[2],
                 n_required[0], n_required[1], n_required[2]);

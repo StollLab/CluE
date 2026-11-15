@@ -1,3 +1,4 @@
+use crate::{clue_print,clue_println};
 use crate::clue_errors::CluEError;
 use crate::cluster::adjacency::AdjacencyList;
 use crate::elements::Element;
@@ -37,7 +38,7 @@ pub fn parse_pdb(filename: &str,target_model: usize)
        (hydrogen_symbol_counts[1], "T", "3H", "tritium")]
    {
      if n > 0{
-       println!("{} atoms with element symbol \"{}\" were read as hydrogen, \
+       clue_println!("{} atoms with element symbol \"{}\" were read as hydrogen, \
 starting as 1H; to make them {}, put them in a group with {}.abundance = 1.0.",
            n, symbol, name, isotope);
      }
@@ -381,11 +382,11 @@ fn parse_atoms(filename: &str,n_atoms: usize, target_model:usize)
    }
 
    for (unk_el, unk_count) in unknown_elements.iter(){
-     println!("Could not parse {} instances of element \"{}\".",
+     clue_println!("Could not parse {} instances of element \"{}\".",
          unk_count, unk_el);
    }
    if let Some(message) = elements_from_names_message(&elements_from_names){
-     print!("{}", message);
+     clue_print!("{}", message);
    }
    Ok( ParticleMap{
      particles: bath_particles,

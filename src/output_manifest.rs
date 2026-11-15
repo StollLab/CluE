@@ -8,6 +8,7 @@
 //! <output>/
 //!   clue_manifest.toml   this record
 //!   rng_seed.txt         main seed
+//!   output_log.txt       terminal output of the runs, appended (output_log.rs)
 //!   signal.csv           weighted average over the structures
 //!   structures.csv       directory, file, relative_weight, absolute_weight,
 //!                        content_hash, number_runs
@@ -40,6 +41,10 @@ use std::path::Path;
 pub const MANIFEST_FILE: &str = "clue_manifest.toml";
 /// The name of the file with the main seed.
 pub const RNG_SEED_FILE: &str = "rng_seed.txt";
+/// The name of the output log, with everything a run prints to the terminal
+/// (`output_log`). It is not recorded in the manifest and is not part of the
+/// completeness check.
+pub const OUTPUT_LOG_FILE: &str = "output_log.txt";
 /// The name of the index of the structures of an output directory.
 pub const STRUCTURES_FILE: &str = "structures.csv";
 /// The prefix of the directory names of the structures in an output 
@@ -1437,13 +1442,19 @@ mod tests{
     dirs
   }
   //----------------------------------------------------------------------------
-  // This function returns every file under `dir` with its contents.
+  // This function returns every file under `dir` with its contents, 
+  // except the output log: every run into a directory appends to it, and
+  // tests running in parallel share one log (output_log.rs), so its 
+  // contents are not reproducible here.
   fn tree_snapshot(dir: &str) -> Vec::<(String,Vec::<u8>)>{
     let mut files = Vec::<(String,Vec::<u8>)>::new();
     if !Path::new(dir).exists(){
       return files;
     }
     for file in list_files(dir, None).unwrap(){
+      if file == OUTPUT_LOG_FILE{
+        continue;
+      }
       let contents = std::fs::read(Path::new(dir).join(&file)).unwrap();
       files.push((file, contents));
     }
@@ -1987,8 +1998,8 @@ label: \"h\",\n        },\n    ],\n}";
         &RANDOM);
     crate::run(config.clone()).unwrap();
 
-    assert_eq!(entry_names(&out), vec![MANIFEST_FILE, RNG_SEED_FILE, 
-        SIGNAL_FILE, "structure_1", STRUCTURES_FILE]);
+    assert_eq!(entry_names(&out), vec![MANIFEST_FILE, OUTPUT_LOG_FILE,
+        RNG_SEED_FILE, SIGNAL_FILE, "structure_1", STRUCTURES_FILE]);
     let structure_dir = format!("{}/structure_1", out);
     assert_eq!(entry_names(&structure_dir), vec!["run_1", "run_2", 
         SIGNAL_FILE]);

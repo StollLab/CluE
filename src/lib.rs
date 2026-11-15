@@ -25,6 +25,7 @@ pub mod misc;
 pub mod kmeans;
 pub mod io;
 pub mod output_manifest;
+pub mod output_log;
 
 
 
@@ -37,7 +38,7 @@ use crate::cluster::build_adjacency_list::build_adjacency_list;
 use crate::cluster::find_clusters::find_clusters;
 use crate::output_manifest::{
   OutputState, OutputStatus, ResumeSummary,
-  RNG_SEED_FILE, SIGNAL_FILE,
+  OUTPUT_LOG_FILE, RNG_SEED_FILE, SIGNAL_FILE,
   draw_main_seed, inspect_output,
 };
 use crate::signal::calculate_signal;
@@ -55,6 +56,9 @@ use num_complex::Complex;
 /// error.
 /// Without `run.rng_seed`, the main seed is drawn from the operating 
 /// system's entropy; it is printed and saved in `rng_seed.txt`.
+/// If the output is saved, everything printed during the run is also 
+/// appended to `<output>/output_log.txt` (`output_log`); the caller ends 
+/// the log with `output_log::finish()`.
 /// It returns the time columns of the run (`TauAxes`, in units.time) and
 /// the highest-order signal: `tau_axes.tau[i]` and `tau_axes.tau2[i]` are
 /// the delays of `signal[i]`, as in the columns of the signal files.
@@ -83,23 +87,34 @@ pub fn run(mut config: Config)
   // The time columns of the signal files, in units.time.
   let tau_axes = TauAxes::from_config(&config)?;
 
+  // The output log: what was printed so far is buffered, and is written 
+  // to <output>/output_log.txt once the directory exists (output_log.rs).
+  // A run that stops before this point writes nothing.
   if let OutputStatus::Complete(dir) = &status{
-    println!("Random number seed: {}.", main_seed);
+    output_log::open(&format!("{}/{}", dir, OUTPUT_LOG_FILE))?;
+    clue_println!("Random number seed: {}.", main_seed);
     if let Some(signal) = load_complete_signal(dir, &config, &tau_axes){
-      println!("Output in {} is already complete; no calculations are \
+      clue_println!("Output in {} is already complete; no calculations are \
 needed.", dir);
       return Ok((tau_axes, signal));
     }
-    println!("The signal in {} cannot be read; it is averaged again from \
+    clue_println!("The signal in {} cannot be read; it is averaged again from \
 the saved instances.", dir);
   }
 
   let mut output = OutputState::start(&config, &status)?;
 
   match output.directory(){
-    Some(dir) => println!("Random number seed: {} (saved in {}/{}).", 
-        main_seed, dir, RNG_SEED_FILE),
-    None => println!("Random number seed: {}.", main_seed),
+    Some(dir) => {
+      // Does nothing if the Complete branch above opened the same log.
+      output_log::open(&format!("{}/{}", dir, OUTPUT_LOG_FILE))?;
+      clue_println!("Random number seed: {} (saved in {}/{}).", 
+          main_seed, dir, RNG_SEED_FILE);
+    },
+    None => {
+      output_log::discard();
+      clue_println!("Random number seed: {}.", main_seed);
+    },
   }
 
   let order_n_signals 

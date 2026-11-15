@@ -45,7 +45,11 @@ impl PyConfig{
           PyCluEError
          >
   {
-    let (tau_axes,signal) = clue_oxide::run(self.config.clone())?;
+    // Close the output log (output_log.txt) before an error is returned, so
+    // that the next run starts a new log.
+    let result = clue_oxide::run(self.config.clone());
+    clue_oxide::output_log::finish();
+    let (tau_axes,signal) = result?;
 
     let tau = Array1::from_vec(tau_axes.tau);
     let tau2 = Array1::from_vec(tau_axes.tau2);

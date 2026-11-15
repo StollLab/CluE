@@ -1,3 +1,4 @@
+use crate::clue_println;
 use crate::config::{Config,DetectedSpinCoordinates,ReplicateUnitCell};
 use crate::CluEError;
 use crate::cluster::connected_subgraphs::separate_into_connected_subgraphs;
@@ -238,7 +239,7 @@ impl Structure{
           1 => ("particle has", "it"),
           _ => ("particles have", "them"),
         };
-        println!("Group \"{}\": {} {} no {}, \
+        clue_println!("Group \"{}\": {} {} no {}, \
 so require.{} cannot select {}.", 
             particle_config.label, n_missing, particles_have, field, key, them);
       }
@@ -294,7 +295,7 @@ so require.{} cannot select {}.",
     // along the cell edges a, b, and c.
     let Some(reciprocal_vectors) = reciprocal_vectors(&self.cell_offsets) 
     else{
-      println!("The unit cell has no volume. \
+      clue_println!("The unit cell has no volume. \
 Molecules will not be made whole across the cell boundary.");
       return Ok(());
     };
@@ -307,7 +308,7 @@ Molecules will not be made whole across the cell boundary.");
     // unit cell is only used here, so the particles are left in place.
     if let Err(err) = self.check_structure_fits_cell(&reciprocal_vectors){
       if config.replicate_unit_cell == Some(ReplicateUnitCell::No){
-        println!("Warning: {}. Since structure.replicate_unit_cell = false, \
+        clue_println!("Warning: {}. Since structure.replicate_unit_cell = false, \
 molecules will not be made whole across the cell boundary.", err);
         return Ok(());
       }
@@ -352,7 +353,7 @@ molecules will not be made whole across the cell boundary.", err);
     const MAX_BOND: f64 = 3.0*ANGSTROM;
     let n_long = self.count_long_bonds(MAX_BOND);
     if n_long > 0{
-      println!("{} bonds are longer than {} angstroms after making \
+      clue_println!("{} bonds are longer than {} angstroms after making \
 molecules whole across the cell boundary.", n_long, MAX_BOND/ANGSTROM);
     }
 

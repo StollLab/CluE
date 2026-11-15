@@ -97,13 +97,35 @@ ADDED:
   exits with 0 or 1. Errors that depend on the structure (group names,
   overlapping groups, empty selections) are still found only by a run.
 
+  A run that saves its output writes everything it prints to the 
+  terminal, stdout and stderr, to <output>/output_log.txt, in the order
+  printed: the title, the notes on the input and the structure, the 
+  random seed, the progress, and the final "CluE successfully completed
+  in ... s." or "CluE Error: ...". The text printed before the output
+  directory is known is written at the top of the log once the directory
+  exists. Each run into the directory appends a new section, which starts
+  with the title; a run into a complete output appends its messages. A 
+  run that stops before it uses the directory (for example with a 
+  different run.rng_seed) writes nothing, and with output.directory = ""
+  no log is written. The log is not part of the record 
+  clue_manifest.toml; a missing or edited log is never a reason to 
+  compute again. If writing the log fails, CluE prints a warning and 
+  continues without it. The text printed by --help, --license, 
+  --version, --warranty, and --check is not logged. pyCluE's 
+  Config.run() and run() write the same log. Library: the module 
+  output_log (macros clue_print!, clue_println!, clue_eprintln!; 
+  functions open, discard, finish); a program that calls 
+  clue_oxide::run more than once should call output_log::finish() after
+  each run. The log is one per process, so runs at the same time in one 
+  process (threads) write into the log opened last.
+
 CHANGED:
   New layout of output directories. Each instance of run.number_runs has
   its own directory (fixes N04 of report.md: with number_runs > 1, all
   instances shared one directory, so with auxiliary_signals = true every
   instance reloaded the checkpoints of the first, and the average equalled
   the first instance):
-    <output>/clue_manifest.toml, rng_seed.txt, signal.csv
+    <output>/clue_manifest.toml, rng_seed.txt, output_log.txt, signal.csv
     <output>/structures.csv   (directory, file, relative_weight, 
                                absolute_weight, content_hash, number_runs)
     <output>/structure_<n>/signal.csv   (average over the instances)

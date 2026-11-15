@@ -1,3 +1,4 @@
+use crate::clue_println;
 use crate::config::{
   ClusterMethod,
   Config,
@@ -136,7 +137,7 @@ fn calculate_auxiliary_signals(
                | Err(err @ CluEError::WrongBatchSignalLength(..))
                | Err(err @ CluEError::CannotParseSignalEntry(..))
                | Err(err @ CluEError::CannotReadFile(..)) => {
-                 println!("Recomputing batch {} of the clusters of size {}: \
+                 clue_println!("Recomputing batch {} of the clusters of size {}: \
 {}.", ibatch, cluster_size, err);
                },
                Err(err) => return Err(err),

@@ -1,3 +1,4 @@
+use crate::clue_println;
 use crate::clue_errors::*;
 
 use crate::cluster::{
@@ -452,7 +453,7 @@ impl Config{
     // Differences up to this size are floating point rounding.
     const ROUNDING: f64 = 1e-12;
     if (sum - 1.0).abs() > ROUNDING{
-      println!("The weights of the detected spin grid sum to {}; \
+      clue_println!("The weights of the detected spin grid sum to {}; \
 they were normalized to sum to one.", sum);
     }
     Ok(())
@@ -490,7 +491,7 @@ they were normalized to sum to one.", sum);
     // Differences up to this size are floating point rounding.
     const ROUNDING: f64 = 1e-12;
     if (sum - 1.0).abs() > ROUNDING{
-      println!("The weights of the orientation grid sum to {}; \
+      clue_println!("The weights of the orientation grid sum to {}; \
 they were normalized to sum to one.", sum);
     }
     Ok(())
@@ -555,7 +556,7 @@ they were normalized to sum to one.", sum);
       // Differences up to this size are floating point rounding.
       const ROUNDING: f64 = 1e-12;
       if (sum - 1.0).abs() > ROUNDING && reported.insert(label.clone()){
-        println!("Group \"{}\": the isotope abundances ({}) sum to {}; \
+        clue_println!("Group \"{}\": the isotope abundances ({}) sum to {}; \
 they were normalized to ({}).", label, original, sum, list(abundances));
       }
     }
@@ -947,7 +948,7 @@ impl DetectedSpinCoordinates{
 
         // Three integers may have been meant as coordinates.
         if let Some(message) = serial_position_message(&vec){
-          println!("{}", message);
+          clue_println!("{}", message);
         }
 
         Ok(Self::CentroidOverSerials(vec))

@@ -1,4 +1,5 @@
 
+use crate::clue_println;
 use crate::CluEError;
 use crate::config::config_toml::*;
 use crate::misc::{
@@ -148,7 +149,7 @@ impl ParticleConfig{
 
       // D and T are read as hydrogen.
       for (key, symbol) in hydrogen_isotope_symbols_in_selection(&table){
-        println!("Group \"{}\": \"{}\" in {} is read as \
+        clue_println!("Group \"{}\": \"{}\" in {} is read as \
 hydrogen, so it applies to all hydrogens.", self.label, symbol, key);
       }
 
