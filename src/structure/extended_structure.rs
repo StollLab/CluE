@@ -1318,16 +1318,16 @@ mod tests{
       
       [[groups]]
       name = "exchangeable_hydrogens"
-      include.elements = ["H"]
-      include.bonded_to.elements = ["O"]
+      require.elements = ["H"]
+      require.bonded_to.elements = ["O"]
 
       1H.abundance = 0.5
       2H.abundance = 0.5
       
       [[groups]]
       name = "nonexchangeable_hydrogens"
-      include.elements = ["H"]
-      exclude.bonded_to.elements = ["O"]
+      require.elements = ["H"]
+      forbid.bonded_to.elements = ["O"]
       
       1H.abundance = 0.5
       2H.abundance = 0.5
@@ -1449,11 +1449,11 @@ mod tests{
       
       [[groups]]
       name = "h"
-      include.elements = ["H"]
+      require.elements = ["H"]
 
       [[groups]]
       name = "non_h"
-      exclude.elements = ["H"]
+      forbid.elements = ["H"]
       drop_probability = 1.0
 
     "##).unwrap();
@@ -1473,12 +1473,12 @@ mod tests{
       
       [[groups]]
       name = "h"
-      include.elements = ["H"]
+      require.elements = ["H"]
       drop_probability = 0.5
 
       [[groups]]
       name = "non_h"
-      exclude.elements = ["H"]
+      forbid.elements = ["H"]
       drop_probability = 1.0
 
 
@@ -1773,7 +1773,7 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_cells_with_include_all_selects_every_atom_of_its_cells(){
-    // cells = "primary" with include = {} is the new form of the old
+    // cells = "primary" with require = {} is the new form of the old
     // selection = {cell_type = "primary_cell"}, which applied the group to
     // every atom of the primary cell and to none of its copies.
     // The radius reaches into the neighboring cells (edge 72.6 Å).
@@ -1795,7 +1795,7 @@ mod tests{
         [[groups]]
         name = "primary"
         cells = "primary"
-        include = {}
+        require = {}
         1H.active = false
         "##);
     assert_eq!(structure.number(), reference.number());
@@ -1827,18 +1827,18 @@ mod tests{
     let groups = r##"
         [[groups]]
         name = "methyl_h"
-        include.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        require.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         drop_probability = 0.3
 
         [[groups]]
         name = "other_h"
-        include.elements = ["H"]
-        exclude.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        require.elements = ["H"]
+        forbid.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         drop_probability = 0.6
 
         [[groups]]
         name = "nitrogen"
-        include.elements = ["N"]
+        require.elements = ["N"]
         drop_probability = 0.5
         "##;
 
@@ -1866,19 +1866,19 @@ mod tests{
     let c_primary = r##"
         [[groups]]
         name = "c_primary"
-        include.elements = ["C"]
+        require.elements = ["C"]
         cells = "primary"
         "##;
     let h_primary = r##"
         [[groups]]
         name = "h_primary"
-        include.elements = ["H"]
+        require.elements = ["H"]
         cells = "primary"
         "##;
     let c_extra = r##"
         [[groups]]
         name = "c_extra"
-        include.elements = ["C"]
+        require.elements = ["C"]
         cells = "extra"
         13C.abundance = 1.0
         "##;
@@ -2258,7 +2258,7 @@ mod tests{
       let structure = build(r##"
           [[groups]]
           name = "h"
-          include.elements = ["H"]
+          require.elements = ["H"]
           1H.abundance = 0.5
           2H.abundance = 0.5
           "##, seed);
@@ -2277,7 +2277,7 @@ mod tests{
     let structure = build(r##"
         [[groups]]
         name = "c"
-        include.elements = ["C"]
+        require.elements = ["C"]
         13C.abundance = 1.0
         "##, 0);
     let carbons = structure.bath_particles.iter()
@@ -2289,7 +2289,7 @@ mod tests{
     let structure = build(r##"
         [[groups]]
         name = "h"
-        include.elements = ["H"]
+        require.elements = ["H"]
         "##, 0);
     assert!(structure.bath_particles.iter()
         .filter(|p| p.element == Element::Hydrogen)
@@ -2319,7 +2319,7 @@ mod tests{
     let structure = build_periodic_tempo(r##"
         [[groups]]
         name = "tempo"
-        include.residues = ["TEM"]
+        require.residues = ["TEM"]
         cosubstitute = "same_molecule"
         "##,0);
     assert_eq!(structure.bath_particles[0].element, Element::Carbon);
@@ -2340,7 +2340,7 @@ mod tests{
     let structure = build_periodic_tempo(r##"
         [[groups]]
         name = "tempo"
-        include.residues = ["TEM"]
+        require.residues = ["TEM"]
         cosubstitute = "same_molecule"
         drop_probability = 0.5
         "##,3);
@@ -2376,7 +2376,7 @@ mod tests{
 
         [[groups]]
         name = "water"
-        include.residues = ["SOL"]
+        require.residues = ["SOL"]
         cosubstitute = "same_molecule"
         drop_probability = 0.5
         "##).unwrap();
@@ -2445,14 +2445,14 @@ mod tests{
     let groups = r##"
         [[groups]]
         name = "methyl_h"
-        include.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        require.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         1H.abundance = 0.5
         2H.abundance = 0.5
 
         [[groups]]
         name = "other_h"
-        include.elements = ["H"]
-        exclude.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
+        require.elements = ["H"]
+        forbid.serials = [3,4,5,7,8,9,21,22,23,25,26,27]
         drop_probability = 0.3
         "##;
 

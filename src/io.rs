@@ -268,7 +268,7 @@ mod tests{
   #[test]
   fn test_load_auxiliary_signals_round_trip(){
     use crate::cluster::read_clusters::read_cluster_file;
-    use crate::config::{SAVE_DIR_AUXILIARY_SIGNALS,SAVE_DIR_ORIENTATION_SIGNALS,
+    use crate::config::{SAVE_DIR_AUXILIARY_SIGNALS,SAVE_DIR_ORIENTATION_PREFIX,
       SAVE_FILE_CLUSTERS};
     use crate::signal::{Signal,load_csv_to_vec_signals};
     use crate::structure::Structure;
@@ -294,10 +294,12 @@ rng_seed = 5\n",toml);
     // There is one structure, one instance, and one orientation.
     let structure_dirs = structure_output_dirs(&out).unwrap();
     assert_eq!(structure_dirs.len(),1);
-    let ori_root = format!("{}/instance_1/{}",structure_dirs[0].2,
-        SAVE_DIR_ORIENTATION_SIGNALS);
-    let entries = std::fs::read_dir(&ori_root).unwrap()
-      .map(|e| e.unwrap().path()).collect::<Vec::<_>>();
+    let run_dir = format!("{}/run_1",structure_dirs[0].2);
+    let entries = std::fs::read_dir(&run_dir).unwrap()
+      .map(|e| e.unwrap().path())
+      .filter(|p| p.is_dir() && p.file_name().unwrap().to_str().unwrap()
+          .starts_with(SAVE_DIR_ORIENTATION_PREFIX))
+      .collect::<Vec::<_>>();
     assert_eq!(entries.len(),1);
     let ori_dir = entries[0].to_str().unwrap().to_string();
 

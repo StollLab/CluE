@@ -957,7 +957,7 @@ mod tests{
       
       [[groups]]
       name = "hydrogens"
-      include.elements = ["H"]
+      require.elements = ["H"]
       1H.c3_tunnel_splitting = 75e-3
     "##).unwrap();
 

@@ -86,7 +86,7 @@ src/
     validate.rs      per-table key check (`check_toml_keys`: unknown or misplaced
                      keys are errors) and `Config::check_completeness`
     particle_config.rs  per-group / per-isotope particle settings
-    command_line_input.rs  CLI flags (-c, -h, -l, -V, -W, -H, -O)
+    command_line_input.rs  CLI flags (-c, -h, -l, -V, -W, -O)
   structure/         structure input (pdb.rs, gro.rs), particle filters,
                      exchange groups, extended (periodic) structures
   cluster/           adjacency lists, cluster finding, partitioning
@@ -158,7 +158,7 @@ When adding or renaming a config key:
    `src/config/toml_keys.rs` where the code reads the key by name.
 2. Add the key to the key list of its table in `src/config/validate.rs`
    (`TOP_LEVEL_KEYS`, `STRUCTURE_KEYS`, `CLUSTER_EXPANSION_KEYS`,
-   `GROUP_KEYS`, `INCLUDE_KEYS`, `ISOTOPE_KEYS`, ...) and update the array
+   `GROUP_KEYS`, `REQUIRE_KEYS`, `ISOTOPE_KEYS`, ...) and update the array
    length (`[&str; N]`). Keys are checked per table, so a missing entry
    rejects valid configs. For a new table, also add a `Schema` variant, list
    it in `ALL_SCHEMAS`, and handle it in `Schema::keys`, `Schema::child` (the

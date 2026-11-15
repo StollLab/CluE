@@ -794,7 +794,7 @@ mod tests{
 
         [[groups]]
         name = "tempo_h"
-        include.elements = ["H"]
+        require.elements = ["H"]
 
         1H.c3_tunnel_splitting = 80e-3
         "##).unwrap();
@@ -842,7 +842,7 @@ mod tests{
 
         [[groups]]
         name = "tempo_h"
-        include.elements = ["H"]
+        require.elements = ["H"]
 
         1H.c3_tunnel_splitting = 80e-3
         "##).unwrap();

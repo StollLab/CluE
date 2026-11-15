@@ -10,10 +10,9 @@ use crate::config::{
   SAVE_FILE_BATH, 
   SAVE_FILE_CLUSTERS, 
   SAVE_FILE_DET_SPIN_COOR,
-  SAVE_DIR_INFO, 
   SAVE_FILE_EXCHANGE_GROUPS,
   SAVE_FILE_METHYL_PARTITIONS,
-  SAVE_DIR_ORIENTATION_SIGNALS,
+  SAVE_DIR_ORIENTATION_PREFIX,
   SAVE_FILE_ORIENTATIONS,
   SAVE_FILE_SANS_SPIN_SIGNALS,
   SAVE_FILE_STRUCTURE_PDB,
@@ -279,19 +278,14 @@ fn calculate_structure_signal(seed: u64, config: &Config,
   };
 
   if config.write_orientation_grid == Some(true){
+    // The instance directory exists (write_instance_info()).
     if let Some(save_dir) = &save_dir_opt{
       
-      let info_path = format!("{}/{}",save_dir,SAVE_DIR_INFO);
-
-      if let Err(err) = std::fs::create_dir_all(info_path.clone()){
-        return Err(CluEError::CannotCreateDir(info_path,
-              err.to_string()));
-      }
-      let ori_file = format!("{}/{}.xyzw",info_path,SAVE_FILE_ORIENTATIONS);
+      let ori_file = format!("{}/{}.xyzw",save_dir,SAVE_FILE_ORIENTATIONS);
 
       integration_grid.to_csv(&ori_file)?;
 
-      let ori_file = format!("{}/{}_polar.csv",info_path,SAVE_FILE_ORIENTATIONS);
+      let ori_file = format!("{}/{}_polar.csv",save_dir,SAVE_FILE_ORIENTATIONS);
 
       integration_grid.to_polar_csv(&ori_file)?;
     }
@@ -614,7 +608,8 @@ fn calculate_methyl_partition_cce(
 } 
 //------------------------------------------------------------------------------
 // This function creates the directory `save_dir` of an instance and
-// writes its info files (`output.info` and the switches below it).
+// writes the files about the structure into it (`output.info` and the 
+// switches below it).
 fn write_instance_info(
     save_dir: &str,
     structure: &Structure,
@@ -629,13 +624,6 @@ fn write_instance_info(
 
   if config.write_info == Some(true){
 
-    let info_path = format!("{}/{}",save_dir,SAVE_DIR_INFO);
-
-    if let Err(err) = std::fs::create_dir_all(info_path.clone()){
-      return Err(CluEError::CannotCreateDir(info_path,
-            err.to_string()));
-    }
-
     if config.write_detected_spin == Some(true){
       if let Some(det) = &structure.detected_particle{
         let mut coors = det.weighted_coordinates.clone();
@@ -645,26 +633,26 @@ fn write_instance_info(
         );
         coors = coors.scale(1.0/ANGSTROM);
         coors.to_csv(
-          &format!("{}/{}.xyzw", info_path, SAVE_FILE_DET_SPIN_COOR),
+          &format!("{}/{}.xyzw", save_dir, SAVE_FILE_DET_SPIN_COOR),
         )?;
       }
     }
 
     if config.write_bath == Some(true){
       structure.bath_to_csv(
-          &format!("{}/{}.csv", info_path, SAVE_FILE_BATH),
+          &format!("{}/{}.csv", save_dir, SAVE_FILE_BATH),
           config)?;
     }
 
     if config.write_structure_pdb == Some(true){
       structure.write_pdb(&format!("{}/{}.pdb", 
-            info_path, SAVE_FILE_STRUCTURE_PDB))?;
+            save_dir, SAVE_FILE_STRUCTURE_PDB))?;
     }
 
     if let Some(exchange_group_manager) = &structure.exchange_groups{
       if config.write_exchange_groups == Some(true){
         let csv_file = format!("{}/{}.csv",
-            info_path,SAVE_FILE_EXCHANGE_GROUPS);
+            save_dir,SAVE_FILE_EXCHANGE_GROUPS);
         exchange_group_manager.to_csv(&csv_file,structure)?;
       }
     }
@@ -680,16 +668,11 @@ fn optionally_save_tensors(
       config: &Config
       ) -> Result<(),CluEError>
 {
+  // The instance directory exists (write_instance_info()).
   if let Some(save_dir) = &save_dir_opt{
     if config.write_info == Some(true){
-      let info_path = format!("{}/{}",save_dir,SAVE_DIR_INFO);
-      
       if config.write_tensors == Some(true){
-        if let Err(err) = std::fs::create_dir_all(info_path.clone()){
-          return Err(CluEError::CannotCreateDir(info_path,
-                err.to_string()));
-        }
-        let tensor_path = format!("{}/{}.txt",info_path,SAVE_FILE_TENSORS);
+        let tensor_path = format!("{}/{}.txt",save_dir,SAVE_FILE_TENSORS);
 
         tensors.save(&tensor_path,structure)?;
       }
@@ -706,7 +689,8 @@ fn get_orientation_save_dir(
 {
   let theta_degrees = rot_dir.theta()*180.0/PI;
   let phi_degrees = rot_dir.phi()*180.0/PI;
-  let save_dir = format!("theta_{}deg_phi_{}deg",theta_degrees, phi_degrees);
+  let save_dir = format!("{}theta_{}deg_phi_{}deg", 
+      SAVE_DIR_ORIENTATION_PREFIX, theta_degrees, phi_degrees);
   println!(
       "\nMagnetic field orientation: θ = {} degrees; φ = {} degrees.", 
       theta_degrees, phi_degrees);
@@ -716,8 +700,7 @@ fn get_orientation_save_dir(
 
       if config.write_orientation_signals == Some(true){ 
       
-        let save_path = format!("{}/{}/{}",
-            path, SAVE_DIR_ORIENTATION_SIGNALS,save_dir);
+        let save_path = format!("{}/{}", path, save_dir);
       
         match std::fs::create_dir_all(save_path.clone()){
           Ok(_) => (),

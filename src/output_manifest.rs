@@ -10,18 +10,21 @@
 //!   rng_seed.txt         main seed
 //!   tau_axis.csv
 //!   signal.csv           weighted average over the structures
-//!   structures.csv       id, file, content_hash, weight, number_runs, directory
-//!   structures/<id>/
+//!   structures.csv       directory, file, relative_weight, absolute_weight,
+//!                        content_hash, number_runs
+//!   structure_<n>/       one per structure, n = 1, 2, ...
 //!     signal.csv         average over the instances of the structure
-//!     instance_<k>/      k = 1, ..., number_runs
+//!     run_<k>/           one per instance, k = 1, ..., number_runs
 //!       signal.csv
-//!       info/
-//!       orientations/theta_<θ>deg_phi_<φ>deg/
+//!       detected_spin.xyzw, bath.csv, structure_pdb.pdb, 
+//!       exchange_groups.csv, tensors.txt, orientation_grid.xyzw,
+//!       orientation_grid_polar.csv
+//!       ori_theta_<θ>deg_phi_<φ>deg/
 //! ```
 use crate::clue_errors::CluEError;
 use crate::config::{
   ClusterSource, Config, PartitionTableConfig, StructureInput,
-  SAVE_DIR_ORIENTATION_SIGNALS,
+  SAVE_DIR_ORIENTATION_PREFIX,
 };
 use crate::io::write_atomically;
 use crate::math::fnv1a_64;
@@ -38,15 +41,19 @@ pub const MANIFEST_FILE: &str = "clue_manifest.toml";
 pub const RNG_SEED_FILE: &str = "rng_seed.txt";
 /// The name of the index of the structures of an output directory.
 pub const STRUCTURES_FILE: &str = "structures.csv";
-/// The directory of the structures in an output directory.
-pub const SAVE_DIR_STRUCTURES: &str = "structures";
+/// The prefix of the directory names of the structures in an output 
+/// directory, `structure_<n>`.
+pub const STRUCTURE_DIR_PREFIX: &str = "structure_";
+/// The prefix of the directory names of the instances of a structure,
+/// `run_<k>`.
+pub const INSTANCE_DIR_PREFIX: &str = "run_";
 /// The name of the signal files.
 pub const SIGNAL_FILE: &str = "signal.csv";
 /// The name of the time axis file.
 pub const TAU_AXIS_FILE: &str = "tau_axis.csv";
 
 // The version of the layout of `clue_manifest.toml`.
-const MANIFEST_FORMAT: u32 = 1;
+const MANIFEST_FORMAT: u32 = 2;
 
 /// The version of CluE that writes the output.
 pub const CLUE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -90,6 +97,32 @@ pub fn structure_seed(main_seed: u64, content_hash: u64) -> u64{
   let mut rng = ChaCha20Rng::seed_from_u64(main_seed);
   rng.set_stream(content_hash);
   rng.next_u64()
+}
+//------------------------------------------------------------------------------
+/// This function returns the id, and directory name, of structure number
+/// `number`: `structure_<number>`.
+pub fn structure_id(number: usize) -> String{
+  format!("{}{}", STRUCTURE_DIR_PREFIX, number)
+}
+//------------------------------------------------------------------------------
+/// This function returns the number that the next new structure of an 
+/// output with the structure records `records` gets: one more than the 
+/// largest number n of the ids `structure_<n>`, or 1 without records.
+/// Ids that are not of this form (only possible in a hand-edited record) 
+/// are skipped; the returned number is still larger than every number 
+/// that is used, so ids are never reused.
+pub fn next_structure_number(records: &[StructureRecord]) -> usize{
+  records.iter()
+    .filter_map(|r| r.id.strip_prefix(STRUCTURE_DIR_PREFIX)
+        .and_then(|n| n.parse::<usize>().ok()))
+    .max()
+    .map_or(1, |n| n + 1)
+}
+//------------------------------------------------------------------------------
+/// This function returns the directory name of instance `index` (from 1)
+/// of a structure: `run_<index>`.
+pub fn instance_dir_name(index: usize) -> String{
+  format!("{}{}", INSTANCE_DIR_PREFIX, index)
 }
 //------------------------------------------------------------------------------
 /// This function draws `n` seeds from `rng`.
@@ -175,8 +208,10 @@ pub struct InputFileRecord{
 }
 
 /// `StructureRecord` is the progress of one input structure: its id 
-/// (the name of its directory under `structures/`), file, content hash,
-/// weight, seed, number of instances, and the instances.
+/// (the name of its directory in the output directory, `structure_<n>`,
+/// see `next_structure_number()`), file, content hash, weight, seed, 
+/// number of instances, and the instances.
+/// A structure is matched to its record by the content hash.
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct StructureRecord{
   pub id: String,
@@ -196,8 +231,7 @@ pub struct StructureRecord{
 /// `complete` is `true` once the instance's signal is saved; `outputs` 
 /// are the output switches that were on (see `instance_outputs()`), and 
 /// `files` the files of the instance outside its orientation directories,
-/// relative to the instance directory 
-/// (`structures/<id>/instance_<index>`).
+/// relative to the instance directory (`<id>/run_<index>`).
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct InstanceRecord{
   pub index: usize,
@@ -275,9 +309,17 @@ pub fn read_manifest(dir: &str) -> Result<Option<Manifest>,CluEError>{
           err.to_string())),
   };
   if manifest.manifest_format != MANIFEST_FORMAT{
+    // Format 1 kept the instances under structures/<id>/instance_<k>/.
+    let note = if manifest.manifest_format == 1{
+      "; outputs of earlier 1.0.0-dev builds keep their instances under \
+structures/; set a different output.directory"
+    }else{
+      ""
+    };
     return Err(CluEError::CannotParseManifest(filename, format!(
             "manifest_format = {} is not supported; this version of CluE \
-reads manifest_format = {}", manifest.manifest_format, MANIFEST_FORMAT)));
+reads manifest_format = {}{}", manifest.manifest_format, MANIFEST_FORMAT,
+            note)));
   }
   Ok(Some(manifest))
 }
@@ -321,7 +363,7 @@ pub fn structure_output_dirs(output_dir: &str)
   };
   Ok(manifest.structures.iter()
     .map(|s| (s.file.clone(), s.id.clone(), 
-          format!("{}/{}/{}", output_dir, SAVE_DIR_STRUCTURES, s.id)))
+          format!("{}/{}", output_dir, s.id)))
     .collect())
 }
 //------------------------------------------------------------------------------
@@ -348,6 +390,12 @@ pub fn input_files(config: &Config)
       };
       let mut files = Vec::<String>::new();
       for entry in entries.flatten(){
+        // Only orientation directories hold clusters.
+        if !entry.file_name().to_string_lossy()
+          .starts_with(SAVE_DIR_ORIENTATION_PREFIX)
+        {
+          continue;
+        }
         let clusters_file = entry.path().join("clusters.toml");
         if clusters_file.is_file(){
           files.push(clusters_file.to_string_lossy().to_string());
@@ -604,7 +652,9 @@ fn check_compatible(manifest: &Manifest, config: &Config, dir: &str)
     return Err(CluEError::NoNumberSystemInstances);
   };
   for record in manifest.structures.iter(){
-    let Some(structure) = structures.iter().find(|s| s.id == record.id) else{
+    let Some(structure) = structures.iter()
+      .find(|s| s.content_hash_hex() == record.content_hash) else
+    {
       return Err(CluEError::OutputStructureRemoved(dir.to_string(),
             record.file.clone(), record.id.clone()));
     };
@@ -659,28 +709,32 @@ fn completeness(manifest: &Manifest, config: &Config, dir: &str)
     .all(|file| Path::new(dir).join(file).is_file());
 
   let mut summaries = Vec::<ResumeSummary>::new();
+  // New structures get the numbers after the recorded ones, in input order,
+  // as `OutputState::begin_structure()` gives them.
+  let mut next_number = next_structure_number(&manifest.structures);
   for structure in config.structure_inputs()?.iter(){
     let Some(record) = manifest.structures.iter()
-      .find(|r| r.id == structure.id) else
+      .find(|r| r.content_hash == structure.content_hash_hex()) else
     {
       complete = false;
       summaries.push(ResumeSummary{
         file: structure.file.clone(),
-        id: structure.id.clone(),
+        id: structure_id(next_number),
         new_structure: true,
         number_runs,
         instances_complete: 0,
         instances_added: number_runs,
         orientations_complete: 0,
       });
+      next_number += 1;
       continue;
     };
 
     let mut instances_complete = 0;
     let mut orientations_complete = 0;
     for instance in record.instances.iter().take(number_runs){
-      let instance_dir = Path::new(dir).join(SAVE_DIR_STRUCTURES)
-        .join(&record.id).join(format!("instance_{}", instance.index));
+      let instance_dir = Path::new(dir).join(&record.id)
+        .join(instance_dir_name(instance.index));
       if instance_is_complete(instance, &inst_outputs, &ori_outputs, 
           &instance_dir)
       {
@@ -695,15 +749,14 @@ fn completeness(manifest: &Manifest, config: &Config, dir: &str)
 
     if instances_complete < number_runs 
       || record.weight != structure.weight
-      || !Path::new(dir).join(SAVE_DIR_STRUCTURES).join(&record.id)
-        .join(SIGNAL_FILE).is_file()
+      || !Path::new(dir).join(&record.id).join(SIGNAL_FILE).is_file()
     {
       complete = false;
     }
 
     summaries.push(ResumeSummary{
       file: structure.file.clone(),
-      id: structure.id.clone(),
+      id: record.id.clone(),
       new_structure: false,
       number_runs,
       instances_complete,
@@ -769,15 +822,21 @@ fn list_directory(dir: &str) -> Result<Vec::<String>,CluEError>{
 }
 //------------------------------------------------------------------------------
 // This function returns the files under the directory `dir`, as sorted 
-// paths relative to `dir`, without the subdirectory `exclude` of `dir` and
-// without temporary `.tmp` files.
-fn list_files(dir: &str, exclude: Option<&str>)
+// paths relative to `dir`, without the subdirectories of `dir` whose names
+// start with `exclude_prefix` and without temporary `.tmp` files.
+// Only the direct subdirectories of `dir` are compared with the prefix.
+fn list_files(dir: &str, exclude_prefix: Option<&str>)
   -> Result<Vec::<String>,CluEError>
 {
   let root = Path::new(dir);
   let mut files = Vec::<String>::new();
   let mut stack = vec![root.to_path_buf()];
-  let excluded = exclude.map(|e| root.join(e));
+  let is_excluded = |path: &Path| match exclude_prefix{
+    Some(prefix) => path.parent() == Some(root) 
+      && path.file_name().map_or(false, 
+          |name| name.to_string_lossy().starts_with(prefix)),
+    None => false,
+  };
   while let Some(path) = stack.pop(){
     let entries = match std::fs::read_dir(&path){
       Ok(entries) => entries,
@@ -787,7 +846,7 @@ fn list_files(dir: &str, exclude: Option<&str>)
     for entry in entries.flatten(){
       let entry_path = entry.path();
       if entry_path.is_dir(){
-        if Some(&entry_path) != excluded.as_ref(){
+        if !is_excluded(&entry_path){
           stack.push(entry_path);
         }
       }else if entry_path.extension().map_or(true, |ext| ext != "tmp"){
@@ -1061,12 +1120,14 @@ impl OutputState{
       instance_seeds: &[u64]) -> Result<usize,CluEError>
   {
     let s_idx = match self.manifest.structures.iter()
-      .position(|r| r.id == structure.id)
+      .position(|r| r.content_hash == structure.content_hash_hex())
     {
       Some(s_idx) => s_idx,
       None => {
+        let id = structure_id(
+            next_structure_number(&self.manifest.structures));
         self.manifest.structures.push(StructureRecord{
-          id: structure.id.clone(),
+          id,
           file: structure.file.clone(),
           content_hash: structure.content_hash_hex(),
           weight: structure.weight,
@@ -1123,14 +1184,14 @@ derived seed {}", record.file, instance.index, instance.seed, derived)));
   /// output is saved.
   pub fn structure_dir(&self, s_idx: usize) -> Option<String>{
     let dir = self.dir.as_ref()?;
-    Some(format!("{}/{}/{}", dir, SAVE_DIR_STRUCTURES, 
-          self.manifest.structures[s_idx].id))
+    Some(format!("{}/{}", dir, self.manifest.structures[s_idx].id))
   }
   //----------------------------------------------------------------------------
   /// This function returns the directory of instance `k` (from 0) of
   /// structure `s_idx`, if the output is saved.
   pub fn instance_dir(&self, s_idx: usize, k: usize) -> Option<String>{
-    Some(format!("{}/instance_{}", self.structure_dir(s_idx)?, k + 1))
+    Some(format!("{}/{}", self.structure_dir(s_idx)?, 
+          instance_dir_name(k + 1)))
   }
   //----------------------------------------------------------------------------
   /// This function returns `true` if instance `k` of structure `s_idx` is
@@ -1239,7 +1300,7 @@ differ", record.file, instance.index)));
   {
     let files = match self.instance_dir(s_idx, k){
       Some(instance_dir) => list_files(&instance_dir, 
-          Some(SAVE_DIR_ORIENTATION_SIGNALS))?,
+          Some(SAVE_DIR_ORIENTATION_PREFIX))?,
       None => Vec::<String>::new(),
     };
     let instance = &mut self.manifest.structures[s_idx].instances[k];
@@ -1250,24 +1311,32 @@ differ", record.file, instance.index)));
   }
   //----------------------------------------------------------------------------
   /// This function writes the index of the structures (`structures.csv`),
-  /// if the output is saved.
+  /// if the output is saved: one row per structure record, with the 
+  /// columns `directory` (the structure's directory in the output 
+  /// directory), `file`, `relative_weight` (the weight of the structure), 
+  /// `absolute_weight` (weight / sum of the weights, the factor of the 
+  /// structure's signal in the averaged signal), `content_hash`, and 
+  /// `number_runs`.
   pub fn write_structures_index(&self) -> Result<(),CluEError>{
     let Some(dir) = &self.dir else{
       return Ok(());
     };
     let records = &self.manifest.structures;
+    // The structure signals are averaged with weight / total weight.
+    let total_weight = records.iter().map(|r| r.weight).sum::<f64>();
     let column = |f: &dyn Fn(&StructureRecord) -> String| 
       records.iter().map(f).collect::<Vec::<String>>();
     let data = vec![
       column(&|r| r.id.clone()),
       column(&|r| r.file.clone()),
-      column(&|r| r.content_hash.clone()),
       column(&|r| r.weight.to_string()),
+      column(&|r| (r.weight/total_weight).to_string()),
+      column(&|r| r.content_hash.clone()),
       column(&|r| r.number_runs.to_string()),
-      column(&|r| format!("{}/{}", SAVE_DIR_STRUCTURES, r.id)),
     ];
-    let headers = ["id", "file", "content_hash", "weight", "number_runs",
-      "directory"].iter().map(|h| h.to_string()).collect::<Vec::<String>>();
+    let headers = ["directory", "file", "relative_weight", "absolute_weight",
+      "content_hash", "number_runs"].iter().map(|h| h.to_string())
+      .collect::<Vec::<String>>();
     crate::io::write_data(&data, &format!("{}/{}", dir, STRUCTURES_FILE), 
         headers)
   }
@@ -1353,15 +1422,17 @@ mod tests{
   fn instance_dir(out: &str, k: usize) -> String{
     let structures = structure_output_dirs(out).unwrap();
     assert_eq!(structures.len(), 1);
-    format!("{}/instance_{}", structures[0].2, k)
+    format!("{}/{}", structures[0].2, instance_dir_name(k))
   }
   //----------------------------------------------------------------------------
   // This function returns the sorted orientation directories of an 
   // instance directory.
   fn orientation_dirs(instance_dir: &str) -> Vec::<String>{
-    let mut dirs = std::fs::read_dir(format!("{}/{}", instance_dir, 
-          SAVE_DIR_ORIENTATION_SIGNALS)).unwrap()
-      .map(|e| e.unwrap().path().to_str().unwrap().to_string())
+    let mut dirs = std::fs::read_dir(instance_dir).unwrap()
+      .map(|e| e.unwrap().path())
+      .filter(|p| p.is_dir() && p.file_name().unwrap().to_str().unwrap()
+          .starts_with(SAVE_DIR_ORIENTATION_PREFIX))
+      .map(|p| p.to_str().unwrap().to_string())
       .collect::<Vec::<String>>();
     dirs.sort();
     dirs
@@ -1694,8 +1765,9 @@ build uses"));
         ("orientation_signals = true","orientation_signals = false")]);
     let (_, signal) = crate::run(config.clone()).unwrap();
     let dir_1 = instance_dir(&out, 1);
-    assert!(!Path::new(&format!("{}/{}", dir_1, 
-            SAVE_DIR_ORIENTATION_SIGNALS)).exists());
+    assert!(std::fs::read_dir(&dir_1).unwrap().flatten()
+        .all(|e| !e.file_name().to_string_lossy()
+          .starts_with(SAVE_DIR_ORIENTATION_PREFIX)));
     let manifest = read_manifest(&out).unwrap().unwrap();
     assert!(manifest.structures[0].instances[0].orientations.iter()
         .all(|o| !o.complete));
@@ -1862,7 +1934,7 @@ label: \"h\",\n        },\n    ],\n}";
       input_files: vec![InputFileRecord{path: "c.toml".to_string(), 
         content_hash: "0011223344556677".to_string()}],
       structures: vec![StructureRecord{
-        id: "s_1".to_string(),
+        id: "structure_1".to_string(),
         file: "a.pdb".to_string(),
         content_hash: "1".to_string(),
         weight: 0.25,
@@ -1876,7 +1948,7 @@ label: \"h\",\n        },\n    ],\n}";
           outputs: vec!["info.bath".to_string()],
           files: vec!["signal.csv".to_string()],
           orientations: vec![OrientationRecord{complete: true, 
-            directory: "orientations/x".to_string(),
+            directory: "ori_x".to_string(),
             outputs: vec![], files: vec!["signal.csv".to_string()]},
             OrientationRecord::default()],
         }],
@@ -1895,6 +1967,165 @@ label: \"h\",\n        },\n    ],\n}";
     assert!(matches!(read_manifest(&out), 
           Err(CluEError::CannotParseManifest(..))));
     let _ = std::fs::remove_dir_all(&out);
+  }
+  //----------------------------------------------------------------------------
+  // This function returns the sorted names of the entries of `dir`.
+  fn entry_names(dir: &str) -> Vec::<String>{
+    let mut names = std::fs::read_dir(dir).unwrap()
+      .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+      .collect::<Vec::<String>>();
+    names.sort();
+    names
+  }
+  //----------------------------------------------------------------------------
+  // The output layout: structure_<n>/run_<k>/ with the files about the 
+  // structure and the ori_ directories, the structures.csv columns, and the
+  // manifest records.
+  #[test]
+  fn test_output_layout(){
+    let out = temp_dir("layout");
+    let config = small_config(&out, "number_runs = 2\nrng_seed = 3", 
+        &RANDOM);
+    crate::run(config.clone()).unwrap();
+
+    assert_eq!(entry_names(&out), vec![MANIFEST_FILE, RNG_SEED_FILE, 
+        SIGNAL_FILE, "structure_1", STRUCTURES_FILE, TAU_AXIS_FILE]);
+    let structure_dir = format!("{}/structure_1", out);
+    assert_eq!(entry_names(&structure_dir), vec!["run_1", "run_2", 
+        SIGNAL_FILE]);
+
+    let manifest = read_manifest(&out).unwrap().unwrap();
+    assert_eq!(manifest.structures.len(), 1);
+    let record = &manifest.structures[0];
+    assert_eq!(record.id, "structure_1");
+    for k in 1..=2{
+      let run_dir = format!("{}/run_{}", structure_dir, k);
+      let names = entry_names(&run_dir);
+      // The files about the structure are in the instance directory 
+      // (output.info, bath, detected_spin, orientation_grid are on; 
+      // structure_pdb is off in the asset).
+      for file in [SIGNAL_FILE, "bath.csv", "detected_spin.xyzw", 
+        "orientation_grid.xyzw", "orientation_grid_polar.csv"]
+      {
+        assert!(names.contains(&file.to_string()), "{}: {:?}", file, names);
+      }
+      for old in ["info", "orientations"]{
+        assert!(!names.contains(&old.to_string()), "{}: {:?}", old, names);
+      }
+      // Every directory is an orientation directory.
+      let dirs = names.iter()
+        .filter(|n| Path::new(&run_dir).join(n).is_dir())
+        .collect::<Vec::<&String>>();
+      assert!(!dirs.is_empty());
+      assert!(dirs.iter().all(|n| n.starts_with("ori_theta_")), "{:?}", dirs);
+
+      // The instance record lists the files outside the orientation 
+      // directories; the orientation records name the ori_ directories.
+      let instance = &record.instances[k - 1];
+      assert!(instance.files.contains(&"bath.csv".to_string()));
+      assert!(instance.files.iter()
+          .all(|f| !f.starts_with("ori_") && !f.starts_with("info/")),
+          "{:?}", instance.files);
+      assert!(instance.orientations.iter()
+          .all(|o| o.directory.starts_with("ori_theta_") && o.complete));
+    }
+    for old in ["structures", "instance_1", "runs"]{
+      assert!(!Path::new(&out).join(old).exists());
+      assert!(!Path::new(&structure_dir).join(old).exists());
+    }
+
+    let index = std::fs::read_to_string(format!("{}/{}", out, 
+          STRUCTURES_FILE)).unwrap();
+    assert_eq!(index, format!("directory,file,relative_weight,\
+absolute_weight,content_hash,number_runs\nstructure_1,{},1,1,{},2\n", 
+          record.file, record.content_hash));
+
+    // A rerun names no second structure.
+    crate::run(config).unwrap();
+    assert_eq!(read_manifest(&out).unwrap().unwrap().structures, 
+        manifest.structures);
+    let _ = std::fs::remove_dir_all(&out);
+  }
+  //----------------------------------------------------------------------------
+  // The clusters of a run are read back from its instance directory, 
+  // `<output>/structure_<n>/run_<k>`, and give the same signal.
+  #[test]
+  fn test_clusters_from_an_instance_directory(){
+    let out = temp_dir("clusters_source");
+    let config = small_config(&out, "number_runs = 1\nrng_seed = 3", &[]);
+    crate::run(config).unwrap();
+    let run_dir = instance_dir(&out, 1);
+
+    let out_2 = temp_dir("clusters_reused");
+    let config_2 = small_config(&out_2, "number_runs = 1\nrng_seed = 3", 
+        &[("[cluster_expansion.clustering]", &format!(
+            "[cluster_expansion.clustering]\n  file = '{}'", run_dir))]);
+    assert_eq!(config_2.cluster_source, 
+        Some(ClusterSource::OrientationsDir(run_dir.clone())));
+    crate::run(config_2).unwrap();
+    assert_eq!(read_signals(&format!("{}/{}", run_dir, SIGNAL_FILE)),
+        read_signals(&format!("{}/{}", instance_dir(&out_2, 1), 
+            SIGNAL_FILE)));
+    let _ = std::fs::remove_dir_all(&out);
+    let _ = std::fs::remove_dir_all(&out_2);
+  }
+  //----------------------------------------------------------------------------
+  // An output of an earlier 1.0.0-dev build (manifest_format = 1) is 
+  // rejected, by a run and by --check, with a hint.
+  #[test]
+  fn test_manifest_format_1_is_rejected(){
+    let out = temp_dir("format_1");
+    let toml = small_toml(&out, "number_runs = 1\nrng_seed = 3", &[]);
+    let config = Config::from_toml_string(&toml).unwrap();
+    crate::run(config.clone()).unwrap();
+    edit_manifest(&out, |m| m.manifest_format = 1);
+
+    let expected = CluEError::CannotParseManifest(manifest_path(&out),
+        "manifest_format = 1 is not supported; this version of CluE reads \
+manifest_format = 2; outputs of earlier 1.0.0-dev builds keep their \
+instances under structures/; set a different output.directory".to_string());
+    assert_eq!(read_manifest(&out), Err(expected.clone()));
+    let mut checked = config.clone();
+    checked.set_tau_axis().unwrap();
+    assert_eq!(inspect_output(&checked), Err(expected.clone()));
+    assert_eq!(crate::run(config).unwrap_err(), expected);
+
+    let input_file = format!("{}.toml", out);
+    std::fs::write(&input_file, &toml).unwrap();
+    let report = crate::check(CommandLineInput::new(vec![
+          "clue_oxide".into(), "-c".into(), input_file.clone()]).unwrap());
+    assert_eq!(report.output, Some(Err(expected)));
+    let _ = std::fs::remove_file(&input_file);
+    let _ = std::fs::remove_dir_all(&out);
+  }
+  //----------------------------------------------------------------------------
+  // Structures are numbered from 1; new ones get the next unused number.
+  #[test]
+  fn test_structure_numbers(){
+    let record = |id: &str| StructureRecord{id: id.to_string(), 
+      file: "a.pdb".to_string(), content_hash: "0".to_string(), weight: 1.0,
+      seed: 0, number_runs: 1, instances: Vec::<InstanceRecord>::new()};
+    assert_eq!(next_structure_number(&[]), 1);
+    assert_eq!(next_structure_number(&[record("structure_1")]), 2);
+    assert_eq!(next_structure_number(&[record("structure_1"), 
+          record("structure_3")]), 4);
+    // Ids of another form are skipped.
+    assert_eq!(next_structure_number(&[record("s_0011"), 
+          record("structure_2")]), 3);
+    assert_eq!(structure_id(4), "structure_4");
+    assert_eq!(instance_dir_name(2), "run_2");
+
+    // The resume summary of a structure that is not recorded yet names the
+    // directory it will get.
+    let out = temp_dir("numbers");
+    let config = small_config(&out, "number_runs = 1\nrng_seed = 3", &[]);
+    let manifest = Manifest::new(&config).unwrap();
+    let (complete, summaries) = completeness(&manifest, &config, &out)
+      .unwrap();
+    assert!(!complete);
+    assert_eq!(summaries.len(), 1);
+    assert!(summaries[0].new_structure);
+    assert_eq!(summaries[0].id, "structure_1");
   }
   //----------------------------------------------------------------------------
 }

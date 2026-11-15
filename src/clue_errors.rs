@@ -397,7 +397,7 @@ size 1 to clusters of size n", file),
 
       CluEError::CentroidGroupHasDistanceSelection(label) => write!(f,
           "group \"{}\" is used to place the detected spin and cannot use \
-include.distance, since distances are measured from the detected spin",
+require.distance, since distances are measured from the detected spin",
           label),
 
       CluEError::PulseSequenceNotSupported(method,seq) => write!(f,
@@ -446,8 +446,8 @@ detected_spin.position and the coordinates in the structure file",
 particles must not reside in more than one group",label0,label1),
 
       CluEError::GroupHasNoSelection(label) => write!(f,
-          "group \"{}\" has no include or exclude table, so it selects no \
-atoms; include = {{}} selects all atoms (of the cells set by cells)",
+          "group \"{}\" has no require or forbid table, so it selects no \
+atoms; require = {{}} selects all atoms (of the cells set by cells)",
           label),
 
       CluEError::InvalidGroBox(edges) => write!(f,
@@ -1058,7 +1058,7 @@ position among the active bath particles"),
 [n1, n2, n3])"),
       (CluEError::CentroidGroupHasDistanceSelection(s("ring")),
        "group \"ring\" is used to place the detected spin and cannot use \
-include.distance, since distances are measured from the detected spin"),
+require.distance, since distances are measured from the detected spin"),
       (CluEError::PartitionIsIncomplete,
        "the partition must assign every spin to a block, with blocks \
 numbered 0, 1, ..., n-1 without gaps; block numbers in \
@@ -1118,8 +1118,8 @@ Hamiltonian"),
       (CluEError::CannotCreateFile(s("out/a.csv"),s("permission denied")),
        "cannot create \"out/a.csv\": permission denied"),
       (CluEError::GroupHasNoSelection(s("methyl")),
-       "group \"methyl\" has no include or exclude table, so it selects no \
-atoms; include = {} selects all atoms (of the cells set by cells)"),
+       "group \"methyl\" has no require or forbid table, so it selects no \
+atoms; require = {} selects all atoms (of the cells set by cells)"),
       (CluEError::MutuallyExclusiveKeys(s("exchange_coupling"),
           s("c3_tunnel_splitting")),
        "exchange_coupling and c3_tunnel_splitting are mutually exclusive"),
@@ -1163,8 +1163,8 @@ or set a different output.directory"),
        "the output in \"out\" was computed with run.rng_seed = 42, but \
 run.rng_seed is 7; set rng_seed = 42 to resume it, or set a different \
 output.directory"),
-      (CluEError::OutputStructureRemoved(s("out"),s("a.pdb"),s("s_01")),
-       "the output in \"out\" contains structure \"a.pdb\" (s_01), which is \
+      (CluEError::OutputStructureRemoved(s("out"),s("a.pdb"),s("structure_1")),
+       "the output in \"out\" contains structure \"a.pdb\" (structure_1), which is \
 not an input structure, or whose file contents changed; structures can be \
 added to an output, but not removed or changed; restore the structure file \
 or set a different output.directory"),

@@ -113,9 +113,7 @@ impl PyConfig{
       info::version::print_version();
     }
 
-    if input.show_title{
-      info::title::print_title();
-    }
+    info::title::print_title();
 
     let mut config = Config::read_input(input)?;
 

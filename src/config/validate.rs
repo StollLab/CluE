@@ -147,11 +147,11 @@ const GROUP_KEYS: [&str; 7] = [
   KEY_DROP_PROB,
   KEY_ISO_COSUBSTITUTE,
   KEY_CELLS,
-  KEY_INCLUDE,
-  KEY_EXCLUDE,
+  KEY_REQUIRE,
+  KEY_FORBID,
 ];
 
-const INCLUDE_KEYS: [&str; 9] = [
+const REQUIRE_KEYS: [&str; 9] = [
   KEY_SELE_CHAIN_IDS,
   KEY_SELE_ELEMENTS,
   KEY_SELE_INDICES,
@@ -163,7 +163,7 @@ const INCLUDE_KEYS: [&str; 9] = [
   KEY_BONDED_TO,
 ];
 
-const EXCLUDE_KEYS: [&str; 8] = [
+const FORBID_KEYS: [&str; 8] = [
   KEY_SELE_CHAIN_IDS,
   KEY_SELE_ELEMENTS,
   KEY_SELE_INDICES,
@@ -267,7 +267,7 @@ const OLD_KEY_PULSE_SEQUENCE: &str = "pulse_sequence";
 
 // The keys that were removed because the code did not use them, 
 // by the table they were in, with the reason.
-const REMOVED_KEYS: [(Schema,&str,&str); 9] = [
+const REMOVED_KEYS: [(Schema,&str,&str); 11] = [
   (Schema::TopLevel, "min_cell_size", "it was read but never used"),
   (Schema::TopLevel, "max_cell_size", "it was read but never used"),
   (Schema::TopLevel, "pulses", "[[pulses]] was read but never used; the \
@@ -281,14 +281,17 @@ signals are written with auxiliary_signals"),
   (Schema::Output, "config", "it was read but never used"),
   (Schema::TopLevel, "run_name", REMOVED_RUN_NAME),
   (Schema::Output, "run_name", REMOVED_RUN_NAME),
+  (Schema::Group, "include", "renamed to require"),
+  (Schema::Group, "exclude", "renamed to forbid"),
 ];
 
 // Why run_name was removed.
 const REMOVED_RUN_NAME: &str = "output directories are now named \
-automatically: each structure and instance gets its own directory under \
-structures/ (see the change log of 1.0.0-dev)";
+automatically: each structure gets its own directory structure_<n>/ in the \
+output directory, with one run_<k>/ directory per instance (see the change \
+log of 1.0.0-dev)";
 
-// The old group table that the include and exclude tables and the group
+// The old group table that the require and forbid tables and the group
 // key cells replace.
 const OLD_KEY_SELECTION: &str = "selection";
 
@@ -316,8 +319,8 @@ enum Schema{
   Structure,
   DetectedSpin,
   Group,
-  Include,
-  Exclude,
+  Require,
+  Forbid,
   BondedTo,
   Isotope,
   Tensor,
@@ -339,8 +342,8 @@ const ALL_SCHEMAS: [Schema; 20] = [
   Schema::Structure,
   Schema::DetectedSpin,
   Schema::Group,
-  Schema::Include,
-  Schema::Exclude,
+  Schema::Require,
+  Schema::Forbid,
   Schema::BondedTo,
   Schema::Isotope,
   Schema::Tensor,
@@ -366,8 +369,8 @@ impl Schema{
       Schema::Structure => &STRUCTURE_KEYS,
       Schema::DetectedSpin => &DETECTED_SPIN_KEYS,
       Schema::Group => &GROUP_KEYS,
-      Schema::Include => &INCLUDE_KEYS,
-      Schema::Exclude => &EXCLUDE_KEYS,
+      Schema::Require => &REQUIRE_KEYS,
+      Schema::Forbid => &FORBID_KEYS,
       Schema::BondedTo => &BONDED_TO_KEYS,
       Schema::Isotope => &ISOTOPE_KEYS,
       Schema::Tensor => &TENSOR_KEYS,
@@ -415,17 +418,17 @@ impl Schema{
         _ => None,
       },
       Schema::Group => {
-        if key == KEY_INCLUDE{
-          Some((Schema::Include,false))
-        }else if key == KEY_EXCLUDE{
-          Some((Schema::Exclude,false))
+        if key == KEY_REQUIRE{
+          Some((Schema::Require,false))
+        }else if key == KEY_FORBID{
+          Some((Schema::Forbid,false))
         }else if is_isotope_key(key){
           Some((Schema::Isotope,false))
         }else{
           None
         }
       },
-      Schema::Include | Schema::Exclude => match key{
+      Schema::Require | Schema::Forbid => match key{
         KEY_BONDED_TO => Some((Schema::BondedTo,false)),
         _ => None,
       },
@@ -461,10 +464,10 @@ impl Schema{
       Schema::Structure => "[structure]",
       Schema::DetectedSpin => "[detected_spin]",
       Schema::Group => "[[groups]]",
-      Schema::Include => "the include table of [[groups]]",
-      Schema::Exclude => "the exclude table of [[groups]]",
+      Schema::Require => "the require table of [[groups]]",
+      Schema::Forbid => "the forbid table of [[groups]]",
       Schema::BondedTo => "a bonded_to table of [[groups]] \
-(include.bonded_to, exclude.bonded_to)",
+(require.bonded_to, forbid.bonded_to)",
       Schema::Isotope => "an isotope table of [[groups]]",
       Schema::Tensor => "a tensor table (values, axes, \
 spherical_coefficients, stevens_coefficients)",
@@ -500,7 +503,7 @@ fn is_isotope_key(key: &str) -> bool{
 /// This function checks that every key of the parsed input `table` is
 /// allowed in the table that contains it.
 /// All keys that are not allowed are reported together, each with its full
-/// path, for example `groups[2].include.elemnts`;
+/// path, for example `groups[2].require.elemnts`;
 /// `groups[i]` counts the [[groups]] entries from 0.
 /// Keys of the input format before 1.0.0 are reported with what replaced 
 /// them, for example `radius: moved to structure.radius`.
@@ -625,7 +628,7 @@ fn not_allowed_message(path: &str, key: &str, schema: Schema,
 
   if schema == Schema::Group && key == OLD_KEY_SELECTION{
     return with_group(&key_path, group, &format!("replaced by {}, {}, and \
-{}", join_path(path, KEY_INCLUDE), join_path(path, KEY_EXCLUDE), 
+{}", join_path(path, KEY_REQUIRE), join_path(path, KEY_FORBID), 
           join_path(path, KEY_CELLS)));
   }
 
@@ -646,14 +649,14 @@ belongs in {}", schema.description(), places.join(" or ")))
 // selection table of the group at `group_path`.
 // `only_cells` is `true` if the selection table had no keys other than 
 // `OLD_CELL_KEYS`, so that it selected every atom of its cells; 
-// the group then also needs `include = {}`.
+// the group then also needs `require = {}`.
 fn old_selection_key_hint(group_path: &str, old_key: &str, only_cells: bool)
   -> String
 {
   let at = |key: &str| join_path(group_path, key);
   let include_all = if only_cells{
     format!(", together with {} = {{}} to select all atoms as before", 
-        at(KEY_INCLUDE))
+        at(KEY_REQUIRE))
   }else{
     String::new()
   };
@@ -667,9 +670,9 @@ or \"extra\" (false){}", at(KEY_CELLS), include_all),
     "cell_ids" | "not_cell_ids" => return "removed; selection by unit-cell \
 index is no longer supported".to_string(),
     "within_distance" => return format!("replaced by {} = [0.0, max]",
-        at("include.distance")),
+        at("require.distance")),
     "not_within_distance" => return format!("replaced by {} = [min, inf]",
-        at("include.distance")),
+        at("require.distance")),
     _ => (),
   }
 
@@ -677,19 +680,19 @@ index is no longer supported".to_string(),
   let (table, attribute) = if let Some(a) 
     = old_key.strip_prefix("not_bonded_")
   {
-    ("exclude.bonded_to", a)
+    ("forbid.bonded_to", a)
   }else if let Some(a) = old_key.strip_prefix("bonded_"){
-    ("include.bonded_to", a)
+    ("require.bonded_to", a)
   }else if let Some(a) = old_key.strip_prefix("not_"){
-    ("exclude", a)
+    ("forbid", a)
   }else{
-    ("include", old_key)
+    ("require", old_key)
   };
 
   match OLD_SELECTION_ATTRIBUTES.iter().find(|(old, _)| *old == attribute){
     Some((_, new)) => format!("moved to {}.{}", at(table), new),
     None => format!("unknown key; the selection table is replaced by {}, \
-{}, and {}", at(KEY_INCLUDE), at(KEY_EXCLUDE), at(KEY_CELLS)),
+{}, and {}", at(KEY_REQUIRE), at(KEY_FORBID), at(KEY_CELLS)),
   }
 }
 //------------------------------------------------------------------------------
@@ -990,9 +993,9 @@ mod tests{
         name = "h"
         drop_probability = 0.1
         cells = "all"
-        include = {distance = [0, 5], bonded_to = {residues = "SOL"}}
-        exclude.residue_numbers = 3
-        exclude.bonded_to.names = ["O1"]
+        require = {distance = [0, 5], bonded_to = {residues = "SOL"}}
+        forbid.residue_numbers = 3
+        forbid.bonded_to.names = ["O1"]
         1H.abundance = 1.0
         1H.hyperfine.values = [1.0, 1.0, -2.0]
         1H.hyperfine.axes.x = {from_bonded_to = "a", to = "b"}
@@ -1000,7 +1003,7 @@ mod tests{
         e.g_matrix = [2.0]
         [[groups]]
         name = "o"
-        exclude.bonded_to.residues = ["SOL"]
+        forbid.bonded_to.residues = ["SOL"]
         "##);
     assert_eq!(errors, Vec::<String>::new());
   }
@@ -1019,11 +1022,11 @@ mod tests{
         g_matrix.axes.x = {form = "a"}
         [[groups]]
         name = "a"
-        include.elements = ["H"]
+        require.elements = ["H"]
         [[groups]]
         name = "b"
-        exclude.elemnts = ["H"]
-        include.bonded_to.distance = [0, 1]
+        forbid.elemnts = ["H"]
+        require.bonded_to.distance = [0, 1]
         1H.abundanse = 1.0
         1H.hyperfine.axes.q = [1.0, 0.0, 0.0]
         1h.abundance = 1.0
@@ -1036,10 +1039,10 @@ mod tests{
         "groups[1].1H.abundanse (group \"b\"): unknown key".to_string(),
         "groups[1].1H.hyperfine.axes.q (group \"b\"): unknown key".to_string(),
         "groups[1].1h (group \"b\"): unknown key".to_string(),
-        "groups[1].exclude.elemnts (group \"b\"): unknown key".to_string(),
-        "groups[1].include.bonded_to.distance (group \"b\"): not allowed in \
-a bonded_to table of [[groups]] (include.bonded_to, exclude.bonded_to); this \
-key belongs in [units] or the include table of [[groups]] or \
+        "groups[1].forbid.elemnts (group \"b\"): unknown key".to_string(),
+        "groups[1].require.bonded_to.distance (group \"b\"): not allowed in \
+a bonded_to table of [[groups]] (require.bonded_to, forbid.bonded_to); this \
+key belongs in [units] or the require table of [[groups]] or \
 [cluster_expansion.clustering.pair_cutoffs]".to_string(),
         "lebedev: unknown key".to_string(),
         "structure.radiuss: unknown key".to_string(),
@@ -1059,7 +1062,7 @@ key belongs in [units] or the include table of [[groups]] or \
         [[groups]]
         name = "a"
         elements = ["H"]
-        exclude.distance = [0, 4]
+        forbid.distance = [0, 4]
         "##);
     assert_eq!(errors, vec![
         "1H: not allowed in the top level; this key belongs in [[groups]]"
@@ -1067,11 +1070,11 @@ key belongs in [units] or the include table of [[groups]] or \
         "detected_spin.radius: not allowed in [detected_spin]; this key \
 belongs in [structure]".to_string(),
         "groups[0].elements (group \"a\"): not allowed in [[groups]]; this \
-key belongs in the include table of [[groups]] or the exclude table of \
-[[groups]] or a bonded_to table of [[groups]] (include.bonded_to, \
-exclude.bonded_to)".to_string(),
-        "groups[0].exclude.distance (group \"a\"): not allowed in the \
-exclude table of [[groups]]; this key belongs in [units] or the include \
+key belongs in the require table of [[groups]] or the forbid table of \
+[[groups]] or a bonded_to table of [[groups]] (require.bonded_to, \
+forbid.bonded_to)".to_string(),
+        "groups[0].forbid.distance (group \"a\"): not allowed in the \
+forbid table of [[groups]]; this key belongs in [units] or the require \
 table of [[groups]] or [cluster_expansion.clustering.pair_cutoffs]".to_string(),
         "orientations.temperature: not allowed in [orientations]; this key \
 belongs in [conditions]".to_string(),
@@ -1157,6 +1160,30 @@ built from detected_spin.transition".to_string(),
     }
   }
   //----------------------------------------------------------------------------
+  // The group tables include and exclude were renamed to require and forbid.
+  #[test]
+  fn test_include_and_exclude_are_renamed(){
+    let errors = key_errors(r##"
+        [[groups]]
+        name = "a"
+        include.elements = ["H"]
+        exclude = {residues = ["SOL"]}
+        "##);
+    assert_eq!(errors, vec![
+        "groups[0].exclude (group \"a\"): removed; renamed to forbid"
+          .to_string(),
+        "groups[0].include (group \"a\"): removed; renamed to require"
+          .to_string(),
+    ]);
+    let errors = key_errors(r##"
+        [[groups]]
+        name = "a"
+        require.elements = ["H"]
+        forbid = {residues = ["SOL"]}
+        "##);
+    assert_eq!(errors, Vec::<String>::new());
+  }
+  //----------------------------------------------------------------------------
   #[test]
   fn test_old_selection_keys_get_migration_hints(){
     let errors = key_errors(r##"
@@ -1188,48 +1215,48 @@ built from detected_spin.transition".to_string(),
     let n = "(group \"pro_ex\")";
     assert_eq!(errors, vec![
         format!("{}.bonded_elements {}: moved to \
-groups[0].include.bonded_to.elements", g, n),
+groups[0].require.bonded_to.elements", g, n),
         format!("{}.cell_ids {}: removed; selection by unit-cell index is no \
 longer supported", g, n),
         format!("{}.cell_type {}: replaced by groups[0].cells = \"all\", \
 \"primary\", or \"extra\" (was \"all_cells\", \"primary_cell\", \
 \"extracells\")", g, n),
-        format!("{}.elements {}: moved to groups[0].include.elements", g, n),
+        format!("{}.elements {}: moved to groups[0].require.elements", g, n),
         format!("{}.elemnts {}: unknown key; the selection table is replaced \
-by groups[0].include, groups[0].exclude, and groups[0].cells", g, n),
+by groups[0].require, groups[0].forbid, and groups[0].cells", g, n),
         format!("{}.not_bonded_elements {}: moved to \
-groups[0].exclude.bonded_to.elements", g, n),
+groups[0].forbid.bonded_to.elements", g, n),
         format!("{}.not_cell_ids {}: removed; selection by unit-cell index is \
 no longer supported", g, n),
-        format!("{}.not_residues {}: moved to groups[0].exclude.residues", 
+        format!("{}.not_residues {}: moved to groups[0].forbid.residues", 
             g, n),
         format!("{}.not_within_distance {}: replaced by \
-groups[0].include.distance = [min, inf]", g, n),
+groups[0].require.distance = [min, inf]", g, n),
         format!("{}.primary_cell {}: replaced by groups[0].cells = \
 \"primary\" (true) or \"extra\" (false)", g, n),
         format!("{}.residue_sequence_numbers {}: moved to \
-groups[0].include.residue_numbers", g, n),
+groups[0].require.residue_numbers", g, n),
         format!("{}.within_distance {}: replaced by \
-groups[0].include.distance = [0.0, max]", g, n),
+groups[0].require.distance = [0.0, max]", g, n),
         "groups[1].selection (group \"empty\"): replaced by \
-groups[1].include, groups[1].exclude, and groups[1].cells".to_string(),
+groups[1].require, groups[1].forbid, and groups[1].cells".to_string(),
         // A selection with only cell keys selected every atom of its cells.
         "groups[2].selection.cell_type (group \"primary_only\"): replaced by \
 groups[2].cells = \"all\", \"primary\", or \"extra\" (was \"all_cells\", \
-\"primary_cell\", \"extracells\"), together with groups[2].include = {} \
+\"primary_cell\", \"extracells\"), together with groups[2].require = {} \
 to select all atoms as before".to_string(),
         "groups[3].selection.primary_cell (group \"extra_only\"): replaced \
 by groups[3].cells = \"primary\" (true) or \"extra\" (false), together \
-with groups[3].include = {} to select all atoms as before".to_string(),
+with groups[3].require = {} to select all atoms as before".to_string(),
     ]);
 
     // Every attribute key of the old selection table, in its four forms, 
     // moves to a key that the new tables accept.
     for (old, new) in OLD_SELECTION_ATTRIBUTES.iter(){
-      for (prefix, table, schema) in [("", "include", Schema::Include),
-          ("not_", "exclude", Schema::Exclude),
-          ("bonded_", "include.bonded_to", Schema::BondedTo),
-          ("not_bonded_", "exclude.bonded_to", Schema::BondedTo)]
+      for (prefix, table, schema) in [("", "require", Schema::Require),
+          ("not_", "forbid", Schema::Forbid),
+          ("bonded_", "require.bonded_to", Schema::BondedTo),
+          ("not_bonded_", "forbid.bonded_to", Schema::BondedTo)]
       {
         assert!(schema.allows(new), "{}", new);
         assert_eq!(old_selection_key_hint("groups[0]", 
@@ -1274,8 +1301,8 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
     let errors = key_errors(r##"
         [[groups]]
         name = "b"
-        include = 1
-        exclude.bonded_to = "C"
+        require = 1
+        forbid.bonded_to = "C"
         "##);
     assert_eq!(errors, Vec::<String>::new());
   }
@@ -1287,7 +1314,7 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
       assert!(is_isotope_key(&isotope.to_string()), "{}", isotope);
     }
     assert!(is_isotope_key("e"));
-    for key in ["1h", "H", "H1", "", "include", "lebedev"]{
+    for key in ["1h", "H", "H1", "", "require", "lebedev"]{
       assert!(!is_isotope_key(key), "{}", key);
     }
   }

@@ -56,11 +56,12 @@ pub const SAVE_DIR_AUXILIARY_SIGNALS: &str = "auxiliary_signals";
 pub const SAVE_DIR_CLUSTER_SIGNALS: &str = "cluster_signals";
 pub const SAVE_FILE_BATH: &str = "bath";
 pub const SAVE_FILE_CLUSTERS: &str = "clusters";
-pub const SAVE_DIR_INFO: &str = "info";
 pub const SAVE_FILE_DET_SPIN_COOR: &str = "detected_spin";
 pub const SAVE_FILE_EXCHANGE_GROUPS: &str = "exchange_groups";
 pub const SAVE_FILE_METHYL_PARTITIONS: &str = "methyl_partitions";
-pub const SAVE_DIR_ORIENTATION_SIGNALS: &str = "orientations";
+/// The prefix of the orientation directories of an instance,
+/// `ori_theta_<θ>deg_phi_<φ>deg`.
+pub const SAVE_DIR_ORIENTATION_PREFIX: &str = "ori_";
 pub const SAVE_FILE_ORIENTATIONS: &str = "orientation_grid";
 pub const SAVE_FILE_PARTITION_TABLE: &str = "partition_table";
 pub const SAVE_FILE_SANS_SPIN_SIGNALS: &str = "sans_spin_signals";
@@ -175,16 +176,15 @@ pub const DEFAULT_ORIENTATION_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// `StructureInput` is one input structure of a run.
 /// `file` is the structure file, `content_hash` the FNV-1a hash of its
-/// contents, `id` the name of its output directory
-/// (`s_<content_hash in hex>`), and `weight` its weight in the average
-/// over structures.
-/// The id depends only on the file contents, not on the file name or on
-/// the position of the structure in a list of structures.
+/// contents, and `weight` its weight in the average over structures.
+/// A structure is identified by its content hash, not by the file name or
+/// by its position in a list of structures. The name of its output
+/// directory, `structure_<n>`, is assigned by the record of the output 
+/// directory (`output_manifest`).
 #[derive(Debug,Clone,PartialEq)]
 pub struct StructureInput{
   pub file: String,
   pub content_hash: u64,
-  pub id: String,
   pub weight: f64,
 }
 
@@ -201,7 +201,6 @@ impl StructureInput{
     Ok(StructureInput{
       file: file.to_string(),
       content_hash,
-      id: format!("s_{:016x}", content_hash),
       weight,
     })
   }
@@ -1355,7 +1354,7 @@ impl Config{
         set_particle_configs_from_toml_table(&mut self.particles,
             group.clone(),unit_of_distance,unit_of_energy)?;
       }
-      // A group without include or exclude selects no atoms, so its
+      // A group without require or forbid selects no atoms, so its
       // settings would be ignored without notice. Entries with the same
       // name are merged by now, so one of them having a selection suffices.
       for particle_config in self.particles.iter(){
@@ -1916,15 +1915,15 @@ mod tests{
 
       [[groups]]
       name = "tempo_c1"
-      include = {elements = ["C"], serials = [1]}
+      require = {elements = ["C"], serials = [1]}
 
       [[groups]]
       name = "tempo_c19"
-      include = {elements = ["C"], serials = [19]}
+      require = {elements = ["C"], serials = [19]}
 
       [[groups]]
       name = "tempo_n"
-      include = {elements = ["N"]}
+      require = {elements = ["N"]}
 
       [groups.14N]
       hyperfine.values = [20.0,20.0,100.0] # MHz
@@ -1937,17 +1936,17 @@ mod tests{
 
       [[groups]]
         name = "tempo_o"
-        include = {elements = ["O"]}
+        require = {elements = ["O"]}
 
       [[groups]]
         name = "tempo_h"
-        include = {elements = ["H"]}
+        require = {elements = ["H"]}
         1H.c3_tunnel_splitting = 0.120 # MHz
 
       [[groups]]
         name = "glycerol_oh"
         drop_probability = 0.5
-        [groups.include]
+        [groups.require]
           elements = ["H"]
           residues = ["GLY"]
           bonded_to.elements = ["O"]
@@ -1960,7 +1959,7 @@ mod tests{
         1H.abundance = 0.5
         2H.abundance = 0.5
 
-        [groups.include]
+        [groups.require]
           elements = ["H"]
           residues = ["GLY"]
           bonded_to.elements = ["C"]
@@ -2165,7 +2164,7 @@ mod tests{
         thermalize_cluster_populations = true
 
         [cluster_expansion.clustering]
-        file = "previous_run/orientations"
+        file = "previous_run/structure_1/run_1"
         max_spins = 6
         partitioning = "kmeans"
         kmeans_size = 4
@@ -2235,7 +2234,7 @@ mod tests{
 
     // [cluster_expansion.clustering] and its pair_cutoffs
     assert_eq!(config.cluster_source, Some(ClusterSource::OrientationsDir(
-            "previous_run/orientations".to_string())));
+            "previous_run/structure_1/run_1".to_string())));
     assert_eq!(config.max_spins, Some(6));
     assert_eq!(config.partitioning, Some(PartitioningMethod::KMeans(4)));
     assert_eq!(config.kmeans_iter_cap, Some(50));
@@ -2274,18 +2273,18 @@ mod tests{
     let config = Config::from_toml_string(r##"
         [[groups]]
         name = "a"
-        include.elements = "H"
+        require.elements = "H"
         [[groups]]
         name = "p"
-        include.elements = "C"
+        require.elements = "C"
         cells = "primary"
         [[groups]]
         name = "x"
-        include.elements = "C"
+        require.elements = "C"
         cells = "extra"
         [[groups]]
         name = "b"
-        include.elements = "N"
+        require.elements = "N"
         cells = "all"
         "##).unwrap();
     let labels = |p_cfgs: &[ParticleConfig]| p_cfgs.iter()
@@ -2299,10 +2298,10 @@ mod tests{
        CluEError::CannotParseCellType(s("primary_cell"))),
       ("cells = true", CluEError::InvalidTOMLValue(s("group \"g\": cells"),
           s("a string"), s("boolean"))),
-      ("include = 1", CluEError::InvalidTOMLValue(s("group \"g\": include"),
+      ("require = 1", CluEError::InvalidTOMLValue(s("group \"g\": require"),
           s("a table"), s("integer"))),
-      ("exclude = [\"H\"]", CluEError::InvalidTOMLValue(
-          s("group \"g\": exclude"), s("a table"), s("array"))),
+      ("forbid = [\"H\"]", CluEError::InvalidTOMLValue(
+          s("group \"g\": forbid"), s("a table"), s("array"))),
     ];
     for (settings, expected) in cases{
       let result = Config::from_toml_string(&format!(
@@ -2310,8 +2309,8 @@ mod tests{
       assert_eq!(result.err(), Some(expected), "{}", settings);
     }
 
-    // A group without include or exclude would select no atoms, so it is
-    // rejected, also when it has cells; include = {} selects all atoms.
+    // A group without require or forbid would select no atoms, so it is
+    // rejected, also when it has cells; require = {} selects all atoms.
     for settings in ["cells = \"primary\"", "cells = \"extra\"",
         "1H.active = false"]
     {
@@ -2321,7 +2320,7 @@ mod tests{
           "{}", settings);
     }
     let config = Config::from_toml_string(
-        "[[groups]]\nname = \"g\"\ncells = \"primary\"\ninclude = {}")
+        "[[groups]]\nname = \"g\"\ncells = \"primary\"\nrequire = {}")
       .unwrap();
     assert_eq!(config.particles[0].filter, Some(
         crate::structure::particle_filter::ParticleFilter::new()));
@@ -2333,7 +2332,7 @@ mod tests{
         cells = "primary"
         [[groups]]
         name = "g"
-        include.elements = "H"
+        require.elements = "H"
         "##).unwrap();
     assert_eq!(config.particles[0].cell_type,
         crate::config::particle_config::CellType::PrimaryCell);
@@ -2344,12 +2343,12 @@ mod tests{
     let config = Config::from_toml_string(r##"
         [[groups]]
         name = "g"
-        include.elements = "H"
-        include.distance = [1.0, 5.0]
+        require.elements = "H"
+        require.distance = [1.0, 5.0]
         [[groups]]
         name = "g"
-        exclude.residues = "SOL"
-        include.distance = [0.0, 3.0]
+        forbid.residues = "SOL"
+        require.distance = [0.0, 3.0]
         "##).unwrap();
     let filter = config.particles[0].filter.as_ref().unwrap();
     assert_eq!(filter.elements, vec![crate::elements::Element::Hydrogen]);
@@ -2364,7 +2363,7 @@ mod tests{
     Config::from_toml_string(&format!(r##"
         [[groups]]
         name = "g"
-        include.elements = ["C"]
+        require.elements = ["C"]
         {}
         "##, settings))
   }
@@ -2648,7 +2647,7 @@ mod tests{
       let config = Config::from_toml_string(&format!(r##"
           [[groups]]
           name = "methyl"
-          include.elements = ["H"]
+          require.elements = ["H"]
           cosubstitute = "{}"
           "##, value)).unwrap();
       assert_eq!(config.particles[0].properties.as_ref().unwrap().cosubstitute,
@@ -2661,7 +2660,7 @@ mod tests{
       let result = Config::from_toml_string(&format!(r##"
           [[groups]]
           name = "methyl"
-          include.elements = ["H"]
+          require.elements = ["H"]
           cosubstitute = "{}"
           "##, value));
       assert_eq!(result.err(), Some(CluEError::CannotParseCosubstitute(
@@ -2673,7 +2672,7 @@ mod tests{
   fn test_isotope_selections_are_rejected(){
     // Groups are selected before isotopes are drawn, so selections by
     // isotope were removed; the keys are invalid.
-    for (table, value) in [("include", "2H"), ("exclude", "1H")]{
+    for (table, value) in [("require", "2H"), ("forbid", "1H")]{
       let result = Config::from_toml_string(&format!(r##"
           [[groups]]
           name = "deuterons"

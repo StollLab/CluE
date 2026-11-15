@@ -250,7 +250,7 @@ MD of 2 waters, t= 0.0\n\
 
         [[groups]]
         name = "tempo_h"
-        include.elements = ["H"]
+        require.elements = ["H"]
         "##, replicate)).unwrap();
       config.set_defaults().unwrap();
 

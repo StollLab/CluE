@@ -1146,25 +1146,25 @@ mod tests{
 
         [[groups]]
         name = "tempo_h"
-        include.residues = ["TEM"]
-        include.elements = ["H"]
+        require.residues = ["TEM"]
+        require.elements = ["H"]
 
         1H.c3_tunnel_splitting = 80e-3
 
         [[groups]]
         name = "tempo_o"
-        include.residues = ["TEM"]
-        include.elements = ["O"]
+        require.residues = ["TEM"]
+        require.elements = ["O"]
 
         [[groups]]
         name = "tempo_c"
-        include.residues = ["TEM"]
-        include.elements = ["C"]
+        require.residues = ["TEM"]
+        require.elements = ["C"]
 
         [[groups]]
         name = "tempo_n"
-        include.residues = ["TEM"]
-        include.elements = ["N"]
+        require.residues = ["TEM"]
+        require.elements = ["N"]
 
         14N.electric_quadrupole.values = [-1.12, -5.88, 7.0]
         14N.electric_quadrupole.axes.x = {to_same_molecule_as = "tempo_o"}

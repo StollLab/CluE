@@ -47,14 +47,14 @@ number = 1
 
 [[groups]]
 name = "CLOSE_H"
-include.distance = [0.0, 4.0]
+require.distance = [0.0, 4.0]
 1H.active = false
   
 [[groups]]
 name = "WATER_H"
-include.residues = "SOL"
-include.elements = "H"
-include.distance = [4.0, inf]
+require.residues = "SOL"
+require.elements = "H"
+require.distance = [4.0, inf]
 
 drop_probability = 0.99
 
@@ -64,10 +64,10 @@ drop_probability = 0.99
 
 [[groups]]
 name = "GLYCEROL_OH"
-include.residues = "GLY"
-include.elements = "H"
-include.bonded_to.elements = "O"
-include.distance = [4.0, inf]
+require.residues = "GLY"
+require.elements = "H"
+require.bonded_to.elements = "O"
+require.distance = [4.0, inf]
 
 drop_probability = 0.99
 
@@ -77,10 +77,10 @@ drop_probability = 0.99
 
 [[groups]]
 name = "GLYCEROL_CH"
-include.residues = "GLY"
-include.elements = "H"
-include.bonded_to.elements = "C"
-include.distance = [4.0, inf]
+require.residues = "GLY"
+require.elements = "H"
+require.bonded_to.elements = "C"
+require.distance = [4.0, inf]
 
 cosubstitute = "same_molecule"
 

@@ -75,7 +75,7 @@ impl ParticleFilter{
     Default::default()
   }
   //----------------------------------------------------------------------------
-  /// This function reads a filter from the `include` and `exclude` tables of
+  /// This function reads a filter from the `require` and `forbid` tables of
   /// a group (see `set_from_toml_tables()`).
   pub fn from_toml_tables(include: Option<&toml::Table>, 
       exclude: Option<&toml::Table>, unit_of_distance: f64) 
@@ -86,11 +86,11 @@ impl ParticleFilter{
     Ok(out)
   }
   //----------------------------------------------------------------------------
-  /// This function sets the filter from the `include` and `exclude` tables 
+  /// This function sets the filter from the `require` and `forbid` tables 
   /// of a group.
-  /// `include` and its `bonded_to` table set the include lists 
+  /// `require` and its `bonded_to` table set the include lists 
   /// (`elements`, `bonded_elements`, ...) and the distance range;
-  /// `exclude` and its `bonded_to` table set the "not" lists
+  /// `forbid` and its `bonded_to` table set the "not" lists
   /// (`not_elements`, `not_bonded_elements`, ...).
   /// Each key that is present replaces the field it sets; 
   /// the other fields are kept, so that entries of a group with the same 
@@ -110,7 +110,7 @@ impl ParticleFilter{
         self.set_distance_range(value, unit_of_distance)?;
       }
 
-      if let Some(bonded_to) = bonded_to_table(include, KEY_INCLUDE)?{
+      if let Some(bonded_to) = bonded_to_table(include, KEY_REQUIRE)?{
         self.set_attributes(bonded_to, SelectionTable::IncludeBondedTo)?;
       }
     }
@@ -118,7 +118,7 @@ impl ParticleFilter{
     if let Some(exclude) = exclude{
       self.set_attributes(exclude, SelectionTable::Exclude)?;
 
-      if let Some(bonded_to) = bonded_to_table(exclude, KEY_EXCLUDE)?{
+      if let Some(bonded_to) = bonded_to_table(exclude, KEY_FORBID)?{
         self.set_attributes(bonded_to, SelectionTable::ExcludeBondedTo)?;
       }
     }
@@ -189,7 +189,7 @@ impl ParticleFilter{
   }
   //----------------------------------------------------------------------------
   // This function sets `not_within_distance` and `within_distance` from
-  // `include.distance = [min, max]`, given in `unit_of_distance`.
+  // `require.distance = [min, max]`, given in `unit_of_distance`.
   // Both bounds are inclusive (`does_pass_filter()`).
   // A minimum of 0 or less, or a maximum of inf, leaves that bound unset,
   // since it cannot exclude a particle.
@@ -204,7 +204,7 @@ impl ParticleFilter{
           .collect::<Option<Vec::<f64>>>());
     let Some(bounds) = bounds else{
       return Err(CluEError::InvalidTOMLValue(
-            format!("{}.{}", KEY_INCLUDE, KEY_SELE_DISTANCE),
+            format!("{}.{}", KEY_REQUIRE, KEY_SELE_DISTANCE),
             "an array [min, max] of two numbers".to_string(), 
             value.to_string()));
     };
@@ -272,7 +272,7 @@ impl ParticleFilter{
   //----------------------------------------------------------------------------
   /// This function returns, for each non-empty list of serials, atom names,
   /// residues, chain IDs, or residue sequence numbers in the filter,
-  /// its key in the include table, a description of the field, and the 
+  /// its key in the require table, a description of the field, and the 
   /// number of primary cell particles without that field, which the list
   /// cannot select.
   pub fn count_particles_missing_fields(&self, structure: &Structure)
@@ -613,10 +613,10 @@ impl SelectionTable{
   // This function returns the path of the table within its group.
   fn path(&self) -> &'static str{
     match self{
-      SelectionTable::Include => "include",
-      SelectionTable::Exclude => "exclude",
-      SelectionTable::IncludeBondedTo => "include.bonded_to",
-      SelectionTable::ExcludeBondedTo => "exclude.bonded_to",
+      SelectionTable::Include => "require",
+      SelectionTable::Exclude => "forbid",
+      SelectionTable::IncludeBondedTo => "require.bonded_to",
+      SelectionTable::ExcludeBondedTo => "forbid.bonded_to",
     }
   }
 }
@@ -1153,15 +1153,15 @@ mod tests{
 
         [[groups]]
         name = "tempo_n"
-        include.elements = "N"
+        require.elements = "N"
 
         [[groups]]
         name = "tempo_o"
-        include.elements = "O"
+        require.elements = "O"
 
         [[groups]]
         name = "tempo_c"
-        include.serials = [1,19]
+        require.serials = [1,19]
         "##).unwrap();
 
     let mut rng = ChaCha20Rng::seed_from_u64(0);
@@ -1350,23 +1350,23 @@ mod tests{
   }
   //----------------------------------------------------------------------------
   // This function reads the filter of a group from `group`, the TOML of 
-  // its include and exclude tables.
+  // its require and forbid tables.
   fn filter_from(group: &str) -> Result<ParticleFilter,CluEError>{
     let table = group.parse::<toml::Table>().unwrap();
-    let include = table.get(KEY_INCLUDE).and_then(|v| v.as_table());
-    let exclude = table.get(KEY_EXCLUDE).and_then(|v| v.as_table());
+    let include = table.get(KEY_REQUIRE).and_then(|v| v.as_table());
+    let exclude = table.get(KEY_FORBID).and_then(|v| v.as_table());
     ParticleFilter::from_toml_tables(include, exclude, 1.0)
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_set_from_toml_tables_reads_valid_lists(){
     let filter = filter_from(r##"
-      include.indices = [0, 3]
-      include.serials = [12, 13]
-      include.elements = ["C", "N"]
-      include.bonded_to.chain_ids = []
-      exclude.residue_numbers = [4294967295]
-      exclude.names = ["H1"]
+      require.indices = [0, 3]
+      require.serials = [12, 13]
+      require.elements = ["C", "N"]
+      require.bonded_to.chain_ids = []
+      forbid.residue_numbers = [4294967295]
+      forbid.names = ["H1"]
     "##).unwrap();
     assert_eq!(filter.indices, vec![0,3]);
     assert_eq!(filter.serials, vec![12,13]);
@@ -1378,38 +1378,38 @@ mod tests{
   //----------------------------------------------------------------------------
   #[test]
   fn test_selection_keys_fill_the_filter_fields(){
-    // Each key of include, exclude, and their bonded_to tables fills the 
+    // Each key of require, forbid, and their bonded_to tables fills the 
     // `ParticleFilter` field that the old selection key filled
     // (X, not_X, bonded_X, and not_bonded_X).
     let filter = filter_from(r##"
-      include.indices = [1]
-      include.elements = ["H"]
-      include.serials = [2]
-      include.names = ["H1"]
-      include.residues = ["SOL"]
-      include.residue_numbers = [3]
-      include.chain_ids = ["A"]
-      include.bonded_to.indices = [4]
-      include.bonded_to.elements = ["O"]
-      include.bonded_to.serials = [5]
-      include.bonded_to.names = ["O1"]
-      include.bonded_to.residues = ["GLY"]
-      include.bonded_to.residue_numbers = [6]
-      include.bonded_to.chain_ids = ["B"]
-      exclude.indices = [7]
-      exclude.elements = ["N"]
-      exclude.serials = [8]
-      exclude.names = ["N1"]
-      exclude.residues = ["PRO"]
-      exclude.residue_numbers = [9]
-      exclude.chain_ids = ["C"]
-      exclude.bonded_to.indices = [10]
-      exclude.bonded_to.elements = ["C"]
-      exclude.bonded_to.serials = [11]
-      exclude.bonded_to.names = ["C1"]
-      exclude.bonded_to.residues = ["THR"]
-      exclude.bonded_to.residue_numbers = [12]
-      exclude.bonded_to.chain_ids = ["D"]
+      require.indices = [1]
+      require.elements = ["H"]
+      require.serials = [2]
+      require.names = ["H1"]
+      require.residues = ["SOL"]
+      require.residue_numbers = [3]
+      require.chain_ids = ["A"]
+      require.bonded_to.indices = [4]
+      require.bonded_to.elements = ["O"]
+      require.bonded_to.serials = [5]
+      require.bonded_to.names = ["O1"]
+      require.bonded_to.residues = ["GLY"]
+      require.bonded_to.residue_numbers = [6]
+      require.bonded_to.chain_ids = ["B"]
+      forbid.indices = [7]
+      forbid.elements = ["N"]
+      forbid.serials = [8]
+      forbid.names = ["N1"]
+      forbid.residues = ["PRO"]
+      forbid.residue_numbers = [9]
+      forbid.chain_ids = ["C"]
+      forbid.bonded_to.indices = [10]
+      forbid.bonded_to.elements = ["C"]
+      forbid.bonded_to.serials = [11]
+      forbid.bonded_to.names = ["C1"]
+      forbid.bonded_to.residues = ["THR"]
+      forbid.bonded_to.residue_numbers = [12]
+      forbid.bonded_to.chain_ids = ["D"]
     "##).unwrap();
 
     let s = |x: &str| vec![x.to_string()];
@@ -1452,10 +1452,10 @@ mod tests{
     // selection.bonded_elements = ["O","N"], and
     // selection.not_bonded_elements = ["C"] before the redesign.
     let filter = filter_from(r##"
-      include.elements = "H"
-      include.bonded_to.elements = ["O", "N"]
-      exclude.residues = "R1C"
-      exclude.bonded_to.elements = "C"
+      require.elements = "H"
+      require.bonded_to.elements = ["O", "N"]
+      forbid.residues = "R1C"
+      forbid.bonded_to.elements = "C"
     "##).unwrap();
     let mut expected = ParticleFilter::new();
     expected.not_residues = s("R1C");
@@ -1469,10 +1469,10 @@ mod tests{
   fn test_single_selection_values(){
     // A single value is a list of one.
     let filter = filter_from(r##"
-      include.elements = "H"
-      include.residue_numbers = 45
-      exclude.residues = "THR"
-      exclude.bonded_to.serials = 7
+      require.elements = "H"
+      require.residue_numbers = 45
+      forbid.residues = "THR"
+      forbid.bonded_to.serials = 7
     "##).unwrap();
     assert_eq!(filter.elements, vec![Element::Hydrogen]);
     assert_eq!(filter.residue_sequence_numbers, vec![45]);
@@ -1480,43 +1480,43 @@ mod tests{
     assert_eq!(filter.not_bonded_serials, vec![7]);
 
     // A single value of the wrong type names the key.
-    let error = filter_from("include.serials = \"12\"").unwrap_err();
-    assert_eq!(error.to_string(), "include.serials must be a non-negative \
+    let error = filter_from("require.serials = \"12\"").unwrap_err();
+    assert_eq!(error.to_string(), "require.serials must be a non-negative \
 integer, or an array of them, but got \"12\"");
-    let error = filter_from("exclude.bonded_to.names = 3").unwrap_err();
-    assert_eq!(error.to_string(), "exclude.bonded_to.names must be a string, \
+    let error = filter_from("forbid.bonded_to.names = 3").unwrap_err();
+    assert_eq!(error.to_string(), "forbid.bonded_to.names must be a string, \
 or an array of them, but got 3");
-    let error = filter_from("include.names = {a = 1}").unwrap_err();
-    assert_eq!(error.to_string(), "include.names must be a string, or an \
+    let error = filter_from("require.names = {a = 1}").unwrap_err();
+    assert_eq!(error.to_string(), "require.names must be a string, or an \
 array of them, but got table");
-    let error = filter_from("include.bonded_to = 1").unwrap_err();
+    let error = filter_from("require.bonded_to = 1").unwrap_err();
     assert_eq!(error.to_string(), 
-        "include.bonded_to must be a table, but got integer");
+        "require.bonded_to must be a table, but got integer");
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_distance_range(){
     // [min, max] sets not_within_distance = min and within_distance = max,
     // as the old keys did.
-    let filter = filter_from("include.distance = [4.0, 25.0]").unwrap();
+    let filter = filter_from("require.distance = [4.0, 25.0]").unwrap();
     assert_eq!(filter.not_within_distance, Some(4.0));
     assert_eq!(filter.within_distance, Some(25.0));
     assert!(filter.depends_on_cell());
 
     // Integers are numbers too.
-    let filter = filter_from("include.distance = [4, 25]").unwrap();
+    let filter = filter_from("require.distance = [4, 25]").unwrap();
     assert_eq!((filter.not_within_distance, filter.within_distance),
         (Some(4.0), Some(25.0)));
 
     // An open bound is left unset: [0, b] is the old within_distance = b,
     // and [a, inf] the old not_within_distance = a.
-    let filter = filter_from("include.distance = [0.0, 25.0]").unwrap();
+    let filter = filter_from("require.distance = [0.0, 25.0]").unwrap();
     assert_eq!((filter.not_within_distance, filter.within_distance),
         (None, Some(25.0)));
-    let filter = filter_from("include.distance = [4.0, inf]").unwrap();
+    let filter = filter_from("require.distance = [4.0, inf]").unwrap();
     assert_eq!((filter.not_within_distance, filter.within_distance),
         (Some(4.0), None));
-    let filter = filter_from("include.distance = [0, inf]").unwrap();
+    let filter = filter_from("require.distance = [0, inf]").unwrap();
     assert_eq!((filter.not_within_distance, filter.within_distance),
         (None, None));
     assert!(!filter.depends_on_cell());
@@ -1529,10 +1529,10 @@ array of them, but got table");
         (Some(4e-10), Some(25e-10)));
 
     for bad in ["4.0", "[4.0]", "[4.0, 5.0, 6.0]", "[\"a\", 5.0]"]{
-      let error = filter_from(&format!("include.distance = {}", bad))
+      let error = filter_from(&format!("require.distance = {}", bad))
         .unwrap_err();
       assert!(matches!(error, CluEError::InvalidTOMLValue(ref key,_,_) 
-            if key == "include.distance"), "{}: {:?}", bad, error);
+            if key == "require.distance"), "{}: {:?}", bad, error);
     }
   }
   //----------------------------------------------------------------------------
@@ -1543,24 +1543,24 @@ array of them, but got table");
     let string = "a string";
     let cases = [
       // Wrong type: previously dropped, so ["13"] selected every particle.
-      (r#"include.serials = [12, "13"]"#, "include.serials", 1, int,
+      (r#"require.serials = [12, "13"]"#, "require.serials", 1, int,
        r#""13""#),
-      (r#"include.serials = ["13"]"#, "include.serials", 0, int, r#""13""#),
-      ("include.residue_numbers = [12.0]", "include.residue_numbers", 0,
+      (r#"require.serials = ["13"]"#, "require.serials", 0, int, r#""13""#),
+      ("require.residue_numbers = [12.0]", "require.residue_numbers", 0,
        int, "12.0"),
-      (r#"include.bonded_to.indices = [true]"#, "include.bonded_to.indices",
+      (r#"require.bonded_to.indices = [true]"#, "require.bonded_to.indices",
        0, int, "true"),
-      (r#"include.names = ["H1", 2]"#, "include.names", 1, string, "2"),
-      (r#"exclude.chain_ids = [["A"]]"#, "exclude.chain_ids", 0, string,
+      (r#"require.names = ["H1", 2]"#, "require.names", 1, string, "2"),
+      (r#"forbid.chain_ids = [["A"]]"#, "forbid.chain_ids", 0, string,
        r#"["A"]"#),
-      (r#"include.elements = ["C", 6]"#, "include.elements", 1, string, "6"),
-      (r#"exclude.bonded_to.elements = [7]"#, "exclude.bonded_to.elements", 0,
+      (r#"require.elements = ["C", 6]"#, "require.elements", 1, string, "6"),
+      (r#"forbid.bonded_to.elements = [7]"#, "forbid.bonded_to.elements", 0,
        string, "7"),
       // Negative: previously wrapped around to a huge number.
-      ("exclude.serials = [-1]", "exclude.serials", 0, int, "-1"),
-      ("include.indices = [0, -1]", "include.indices", 1, int, "-1"),
+      ("forbid.serials = [-1]", "forbid.serials", 0, int, "-1"),
+      ("require.indices = [0, -1]", "require.indices", 1, int, "-1"),
       // Too large for u32: previously truncated to 0.
-      ("include.serials = [4294967296]", "include.serials", 0, int,
+      ("require.serials = [4294967296]", "require.serials", 0, int,
        "4294967296"),
     ];
     for (selection, key, index, expected, found) in cases{
@@ -1570,15 +1570,15 @@ array of them, but got table");
           "{}", selection);
     }
 
-    let error = filter_from(r#"include.serials = [12, "13"]"#).unwrap_err();
+    let error = filter_from(r#"require.serials = [12, "13"]"#).unwrap_err();
     assert_eq!(error.to_string(),
-        r#"include.serials[1] must be a non-negative integer, but got "13""#);
+        r#"require.serials[1] must be a non-negative integer, but got "13""#);
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_exclude_only_selects_every_other_particle(){
-    // A filter with only exclude keys selects every particle that is not
-    // excluded, since empty include lists do not restrict the selection.
+    // A filter with only forbid keys selects every particle that is not
+    // excluded, since empty require lists do not restrict the selection.
     let filename = "./assets/a_TEMPO_a_water_a_glycerol.pdb";
     let mut structure = pdb::parse_pdb(&filename,0).unwrap();
     let mut config = Config::new();
@@ -1589,7 +1589,7 @@ array of them, but got table");
     structure.build_primary_structure(&mut rng, &config).unwrap();
     let n_particles = structure.number();
 
-    let filter = filter_from(r#"exclude.elements = ["H", "C"]"#).unwrap();
+    let filter = filter_from(r#"forbid.elements = ["H", "C"]"#).unwrap();
     let expected = (0..n_particles).filter(|&idx|{
       let element = structure.bath_particles[idx].element;
       element != Element::Hydrogen && element != Element::Carbon
@@ -1597,10 +1597,10 @@ array of them, but got table");
     assert_eq!(filter.filter(&structure), expected);
     assert_eq!(expected, vec![27,28,32,36,41,43]);
 
-    // Each exclude key excludes on its own.
+    // Each forbid key excludes on its own.
     let filter = filter_from(r#"
-        exclude.elements = "N"
-        exclude.residues = "SOL"
+        forbid.elements = "N"
+        forbid.residues = "SOL"
         "#).unwrap();
     let expected = (0..n_particles).filter(|&idx|{
       let particle = &structure.bath_particles[idx];
@@ -1610,8 +1610,8 @@ array of them, but got table");
     assert_eq!(filter.filter(&structure), expected);
     assert_eq!(expected.len(), n_particles - 4);
 
-    // Empty include and exclude tables select every particle.
-    let filter = filter_from("include = {}\nexclude = {}").unwrap();
+    // Empty require and forbid tables select every particle.
+    let filter = filter_from("require = {}\nforbid = {}").unwrap();
     assert_eq!(filter, ParticleFilter::new());
     assert_eq!(filter.filter(&structure).len(), n_particles);
   }

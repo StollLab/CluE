@@ -53,29 +53,29 @@
 
 [[groups]]
   name = "r1_h"
-  include.residues = "R1C"
-  include.elements = "H"
+  require.residues = "R1C"
+  require.elements = "H"
   1H.c3_tunnel_splitting = 86.4846352321929e-3
 
 [[groups]]
   name = "pro_nx"
-  include.elements = "H"
-  include.bonded_to.elements = "C"
-  exclude.residues = "R1C"
+  require.elements = "H"
+  require.bonded_to.elements = "C"
+  forbid.residues = "R1C"
   1H.c3_tunnel_splitting = 53.39849286870266e-3
 
 [[groups]]
   name = "pro_ex"
-  include.elements = "H"
-  include.bonded_to.elements = ["O", "N"]
-  exclude.residues = "R1C"
-  exclude.bonded_to.elements = "C"
+  require.elements = "H"
+  require.bonded_to.elements = ["O", "N"]
+  forbid.residues = "R1C"
+  forbid.bonded_to.elements = "C"
   1H.active = false
 
 [[groups]]
   name = "r1_n"
-  include.residues = "R1C"
-  include.names = "N1"
+  require.residues = "R1C"
+  require.names = "N1"
 
   14N.hyperfine.values = [14.7,14.7,101.4] 
   14N.hyperfine.axes.x = {to = "r1_o"} 
@@ -88,15 +88,15 @@
 
 [[groups]]
   name = "r1_o"
-  include.residues = "R1C"
-  include.names = "O1"
+  require.residues = "R1C"
+  require.names = "O1"
 
 [[groups]]
   name = "r1_c2"
-  include.residues = "R1C"
-  include.names = "C2"
+  require.residues = "R1C"
+  require.names = "C2"
 
 [[groups]]
   name = "r1_c5"
-  include.residues = "R1C"
-  include.names = "C5"
+  require.residues = "R1C"
+  require.names = "C5"

@@ -8,7 +8,6 @@ Options:\n    \
     -c, --check      Checks the input file and the existing output \
 without running it.\n    \
     -h, --help       Prints help information.\n    \
-    -H, --hide-title Do not display title information.\n    \
     -l, --license    Prints license.\n    \
     -O, --option     input additional options.\n    \
     -V, --version    Prints version information.\n    \

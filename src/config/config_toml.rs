@@ -351,11 +351,11 @@ mod tests{
 
         2H.active = false
 
-        [groups.include] 
+        [groups.require] 
         elements = ["H"]
         distance = [4, 25]
 
-        [groups.exclude] 
+        [groups.forbid] 
         elements = ["N",  "O"]
 
 
@@ -363,7 +363,7 @@ mod tests{
 
         name = "nitroxide_N"
 
-        include = {elements = ["N"],residues = ["R1M"]}
+        require = {elements = ["N"],residues = ["R1M"]}
 
         14N.abundance = 0.9
         15N.abundance = 0.1

@@ -140,10 +140,10 @@ impl ParticleConfig{
       self.cell_type = CellType::from(cells)?;
     }
 
-    // A group with neither include nor exclude has no filter and selects
+    // A group with neither require nor forbid has no filter and selects
     // no particles.
-    let include = selection_table(&table, KEY_INCLUDE, &self.label)?;
-    let exclude = selection_table(&table, KEY_EXCLUDE, &self.label)?;
+    let include = selection_table(&table, KEY_REQUIRE, &self.label)?;
+    let exclude = selection_table(&table, KEY_FORBID, &self.label)?;
     if include.is_some() || exclude.is_some(){
 
       // D and T are read as hydrogen.
@@ -216,7 +216,7 @@ impl CellType{
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //------------------------------------------------------------------------------
-// This function returns the table `key` (include or exclude) of the group 
+// This function returns the table `key` (require or forbid) of the group 
 // `table` with name `label`, if the group has one.
 fn selection_table<'a>(table: &'a toml::Table, key: &str, label: &str)
   -> Result<Option<&'a toml::Table>,CluEError>
@@ -233,14 +233,14 @@ fn selection_table<'a>(table: &'a toml::Table, key: &str, label: &str)
 }
 //------------------------------------------------------------------------------
 // This function returns the element selections of the group `table` 
-// (include.elements, exclude.elements, and their bonded_to forms) that 
+// (require.elements, forbid.elements, and their bonded_to forms) that 
 // contain the symbols "D" or "T", which are read as hydrogen, 
 // as (key, symbol) pairs.
 fn hydrogen_isotope_symbols_in_selection(table: &toml::Table)
   -> Vec::<(String, String)>
 {
   let mut found = Vec::<(String, String)>::new();
-  for key in [KEY_INCLUDE, KEY_EXCLUDE]{
+  for key in [KEY_REQUIRE, KEY_FORBID]{
     let Some(selection) = table.get(key).and_then(|v| v.as_table()) else{
       continue;
     };
@@ -734,21 +734,21 @@ mod tests{
   #[test]
   fn test_hydrogen_isotope_symbols_in_selection(){
     let group: toml::Table = toml::from_str(r##"
-        include.elements = ["D", "C"]
-        include.bonded_to.elements = "T"
-        exclude.elements = ["O"]
-        exclude.bonded_to.elements = ["N", "D"]
+        require.elements = ["D", "C"]
+        require.bonded_to.elements = "T"
+        forbid.elements = ["O"]
+        forbid.bonded_to.elements = ["N", "D"]
         "##).unwrap();
     let s = |x: &str| x.to_string();
     assert_eq!(hydrogen_isotope_symbols_in_selection(&group), vec![
-        (s("include.elements"), s("D")),
-        (s("include.bonded_to.elements"), s("T")),
-        (s("exclude.bonded_to.elements"), s("D")),
+        (s("require.elements"), s("D")),
+        (s("require.bonded_to.elements"), s("T")),
+        (s("forbid.bonded_to.elements"), s("D")),
     ]);
 
     // The selection still treats D and T as hydrogen.
-    let include = group.get(KEY_INCLUDE).and_then(|v| v.as_table());
-    let exclude = group.get(KEY_EXCLUDE).and_then(|v| v.as_table());
+    let include = group.get(KEY_REQUIRE).and_then(|v| v.as_table());
+    let exclude = group.get(KEY_FORBID).and_then(|v| v.as_table());
     let filter = ParticleFilter::from_toml_tables(include, exclude, 1.0)
       .unwrap();
     assert_eq!(filter.elements, vec![Element::Hydrogen, Element::Carbon]);

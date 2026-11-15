@@ -9,7 +9,6 @@ pub struct CommandLineInput{
   pub check_only: bool,
   pub show_help: bool,
   pub show_license: bool,
-  pub show_title: bool,
   pub show_version: bool,
   pub show_warranty: bool,
   next_arg: NextArg
@@ -34,7 +33,6 @@ impl CommandLineInput{
       check_only: false,
       show_help: false,
       show_license: false,
-      show_title: true,
       show_version: false,
       show_warranty: false,
       next_arg: NextArg::InputConfig,
@@ -92,7 +90,6 @@ impl CommandLineInput{
       "--check" => self.check_only = true,
       "--help" => self.show_help = true,
       "--license" => self.show_license = true,
-      "--hide-title" => self.show_title = false,
       //"--output" => self.next_arg = NextArg::Output,
       "--option" => self.next_arg = NextArg::ConfigOption,
       "--version" => self.show_version = true,
@@ -123,7 +120,6 @@ impl CommandLineInput{
       "c" => self.check_only = true,
       "h" => self.show_help = true,
       "l" => self.show_license = true,
-      "H" => self.show_title = false,
       //"o" => self.next_arg = NextArg::Output,
       "O" => self.next_arg = NextArg::ConfigOption,
       "V" => self.show_version = true,
@@ -150,7 +146,7 @@ mod tests{
   #[test]
   fn test_check_option(){
     for args in [vec!["--check", "in.toml"], vec!["in.toml", "-c"],
-        vec!["-Hc", "in.toml"]]
+        vec!["-c", "in.toml"]]
     {
       let cli = parse(&args).unwrap();
       assert!(cli.check_only, "{:?}", args);
@@ -162,6 +158,15 @@ mod tests{
 
     assert_eq!(parse(&["--chek", "in.toml"]).err(), 
         Some(CluEError::UnrecognizedOption("--chek".to_string())));
+  }
+  //----------------------------------------------------------------------------
+  // The option to hide the title was removed; the title is always printed.
+  #[test]
+  fn test_hide_title_option_is_removed(){
+    assert_eq!(parse(&["--hide-title", "in.toml"]).err(), 
+        Some(CluEError::UnrecognizedOption("--hide-title".to_string())));
+    assert_eq!(parse(&["-H", "in.toml"]).err(), 
+        Some(CluEError::UnrecognizedOption("H".to_string())));
   }
   //----------------------------------------------------------------------------
 }

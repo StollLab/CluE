@@ -239,7 +239,7 @@ impl Structure{
           _ => ("particles have", "them"),
         };
         println!("Group \"{}\": {} {} no {}, \
-so include.{} cannot select {}.", 
+so require.{} cannot select {}.", 
             particle_config.label, n_missing, particles_have, field, key, them);
       }
     }
@@ -844,7 +844,7 @@ mod tests{
           structure.replicate_unit_cell = false
           [[groups]]
           name = "h"
-          include.elements = ["H"]
+          require.elements = ["H"]
           1H.abundance = 0.5
           2H.abundance = 0.5
           {}
@@ -906,13 +906,13 @@ mod tests{
         structure.replicate_unit_cell = false
         [[groups]]
         name = "ch"
-        include.elements = ["H"]
-        include.bonded_to.elements = ["C"]
+        require.elements = ["H"]
+        require.bonded_to.elements = ["C"]
         cosubstitute = "same_molecule"
         [[groups]]
         name = "oh"
-        include.elements = ["H"]
-        include.bonded_to.elements = ["O"]
+        require.elements = ["H"]
+        require.bonded_to.elements = ["O"]
         cosubstitute = "particle"
         "##, filename.display())).unwrap();
     let mut structure = pdb::parse_pdb(filename.to_str().unwrap(),0).unwrap();
@@ -976,10 +976,10 @@ mod tests{
         structure.replicate_unit_cell = false
         [[groups]]
         name = "tempo_n"
-        include.elements = ["N"]
+        require.elements = ["N"]
         [[groups]]
         name = "nothing"
-        include.residues = ["XYZ"]
+        require.residues = ["XYZ"]
         {}
         "##, position, groups)).unwrap();
     let mut structure = pdb::parse_pdb("./assets/TEMPO.pdb",0).unwrap();

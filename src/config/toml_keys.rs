@@ -68,13 +68,13 @@ pub const KEY_ISO_COSUBSTITUTE: &str = "cosubstitute";
 // Selection Keys
 // The group keys that select particles, and the keys of their tables.
 pub const KEY_CELLS: &str = "cells";
-pub const KEY_INCLUDE: &str = "include";
-pub const KEY_EXCLUDE: &str = "exclude";
+pub const KEY_REQUIRE: &str = "require";
+pub const KEY_FORBID: &str = "forbid";
 pub const KEY_BONDED_TO: &str = "bonded_to";
 
 pub const KEY_SELE_DISTANCE: &str = "distance";
 
-// The atom attributes, used in include, exclude, and their bonded_to tables.
+// The atom attributes, used in require, forbid, and their bonded_to tables.
 pub const KEY_SELE_CHAIN_IDS: &str = "chain_ids";
 pub const KEY_SELE_ELEMENTS: &str = "elements";
 pub const KEY_SELE_INDICES: &str = "indices";

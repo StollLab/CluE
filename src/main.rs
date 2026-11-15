@@ -58,9 +58,7 @@ fn main() {
     check_input(input);
   }
 
-  if input.show_title{
-    info::title::print_title();
-  }
+  info::title::print_title();
 
 
   // Parse input files.

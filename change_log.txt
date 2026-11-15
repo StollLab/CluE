@@ -9,6 +9,9 @@ NOTE:
   cluster_method, ensemble_cce, selection.within_distance, and cell_type;
   those two entries give the new name of each key. Some of the old keys,
   such as cell_ids and primary_cell, were removed (see REMOVED).
+  The group tables include and exclude were later renamed to require and
+  forbid (see the CHANGED entry "The group tables include and exclude are
+  renamed"); entries written before that name them include and exclude.
 
 ADDED:
   Output directories can be resumed. Each output directory has a record,
@@ -101,16 +104,48 @@ CHANGED:
   instance reloaded the checkpoints of the first, and the average equalled
   the first instance):
     <output>/clue_manifest.toml, rng_seed.txt, tau_axis.csv, signal.csv
-    <output>/structures.csv   (id, file, content_hash, weight, 
-                               number_runs, directory)
-    <output>/structures/<id>/signal.csv   (average over the instances)
-    <output>/structures/<id>/instance_<k>/signal.csv, info/, 
-      orientations/theta_<θ>deg_phi_<φ>deg/
-  <id> is s_<16 hex digits of the FNV-1a hash of the structure file
-  contents>. Previously instances were written to <output>/<run_name> or
+    <output>/structures.csv   (directory, file, relative_weight, 
+                               absolute_weight, content_hash, number_runs)
+    <output>/structure_<n>/signal.csv   (average over the instances)
+    <output>/structure_<n>/run_<k>/signal.csv
+    <output>/structure_<n>/run_<k>/detected_spin.xyzw, bath.csv, 
+      structure_pdb.pdb, exchange_groups.csv, tensors.txt, 
+      orientation_grid.xyzw, orientation_grid_polar.csv
+    <output>/structure_<n>/run_<k>/ori_theta_<θ>deg_phi_<φ>deg/
+  The structure directories are numbered n = 1, 2, ... in the order in 
+  which the structures are added to the output; a structure is matched to
+  its directory by the FNV-1a hash of its file contents, which 
+  structures.csv and clue_manifest.toml record. In structures.csv, 
+  directory is relative to the output directory, relative_weight is the 
+  weight of the structure, and absolute_weight is its weight divided by 
+  the sum of the weights (the factor of its signal in <output>/signal.csv).
+  Previously instances were written to <output>/<run_name> or
   <output>/run-<hash of the structure>. A cluster_expansion.clustering.file
-  directory taken from an earlier run is now 
-  <output>/structures/<id>/instance_<k>/orientations.
+  directory taken from an earlier run is now <output>/structure_<n>/run_<k>.
+  Earlier 1.0.0-dev builds wrote <output>/structures/s_<hash>/instance_<k>/
+  with the subdirectories info/ and orientations/theta_..._phi_.../ and the
+  structures.csv columns id, file, content_hash, weight, number_runs, 
+  directory; clue_manifest.toml now has manifest_format = 2, and outputs 
+  of those builds (manifest_format = 1) are not resumed: a run or --check
+  stops with an error that says so; set a different output.directory.
+  The files about the structure, which were in run_<k>/info/, are now 
+  directly in run_<k>/; output.info and the switches below it are 
+  unchanged.
+  Library: StructureInput no longer has an id (the directory name is 
+  assigned by the output record); the constants SAVE_DIR_STRUCTURES, 
+  SAVE_DIR_INFO, and SAVE_DIR_ORIENTATION_SIGNALS are replaced by 
+  STRUCTURE_DIR_PREFIX, INSTANCE_DIR_PREFIX (output_manifest), and 
+  SAVE_DIR_ORIENTATION_PREFIX (config); new functions 
+  output_manifest::structure_id(), next_structure_number(), and
+  instance_dir_name().
+
+  The group tables include and exclude are renamed to require and forbid
+  (require.X, forbid.X, require.bonded_to.X, forbid.bonded_to.X, 
+  require.distance, require = {}). Their keys and meaning are unchanged.
+  A group with include or exclude is rejected with "removed; renamed to 
+  require" or "removed; renamed to forbid", and error messages name the
+  new tables. The test assets use the new names. Library: KEY_INCLUDE and
+  KEY_EXCLUDE are replaced by KEY_REQUIRE and KEY_FORBID.
 
   Seeds. Each structure has a seed derived from the main seed and the hash
   of its file contents, each instance a seed drawn from the structure 
@@ -334,7 +369,8 @@ CHANGED:
   entries are ignored, and an entry that is not a number is an error that
   names the line.
 
-  The orientation grid written to info/orientation_grid.xyzw now holds the
+  The orientation grid written to info/orientation_grid.xyzw (now 
+  run_<k>/orientation_grid.xyzw, see CHANGED) now holds the
   right coordinates for every point. Previously only the first row was 
   right; the weights, orientation_grid_polar.csv, and the signals were not
   affected.
@@ -615,6 +651,11 @@ CHANGED:
   were removed from it.
 
 REMOVED:
+  The command line option -H, --hide-title. The title is always printed;
+  -H and --hide-title are reported as unrecognized options. Library: the
+  field CommandLineInput::show_title. pyCluE prints the title for every 
+  Config, as it did unless -H was passed.
+
   The key output.run_name. Output directories are now named 
   automatically (see the new layout under CHANGED). output.run_name, and
   run_name at the top level of the old layout, are reported as removed.
