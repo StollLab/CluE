@@ -1505,8 +1505,7 @@ mod tests{
     // 3224 waters and 250 glycerols in a 50.146 A cubic box.
     let mut config = Config::from_toml_file("./assets/solvent_box.toml")
       .unwrap();
-    config.input_structure_file
-      = Some("./assets/water_gly_20pc_vol.pdb".to_string());
+    config.set_structure_file("./assets/water_gly_20pc_vol.pdb");
     // The toml position is in angstroms, so put the spin at the box center.
     config.detected_spin_position = Some(DetectedSpinCoordinates::XYZ(
           Vector3D::from([25.0, 25.0, 25.0]).scale(ANGSTROM)));
@@ -2196,8 +2195,7 @@ mod tests{
     // and unit cells with the same groups share them.
     let mut config = Config::from_toml_file("./assets/solvent_box.toml")
       .unwrap();
-    config.input_structure_file
-      = Some("./assets/water_gly_20pc_vol.pdb".to_string());
+    config.set_structure_file("./assets/water_gly_20pc_vol.pdb");
     config.detected_spin_position = Some(DetectedSpinCoordinates::XYZ(
           Vector3D::from([25.0, 25.0, 25.0]).scale(ANGSTROM)));
     let mut rng = ChaCha20Rng::seed_from_u64(20261012);

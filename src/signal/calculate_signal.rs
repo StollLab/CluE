@@ -98,11 +98,24 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState,
   let mut signals = (0..=max_cluster_size).map(|_ii| Signal::zeros(n_tot))
     .collect::<Vec::<Signal>>();
 
-  for structure_input in structures.iter(){
+  for (i_structure, structure_input) in structures.iter().enumerate(){
 
     let seed = structure_seed(main_seed, structure_input.content_hash);
     let new_seeds = instance_seeds(seed, number_runs);
     let s_idx = output.begin_structure(structure_input, seed, &new_seeds)?;
+
+    // A single-structure run prints no structure line.
+    if structures.len() > 1{
+      let n_identical = structure_input.sources.len() - 1;
+      let identical = match n_identical{
+        0 => String::new(),
+        1 => " and 1 file with identical contents".to_string(),
+        n => format!(" and {} files with identical contents", n),
+      };
+      clue_println!("\nStructure {}/{}: {}{} ({}).", i_structure + 1, 
+          structures.len(), structure_input.file, identical,
+          output.manifest().structures[s_idx].id);
+    }
 
     let mut structure_signals = (0..=max_cluster_size)
       .map(|_ii| Signal::zeros(n_tot))
@@ -150,7 +163,7 @@ pub fn calculate_signals(config: &Config, output: &mut OutputState,
     }
   }
 
-  output.write_structures_index()?;
+  output.write_structures_index(&structures)?;
 
   Ok(signals)
 }

@@ -49,6 +49,12 @@ const STRUCTURE_KEYS: [&str; 6] = [
   "clash_distance_pbc",
 ];
 
+// An entry of a structure.file array given as a table.
+const STRUCTURE_FILE_KEYS: [&str; 2] = [
+  "file",
+  "weight",
+];
+
 const DETECTED_SPIN_KEYS: [&str; 11] = [
   "density_matrix",
   "detection_operator",
@@ -317,6 +323,7 @@ enum Schema{
   TopLevel,
   Units,
   Structure,
+  StructureFile,
   DetectedSpin,
   Group,
   Require,
@@ -336,10 +343,11 @@ enum Schema{
   Output,
 }
 
-const ALL_SCHEMAS: [Schema; 20] = [
+const ALL_SCHEMAS: [Schema; 21] = [
   Schema::TopLevel,
   Schema::Units,
   Schema::Structure,
+  Schema::StructureFile,
   Schema::DetectedSpin,
   Schema::Group,
   Schema::Require,
@@ -367,6 +375,7 @@ impl Schema{
       Schema::TopLevel => &TOP_LEVEL_KEYS,
       Schema::Units => &UNITS_KEYS,
       Schema::Structure => &STRUCTURE_KEYS,
+      Schema::StructureFile => &STRUCTURE_FILE_KEYS,
       Schema::DetectedSpin => &DETECTED_SPIN_KEYS,
       Schema::Group => &GROUP_KEYS,
       Schema::Require => &REQUIRE_KEYS,
@@ -442,6 +451,11 @@ impl Schema{
         _ => None,
       },
       Schema::Axes => Some((Schema::Axis,false)),
+      // structure.file is a string or an array of strings and tables.
+      Schema::Structure => match key{
+        "file" => Some((Schema::StructureFile,true)),
+        _ => None,
+      },
       Schema::ClusterExpansion => match key{
         "clustering" => Some((Schema::Clustering,false)),
         _ => None,
@@ -450,7 +464,7 @@ impl Schema{
         "pair_cutoffs" => Some((Schema::PairCutoffs,false)),
         _ => None,
       },
-      Schema::Units | Schema::Structure | Schema::BondedTo | Schema::Axis
+      Schema::Units | Schema::StructureFile | Schema::BondedTo | Schema::Axis
         | Schema::Conditions | Schema::Orientations | Schema::PulseSequence
         | Schema::PairCutoffs | Schema::Run | Schema::Output => None,
     }
@@ -462,6 +476,8 @@ impl Schema{
       Schema::TopLevel => "the top level",
       Schema::Units => "[units]",
       Schema::Structure => "[structure]",
+      Schema::StructureFile => "a table of the structure.file array \
+(file, weight)",
       Schema::DetectedSpin => "[detected_spin]",
       Schema::Group => "[[groups]]",
       Schema::Require => "the require table of [[groups]]",
@@ -711,6 +727,11 @@ impl Config{
   /// (`cluster_expansion.clustering.partitioning` with its `kmeans_size`, 
   /// `orientations.file`, and a csv `detected_spin.position`) are checked
   /// by the parser.
+  /// The structure files are expanded (`expand_structure_files()`: globs,
+  /// weights csv files, weights, duplicates), but not read.
+  /// Settings that refer to the atoms or bath of one structure (a cluster
+  /// file, a directory of orientation directories, a partition-table csv 
+  /// file) conflict with several structure files.
   /// Errors that depend on the structure (group names, overlapping groups,
   /// empty selections) are found only by a run.
   pub fn check_completeness(&self) -> Result<(),CluEError>{
@@ -718,7 +739,7 @@ impl Config{
 
     // Settings without a default.
     let required = [
-      (self.input_structure_file.is_some(), "structure.file"),
+      (self.structure_files.is_some(), "structure.file"),
       (self.radius.is_some(), "structure.radius"),
       (self.magnetic_field.is_some(), "conditions.magnetic_field"),
       (self.detected_spin_position.is_some(), "detected_spin.position"),
@@ -828,9 +849,26 @@ cluster_expansion.thermalize_cluster_populations = true".to_string());
     }
 
     // Files and directories.
-    if let Some(filename) = &self.input_structure_file{
-      if let Some(problem) = check_path(filename, false){
-        problems.push(format!("structure.file: {}", problem));
+    let mut number_structure_files = 0;
+    if self.structure_files.is_some(){
+      match self.expand_structure_files(){
+        Ok(sources) => number_structure_files = sources.len(),
+        Err(err) => problems.push(format!("structure.file: {}", err)),
+      }
+    }
+    if number_structure_files > 1{
+      let conflict = |key: &str| format!("{} cannot be used with several \
+structure files (structure.file gives {} files), since it refers to the atoms of \
+one structure", key, number_structure_files);
+      match &self.cluster_source{
+        Some(ClusterSource::File(_)) | Some(ClusterSource::OrientationsDir(_))
+          => problems.push(conflict("cluster_expansion.clustering.file")),
+        Some(ClusterSource::Structure) | None => {
+          if let Some(PartitionTableConfig::CSV(_)) = &self.partition_table{
+            problems.push(conflict(
+                  "cluster_expansion.clustering.partition_table"));
+          }
+        },
       }
     }
 
@@ -875,7 +913,7 @@ cluster_expansion.thermalize_cluster_populations = true".to_string());
 //------------------------------------------------------------------------------
 // This function returns a description of the problem if `path` is not an
 // existing file (`is_dir == false`) or directory (`is_dir == true`).
-fn check_path(path: &str, is_dir: bool) -> Option<String>{
+pub(crate) fn check_path(path: &str, is_dir: bool) -> Option<String>{
   let p = Path::new(path);
   if !p.exists(){
     return Some(format!("\"{}\" does not exist", path));
@@ -898,6 +936,7 @@ mod tests{
   use crate::io::FromTOMLString;
   use crate::config::config_toml::ConfigTOML;
   use strum::IntoEnumIterator;
+  use crate::config::StructureFileSpec;
 
   //----------------------------------------------------------------------------
   // This function returns the messages of the key check of `toml_str`.
@@ -1551,7 +1590,7 @@ to 1".to_string()]);
   fn test_missing_files_are_reported(){
     let mut config = Config::from_toml_file(
         "assets/1omp_K26R1_0.003228966616048703.toml").unwrap();
-    config.input_structure_file = Some("assets/no_such_file.pdb".to_string());
+    config.set_structure_file("assets/no_such_file.pdb");
     config.partition_table = Some(PartitionTableConfig::CSV(
           "assets".to_string()));
     assert_eq!(problems_of(&config), vec![
@@ -1562,8 +1601,7 @@ file".to_string(),
     ]);
 
     // The partition table is not read for clusters from a file.
-    config.input_structure_file = Some(
-        "assets/1omp_K26R1_0.003228966616048703.pdb".to_string());
+    config.set_structure_file("assets/1omp_K26R1_0.003228966616048703.pdb");
     config.cluster_source = Some(ClusterSource::File(
           "assets/no_clusters.toml".to_string()));
     assert_eq!(problems_of(&config), vec![
@@ -1578,6 +1616,62 @@ directory".to_string()]);
 
     config.cluster_source = Some(ClusterSource::OrientationsDir(
           "assets".to_string()));
+    assert_eq!(problems_of(&config), Vec::<String>::new());
+  }
+  //----------------------------------------------------------------------------
+  // Settings that refer to the atoms of one structure conflict with several
+  // structure files; structure.file errors are reported without a run.
+  #[test]
+  fn test_several_structure_files(){
+    let mut config = Config::from_toml_file(
+        "assets/1omp_K26R1_0.003228966616048703.toml").unwrap();
+    let two_files = Some(vec![
+      StructureFileSpec{pattern: "assets/1omp_K26R1_0.003228966616048703.pdb"
+        .to_string(), weight: None},
+      StructureFileSpec{pattern: "assets/TEMPO.pdb".to_string(), 
+        weight: Some(3.0)}]);
+    config.structure_files = two_files.clone();
+    config.cluster_source = Some(ClusterSource::Structure);
+    config.partition_table = None;
+    assert_eq!(problems_of(&config), Vec::<String>::new());
+
+    let conflict = |key: &str| format!("{} cannot be used with several \
+structure files (structure.file gives 2 files), since it refers to the atoms \
+of one structure", key);
+    config.partition_table = Some(PartitionTableConfig::CSV(
+          "assets/no_partitions.csv".to_string()));
+    assert_eq!(problems_of(&config), vec![
+        conflict("cluster_expansion.clustering.partition_table"),
+        "cluster_expansion.clustering.partition_table: \
+\"assets/no_partitions.csv\" does not exist".to_string()]);
+
+    // The partition table is not read for clusters from a file.
+    config.cluster_source = Some(ClusterSource::OrientationsDir(
+          "assets".to_string()));
+    assert_eq!(problems_of(&config), 
+        vec![conflict("cluster_expansion.clustering.file")]);
+    config.cluster_source = Some(ClusterSource::File(
+          "assets/TEMPO.pdb".to_string()));
+    assert_eq!(problems_of(&config), 
+        vec![conflict("cluster_expansion.clustering.file")]);
+
+    // One file has no conflict.
+    config.set_structure_file("assets/TEMPO.pdb");
+    assert_eq!(problems_of(&config), Vec::<String>::new());
+
+    // Errors of the expansion name the key.
+    config.structure_files = Some(vec![
+      StructureFileSpec{pattern: "assets/TEMPO.pdb".to_string(), 
+        weight: Some(0.0)}]);
+    assert_eq!(problems_of(&config), vec![format!("structure.file: {}",
+          CluEError::InvalidStructureWeight("assets/TEMPO.pdb".to_string(),
+            "0".to_string()))]);
+    config.structure_files = None;
+    assert_eq!(problems_of(&config), 
+        vec!["structure.file is not set".to_string()]);
+    config.structure_files = two_files;
+    config.cluster_source = Some(ClusterSource::Structure);
+    config.partition_table = None;
     assert_eq!(problems_of(&config), Vec::<String>::new());
   }
   //----------------------------------------------------------------------------

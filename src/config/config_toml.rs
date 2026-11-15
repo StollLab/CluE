@@ -71,11 +71,13 @@ pub struct UnitsTOML{
 /// the system is built from it.
 #[derive(Debug,Clone,Default,Serialize,Deserialize)]
 pub struct StructureTOML{
-  pub file: Option<String>,
+  /// A path, glob, or weights csv file, or an array of them, each a string
+  /// or a table {file, weight}; converted by `StructureFileSpec::from_toml()`.
+  pub file: Option<toml::Value>,
   pub pdb_model_index: Option<usize>,
   pub radius: Option<f64>,
   pub replicate_unit_cell: Option<toml::Value>,
-  pub clash_distance: Option<f64>, 
+  pub clash_distance: Option<f64>,
   pub clash_distance_pbc: Option<f64>,
 }
 //------------------------------------------------------------------------------

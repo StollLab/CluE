@@ -14,6 +14,39 @@ NOTE:
   renamed"); entries written before that name them include and exclude.
 
 ADDED:
+  Several weighted input structures (plan_multistructures.md, stage 2).
+  structure.file accepts a path, a glob ("frames/*.pdb", matches sorted
+  lexicographically; a path that names an existing file is that file, also
+  if it contains *, ? or [), a weights csv file (header file,weight; blank
+  weight = 1; lines starting with # and blank lines are skipped; paths may
+  be globs; errors name the line of the file), or an array of paths and
+  tables, e.g. [{file = "a.pdb", weight = 0.1}, "b.pdb"]. Relative paths,
+  also those in a weights csv file, are relative to the working directory,
+  not to the csv file.
+  Weights are relative (default 1), must be finite and > 0, and a weight on
+  a glob applies to each matched file. The signal is the weighted average
+  over the files. Files with identical contents share one structure_<n>/
+  directory and are simulated once with the sum of their weights. A file
+  given twice (also via different paths), a glob without a match, or a
+  weight on a csv entry is an error, reported by --check. A cluster file,
+  a directory of orientation directories, or a partition-table csv file
+  cannot be combined with several structure files. All files use the same
+  config: serial numbers and groups must mean the same atoms in each file,
+  and a detected_spin.position given as coordinates is the same point in
+  every file. Multi-model PDB files are not expanded into structures;
+  structure.pdb_model_index applies to every file. number_runs applies to
+  every structure.
+  structures.csv has one row per structure file (files of one structure
+  share a directory); clue_manifest.toml records the files and weights of
+  each structure (sources). A change of files or weights re-averages
+  without recomputing instances. Outputs written before this change do not
+  resume, because the fingerprint of the settings changed: with
+  output.directory set, a run into such an output stops with an "output
+  config" mismatch (set a different output.directory); with the default
+  directory, whose name CluE-<hash> is derived from the fingerprint, a run
+  starts a new simulation in a new directory and leaves the old one
+  unchanged.
+
   Output directories can be resumed. Each output directory has a record,
   clue_manifest.toml, with the CluE version, the version of the Rust 
   compiler that built CluE, the main seed, run.cluster_batch_size, a 

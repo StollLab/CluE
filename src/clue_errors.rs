@@ -25,6 +25,7 @@ pub enum CluEError{
   CannotNormalizeVector,
   CannotCreateFile(String,String),
   CannotOpenFile(String,String),
+  CannotReadStructureWeights(String,usize,String),
   CannotParseCellType(String),
   CannotParseClusterMethod(String),
   CannotParseElement(String),
@@ -65,6 +66,7 @@ pub enum CluEError{
   DuplicateSerial(u32),
   ExpectedClusterSetWithNSizes(usize,usize),
   ExpectedTOMLArray(String),
+  DuplicateStructureFile(String,String,String),
   ExpectedTOMLFloat(String),
   ExpectedTOMLUInt(String),
   FailedKMeans,
@@ -94,6 +96,9 @@ pub enum CluEError{
   IsotopeAbundancesDoNotSumToOne(String,String,f64,f64),
   InvalidStevens(String),
   InvalidStevensCoefficientShape(usize,usize,usize),
+  InvalidStructureFile(String),
+  InvalidStructureGlob(String,String),
+  InvalidStructureWeight(String,String),
   InvalidTOMLKeys(Vec::<String>),
   InvalidTOMLValue(String,String,String),
   LengthMismatchTimepointsIncrements(String,usize,usize),
@@ -105,6 +110,7 @@ pub enum CluEError{
   MissingGroupName,
   MissingHeader(usize,usize,String),
   MissingTOMLKey(String,String),
+  MultipleStructureFiles(usize),
   MutuallyExclusiveKeys(String,String),
   NANTensorBathDipoleDipole(String,String,String,String),
   NANTensorBathZeeman(String,String),
@@ -114,6 +120,7 @@ pub enum CluEError{
   NANTensorQuadrupole(String,String),
   NANTensorZerofield(String,String),
   NeighborListAndPartitionTableAreNotCompatible,
+  NestedStructureWeightsFile(String,String),
   NoApplyPBC,
   NoClusterBatchSize,
   NoClusterMethod,
@@ -187,7 +194,9 @@ pub enum CluEError{
   SpaceGroupNotP1(String),
   SpinGridWeightsDoNotSumToOne(f64,f64),
   SpinAlreadyPartitioned(usize,i32),
+  StructureGlobNoMatch(String),
   StructureLargerThanCell(String,f64),
+  StructureWeightsFileWithWeight(String),
   TensorNotSet(usize),
   ThermalizationRequiresEnsembleCCE,
   TooManyAtomsInPDB(String,usize),
@@ -856,6 +865,41 @@ only sizes up to {}",cluster_size,max_size),
       CluEError::NoStructureFile => write!(f,
           "no structure file defined"),
 
+      CluEError::CannotReadStructureWeights(file,line,msg) => write!(f,
+          "cannot read the structure weights file \"{}\", line {}: {}",
+          file, line, msg),
+
+      CluEError::DuplicateStructureFile(path,first,second) => write!(f,
+          "the structure file \"{}\" is given twice, by \"{}\" and by \
+\"{}\"; each file can be given only once (files with identical contents but \
+different names are allowed)", path, first, second),
+
+      CluEError::InvalidStructureFile(problem) => write!(f,
+          "{}", problem),
+
+      CluEError::InvalidStructureGlob(pattern,msg) => write!(f,
+          "cannot expand the glob \"{}\": {}", pattern, msg),
+
+      CluEError::InvalidStructureWeight(entry,weight) => write!(f,
+          "the weight of \"{}\" is {}; weights must be finite numbers greater \
+than 0 (to drop a file, leave it out)", entry, weight),
+
+      CluEError::MultipleStructureFiles(n) => write!(f,
+          "structure.file gives {} structure files, but one structure is \
+built here; build each structure with Structure::build_structure_from_file", 
+          n),
+
+      CluEError::NestedStructureWeightsFile(file,inner) => write!(f,
+          "the structure weights file \"{}\" lists the csv file \"{}\"; \
+a weights file lists structure files, not other weights files", file, inner),
+
+      CluEError::StructureGlobNoMatch(pattern) => write!(f,
+          "the glob \"{}\" matches no file", pattern),
+
+      CluEError::StructureWeightsFileWithWeight(file) => write!(f,
+          "\"{}\" is a structure weights file and has a weight in \
+structure.file; set the weights in the csv file", file),
+
       CluEError::ParticlesClash(idx0,elmt0,idx1,elmt1,r,r_clash) => write!(f,
           "{} ({}) and {} ({}) are {} Å apart, closer than the \
 clash distance of {} Å",idx0,elmt0,idx1,elmt1,r,r_clash),
@@ -1191,6 +1235,30 @@ move it or set a different output.directory"),
        "the auxiliary signals in \"out\" were saved in batches of \
 run.cluster_batch_size = 1000, but it is 500; set cluster_batch_size = 1000 \
 to resume the output"),
+      (CluEError::CannotReadStructureWeights(s("w.csv"),3,s("blank")),
+       "cannot read the structure weights file \"w.csv\", line 3: blank"),
+      (CluEError::DuplicateStructureFile(s("/d/a.pdb"),s("a.pdb"),s("*.pdb")),
+       "the structure file \"/d/a.pdb\" is given twice, by \"a.pdb\" and by \
+\"*.pdb\"; each file can be given only once (files with identical contents \
+but different names are allowed)"),
+      (CluEError::InvalidStructureFile(s("\"a.pdb\" does not exist")),
+       "\"a.pdb\" does not exist"),
+      (CluEError::InvalidStructureGlob(s("[a"),s("invalid range pattern")),
+       "cannot expand the glob \"[a\": invalid range pattern"),
+      (CluEError::InvalidStructureWeight(s("a.pdb"),s("0")),
+       "the weight of \"a.pdb\" is 0; weights must be finite numbers greater \
+than 0 (to drop a file, leave it out)"),
+      (CluEError::MultipleStructureFiles(2),
+       "structure.file gives 2 structure files, but one structure is built \
+here; build each structure with Structure::build_structure_from_file"),
+      (CluEError::NestedStructureWeightsFile(s("w.csv"),s("v.csv")),
+       "the structure weights file \"w.csv\" lists the csv file \"v.csv\"; a \
+weights file lists structure files, not other weights files"),
+      (CluEError::StructureGlobNoMatch(s("f_*.pdb")),
+       "the glob \"f_*.pdb\" matches no file"),
+      (CluEError::StructureWeightsFileWithWeight(s("w.csv")),
+       "\"w.csv\" is a structure weights file and has a weight in \
+structure.file; set the weights in the csv file"),
     ];
     for (error, message) in cases{
       assert_eq!(error.to_string(), message, "{:?}", error);

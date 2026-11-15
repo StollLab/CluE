@@ -10,9 +10,11 @@
 //!   rng_seed.txt         main seed
 //!   output_log.txt       terminal output of the runs, appended (output_log.rs)
 //!   signal.csv           weighted average over the structures
-//!   structures.csv       directory, file, relative_weight, absolute_weight,
-//!                        content_hash, number_runs
-//!   structure_<n>/       one per structure, n = 1, 2, ...
+//!   structures.csv       one row per structure file: directory, file, 
+//!                        relative_weight, absolute_weight, content_hash,
+//!                        number_runs
+//!   structure_<n>/       one per structure, n = 1, 2, ...; files with
+//!                        identical contents are one structure
 //!     signal.csv         average over the instances of the structure
 //!     run_<k>/           one per instance, k = 1, ..., number_runs
 //!       signal.csv
@@ -25,8 +27,8 @@
 //! units.time), followed by the columns `signal_0`, `signal_1`, ...
 use crate::clue_errors::CluEError;
 use crate::config::{
-  ClusterSource, Config, PartitionTableConfig, StructureInput,
-  SAVE_DIR_ORIENTATION_PREFIX,
+  ClusterSource, Config, PartitionTableConfig, StructureInput, 
+  StructureSource, SAVE_DIR_ORIENTATION_PREFIX,
 };
 use crate::io::write_atomically;
 use crate::math::fnv1a_64;
@@ -213,9 +215,13 @@ pub struct InputFileRecord{
 
 /// `StructureRecord` is the progress of one input structure: its id 
 /// (the name of its directory in the output directory, `structure_<n>`,
-/// see `next_structure_number()`), file, content hash, weight, seed, 
-/// number of instances, and the instances.
+/// see `next_structure_number()`), file (the first source), content hash, 
+/// weight (the sum of the source weights), seed, number of instances, the
+/// instances, and the sources: the structure files with these contents 
+/// and their weights, as in the last run.
 /// A structure is matched to its record by the content hash.
+/// A record without sources means the single source (`file`, `weight`)
+/// (`StructureRecord::sources()`).
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct StructureRecord{
   pub id: String,
@@ -227,6 +233,39 @@ pub struct StructureRecord{
   pub number_runs: usize,
   #[serde(default)]
   pub instances: Vec::<InstanceRecord>,
+  #[serde(default)]
+  pub sources: Vec::<SourceRecord>,
+}
+
+impl StructureRecord{
+  //----------------------------------------------------------------------------
+  /// This function returns the recorded sources, or the single source 
+  /// (`file`, `weight`) if none are recorded.
+  pub fn sources(&self) -> Vec::<SourceRecord>{
+    if self.sources.is_empty(){
+      vec![SourceRecord{file: self.file.clone(), weight: self.weight}]
+    }else{
+      self.sources.clone()
+    }
+  }
+  //----------------------------------------------------------------------------
+}
+
+/// `SourceRecord` is a structure file of a structure record and its 
+/// relative weight.
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+pub struct SourceRecord{
+  pub file: String,
+  pub weight: f64,
+}
+
+//------------------------------------------------------------------------------
+// This function returns the source records of `structure`.
+fn source_records(structure: &StructureInput) -> Vec::<SourceRecord>{
+  structure.sources.iter()
+    .map(|s: &StructureSource| SourceRecord{file: s.file.clone(), 
+        weight: s.weight})
+    .collect()
 }
 
 /// `InstanceRecord` is the progress of one instance of a structure.
@@ -751,8 +790,9 @@ fn completeness(manifest: &Manifest, config: &Config, dir: &str)
     }
     let instances_added = number_runs.saturating_sub(record.instances.len());
 
+    // Changed sources (files or weights) need a new average.
     if instances_complete < number_runs 
-      || record.weight != structure.weight
+      || record.sources() != source_records(structure)
       || !Path::new(dir).join(&record.id).join(SIGNAL_FILE).is_file()
     {
       complete = false;
@@ -1138,6 +1178,7 @@ impl OutputState{
           seed,
           number_runs: 0,
           instances: Vec::<InstanceRecord>::new(),
+          sources: source_records(structure),
         });
         self.manifest.structures.len() - 1
       },
@@ -1174,6 +1215,7 @@ derived seed {}", record.file, instance.index, instance.seed, derived)));
     }
     record.file = structure.file.clone();
     record.weight = structure.weight;
+    record.sources = source_records(structure);
     record.number_runs = std::cmp::max(record.number_runs, 
         instance_seeds.len());
 
@@ -1315,29 +1357,49 @@ differ", record.file, instance.index)));
   }
   //----------------------------------------------------------------------------
   /// This function writes the index of the structures (`structures.csv`),
-  /// if the output is saved: one row per structure record, with the 
-  /// columns `directory` (the structure's directory in the output 
-  /// directory), `file`, `relative_weight` (the weight of the structure), 
-  /// `absolute_weight` (weight / sum of the weights, the factor of the 
-  /// structure's signal in the averaged signal), `content_hash`, and 
-  /// `number_runs`.
-  pub fn write_structures_index(&self) -> Result<(),CluEError>{
+  /// if the output is saved: one row per structure file of the run 
+  /// (`structures`, from `Config::structure_inputs()`), with the columns
+  /// `directory` (the directory of the file's structure in the output 
+  /// directory), `file`, `relative_weight` (the weight of the file as 
+  /// given), `absolute_weight` (weight / sum of the weights of all files,
+  /// the factor of the file in the averaged signal), `content_hash`, and 
+  /// `number_runs` (of the structure record).
+  /// The rows follow the structures in input order, and the files of a 
+  /// structure (files with identical contents) are consecutive rows with 
+  /// the same directory.
+  /// Every structure of `structures` must have begun 
+  /// (`begin_structure()`).
+  pub fn write_structures_index(&self, structures: &[StructureInput]) 
+    -> Result<(),CluEError>
+  {
     let Some(dir) = &self.dir else{
       return Ok(());
     };
-    let records = &self.manifest.structures;
-    // The structure signals are averaged with weight / total weight.
-    let total_weight = records.iter().map(|r| r.weight).sum::<f64>();
-    let column = |f: &dyn Fn(&StructureRecord) -> String| 
-      records.iter().map(f).collect::<Vec::<String>>();
-    let data = vec![
-      column(&|r| r.id.clone()),
-      column(&|r| r.file.clone()),
-      column(&|r| r.weight.to_string()),
-      column(&|r| (r.weight/total_weight).to_string()),
-      column(&|r| r.content_hash.clone()),
-      column(&|r| r.number_runs.to_string()),
-    ];
+    // The structure signals are averaged with weight / total weight, and
+    // the weight of a structure is the sum of the weights of its files.
+    let total_weight = structures.iter()
+      .flat_map(|s| s.sources.iter().map(|source| source.weight))
+      .sum::<f64>();
+
+    let mut data = vec![Vec::<String>::new(); 6];
+    for structure in structures.iter(){
+      let hash = structure.content_hash_hex();
+      let Some(record) = self.manifest.structures.iter()
+        .find(|r| r.content_hash == hash) else
+      {
+        return Err(CluEError::CannotWriteFile(
+              format!("{}/{}", dir, STRUCTURES_FILE),
+              format!("structure \"{}\" has no record", structure.file)));
+      };
+      for source in structure.sources.iter(){
+        data[0].push(record.id.clone());
+        data[1].push(source.file.clone());
+        data[2].push(source.weight.to_string());
+        data[3].push((source.weight/total_weight).to_string());
+        data[4].push(hash.clone());
+        data[5].push(record.number_runs.to_string());
+      }
+    }
     let headers = ["directory", "file", "relative_weight", "absolute_weight",
       "content_hash", "number_runs"].iter().map(|h| h.to_string())
       .collect::<Vec::<String>>();
@@ -1597,13 +1659,16 @@ mod tests{
     let config = small_config(&out, "number_runs = 2\nrng_seed = 5", &[]);
     crate::run(config.clone()).unwrap();
 
+    let structure_file = config.expand_structure_files().unwrap()[0].file
+      .clone();
+
     // Fewer instances.
     let mut fewer = config.clone();
     fewer.number_runs = Some(1);
     assert_eq!(inspect_output(&fewer), Err(CluEError::OutputFewerRuns(
-            out.clone(), config.input_structure_file.clone().unwrap(), 2, 1)));
+            out.clone(), structure_file.clone(), 2, 1)));
     assert_eq!(crate::run(fewer).unwrap_err(), CluEError::OutputFewerRuns(
-            out.clone(), config.input_structure_file.clone().unwrap(), 2, 1));
+            out.clone(), structure_file.clone(), 2, 1));
 
     // A different seed.
     let mut reseeded = config.clone();
@@ -1642,12 +1707,11 @@ build uses"));
 
     // A structure file with other contents is a removed structure.
     let structure_copy = format!("{}_structure.pdb", out);
-    let mut contents = std::fs::read_to_string(
-        config.input_structure_file.as_ref().unwrap()).unwrap();
+    let mut contents = std::fs::read_to_string(&structure_file).unwrap();
     contents.insert_str(0, "REMARK changed copy\n");
     std::fs::write(&structure_copy, contents).unwrap();
     let mut other_structure = config.clone();
-    other_structure.input_structure_file = Some(structure_copy.clone());
+    other_structure.set_structure_file(&structure_copy);
     let record = &read_manifest(&out).unwrap().unwrap().structures[0];
     assert_eq!(inspect_output(&other_structure), 
         Err(CluEError::OutputStructureRemoved(out.clone(), record.file.clone(),
@@ -1962,6 +2026,8 @@ label: \"h\",\n        },\n    ],\n}";
             outputs: vec![], files: vec!["signal.csv".to_string()]},
             OrientationRecord::default()],
         }],
+        sources: vec![SourceRecord{file: "a.pdb".to_string(), weight: 0.125},
+          SourceRecord{file: "b.pdb".to_string(), weight: 0.125}],
       }],
     };
     let text = toml::to_string(&manifest).unwrap();
@@ -2109,12 +2175,264 @@ instances under structures/; set a different output.directory".to_string());
     let _ = std::fs::remove_dir_all(&out);
   }
   //----------------------------------------------------------------------------
+  // This function returns the rows of `structures.csv` in `out`, each split
+  // at the commas, after checking the header.
+  fn structures_rows(out: &str) -> Vec::<Vec::<String>>{
+    let text = std::fs::read_to_string(format!("{}/{}", out, STRUCTURES_FILE))
+      .unwrap();
+    let mut lines = text.lines();
+    assert_eq!(lines.next().unwrap(), 
+        "directory,file,relative_weight,absolute_weight,content_hash,\
+number_runs");
+    lines.map(|line| line.split(',').map(|x| x.to_string()).collect())
+      .collect()
+  }
+  //----------------------------------------------------------------------------
+  // This function returns `signals` scaled by `weight`, summed into `sum`.
+  fn add_scaled(sum: &mut Vec::<Signal>, signals: &[Signal], weight: f64){
+    if sum.is_empty(){
+      *sum = signals.iter().map(|s| Signal::zeros(s.data.len())).collect();
+    }
+    for (total, signal) in sum.iter_mut().zip(signals.iter()){
+      for (t, x) in total.data.iter_mut().zip(signal.data.iter()){
+        *t += x*weight;
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  // This function asserts that `a` and `b` agree to `tol`.
+  fn assert_signals_close(a: &[Signal], b: &[Signal], tol: f64){
+    assert_eq!(a.len(), b.len());
+    for (sa, sb) in a.iter().zip(b.iter()){
+      assert_eq!(sa.data.len(), sb.data.len());
+      for (x, y) in sa.data.iter().zip(sb.data.iter()){
+        assert!((x - y).norm() <= tol, "{} != {}", x, y);
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  // Stage 2 (plan_multistructures.md, 2.I items 4-6): several weighted
+  // structure files, their output directories, structures.csv, the 
+  // weighted average, and resuming after changes of the structure list.
+  #[test]
+  fn test_several_structures(){
+    let out = temp_dir("several");
+    let files_dir = format!("{}_files", out);
+    let _ = std::fs::remove_dir_all(&files_dir);
+    std::fs::create_dir_all(&files_dir).unwrap();
+    let original = std::fs::read_to_string(
+        "assets/1omp_K26R1_0.003228966616048703.pdb").unwrap();
+    // a and c have identical contents; b and d differ from a by a remark.
+    let file = |name: &str| format!("{}/{}.pdb", files_dir, name);
+    for (name, remark) in [("a", ""), ("b", "REMARK b\n"), ("c", ""), 
+      ("d", "REMARK d\n")]
+    {
+      std::fs::write(file(name), format!("{}{}", remark, original)).unwrap();
+    }
+    let structure_line = "file = \"assets/1omp_K26R1_0.003228966616048703.pdb\"";
+    let config_with = |files: &str| small_config(&out, 
+        "number_runs = 2\nrng_seed = 11", 
+        &[RANDOM[0], RANDOM[1], (structure_line, &format!("file = {}", files))]);
+    let entry = |name: &str, weight: f64| format!("{{file = '{}', weight = {}}}",
+        file(name), weight);
+    let read_structure = |id: &str| read_signals(
+        &format!("{}/{}/{}", out, id, SIGNAL_FILE));
+
+    // A duplicate path is an input error of --check, which writes nothing.
+    let input_file = format!("{}.toml", out);
+    std::fs::write(&input_file, small_toml(&out, "rng_seed = 11", 
+        &[(structure_line, &format!("file = ['{}', '{}/./a.pdb']", file("a"),
+            files_dir))])).unwrap();
+    let report = crate::check(CommandLineInput::new(vec![
+          "clue_oxide".into(), "-c".into(), input_file.clone()]).unwrap());
+    // The only problem is the duplicate.
+    let canonical = std::fs::canonicalize(file("a")).unwrap();
+    assert_eq!(report.input, Err(CluEError::IncompleteConfig(vec![
+          format!("structure.file: {}", CluEError::DuplicateStructureFile(
+              canonical.display().to_string(), file("a"), 
+              format!("{}/./a.pdb", files_dir)))])));
+    assert_eq!(report.output, None);
+    assert!(!Path::new(&out).exists());
+    let _ = std::fs::remove_file(&input_file);
+
+    // Weights 1 and 3.
+    let config = config_with(&format!("[{}, {}]", entry("a", 1.0), 
+          entry("b", 3.0)));
+    crate::run(config.clone()).unwrap();
+    assert_eq!(entry_names(&out), vec![MANIFEST_FILE, OUTPUT_LOG_FILE,
+        RNG_SEED_FILE, SIGNAL_FILE, "structure_1", "structure_2", 
+        STRUCTURES_FILE]);
+    for id in ["structure_1", "structure_2"]{
+      assert_eq!(entry_names(&format!("{}/{}", out, id)), 
+          vec!["run_1", "run_2", SIGNAL_FILE]);
+    }
+    let s_a = read_structure("structure_1");
+    let s_b = read_structure("structure_2");
+
+    // Each structure signal is the signal of a run of its file alone with
+    // the same seed: the signal of a structure does not depend on the other
+    // files, their weights, or its position in the list.
+    for (name, id) in [("a", "structure_1"), ("b", "structure_2")]{
+      let out_single = temp_dir(&format!("several_single_{}", name));
+      let single = small_config(&out_single, "number_runs = 2\nrng_seed = 11",
+          &[RANDOM[0], RANDOM[1], 
+            (structure_line, &format!("file = '{}'", file(name)))]);
+      crate::run(single).unwrap();
+      assert_eq!(
+          std::fs::read(format!("{}/structure_1/{}", out_single, SIGNAL_FILE))
+            .unwrap(),
+          std::fs::read(format!("{}/{}/{}", out, id, SIGNAL_FILE)).unwrap(),
+          "{}", name);
+      let _ = std::fs::remove_dir_all(&out_single);
+    }
+    // Random populations: the two structures have different signals.
+    assert_ne!(s_a, s_b);
+    let mut expected = Vec::<Signal>::new();
+    add_scaled(&mut expected, &s_a, 0.25);
+    add_scaled(&mut expected, &s_b, 0.75);
+    assert_signals_close(&read_signals(&format!("{}/{}", out, SIGNAL_FILE)),
+        &expected, 1e-14);
+
+    let hash = |name: &str| format!("{:016x}", 
+        fnv1a_64(&std::fs::read(file(name)).unwrap()));
+    let row = |id: &str, name: &str, w: &str, abs: &str| vec![id.to_string(),
+      file(name), w.to_string(), abs.to_string(), hash(name), "2".to_string()];
+    assert_eq!(structures_rows(&out), vec![
+        row("structure_1", "a", "1", "0.25"),
+        row("structure_2", "b", "3", "0.75")]);
+    let manifest = read_manifest(&out).unwrap().unwrap();
+    assert_eq!(manifest.structures[0].sources, vec![SourceRecord{
+        file: file("a"), weight: 1.0}]);
+    assert_eq!(manifest.structures[1].sources, vec![SourceRecord{
+        file: file("b"), weight: 3.0}]);
+
+    // A run of the same input does no calculations.
+    assert_eq!(inspect_output(&config), Ok(OutputStatus::Complete(
+            out.clone())));
+
+    // A record without sources, as written by stage 1, is the single 
+    // source (file, weight).
+    edit_manifest(&out, |m| for s in m.structures.iter_mut(){
+      s.sources.clear();
+    });
+    assert_eq!(inspect_output(&config), Ok(OutputStatus::Complete(
+            out.clone())));
+    edit_manifest(&out, |m| m.structures[1].weight = 2.0);
+    assert!(matches!(inspect_output(&config), Ok(OutputStatus::Resume(..))));
+    crate::run(config.clone()).unwrap();
+    assert_eq!(read_manifest(&out).unwrap().unwrap().structures, 
+        manifest.structures);
+
+    // A changed weight recomputes no instance and averages again.
+    let instances = |out: &str| ["structure_1", "structure_2"].iter()
+      .flat_map(|id| (1..=2).map(move |k| tree_snapshot(
+              &format!("{}/{}/run_{}", out, id, k))))
+      .collect::<Vec::<_>>();
+    let saved_instances = instances(&out);
+    let config = config_with(&format!("[{}, {}]", entry("a", 1.0), 
+          entry("b", 1.0)));
+    let Ok(OutputStatus::Resume(_, summaries)) = inspect_output(&config) else{
+      panic!("expected Resume");
+    };
+    assert!(summaries.iter().all(|s| !s.new_structure 
+          && s.instances_complete == 2 && s.instances_added == 0));
+    crate::run(config.clone()).unwrap();
+    assert_eq!(instances(&out), saved_instances);
+    let mut expected = Vec::<Signal>::new();
+    add_scaled(&mut expected, &s_a, 0.5);
+    add_scaled(&mut expected, &s_b, 0.5);
+    assert_signals_close(&read_signals(&format!("{}/{}", out, SIGNAL_FILE)),
+        &expected, 1e-14);
+    assert_eq!(structures_rows(&out), vec![
+        row("structure_1", "a", "1", "0.5"),
+        row("structure_2", "b", "1", "0.5")]);
+
+    // Weights that are not integers are recorded exactly: a second run is
+    // complete.
+    let config = config_with(&format!("[{}, {}]", entry("a", 0.1), 
+          entry("b", 0.7)));
+    crate::run(config.clone()).unwrap();
+    assert_eq!(instances(&out), saved_instances);
+    assert_eq!(inspect_output(&config), Ok(OutputStatus::Complete(
+            out.clone())));
+    let mut expected = Vec::<Signal>::new();
+    add_scaled(&mut expected, &s_a, 0.1/0.8);
+    add_scaled(&mut expected, &s_b, 0.7/0.8);
+    assert_signals_close(&read_signals(&format!("{}/{}", out, SIGNAL_FILE)),
+        &expected, 1e-14);
+
+    // A file with the contents of a recorded structure joins it: no new 
+    // directory and no new instance, but a new average.
+    let config = config_with(&format!("[{}, {}, {}]", entry("a", 1.0), 
+          entry("b", 3.0), entry("c", 2.0)));
+    assert_eq!(config.structure_inputs().unwrap().len(), 2);
+    crate::run(config.clone()).unwrap();
+    assert_eq!(instances(&out), saved_instances);
+    assert!(!Path::new(&format!("{}/structure_3", out)).exists());
+    let mut expected = Vec::<Signal>::new();
+    add_scaled(&mut expected, &s_a, 0.5);
+    add_scaled(&mut expected, &s_b, 0.5);
+    assert_signals_close(&read_signals(&format!("{}/{}", out, SIGNAL_FILE)),
+        &expected, 1e-14);
+    assert_eq!(structures_rows(&out), vec![
+        row("structure_1", "a", "1", &(1.0/6.0).to_string()),
+        row("structure_1", "c", "2", &(2.0/6.0).to_string()),
+        row("structure_2", "b", "3", "0.5")]);
+
+    // Removing one of two files with identical contents is not a removed
+    // structure.
+    let config = config_with(&format!("[{}, {}]", entry("b", 3.0), 
+          entry("a", 1.0)));
+    assert!(matches!(inspect_output(&config), Ok(OutputStatus::Resume(..))));
+    crate::run(config.clone()).unwrap();
+    assert_eq!(instances(&out), saved_instances);
+    // The rows follow the input order of the structures.
+    assert_eq!(structures_rows(&out), vec![
+        row("structure_2", "b", "3", "0.75"),
+        row("structure_1", "a", "1", "0.25")]);
+
+    // A new structure gets the next number and is the only one computed;
+    // in another order, the recorded structures keep their numbers.
+    let config = config_with(&format!("[{}, {}, {}]", entry("d", 1.0), 
+          entry("b", 3.0), entry("a", 1.0)));
+    let Ok(OutputStatus::Resume(_, summaries)) = inspect_output(&config) else{
+      panic!("expected Resume");
+    };
+    assert_eq!(summaries.iter().map(|s| (s.id.as_str(), s.new_structure, 
+            s.instances_complete)).collect::<Vec::<_>>(),
+        vec![("structure_3", true, 0), ("structure_2", false, 2), 
+          ("structure_1", false, 2)]);
+    crate::run(config.clone()).unwrap();
+    assert_eq!(instances(&out), saved_instances);
+    assert_eq!(entry_names(&format!("{}/structure_3", out)), 
+        vec!["run_1", "run_2", SIGNAL_FILE]);
+    let s_d = read_structure("structure_3");
+    let mut expected = Vec::<Signal>::new();
+    add_scaled(&mut expected, &s_d, 0.2);
+    add_scaled(&mut expected, &s_b, 0.6);
+    add_scaled(&mut expected, &s_a, 0.2);
+    assert_signals_close(&read_signals(&format!("{}/{}", out, SIGNAL_FILE)),
+        &expected, 1e-14);
+    assert_eq!(structures_rows(&out)[0], row("structure_3", "d", "1", "0.2"));
+
+    // Removing a structure stops the run.
+    let config = config_with(&format!("[{}, {}]", entry("a", 1.0), 
+          entry("b", 3.0)));
+    assert_eq!(crate::run(config).unwrap_err(), 
+        CluEError::OutputStructureRemoved(out.clone(), file("d"), 
+          "structure_3".to_string()));
+
+    let _ = std::fs::remove_dir_all(&out);
+    let _ = std::fs::remove_dir_all(&files_dir);
+  }
+  //----------------------------------------------------------------------------
   // Structures are numbered from 1; new ones get the next unused number.
   #[test]
   fn test_structure_numbers(){
     let record = |id: &str| StructureRecord{id: id.to_string(), 
       file: "a.pdb".to_string(), content_hash: "0".to_string(), weight: 1.0,
-      seed: 0, number_runs: 1, instances: Vec::<InstanceRecord>::new()};
+      seed: 0, number_runs: 1, instances: Vec::<InstanceRecord>::new(),
+      sources: Vec::<SourceRecord>::new()};
     assert_eq!(next_structure_number(&[]), 1);
     assert_eq!(next_structure_number(&[record("structure_1")]), 2);
     assert_eq!(next_structure_number(&[record("structure_1"), 

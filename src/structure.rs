@@ -193,16 +193,18 @@ impl Structure{
   }
   //----------------------------------------------------------------------------
   /// This function builds a `Structure` from info in `Config`,
-  /// from the structure file `structure.file`.
+  /// from the structure file `structure.file`, which must give exactly one
+  /// file (`Config::expand_structure_files()`); for several structure
+  /// files, use `build_structure_from_file()` for each.
   pub fn build_structure(rng: &mut ChaCha20Rng, config: &Config)
     -> Result<Self,CluEError>
   {
+    let sources = config.expand_structure_files()?;
+    if sources.len() != 1{
+      return Err(CluEError::MultipleStructureFiles(sources.len()));
+    }
 
-    let Some(filename) = &config.input_structure_file else{
-      return Err(CluEError::NoStructureFile);
-    };
-
-    Self::build_structure_from_file(rng, config, filename)
+    Self::build_structure_from_file(rng, config, &sources[0].file)
   }
   //----------------------------------------------------------------------------
   /// This function builds a `Structure` from the structure file `filename`
@@ -804,6 +806,17 @@ mod tests{
     let mut rng = ChaCha20Rng::from_entropy();
 
     let structure = Structure::build_structure(&mut rng,&config).unwrap();
+
+    // Several structure files are built one by one.
+    let mut two_files = config.clone();
+    two_files.structure_files = Some(vec![
+      crate::config::StructureFileSpec{pattern: "assets/TEMPO.pdb".to_string(),
+        weight: None},
+      crate::config::StructureFileSpec{
+        pattern: "assets/1omp_K26R1_0.003228966616048703.pdb".to_string(),
+        weight: None}]);
+    assert_eq!(Structure::build_structure(&mut rng,&two_files).unwrap_err(),
+        CluEError::MultipleStructureFiles(2));
 
     assert_eq!(structure.number_active(),19);
   }

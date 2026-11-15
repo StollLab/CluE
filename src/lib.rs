@@ -69,6 +69,9 @@ pub fn run(mut config: Config)
   // Report missing settings and files before any work is done.
   config.check_completeness()?;
 
+  // Read and hash the structure files once for the whole run.
+  config.resolve_structures()?;
+
   config.set_tau_axis()?;
 
   // Decide what to do with the output directory before any work is done.
@@ -234,6 +237,7 @@ pub fn check(input: CommandLineInput) -> CheckReport{
   let config = Config::read_input(input).and_then(|mut config|{
     config.set_defaults()?;
     config.check_completeness()?;
+    config.resolve_structures()?;
     config.set_tau_axis()?;
     Ok(config)
   });

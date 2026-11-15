@@ -146,7 +146,15 @@ it parses the file (including the key check), sets the defaults, and runs
 output directory with `output_manifest::inspect_output` (read-only). It
 prints one line for the input (`<file>: input OK` or the error) and one for
 the output (new, complete, resumes, or the error a run would stop with);
-the logic is `clue_oxide::check`. See
+the logic is `clue_oxide::check`. For `structure.file` (a path, a glob, a
+weights csv file, or an array of these with weights), the input check
+expands the list (`Config::expand_structure_files` in
+`src/config/structure_files.rs`: missing files, globs without a match,
+invalid weights, duplicate paths, nested csv files) and reports a cluster
+file, orientation directory, or partition-table csv used with several
+files; it does not read the structure files. `Config::resolve_structures`
+then reads and hashes them once (files with identical contents are one
+structure). See
 `assets/1omp_K26R1_0.003228966616048703.toml` for a representative example. The
 old `.clue` token format was removed in 0.2.3-alpha.1; files in that
 format no longer run.

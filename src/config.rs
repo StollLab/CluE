@@ -49,7 +49,10 @@ pub mod config_toml;
 pub mod particle_config;
 pub mod toml_keys;
 pub mod pulse_sequence;
+pub mod structure_files;
 pub mod validate;
+
+pub use structure_files::{StructureFileSpec,StructureSource};
 
 
 // Define the directory and file names used to save outputs.
@@ -99,7 +102,10 @@ pub struct Config{
   pub clash_distance: Option<f64>, 
   pub clash_distance_pbc: Option<f64>,
   pub extracell_particles: Vec::<ParticleConfig>,
-  pub input_structure_file: Option<String>,
+  /// The entries of structure.file (`expand_structure_files()`).
+  pub structure_files: Option<Vec::<StructureFileSpec>>,
+  /// The input structures, once `resolve_structures()` has read them.
+  pub resolved_structures: Option<Vec::<StructureInput>>,
   pub max_spherical_tensor_rank: Option<usize>,
   pub particles: Vec::<ParticleConfig>,
   pub pdb_model_index: Option<usize>,
@@ -175,9 +181,11 @@ pub const DEFAULT_SPIN_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 pub const DEFAULT_ORIENTATION_GRID_WEIGHT_TOLERANCE: f64 = 1e-9;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-/// `StructureInput` is one input structure of a run.
-/// `file` is the structure file, `content_hash` the FNV-1a hash of its
-/// contents, and `weight` its weight in the average over structures.
+/// `StructureInput` is one input structure of a run: the structure files
+/// with identical contents (`sources`, in input order), `content_hash` the
+/// FNV-1a hash of their contents, `file` the first source, from which the
+/// structure is built, and `weight` the sum of the source weights, the 
+/// weight of the structure in the average over structures.
 /// A structure is identified by its content hash, not by the file name or
 /// by its position in a list of structures. The name of its output
 /// directory, `structure_<n>`, is assigned by the record of the output 
@@ -187,11 +195,13 @@ pub struct StructureInput{
   pub file: String,
   pub content_hash: u64,
   pub weight: f64,
+  pub sources: Vec::<StructureSource>,
 }
 
 impl StructureInput{
   //----------------------------------------------------------------------------
-  /// This function reads `file` and returns its `StructureInput`.
+  /// This function reads `file` and returns its `StructureInput`, with 
+  /// `file` as the only source.
   pub fn from_file(file: &str, weight: f64) -> Result<Self,CluEError>{
     let contents = match fs::read(file){
       Ok(contents) => contents,
@@ -203,6 +213,7 @@ impl StructureInput{
       file: file.to_string(),
       content_hash,
       weight,
+      sources: vec![StructureSource{file: file.to_string(), weight}],
     })
   }
   //----------------------------------------------------------------------------
@@ -657,7 +668,7 @@ they were normalized to ({}).", label, original, sum, list(abundances));
   /// that the record of an output directory (`clue_manifest.toml`) keeps
   /// separately. These are the [output] settings, run.parallel,
   /// run.cluster_batch_size, run.number_runs, run.rng_seed, and
-  /// structure.file.
+  /// structure.file (the structure files and their weights).
   /// Files that are read during a run (cluster files and partition-table
   /// csv files) enter only by name; their contents are recorded separately.
   pub fn physics_fingerprint(&self) -> String{
@@ -680,20 +691,55 @@ they were normalized to ({}).", label, original, sum, list(abundances));
     config.cluster_batch_size = None;
     config.number_runs = None;
     config.rng_seed = None;
-    config.input_structure_file = None;
+    config.structure_files = None;
+    config.resolved_structures = None;
 
     format!("{:#?}", config)
   }
   //----------------------------------------------------------------------------
   /// This function returns the input structures of the run, each with the
   /// hash of its file contents and its weight in the average over
-  /// structures.
-  /// There is one structure, structure.file, with weight 1.
+  /// structures: the files of `expand_structure_files()`, grouped by 
+  /// content hash in the order of first appearance. Files with identical
+  /// contents are one structure, whose weight is the sum of their weights.
+  /// It returns the structures read by `resolve_structures()`, if it was
+  /// called; otherwise it reads and hashes every structure file.
   pub fn structure_inputs(&self) -> Result<Vec::<StructureInput>,CluEError>{
-    let Some(file) = &self.input_structure_file else{
-      return Err(CluEError::NoStructureFile);
-    };
-    Ok(vec![StructureInput::from_file(file, 1.0)?])
+    if let Some(structures) = &self.resolved_structures{
+      return Ok(structures.clone());
+    }
+    self.read_structure_inputs()
+  }
+  //----------------------------------------------------------------------------
+  /// This function reads and hashes the structure files once, so that 
+  /// later calls of `structure_inputs()` return them without reading the
+  /// files again. 
+  /// It is called by `clue_oxide::run` and `clue_oxide::check` after
+  /// `check_completeness()`; changes of structure.file made after the call
+  /// need another call.
+  pub fn resolve_structures(&mut self) -> Result<(),CluEError>{
+    self.resolved_structures = None;
+    self.resolved_structures = Some(self.read_structure_inputs()?);
+    Ok(())
+  }
+  //----------------------------------------------------------------------------
+  // This function expands, reads, hashes, and groups the structure files 
+  // (`structure_inputs()`).
+  fn read_structure_inputs(&self) -> Result<Vec::<StructureInput>,CluEError>{
+    let mut structures = Vec::<StructureInput>::new();
+    for source in self.expand_structure_files()?{
+      let structure = StructureInput::from_file(&source.file, source.weight)?;
+      match structures.iter_mut()
+        .find(|s| s.content_hash == structure.content_hash)
+      {
+        Some(group) => {
+          group.weight += source.weight;
+          group.sources.push(source);
+        },
+        None => structures.push(structure),
+      }
+    }
+    Ok(structures)
   }
   //----------------------------------------------------------------------------
   /*
@@ -1425,8 +1471,8 @@ impl Config{
   fn set_from_structure_toml(&mut self, structure: StructureTOML,
       unit_of_distance: f64) -> Result<(),CluEError>
   {
-    if structure.file.is_some(){
-      self.input_structure_file = structure.file;
+    if let Some(file) = structure.file{
+      self.structure_files = Some(StructureFileSpec::from_toml(file)?);
     }
 
     if structure.pdb_model_index.is_some(){
@@ -2000,8 +2046,9 @@ mod tests{
         Some(DetectedSpinCoordinates::XYZ(Vector3D { 
             elements: [1.0*ANGSTROM, 2.0*ANGSTROM, 3.0*ANGSTROM] }))
     );
-    assert_eq!(config.input_structure_file,
-         Some("../../assets/TEMPO_wat_gly_70A.pdb".to_string()));
+    assert_eq!(config.structure_files, Some(vec![StructureFileSpec{
+          pattern: "../../assets/TEMPO_wat_gly_70A.pdb".to_string(), 
+          weight: None}]));
     assert_eq!(config.cluster_source,
          Some(ClusterSource::File("clusters_file.toml".to_string())));
     assert_eq!(config.connect_exchange_groups,Some(true));
@@ -2205,7 +2252,8 @@ mod tests{
 
     // [units] and [structure]
     assert_eq!(config.unit_of_time_to_seconds, Some(1e-9));
-    assert_eq!(config.input_structure_file, Some("a.pdb".to_string()));
+    assert_eq!(config.structure_files, Some(vec![StructureFileSpec{
+          pattern: "a.pdb".to_string(), weight: None}]));
     assert_eq!(config.pdb_model_index, Some(2));
     assert!(close(config.radius.unwrap(), 3e-9));
     assert_eq!(config.replicate_unit_cell, 
