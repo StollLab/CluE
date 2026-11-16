@@ -200,7 +200,7 @@ impl SpinStates{
       let sum_sqr: f64 = states[ii]
           .iter().map(|z| z.norm_sqr()).sum();
 
-      for (jj,w) in weights.iter().enumerate(){
+      for (jj,_w) in weights.iter().enumerate(){
         states[ii][[jj,0]] *= Complex64{re: 1.0/sum_sqr.sqrt(), im: 0.0};
       }
     }

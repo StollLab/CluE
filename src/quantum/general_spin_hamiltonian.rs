@@ -323,7 +323,7 @@ pub fn get_free_evolutions_propagators(//hamiltonian: &CxMat,
 
   for (idt,_dt) in tau_increments.iter().enumerate(){
     let n_timepoints = number_timepoints[idt];
-    for ii in 1..n_timepoints{
+    for _ in 1..n_timepoints{
       let idx_u = u_of_taus.len() - 1;
       u_of_taus.push( dus[idt].dot(&u_of_taus[idx_u]));
     }
@@ -354,7 +354,7 @@ pub fn get_2nd_free_evolutions_propagators(//hamiltonian: &CxMat,
 
   for (idt,_dt) in tau_increments.iter().enumerate(){
     let n_timepoints = number_timepoints[idt];
-    for ii in 1..n_timepoints{
+    for _ in 1..n_timepoints{
       let idx_u = u_of_taus.len() - 1;
       u_of_taus.push( dus[idt].dot(&u_of_taus[idx_u]));
     }

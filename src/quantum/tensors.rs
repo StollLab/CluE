@@ -1586,7 +1586,6 @@ mod tests{
          ]),
     ]);
 
-    let dir = UnitSpherePoint::new(0.5*PI,0.5);
     let s3tens0 = s3tens.clone();
     spherical_tensors_rotate_passive(&mut s3tens,
         &UnitSpherePoint::new(0.0,0.0)).unwrap();

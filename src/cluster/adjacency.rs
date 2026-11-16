@@ -171,6 +171,7 @@ mod tests {
     assert_eq!(vertices,vec![0,1,2,4]);
   }
   //----------------------------------------------------------------------------
+  #[allow(non_snake_case)]
   #[test]
   fn test_AdjacencyList_matches_sorted_set_reference(){
     use rand::Rng;
