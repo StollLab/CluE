@@ -1,0 +1,15 @@
+Here is a simple example of using CluE on a protein, MBP.  First run
+
+```
+python3 get_mbp.py
+```
+to use `chilife` to download 1OMP and spin label it at site 66.  Next run
+```
+<clue> config.toml
+```
+with `<clue>` replaced by the path to the CluE binary.  This should generate a directory `CluE-<id>`. Run
+
+```
+python3 plot.py CluE-<id>
+```
+to plot the Hahn echo decay at `CluE-<id>/fig.png`.

@@ -1,0 +1,85 @@
+[structure]
+  file = "1omp_66R1.pdb"
+  radius = 300 # Å
+
+[detected_spin]
+  position = ["r1_n","r1_o"]
+  g_matrix.values = [2.00841, 2.00604, 2.00223]
+  g_matrix.axes.x = {from = "r1_n", to ="r1_o"}
+  g_matrix.axes.y = {from = "r1_c2", to ="r1_c5"}
+
+[conditions]
+  magnetic_field = 1.2 # T
+
+[pulse_sequence]
+  sequence = "hahn"
+  number_timepoints = [301]
+  tau_increments = [5e-2] # ̫µs
+  
+[cluster_expansion]
+  method = "cce"
+  max_cluster_size = 2
+
+[cluster_expansion.clustering]  
+  partitioning = "exchange_groups"
+  max_spins = 3
+
+[cluster_expansion.clustering.pair_cutoffs]
+  hahn_mod_depth = 2e-7
+  hahn_taylor_4 = 4e-13
+  
+[orientations]
+  grid = "lebedev"
+  number = 170
+
+
+[[groups]]
+  name = "r1_h"
+  require.residues = "R1C"
+  require.elements = "H"
+   1H.c3_tunnel_splitting = 86.5e-3 # MHz
+
+[[groups]]
+  name = "pro_nx"
+  require.elements = "H"
+  require.bonded_to.elements = "C"
+  forbid.residues = "R1C"
+  1H.c3_tunnel_splitting = 53.4e-3 # MHz
+
+[[groups]]
+  name = "pro_ex"
+  require.elements = "H"
+  require.bonded_to.elements = ["O", "N"]
+  forbid.residues = "R1C"
+  forbid.bonded_to.elements = "C"
+  1H.active = false
+
+[[groups]]
+  name = "r1_n"
+  require.residues = "R1C"
+  require.names = "N1"
+
+  14N.hyperfine.values = [14.7,14.7,101.4] 
+  14N.hyperfine.axes.x = {to = "r1_o"} 
+  14N.hyperfine.axes.y = {from = "r1_c2", to ="r1_c5"}
+
+  14N.electric_quadrupole.values = [1.23, 0.36, -1.59]
+  14N.electric_quadrupole.axes.x = {to = "r1_o"} 
+  14N.electric_quadrupole.axes.y = {from = "r1_c2", to ="r1_c5"}
+
+
+[[groups]]
+  name = "r1_o"
+  require.residues = "R1C"
+  require.names = "O1"
+
+[[groups]]
+  name = "r1_c2"
+  require.residues = "R1C"
+  require.names = "C2"
+
+[[groups]]
+  name = "r1_c5"
+  require.residues = "R1C"
+  require.names = "C5"
+

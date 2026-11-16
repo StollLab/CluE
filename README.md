@@ -4,7 +4,7 @@ CluE (Cluester Evolution) is a quantum spin dynamics program to simulate central
 ### Installation
 Before installing, make sure you have the latest version of
 [Rust](https://www.rust-lang.org/)[3]
-installed.
+installed.  CluE requires a C++ compiler to build. On linux CluE requires openblas; this can be installed or built when building CluE (set this in the Cargo.toml).  On Windows CluE requires intel-mkl.
 
 Before compiling CluE, it is a good idea to check that everything is working properly by running the tests. 
 ```
@@ -14,7 +14,7 @@ To build Clue, run the following
 ```
 cargo build --release
 ```
-This will build the binary in `clue_oxide/target/release`; to make clue globally available either add this directory to your system path or establish as alias.
+This will build the binary in `target/release`; to make clue globally available either add this directory to your system path or establish as alias.
 In Bash, add
 ```
 alias clue="path/to/clue/target/release/clue_oxide"
@@ -38,18 +38,6 @@ And the use the following to build the Python interface.
 ```
 maturin build
 ``` 
-One potential issue is that when maturin tries to compile CluE, it can fail to see the operating system unique
-flags, and will try to use them all. To account for this, open CluE’s Cargo.toml file and comment out
-everything under the unneeded operating system section. For example, to compile on Linux add comments
-as shown below.
-```
-[target.'cfg(unix)'.dependencies]
-ndarray -linalg = { version = "0.15", features = ["openblas -static"] }
-
-#[target.'cfg(windows) '.dependencies.ndarray -linalg]
-#version = '0.15.0 '
-#features = ['intel -mkl ']
-```
 Once built, navigate to `target/wheels`, source the desired Python environment, and use pip to install the
 wheel.
 ```
