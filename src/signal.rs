@@ -14,6 +14,10 @@ use std::error::Error;
 // The headers of the time columns of a signal file.
 const TAU_HEADER: &str = "tau";
 const TAU2_HEADER: &str = "tau2";
+// The prefixes of the headers of the real and imaginary columns of a signal:
+// a signal with the header "X" is saved as the columns "re_X" and "im_X".
+const RE_PREFIX: &str = "re_";
+const IM_PREFIX: &str = "im_";
 
 /// `TauAxes` holds the time columns of a signal file, in the output unit of
 /// time (units.time): one entry per time point, with tau in the outer loop
@@ -136,7 +140,7 @@ impl Signal{
   }
   //----------------------------------------------------------------------------
   /// This function tries to write a `Signal` to a csv file, with the columns
-  /// `tau`, `tau2`, and `signal`.
+  /// `tau`, `tau2`, `re_signal`, and `im_signal`.
   /// It will return an `Err(CluEError)` if it fails, or if `tau_axes` does
   /// not have one entry per point of the signal.
   pub fn write_to_csv(&self, tau_axes: &TauAxes, filename: &str) 
@@ -165,7 +169,8 @@ impl std::fmt::Display for Signal {
 //------------------------------------------------------------------------------
 /// This function saves a `Vec::<Signal>` to a csv file.  
 /// The file starts with the time columns `tau` and `tau2` from `tau_axes`;
-/// each `Signal` is then saved as a column with the supplied header.
+/// each `Signal` with the supplied header `X` is then saved as two columns,
+/// `re_X` (real part) and `im_X` (imaginary part).
 /// The function will return an error if the number of `Signal`s is different
 /// form the number of headers, if the `Signal`s are not all the same length,
 /// if the time columns do not have one entry per point of the `Signal`s,
@@ -204,7 +209,8 @@ pub fn write_vec_signals(tau_axes: &TauAxes, signals: &[Signal],
 //------------------------------------------------------------------------------
 // This function is the back end to `write_vec_signals()`, and saves the
 // time columns and a list of `Signal's to a csv file.  
-// Each `Signal` is saved as a column with the supplied header.
+// Each `Signal` is saved as a real and an imaginary column with the headers
+// from `complex_headers()`.
 // The lengths are checked by `write_vec_signals()`.
 fn write_vec_signals_to_csv(tau_axes: &TauAxes, signals: &[Signal],
     filename: &str, headers: Vec::<String>) -> Result<(),Box<dyn Error>>
@@ -213,18 +219,19 @@ fn write_vec_signals_to_csv(tau_axes: &TauAxes, signals: &[Signal],
 
   let mut wtr = csv::Writer::from_path(filename)?;
   
-  wtr.write_record([TAU_HEADER, TAU2_HEADER].into_iter()
-      .chain(headers.iter().map(|h| h.as_str())))?;
+  wtr.write_record([TAU_HEADER.to_string(), TAU2_HEADER.to_string()]
+      .into_iter().chain(complex_headers(&headers)))?;
 
   for ii in 0..n_data{
     
-    let mut rec = Vec::<String>::with_capacity(signals.len() + 2);
+    let mut rec = Vec::<String>::with_capacity(2*signals.len() + 2);
 
     rec.push(tau_axes.tau[ii].to_string());
     rec.push(tau_axes.tau2[ii].to_string());
    
     for signal in signals.iter(){
-      rec.push(signal.data[ii].to_string());
+      rec.push(signal.data[ii].re.to_string());
+      rec.push(signal.data[ii].im.to_string());
     }
 
     wtr.write_record(&rec)?;
@@ -234,13 +241,26 @@ fn write_vec_signals_to_csv(tau_axes: &TauAxes, signals: &[Signal],
   
   Ok(())
 }
+//------------------------------------------------------------------------------
+// This function returns the headers of the real and imaginary columns of
+// signals with `headers`: "re_X" and "im_X" for each header "X".
+fn complex_headers(headers: &[String]) -> Vec::<String>{
+  headers.iter()
+    .flat_map(|h| [format!("{}{}",RE_PREFIX,h), format!("{}{}",IM_PREFIX,h)])
+    .collect::<Vec::<String>>()
+}
 //----------------------------------------------------------------------------
 /// This function attempts to load a csv file into a `Vec::<Signal>`.
 /// If the first two columns are the time columns `tau` and `tau2`, they are
 /// returned as `Some(TauAxes)`, and the other columns are the signals;
 /// otherwise, every column is a signal and the time columns are `None`.
+/// Two layouts of the signal columns are read: if a signal header starts
+/// with `re_` or `im_`, each signal is a pair of columns `re_X`, `im_X` 
+/// holding real numbers; otherwise, each signal is one column of complex
+/// numbers written as `a+bi` (the layout before version 1.0.0).
 /// This function will return an error if it cannot find/parse the file,
-/// or if a column `tau` or `tau2` is not in its place.
+/// if a column `tau` or `tau2` is not in its place, or if the `re_`/`im_`
+/// columns do not come in pairs `re_X`, `im_X`.
 pub fn load_csv_to_vec_signals(filename: &str)
   -> Result<(Option<TauAxes>, Vec::<Signal>), CluEError>
 {
@@ -262,9 +282,19 @@ pub fn load_csv_to_vec_signals(filename: &str)
         filename.to_string(), reason)),
   };
 
+  let layout = match signal_column_layout(&headers, n_axes){
+    Ok(layout) => layout,
+    Err(reason) => return Err(CluEError::CannotReadFile(
+        filename.to_string(), reason)),
+  };
+  let n_signals = match layout{
+    SignalColumnLayout::Complex => headers.len() - n_axes,
+    SignalColumnLayout::RealImaginary => (headers.len() - n_axes)/2,
+  };
+
   let mut tau = Vec::<f64>::new();
   let mut tau2 = Vec::<f64>::new();
-  let mut signals = (n_axes..headers.len()).map(|_| Signal::new())
+  let mut signals = (0..n_signals).map(|_| Signal::new())
     .collect::<Vec::<Signal>>();
 
   for (idata, result) in rdr.records().enumerate() {
@@ -280,24 +310,39 @@ pub fn load_csv_to_vec_signals(filename: &str)
                 idata + 1, record.len(), headers.len())));
       }
 
-      for (icol,entry) in record.iter().enumerate(){
-        if icol < n_axes{
-          let Ok(t) = entry.parse::<f64>() else{
-            return Err(CluEError::CannotParseSignalEntry(filename.to_string(),
-                  idata + 1, entry.to_string()));
-          };
-          if icol == 0{
-            tau.push(t);
-          }else{
-            tau2.push(t);
-          }
+      let parse_real = |entry: &str| match entry.parse::<f64>(){
+        Ok(v) => Ok(v),
+        Err(_) => Err(CluEError::CannotParseSignalEntry(filename.to_string(),
+              idata + 1, entry.to_string())),
+      };
+
+      for (icol,entry) in record.iter().enumerate().take(n_axes){
+        let t = parse_real(entry)?;
+        if icol == 0{
+          tau.push(t);
         }else{
-          let Ok(v) = entry.parse::<Complex64>() else{
-            return Err(CluEError::CannotParseSignalEntry(filename.to_string(),
-                  idata + 1, entry.to_string()));
-          };
-          signals[icol - n_axes].data.push(v);
+          tau2.push(t);
         }
+      }
+
+      let entries = record.iter().skip(n_axes).collect::<Vec::<&str>>();
+      match layout{
+        SignalColumnLayout::Complex => {
+          for (signal, entry) in signals.iter_mut().zip(entries.iter()){
+            let Ok(v) = entry.parse::<Complex64>() else{
+              return Err(CluEError::CannotParseSignalEntry(
+                    filename.to_string(), idata + 1, entry.to_string()));
+            };
+            signal.data.push(v);
+          }
+        },
+        SignalColumnLayout::RealImaginary => {
+          for (signal, pair) in signals.iter_mut().zip(entries.chunks(2)){
+            let re = parse_real(pair[0])?;
+            let im = parse_real(pair[1])?;
+            signal.data.push(Complex64::new(re, im));
+          }
+        },
       }
   }
 
@@ -331,6 +376,50 @@ columns must be the first two columns, \"{}\" and \"{}\"",
   }
 
   Ok(n_axes)
+}
+//------------------------------------------------------------------------------
+// The layout of the signal columns of a signal file.
+#[derive(PartialEq,Debug,Clone,Copy)]
+enum SignalColumnLayout{
+  // One column of complex numbers, `a+bi`, per signal.
+  Complex,
+  // Two columns of real numbers, `re_X` and `im_X`, per signal.
+  RealImaginary,
+}
+//------------------------------------------------------------------------------
+// This function returns the layout of the signal columns, the columns after
+// the `n_axes` time columns of `headers`: `RealImaginary` if a signal header
+// starts with "re_" or "im_", and `Complex` otherwise.
+// It returns the reason as an error if, in the `RealImaginary` layout, the
+// signal headers are not pairs "re_X", "im_X".
+fn signal_column_layout(headers: &csv::StringRecord, n_axes: usize) 
+  -> Result<SignalColumnLayout,String>
+{
+  let signal_headers = headers.iter().skip(n_axes).collect::<Vec::<&str>>();
+
+  if !signal_headers.iter()
+    .any(|h| h.starts_with(RE_PREFIX) || h.starts_with(IM_PREFIX))
+  {
+    return Ok(SignalColumnLayout::Complex);
+  }
+
+  for (ipair, pair) in signal_headers.chunks(2).enumerate(){
+    // Column numbers count from 1.
+    let icol = n_axes + 2*ipair + 1;
+    let Some(name) = pair[0].strip_prefix(RE_PREFIX) else{
+      return Err(format!("column {} has the header \"{}\", but signal \
+columns with headers starting with \"{}\" or \"{}\" must come in pairs \
+\"{}X\", \"{}X\"", icol, pair[0], RE_PREFIX, IM_PREFIX, RE_PREFIX, 
+            IM_PREFIX));
+    };
+    let im_header = format!("{}{}",IM_PREFIX,name);
+    if pair.get(1) != Some(&im_header.as_str()){
+      return Err(format!("column {} has the header \"{}\", so column {} \
+must have the header \"{}\"", icol, pair[0], icol + 1, im_header));
+    }
+  }
+
+  Ok(SignalColumnLayout::RealImaginary)
 }
 //------------------------------------------------------------------------------
 /// This function attempts to load a csv file, and attach each `Signal`
@@ -378,6 +467,8 @@ pub fn load_batch_signals(clusters: &mut [Cluster],
 //------------------------------------------------------------------------------
 /// This function attempts to write a csv file containing the `Signal` data
 /// from a list of `Cluster`s.
+/// The signal of a cluster with the header `X` (`Cluster::to_header()`) is
+/// saved as two columns, `re_X` (real part) and `im_X` (imaginary part).
 /// The file is assummed to be saved from CluE Oxide as part of the
 /// checkpointing process.
 /// This function will return an error if it cannot write the file.
@@ -414,14 +505,14 @@ fn write_batch_signals_to_file(clusters: &[Cluster],
           err.to_string())),
   };
 
-  if let Err(err) = wtr.write_record(&headers){
+  if let Err(err) = wtr.write_record(complex_headers(&headers)){
     return Err(CluEError::CannotWriteCSV(filename.to_string(),
           err.to_string()));
   }
 
   for ii in 0..n_data{
     
-    let mut rec = Vec::<String>::with_capacity(n_data);
+    let mut rec = Vec::<String>::with_capacity(2*batch_size);
 
     for cluster in clusters.iter()
       .skip(idx).take(batch_size){
@@ -437,7 +528,8 @@ fn write_batch_signals_to_file(clusters: &[Cluster],
           return Err(CluEError::AllSignalsNotSameLength(filename.to_string()));
         }
 
-        rec.push(signal.data[ii].to_string());
+        rec.push(signal.data[ii].re.to_string());
+        rec.push(signal.data[ii].im.to_string());
     }
 
     if let Err(err) = wtr.write_record(&rec){
@@ -538,11 +630,11 @@ mod tests{
     let filename = "assets/auxiliary_signals.csv";
 
     // The file has no time columns.
-    let (tau_axes, signals) = load_csv_to_vec_signals(&filename).unwrap();
+    let (tau_axes, signals) = load_csv_to_vec_signals(filename).unwrap();
     assert_eq!(tau_axes, None);
     assert_eq!(signals.len(), 3);
 
-    let ref_signals = vec![
+    let ref_signals = [
       Signal{data: vec![
         Complex64{re: 1.0, im: 0.0},  
         Complex64{re: 0.99, im: 0.01},
@@ -620,6 +712,20 @@ mod tests{
         Err(CluEError::ZeroClusterBatchSize));
     assert!(clusters.iter().all(|c| c.signal == Ok(None)));
 
+    // The same batch in the real/imaginary layout, as write_batch_signals
+    // writes it, gives the same signals.
+    std::fs::write(&filename, "re_clu_1,im_clu_1,re_clu_2,im_clu_2\n\
+1,0,1,0\n0.9,0,0.8,0\n0.7,0,0.6,0\n").unwrap();
+    let mut clusters_re_im = new_clusters();
+    load_batch_signals(&mut clusters_re_im, 3, 2, 3, &filename).unwrap();
+    let mut clusters = new_clusters();
+    std::fs::write(&filename, 
+        "clu_1,clu_2\n1+0i,1+0i\n0.9+0i,0.8+0i\n0.7+0i,0.6+0i\n").unwrap();
+    load_batch_signals(&mut clusters, 3, 2, 3, &filename).unwrap();
+    assert_eq!(clusters_re_im, clusters);
+    assert_eq!(load_batch_signals(&mut clusters_re_im, 4, 2, 3, &filename),
+        Err(CluEError::WrongNumberOfBatchSignals(filename.clone(),2,1)));
+
     std::fs::remove_file(&filename).unwrap();
   }
   //----------------------------------------------------------------------------
@@ -645,7 +751,7 @@ mod tests{
     let filename = std::env::temp_dir().join(format!(
           "clue_oxide_test_round_trip_{}.csv", std::process::id()));
     let filename = filename.to_str().unwrap().to_string();
-    write_vec_signals(&tau_axes, &[signal.clone()], 
+    write_vec_signals(&tau_axes, std::slice::from_ref(&signal), 
         vec!["signal_0".to_string()], &filename).unwrap();
     let (read_axes, read) = load_csv_to_vec_signals(&filename).unwrap();
     std::fs::remove_file(&filename).unwrap();
@@ -665,9 +771,10 @@ mod tests{
     }
   }
   //----------------------------------------------------------------------------
-  // The layout of a signal file: tau, tau2, then the signals, one row per
-  // time point; Signal::write_to_csv uses the header "signal", and 
-  // Signal::read_from_csv returns the last signal column.
+  // The layout of a signal file: tau, tau2, then the real and imaginary
+  // columns of each signal, one row per time point; Signal::write_to_csv 
+  // uses the header "signal", and Signal::read_from_csv returns the last 
+  // signal.
   #[test]
   fn test_signal_file_columns(){
     let tau_axes = TauAxes{tau: vec![0.0, 0.0, 2.5], tau2: vec![0.0, 8.0, 0.0]};
@@ -682,17 +789,17 @@ mod tests{
         vec!["signal_0".to_string(), "signal_1".to_string()], &filename)
       .unwrap();
     assert_eq!(std::fs::read_to_string(&filename).unwrap(),
-        "tau,tau2,signal_0,signal_1\n\
-0,0,1+0i,2+0i\n\
-0,8,0.5+0.25i,1+0.5i\n\
-2.5,0,0-1i,0-2i\n");
+        "tau,tau2,re_signal_0,im_signal_0,re_signal_1,im_signal_1\n\
+0,0,1,0,2,0\n\
+0,8,0.5,0.25,1,0.5\n\
+2.5,0,0,-1,0,-2\n");
     assert_eq!(load_csv_to_vec_signals(&filename).unwrap(),
         (Some(tau_axes.clone()), vec![a.clone(), b.clone()]));
     assert_eq!(Signal::read_from_csv(&filename).unwrap(), b);
 
     a.write_to_csv(&tau_axes, &filename).unwrap();
     assert_eq!(std::fs::read_to_string(&filename).unwrap(),
-        "tau,tau2,signal\n0,0,1+0i\n0,8,0.5+0.25i\n2.5,0,0-1i\n");
+        "tau,tau2,re_signal,im_signal\n0,0,1,0\n0,8,0.5,0.25\n2.5,0,0,-1\n");
     assert_eq!(Signal::read_from_csv(&filename).unwrap(), a);
 
     // Without signals, only the time columns are written.
@@ -709,6 +816,92 @@ mod tests{
     std::fs::remove_file(&filename).unwrap();
   }
   //----------------------------------------------------------------------------
+  // The real/imaginary layout and the older a+bi layout of the same data
+  // load to the same signals, with and without time columns.
+  #[test]
+  fn test_load_csv_old_and_new_layout(){
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_layouts_{}.csv", std::process::id()));
+    let filename = filename.to_str().unwrap().to_string();
+    let expected = vec![
+      Signal{data: vec![Complex64::new(1.0,0.0), Complex64::new(0.5,-0.25)]},
+      Signal{data: vec![Complex64::new(-0.0,1e-30), Complex64::new(2.0,3.0)]},
+    ];
+    let tau_axes = TauAxes{tau: vec![0.0, 1.5], tau2: vec![0.0, 0.0]};
+
+    for (contents, axes) in [
+      ("signal_0,signal_1\n1+0i,-0+0.000000000000000000000000000001i\n\
+0.5-0.25i,2+3i\n", None),
+      ("re_signal_0,im_signal_0,re_signal_1,im_signal_1\n1,0,-0,1e-30\n\
+0.5,-0.25,2,3\n", None),
+      ("tau,tau2,signal_0,signal_1\n0,0,1+0i,-0+0.000000000000000000000000000001i\n\
+1.5,0,0.5-0.25i,2+3i\n", Some(tau_axes.clone())),
+      ("tau,tau2,re_signal_0,im_signal_0,re_signal_1,im_signal_1\n\
+0,0,1,0,-0,1e-30\n1.5,0,0.5,-0.25,2,3\n", Some(tau_axes.clone())),
+    ]{
+      std::fs::write(&filename, contents).unwrap();
+      let (read_axes, signals) = load_csv_to_vec_signals(&filename).unwrap();
+      assert_eq!(read_axes, axes, "{}", contents);
+      assert_eq!(signals, expected, "{}", contents);
+      assert_eq!(signals[1].data[0].re.to_bits(), (-0.0f64).to_bits(),
+          "{}", contents);
+    }
+
+    // What write_vec_signals writes is the real/imaginary layout.
+    write_vec_signals(&tau_axes, &expected, 
+        vec!["signal_0".to_string(), "signal_1".to_string()], &filename)
+      .unwrap();
+    assert!(std::fs::read_to_string(&filename).unwrap().starts_with(
+          "tau,tau2,re_signal_0,im_signal_0,re_signal_1,im_signal_1\n"));
+    assert_eq!(load_csv_to_vec_signals(&filename).unwrap(),
+        (Some(tau_axes), expected));
+
+    std::fs::remove_file(&filename).unwrap();
+  }
+  //----------------------------------------------------------------------------
+  // In the real/imaginary layout, the signal columns must be pairs 
+  // "re_X", "im_X", and the entries must be real numbers.
+  #[test]
+  fn test_load_csv_re_im_header_errors(){
+    let filename = std::env::temp_dir().join(format!(
+          "clue_oxide_test_re_im_errors_{}.csv", std::process::id()));
+    let filename = filename.to_str().unwrap().to_string();
+    let not_pairs = |icol: usize, header: &str| format!("column {} has the \
+header \"{}\", but signal columns with headers starting with \"re_\" or \
+\"im_\" must come in pairs \"re_X\", \"im_X\"", icol, header);
+    let wrong_im = |icol: usize, header: &str, im: &str| format!("column {} \
+has the header \"{}\", so column {} must have the header \"{}\"", 
+          icol, header, icol + 1, im);
+
+    for (contents, reason) in [
+      ("re_a\n1\n".to_string(), wrong_im(1, "re_a", "im_a")),
+      ("re_a,im_b\n1,0\n".to_string(), wrong_im(1, "re_a", "im_a")),
+      ("im_a,re_a\n0,1\n".to_string(), not_pairs(1, "im_a")),
+      ("re_a,im_a,signal_1\n1,0,1+0i\n".to_string(), not_pairs(3, "signal_1")),
+      ("signal_1,re_a,im_a\n1+0i,1,0\n".to_string(), not_pairs(1, "signal_1")),
+      ("tau,tau2,re_a,im_a,re_b\n0,0,1,0,1\n".to_string(), 
+       wrong_im(5, "re_b", "im_b")),
+    ]{
+      std::fs::write(&filename, &contents).unwrap();
+      assert_eq!(load_csv_to_vec_signals(&filename).err(), 
+          Some(CluEError::CannotReadFile(filename.clone(), reason)),
+          "{}", contents);
+    }
+
+    // An a+bi entry is not a real number.
+    std::fs::write(&filename, "re_a,im_a\n1,0\n1+0i,0\n").unwrap();
+    assert_eq!(load_csv_to_vec_signals(&filename).err(), 
+        Some(CluEError::CannotParseSignalEntry(filename.clone(), 2, 
+            "1+0i".to_string())));
+    std::fs::write(&filename, "tau,tau2,re_a,im_a\n0,0,1,0\n1,0,1,x\n")
+      .unwrap();
+    assert_eq!(load_csv_to_vec_signals(&filename).err(), 
+        Some(CluEError::CannotParseSignalEntry(filename.clone(), 2, 
+            "x".to_string())));
+
+    std::fs::remove_file(&filename).unwrap();
+  }
+  //----------------------------------------------------------------------------
   // Time columns that do not match the signals are not written, and time
   // columns out of place, or a non-numeric time, are not read.
   #[test]
@@ -719,7 +912,7 @@ mod tests{
     let signal = Signal::ones(3);
 
     let short = TauAxes{tau: vec![0.0, 1.0], tau2: vec![0.0, 0.0, 0.0]};
-    assert_eq!(write_vec_signals(&short, &[signal.clone()], 
+    assert_eq!(write_vec_signals(&short, std::slice::from_ref(&signal), 
           vec!["signal_0".to_string()], &filename),
         Err(CluEError::SignalTauAxesLength(filename.clone(), 2, 3, 3)));
     let short2 = TauAxes{tau: vec![0.0, 1.0, 2.0], tau2: vec![0.0]};
@@ -796,7 +989,7 @@ the time columns must be the first two columns, \"tau\" and \"tau2\""),
     let tau_axes = TauAxes{tau: vec![0.0], tau2: vec![0.0]};
 
     for result in [signal.write_to_csv(&tau_axes, &filename),
-        write_vec_signals(&tau_axes, &[signal.clone()], vec!["a".to_string()],
+        write_vec_signals(&tau_axes, std::slice::from_ref(&signal), vec!["a".to_string()],
           &filename)]
     {
       match result{

@@ -463,10 +463,9 @@ molecules whole across the cell boundary.", n_long, MAX_BOND/ANGSTROM);
 
    // Get the list of bonded indices, if there are any.
    let connections: &Vec::<usize>;
-   if let Some(cnc)= self.connections.get_neighbors(index){
+   {
+       let cnc = self.connections.get_neighbors(index)?;
      connections = cnc;
-   }else{
-     return None;
    }
    
    // Methyls and primary amoniums have four atoms bonded to the central
@@ -789,7 +788,7 @@ mod tests{
   fn test_find_cosubstitution_groups(){
     let mut rng = ChaCha20Rng::from_entropy();
     let filename = "./assets/a_TEMPO_a_water_a_glycerol.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     config.detected_spin_position = Some(
         DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );
@@ -1151,7 +1150,7 @@ structure".to_string())));
     let mut config = Config::from_toml_file("./assets/solvent_box.toml")
       .unwrap();
     let filename = "./assets/water_gly_20pc_vol.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let r_spin = Vector3D::from([25.0, 25.0, 25.0]).scale(ANGSTROM);
     config.detected_spin_position 
       = Some(DetectedSpinCoordinates::XYZ(r_spin.clone()));
@@ -1199,7 +1198,7 @@ structure".to_string())));
         DetectedSpinCoordinates::CentroidOverGroup(vec![label.clone()]) );
     config.set_defaults().unwrap();
 
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     structure.build_primary_structure(&mut rng, &config).unwrap();
 
     for (r_max, r_min) in [(Some(10e-10),None), (None,Some(1e-10))]{
@@ -1208,7 +1207,7 @@ structure".to_string())));
       filter_r.not_within_distance = r_min;
       config.particles[0].filter = Some(filter_r);
 
-      let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+      let mut structure = pdb::parse_pdb(filename,0).unwrap();
       let result = structure.build_primary_structure(&mut rng, &config);
       assert_eq!(result,
           Err(CluEError::CentroidGroupHasDistanceSelection(label.clone())));
@@ -1219,7 +1218,7 @@ structure".to_string())));
   fn test_build_primary_structure_water(){
     let mut rng = ChaCha20Rng::from_entropy();
     let filename = "./assets/water.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     // The detected spin is placed on the oxygen (serial 21030).
     config.detected_spin_position = Some(
@@ -1237,7 +1236,7 @@ structure".to_string())));
   fn test_build_primary_structure_tempo(){
     let mut rng = ChaCha20Rng::from_entropy();
     let filename = "./assets/TEMPO.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
 
     let mut config = Config::new();
     config.detected_spin_position = Some(
@@ -1246,7 +1245,7 @@ structure".to_string())));
     structure.build_primary_structure(&mut rng, &config).unwrap();
 
     assert_eq!(structure.bath_particles
-        .iter().filter(|p| (*p).active).count(), 19);
+        .iter().filter(|p| p.active).count(), 19);
     let exchange_group_manager = structure.exchange_groups
                                  .as_ref().unwrap();
     assert_eq!(exchange_group_manager.exchange_groups.len(), 4);
@@ -1289,7 +1288,7 @@ structure".to_string())));
     let n_gly = 1500;
 
     let filename = "./assets/TEMPO_wat_gly_70A.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     
     let mut config = Config::new();
     config.detected_spin_position = Some(

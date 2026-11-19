@@ -46,7 +46,7 @@ impl Structure{
 
     // A particle without a cell ID is treated as being in the primary cell.
     let primary_indices = (0..self.number())
-      .filter(|&idx| self.cell_ids.get(idx).map_or(true, |&id| id == 0))
+      .filter(|&idx| self.cell_ids.get(idx).is_none_or(|&id| id == 0))
       .collect::<Vec::<usize>>();
 
     let detected_line = self.get_detected_particle_gro_line()?;

@@ -216,6 +216,9 @@ fn write_signals(tau_axes: &TauAxes, signals: &[Signal], filename: &str)
 // (record `s_idx` of `output`) from the instance seed `seed`, and 
 // calculates the signal averaged over the orientations.
 // Orientations that `output` records as complete are loaded.
+// The orientation loop is indexed: `iori` is also the index into
+// `integration_grid` and the orientation record of `output`.
+#[allow(clippy::needless_range_loop)]
 fn calculate_structure_signal(seed: u64, config: &Config, 
     structure_input: &StructureInput, s_idx: usize, k: usize,
     output: &mut OutputState, tau_axes: &TauAxes) 
@@ -385,6 +388,7 @@ fn calculate_structure_signal(seed: u64, config: &Config,
 // `save_dir` is the name of the orientation directory, and `save_path_opt`
 // its path, if the orientation's files are saved; `tau_axes` are the time
 // columns of the saved signal files.
+#[allow(clippy::too_many_arguments)]
 fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng, 
     rot_dir: UnitSpherePoint,
     spin_ops: &ClusterSpinOperators,
@@ -487,7 +491,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     //      config,&save_path_opt,structure)?,
     Some(_cce) => {
       calculate_cluster_signals(&mut cluster_set, &states, spin_ops, &tensors, 
-          config,&save_path_opt,structure)?
+          config,save_path_opt,structure)?
     },
     None => return Err(CluEError::NoClusterMethod)
   };
@@ -703,13 +707,12 @@ fn optionally_save_tensors(
 {
   // The instance directory exists (write_instance_info()).
   if let Some(save_dir) = &save_dir_opt{
-    if config.write_info == Some(true){
-      if config.write_tensors == Some(true){
+    if config.write_info == Some(true)
+      && config.write_tensors == Some(true){
         let tensor_path = format!("{}/{}.txt",save_dir,SAVE_FILE_TENSORS);
 
         tensors.save(&tensor_path,structure)?;
       }
-    }
   }
   Ok(())
 }

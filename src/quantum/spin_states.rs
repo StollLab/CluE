@@ -267,6 +267,12 @@ impl SpinStates{
   //----------------------------------------------------------------------------
 }
 
+impl Default for SpinStates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 #[cfg(test)]
 mod tests{

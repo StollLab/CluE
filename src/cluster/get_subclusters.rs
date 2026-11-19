@@ -74,16 +74,17 @@ mod tests{
 
   #[test]
   fn test_include_vertex_in_which_subcluster(){
-    let expected = vec![
+    let expected = [
       vec![1,3,5],
       vec![0,3,4],
       vec![0,1,2],
     ];
     let cluster_size = 3;
-    for ii in 0..cluster_size{
+    assert_eq!(expected.len(), cluster_size);
+    for (ii, expected_ii) in expected.iter().enumerate(){
       let indices 
         = include_vertex_in_which_subcluster(ii,cluster_size);
-      assert_eq!(indices,expected[ii]);
+      assert_eq!(indices,*expected_ii);
     }
   }
   //----------------------------------------------------------------------------

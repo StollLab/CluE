@@ -43,6 +43,10 @@ pub fn build_adjacency_list(tensors: &HamiltonianTensors,
 //------------------------------------------------------------------------------
 // This function determines if an edge should be placed between the vertices
 // of spins with tensor indices `idx0` and `idx1`.
+// The cutoff checks are written as negated comparisons, such as
+// `!(x >= cutoff)`, so that a NaN value fails them and the spins are not
+// neighbors.
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn are_spins_neighbors(idx0: usize,idx1: usize,
     tensors: &HamiltonianTensors, structure: &Structure, config: &Config) 
   -> Result<bool, CluEError>
@@ -68,13 +72,13 @@ fn are_spins_neighbors(idx0: usize,idx1: usize,
   // let H_Zeeman = dot(omega_1,I_1) + dot(omega_2,I_2),
   // and check if |omega_1 - omega_2| > cutoff.
   if let Some(cutoff_delta_zeeman) = &config.neighbor_cutoff_delta_zeeman{
-    if delta_zeeman.norm() > *cutoff_delta_zeeman {
+    if !(delta_zeeman.norm() <= *cutoff_delta_zeeman) {
       return Ok(false);
     }
   }
   if let Some(cutoff_ave_zeeman) = &config.neighbor_cutoff_average_zeeman{
     let ave_zeeman = 0.5*(zeeman1 + zeeman0).norm();
-    if ave_zeeman <= *cutoff_ave_zeeman {
+    if !(ave_zeeman > *cutoff_ave_zeeman) {
       return Ok(false);
     }
   }
@@ -176,3 +180,71 @@ fn connect_exchange_groups(
 
 
 
+//------------------------------------------------------------------------------
+#[cfg(test)]
+mod tests{
+  use super::*;
+  use crate::io::FromTOMLString;
+  use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
+
+  //----------------------------------------------------------------------------
+  // A NaN cutoff makes every pair fail the check, so the spins are not
+  // neighbors. All cutoffs are first set to values that every finite pair
+  // passes, so that each check is evaluated.
+  #[test]
+  fn test_are_spins_neighbors_rejects_nan_cutoffs(){
+    let mut config = Config::from_toml_string(r##"
+      structure.file = "./assets/TEMPO.pdb"
+      detected_spin.position = [28,29]
+      structure.radius = 73.5676
+      conditions.magnetic_field = 1.2
+      structure.replicate_unit_cell = false
+      pulse_sequence.sequence = "hahn"
+      pulse_sequence.tau_increments = [1e-2]
+      pulse_sequence.number_timepoints = [101]
+    "##).unwrap();
+    config.neighbor_cutoff_delta_hyperfine_zz = Some(f64::NEG_INFINITY);
+    config.neighbor_cutoff_coupling_xx_yy = Some(f64::NEG_INFINITY);
+    config.neighbor_cutoff_point_dipole_perpendicular 
+      = Some(f64::NEG_INFINITY);
+    config.neighbor_cutoff_3_spin_hahn_mod_depth = Some(f64::NEG_INFINITY);
+    config.neighbor_cutoff_3_spin_hahn_taylor_4 = Some(f64::NEG_INFINITY);
+    config.neighbor_cutoff_distance = Some(f64::INFINITY);
+    config.neighbor_cutoff_delta_zeeman = Some(f64::INFINITY);
+    config.neighbor_cutoff_average_zeeman = Some(f64::NEG_INFINITY);
+
+    let mut rng = ChaCha20Rng::seed_from_u64(0);
+    let mut structure = Structure::build_structure(&mut rng, &config)
+      .unwrap();
+    structure.map_nth_active_to_reference_indices();
+    let tensors = HamiltonianTensors::generate(&mut rng, &structure, &config)
+      .unwrap();
+
+    // Spins 1 and 2 are bath spins (0 is the detected spin).
+    let (idx0, idx1) = (1, 2);
+    assert!(are_spins_neighbors(idx0,idx1,&tensors,&structure,&config)
+        .unwrap());
+
+    // Each entry returns a mutable reference to one cutoff of a config.
+    type CutoffField = fn(&mut Config) -> &mut Option<f64>;
+    let cutoffs: [(&str, CutoffField); 8] = [
+      ("delta_zeeman", |c| &mut c.neighbor_cutoff_delta_zeeman),
+      ("average_zeeman", |c| &mut c.neighbor_cutoff_average_zeeman),
+      ("delta_hyperfine_zz", |c| &mut c.neighbor_cutoff_delta_hyperfine_zz),
+      ("coupling_xx_yy", |c| &mut c.neighbor_cutoff_coupling_xx_yy),
+      ("point_dipole_perpendicular", 
+       |c| &mut c.neighbor_cutoff_point_dipole_perpendicular),
+      ("3_spin_hahn_mod_depth", 
+       |c| &mut c.neighbor_cutoff_3_spin_hahn_mod_depth),
+      ("3_spin_hahn_taylor_4", 
+       |c| &mut c.neighbor_cutoff_3_spin_hahn_taylor_4),
+      ("distance", |c| &mut c.neighbor_cutoff_distance),
+    ];
+    for (name, cutoff) in cutoffs.iter(){
+      let mut nan_config = config.clone();
+      *cutoff(&mut nan_config) = Some(f64::NAN);
+      assert!(!are_spins_neighbors(idx0,idx1,&tensors,&structure,
+            &nan_config).unwrap(), "NaN {} cutoff", name);
+    }
+  }
+}

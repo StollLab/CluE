@@ -153,6 +153,25 @@ ADDED:
   process (threads) write into the log opened last.
 
 CHANGED:
+  Signal files store each complex signal as two columns of real numbers,
+  the real part and the imaginary part, instead of one column of a+bi
+  strings (breaking change of the output format; report_todo.md #24). A
+  signal with the header X is written as the columns re_X and im_X:
+  signal.csv files (tau,tau2,re_signal_0,im_signal_0,...),
+  sans_spin_signals.csv (tau,tau2,re_sans_<i>,im_sans_<i>,...), the
+  methyl_partitions/<key>.csv files (tau,tau2,re_signal,im_signal), the
+  checkpoint batch files in auxiliary_signals/ and cluster_signals/
+  (re_clu_<i>_<j>,im_clu_<i>_<j>,...), and pyCluE Signal.write_to_csv.
+  The values are the same numbers as before and are read back bit for
+  bit. Files in the a+bi layout, such as the test reference signals and
+  the files of outputs written before this change, are still read: a
+  file is read in the new layout if a signal header (after tau and tau2)
+  starts with re_ or im_, and then every signal header must be part of a
+  pair re_X, im_X in adjacent columns; otherwise the file is read in the
+  a+bi layout. Resuming an output written before this change loads its
+  saved signals and checkpoint batches; files written by the resumed run
+  are in the new layout. examples/simple_mbp/plot.py reads the new layout.
+
   New layout of output directories. Each instance of run.number_runs has
   its own directory (fixes N04 of report.md: with number_runs > 1, all
   instances shared one directory, so with auxiliary_signals = true every

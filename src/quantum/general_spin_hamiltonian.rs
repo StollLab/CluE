@@ -628,7 +628,7 @@ mod tests{
 
     let spin_indices = vec![0,1,2];
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3,&config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],3,&config).unwrap();
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors,
@@ -663,12 +663,11 @@ mod tests{
 
     for (ii,v) in signal.data.iter().enumerate(){
       let v0 = ref_signal.data[ii];
-      let err: f64;
-      if (v+v0).norm() < 1e12{
-        err = (v-v0).norm();
+      let err: f64 = if (v+v0).norm() < 1e12{
+        (v-v0).norm()
       }else{
-        err = (2.0+(v-v0)/(v+v0)).norm();
-      }
+        (2.0+(v-v0)/(v+v0)).norm()
+      };
       assert!(err < 1e-9);
     }
   }
@@ -698,7 +697,7 @@ mod tests{
     
     let spin_indices = vec![0,1,2];
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3, &config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],3, &config).unwrap();
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors).unwrap();
@@ -729,12 +728,11 @@ mod tests{
 
     for (ii,v) in signal.data.iter().enumerate(){
       let v0 = ref_signal.data[ii];
-      let err: f64;
-      if (v+v0).norm() < 1e12{
-        err = (v-v0).norm();
+      let err: f64 = if (v+v0).norm() < 1e12{
+        (v-v0).norm()
       }else{
-        err = (2.0+(v-v0)/(v+v0)).norm();
-      }
+        (2.0+(v-v0)/(v+v0)).norm()
+      };
       assert!(err < 1e-9);
     }
 
@@ -757,7 +755,7 @@ mod tests{
 
     let spin_indices = vec![0,1,2];
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3,&config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],3,&config).unwrap();
 
     let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
         &spin_indices,&spin_ops, &tensors).unwrap();

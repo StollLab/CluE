@@ -964,7 +964,7 @@ mod tests{
   fn test_VectorSpecifier_to_vector3d(){
     let mut rng = ChaCha20Rng::seed_from_u64(0);
     let filename = "./assets/TEMPO.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     config.detected_spin_position = Some(
         DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );
@@ -1008,7 +1008,7 @@ mod tests{
   
     let mut rng = ChaCha20Rng::seed_from_u64(0);
     let filename = "./assets/a_TEMPO_a_water_a_glycerol.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     config.detected_spin_position = Some(
         DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );
@@ -1045,7 +1045,7 @@ mod tests{
   #[test]
   fn test_filter(){
     let filename = "./assets/a_TEMPO_a_water_a_glycerol.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     config.detected_spin_position = Some(
         DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );
@@ -1580,7 +1580,7 @@ array of them, but got table");
     // A filter with only forbid keys selects every particle that is not
     // excluded, since empty require lists do not restrict the selection.
     let filename = "./assets/a_TEMPO_a_water_a_glycerol.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     config.detected_spin_position = Some(
         DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );

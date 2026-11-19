@@ -193,7 +193,7 @@ mod tests{
   fn reference_component_labels(graph: &AdjacencyList, root: Option<usize>)
     -> Vec::<Option<usize>>
   {
-    fn find(parent: &mut Vec::<usize>, v: usize) -> usize{
+    fn find(parent: &mut [usize], v: usize) -> usize{
       let mut r = v;
       while parent[r] != r{ r = parent[r]; }
       parent[v] = r;
@@ -250,8 +250,8 @@ mod tests{
           assert_eq!(labels[v], labels[component[0]]);
         }
       }
-      for v in 0..n{
-        assert_eq!(seen[v], Some(v) != root);
+      for (v, &seen_v) in seen.iter().enumerate(){
+        assert_eq!(seen_v, Some(v) != root);
       }
       let n_labels = { let mut l = labels.iter().flatten().copied()
           .collect::<Vec::<usize>>(); l.sort(); l.dedup(); l.len() };

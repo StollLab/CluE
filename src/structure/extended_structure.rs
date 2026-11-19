@@ -511,6 +511,8 @@ impl Structure{
   // This function checks for clashes between active particles in the 
   // primary cell, and returns an error for the first clashing pair 
   // (idx0, idx1), ordered by idx0 and then by idx1.
+  // `!(clash_distance > 0.0)` is intended: a NaN distance skips the check.
+  #[allow(clippy::neg_cmp_op_on_partial_ord)]
   fn check_primary_clashes(&mut self, config: &Config) -> Result<(),CluEError>{
 
     let Some(clash_distance) = config.clash_distance else{
@@ -1153,7 +1155,7 @@ mod tests{
     let n_nx = 5*n_gly + 18;
 
     let filename = "./assets/TEMPO_wat_gly_70A.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
 
 
     let mut particle_configs =vec![
@@ -1260,10 +1262,10 @@ mod tests{
 
     for idx in indices{
       let particle = &structure.bath_particles[idx];
-      if (*particle).element == Element::Hydrogen{
+      if particle.element == Element::Hydrogen{
         n_h += 1;
       }else{
-        assert!((*particle).element != Element::Oxygen);
+        assert!(particle.element != Element::Oxygen);
       }
       let mol_id = structure.molecule_id(idx);
       let idx0 = structure.primary_cell_indices[idx];
@@ -1271,8 +1273,8 @@ mod tests{
       let cell_id = cell_indices.iter().position(|&x| {
             match x{ Some(id) => id == idx, None => false,}
           }).unwrap();
-      let is_proton = (*particle).isotope == Isotope::Hydrogen1;
-      let is_deuteron = (*particle).isotope == Isotope::Hydrogen2;
+      let is_proton = particle.isotope == Isotope::Hydrogen1;
+      let is_deuteron = particle.isotope == Isotope::Hydrogen2;
       
       if is_proton{
         n_h1 += 1;
@@ -1377,7 +1379,7 @@ mod tests{
 
     assert_eq!(indices_gly_oh.len(), n_uc*775*3);
     assert_eq!(indices_gly_ch.len(), n_uc*775*5);
-    assert_eq!(indices_npr_oh.len(), n_uc*251*1);
+    assert_eq!(indices_npr_oh.len(), n_uc*251);
     assert_eq!(indices_npr_ch.len(), n_uc*251*7);
     assert_eq!(indices_tempo_h.len(), n_uc*18);
 
@@ -1394,16 +1396,16 @@ mod tests{
     };
 
     let corr_gly_oh = get_1h_2h_correlations(&structure,&indices_gly_oh);
-    assert_corr_approx_eq(&corr_gly_oh,&vec![0.5,0.5],"gly_oh");
+    assert_corr_approx_eq(&corr_gly_oh,&[0.5,0.5],"gly_oh");
 
     let corr_gly_ch = get_1h_2h_correlations(&structure,&indices_gly_ch);
-    assert_corr_approx_eq(&corr_gly_ch,&vec![0.9,0.5],"gly_ch");
+    assert_corr_approx_eq(&corr_gly_ch,&[0.9,0.5],"gly_ch");
 
     let corr_npr_oh = get_1h_2h_correlations(&structure,&indices_npr_oh);
-    assert_corr_approx_eq(&corr_npr_oh,&vec![0.5,0.5],"npr_oh");
+    assert_corr_approx_eq(&corr_npr_oh,&[0.5,0.5],"npr_oh");
 
     let corr_npr_ch = get_1h_2h_correlations(&structure,&indices_npr_ch);
-    assert_corr_approx_eq(&corr_npr_ch,&vec![0.93,0.5],"npr_h");
+    assert_corr_approx_eq(&corr_npr_ch,&[0.93,0.5],"npr_h");
 
   }
   //----------------------------------------------------------------------------
@@ -1417,7 +1419,7 @@ mod tests{
       let idx0 = indices[ii-1];
       let particle0 = &structure.bath_particles[idx0];
       let particle = &structure.bath_particles[*idx];
-      if (*particle).isotope == (*particle0).isotope{
+      if particle.isotope == particle0.isotope{
         corr_1 += 1.0;
       }
 
@@ -1426,7 +1428,7 @@ mod tests{
       let idx0 = indices[ii-9];
       let particle0 = &structure.bath_particles[idx0];
       let particle = &structure.bath_particles[*idx];
-      if (*particle).isotope == (*particle0).isotope{
+      if particle.isotope == particle0.isotope{
         corr_9 += 1.0;
       }
     }
@@ -2406,6 +2408,7 @@ mod tests{
   // This function lists the active particles in bath order, and the exchange
   // groups that have an active member, by primary cell index and unit cell,
   // so that structures with different bath indices can be compared.
+  #[allow(clippy::type_complexity)]
   fn active_set(structure: &Structure)
     -> (Vec::<(usize,usize,Isotope,Vector3D)>,
         Vec::<(Vec::<(usize,usize)>,Vector3D,f64)>)

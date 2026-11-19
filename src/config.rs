@@ -38,6 +38,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::mem;
+use std::str::FromStr;
 
 use num_complex::Complex64;
 use ndarray::Array2;
@@ -439,6 +440,8 @@ impl Config{
   // them.
   // A message is printed when normalizing changes the weights by more 
   // than floating point rounding.
+  // `!(... <= tolerance)` is intended: a NaN sum is rejected.
+  #[allow(clippy::neg_cmp_op_on_partial_ord)]
   fn check_detected_spin_grid(&mut self) -> Result<(),CluEError>{
     let Some(DetectedSpinCoordinates::ProbabilityDistribution(grid)) 
       = &mut self.detected_spin_position else{
@@ -476,6 +479,8 @@ they were normalized to sum to one.", sum);
   // normalized afterwards, so weights that do not sum to one scale it.
   // A message is printed when normalizing changes the weights by more 
   // than floating point rounding.
+  // `!(... <= tolerance)` is intended: a NaN sum is rejected.
+  #[allow(clippy::neg_cmp_op_on_partial_ord)]
   fn check_orientation_grid(&mut self) -> Result<(),CluEError>{
     let Some(OrientationAveraging::Grid(grid)) 
       = &mut self.orientation_grid else{
@@ -1172,7 +1177,7 @@ of integers".to_string(), other.type_str().to_string())),
     }
     match array[0]{
       Value::Integer(_) => {
-        if array.len() % 2 != 0{
+        if !array.len().is_multiple_of(2){
           return Err(CluEError::InvalidTOMLValue(
                 PATH_PARTITION_TABLE.to_string(),
                 "a csv file name or an array [index0, block0, index1, block1, ...] \
@@ -1263,7 +1268,7 @@ impl OrientationAveraging{
               "orientations.number".to_string(),
               format!("orientations.grid = \"{}\"", grid)));
       };
-      return Ok(OrientationAveraging::Random(n_ori));
+      Ok(OrientationAveraging::Random(n_ori))
 
     } else if grid == KEY_ORI_FILE{
       
@@ -1273,7 +1278,7 @@ impl OrientationAveraging{
               format!("orientations.grid = \"{}\"", grid)));
       };
       let int_grid = IntegrationGrid::read_from_csv(filename)?;
-      return Ok(OrientationAveraging::Grid(int_grid));
+      Ok(OrientationAveraging::Grid(int_grid))
 
     } else if grid == KEY_ORI_VECTOR{
       let Some(v) = ori_toml.vector else{
@@ -1287,11 +1292,11 @@ impl OrientationAveraging{
               "an array [x, y, z] of three floats".to_string(),
               format!("an array of length {}", v.len())));
       }
-      return Ok(OrientationAveraging::Grid(IntegrationGrid{
+      Ok(OrientationAveraging::Grid(IntegrationGrid{
           dim: 3,
           points: v,
           weights: vec![1.0],
-      }));
+      }))
 
 
     } else if grid == KEY_ORI_CIRCLE{
@@ -1311,9 +1316,9 @@ impl OrientationAveraging{
               "orientations.number".to_string(),
               format!("orientations.grid = \"{}\"", grid)));
       };
-      return Ok(OrientationAveraging::Grid(
+      Ok(OrientationAveraging::Grid(
           IntegrationGrid::circle_3d(&Vector3D::from([v[0],v[1],v[2]]), n_ori)
-      ));
+      ))
     } else if grid == KEY_ORI_VECTORGRID{
       let Some(v_grid) = ori_toml.vector_grid else{
         return Err(CluEError::MissingTOMLKey(
@@ -1335,14 +1340,14 @@ impl OrientationAveraging{
         weights.push(v[3]);
       }
 
-      return Ok(OrientationAveraging::Grid(IntegrationGrid{
+      Ok(OrientationAveraging::Grid(IntegrationGrid{
           dim: 3,
           points,
           weights,
-      }));
+      }))
 
     } else{
-      return Err(CluEError::CannotParseOrientations(grid.to_string()));
+      Err(CluEError::CannotParseOrientations(grid.to_string()))
     }
   }
 }
@@ -2144,7 +2149,7 @@ mod tests{
     let properties = groups[4].properties.clone().unwrap();
     let hydrogen = &properties
         .isotope_properties[&Isotope::Hydrogen1.to_string()];
-    let ex1 = hydrogen.exchange_coupling.clone().unwrap();
+    let ex1 = hydrogen.exchange_coupling.unwrap();
     let ex0 = -80.0e3;
     assert!(2.0*(ex0-ex1).abs()/(ex0+ex1).abs() < 1e-12);
 

@@ -17,26 +17,24 @@ def plot(clue_path):
   data = load_clue_data(file_path)
 
   fig,ax = plt.subplots(1,1,figsize=(6,6))
-  
-  ax.plot(2*data['tau'],data['signal_2'],color='tab:green')
+
+  ax.plot(2*data['tau'],np.real(data['signal_2']),color='tab:green')
 
   ax.set_xlabel(r'$2\tau$ (µs)')
   ax.set_ylabel('relative echo amplitude')
   plt.savefig(f'{clue_path}/fig.png')
 
 def load_clue_data(file_path):
-
+  # A signal X is saved as the columns re_X and im_X; out['X'] is the
+  # complex signal. Other columns, such as tau and tau2, are kept as they are.
   df = pd.read_csv(file_path)
   out = {}
   for k,v in df.items():
-    if type(v[0])==type('str'):
-      signal = np.array(
-        (v.str.replace('i','j')).apply(lambda z: complex(z))
-      )
-      out[k] = np.real(signal)
-    else:
-      out[k] = np.real(v)
-
+    if k.startswith('re_'):
+      name = k[len('re_'):]
+      out[name] = np.array(v) + 1j*np.array(df['im_' + name])
+    elif not k.startswith('im_'):
+      out[k] = np.array(v)
 
   return out
-main()  
+main()

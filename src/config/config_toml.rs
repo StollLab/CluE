@@ -408,7 +408,7 @@ mod tests{
     let toml_str = r##"
       this_is_not_a_key = True
       "##;
-    assert!(check_toml_str(&toml_str).is_err());
+    assert!(check_toml_str(toml_str).is_err());
   }
   //----------------------------------------------------------------------------
 

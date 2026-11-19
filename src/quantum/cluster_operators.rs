@@ -217,11 +217,11 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
 
   let detection_operator = match det_op{
     DetectionOp::Matrix(mat) => { 
-      let det_op = match frame{
+      
+      match frame{
         DetFrame::Eigen => eigvecs.dot( &mat.dot( &inv_eigvecs) ),
         DetFrame::Zeeman => mat.clone(),  
-      };
-      det_op
+      }
     },
     DetectionOp::S(sop) => {
       let mut det_op = get_spin_operator(det_multiplicity,sop);
@@ -283,7 +283,7 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     let mut pulse_list = config.pulses.clone();
     match frame{
       DetFrame::Eigen => {
-        for (_,p) in pulse_list.iter_mut(){
+        for p in pulse_list.values_mut(){
           *p = eigvecs.dot( &p.dot( &inv_eigvecs) );
         }
       },
@@ -345,7 +345,7 @@ impl<'a> KronSpinOperators {
     for il in 0..=ist_max_l{
       let l = il as i32;
       for im in 0..=2*l+1 {
-        let m = im as i32 - l;
+        let m = im - l;
         let tlm_list = KronSpinOpList::new(det_multiplicity,
           spin_multiplicity, SpinOp::T(l,m), max_size)?;
         spherical_operators.insert( (l,m), tlm_list);
@@ -652,8 +652,11 @@ impl fmt::Display for SpinOp {
     }
 }
 
-impl SpinOp{
-  pub fn from_str(s: &str) -> Result<Self,CluEError>{
+impl std::str::FromStr for SpinOp{
+  type Err = CluEError;
+  /// This function parses a spin operator name ("Sx", "Sy", "Sz", "S+", "S-",
+  /// or "S^2", with an optional lower-case "s").
+  fn from_str(s: &str) -> Result<Self,CluEError>{
     // TODO: add ISTs 
     match s{
       "sx" | "Sx" => Ok(Self::Sx),  
@@ -1107,9 +1110,7 @@ mod tests {
       array![[ONE],[ZERO],[ZERO],[ZERO],[ZERO]],
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
-      let expected = vec![
-      array![[I],[ZERO],[ZERO],[ZERO],[-I]],
-    ];   
+      let expected = [array![[I],[ZERO],[ZERO],[ZERO],[-I]]];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
@@ -1121,9 +1122,7 @@ mod tests {
       array![[ZERO],[ONE],[ZERO],[ZERO],[ZERO]],
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
-      let expected = vec![
-      array![[ZERO],[0.5*I],[ZERO],[0.5*I],[ZERO]],
-    ];   
+      let expected = [array![[ZERO],[0.5*I],[ZERO],[0.5*I],[ZERO]]];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
@@ -1136,9 +1135,7 @@ mod tests {
       array![[ZERO],[ZERO],[ONE],[ZERO],[ZERO]],
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
-      let expected = vec![
-      array![[ZERO],[ZERO],[SQRT2*SQRT3*ONE],[ZERO],[ZERO]],
-    ];   
+      let expected = [array![[ZERO],[ZERO],[SQRT2*SQRT3*ONE],[ZERO],[ZERO]]];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
@@ -1151,9 +1148,7 @@ mod tests {
       array![[ZERO],[ZERO],[ZERO],[ONE],[ZERO]],
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
-      let expected = vec![
-      array![[ZERO],[0.5*ONE],[ZERO],[-0.5*ONE],[ZERO]],
-    ];   
+      let expected = [array![[ZERO],[0.5*ONE],[ZERO],[-0.5*ONE],[ZERO]]];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
@@ -1165,9 +1160,7 @@ mod tests {
       array![[ZERO],[ZERO],[ZERO],[ZERO],[ONE]],
     ];   
     let coefs = stevens_to_spherical_coefficients(mult,&stevens,tol).unwrap();
-      let expected = vec![
-      array![[ONE],[ZERO],[ZERO],[ZERO],[ONE]],
-    ];   
+      let expected = [array![[ONE],[ZERO],[ZERO],[ZERO],[ONE]]];   
     for (ii,c) in coefs.iter().enumerate(){
       let c0 = &expected[ii];
       assert_eq!(c.shape(),c0.shape());
@@ -1184,7 +1177,7 @@ mod tests {
     let mult = 3;
     let k = 2;
 
-    let stevens = vec![
+    let stevens = [
       spin_stevens(mult, k, -2).unwrap(),
       spin_stevens(mult, k, -1).unwrap(),
       spin_stevens(mult, k,  0).unwrap(),
@@ -1192,7 +1185,7 @@ mod tests {
       spin_stevens(mult, k,  2).unwrap(),
     ];   
 
-    let expected = vec![
+    let expected = [
       I*(spin_ist(mult,k, -2) - spin_ist(mult,k,  2)),
       0.5*I*(spin_ist(mult,k, -1) + spin_ist(mult,k,  1)),
       SQRT2*SQRT3*ONE*spin_ist(mult,k,  0),
@@ -1225,7 +1218,7 @@ mod tests {
     for mult in 2..=3{
       let e = CxMat::eye(mult);
       let coefs = spherical_operator_decomposition(&e, tol);
-      let expected = vec![array![[ONE]] ];
+      let expected = [array![[ONE]]];
       assert_eq!(coefs.len(),expected.len());
       for (ii,c) in coefs.iter().enumerate(){
         let c0 = &expected[ii];
@@ -1235,7 +1228,7 @@ mod tests {
 
       let sz = spin_z(mult);
       let coefs = spherical_operator_decomposition(&sz, tol);
-      let expected = vec![array![[ZERO],[ONE],[ZERO]] ];
+      let expected = [array![[ZERO],[ONE],[ZERO]]];
       assert_eq!(coefs.len(),expected.len());
       for (ii,c) in coefs.iter().enumerate(){
         let c0 = &expected[ii];
@@ -1245,7 +1238,7 @@ mod tests {
 
       let t = spin_z(mult) + CxMat::eye(mult);
       let coefs = spherical_operator_decomposition(&t, tol);
-      let expected = vec![
+      let expected = [
         array![[ONE]], 
         array![[ZERO],[ONE],[ZERO]], 
       ];
@@ -1258,7 +1251,7 @@ mod tests {
 
       let mut t = CxMat::zeros([mult,mult]);
       let mut x = ONE;
-      for l in 0..=(2 as i32){
+      for l in 0..=2_i32{
         for m in -l..=l{
           let tlm = spin_ist(mult,l,m);
           t = t + x*tlm;
@@ -1508,11 +1501,11 @@ mod tests {
 
     let spin_mults = Vec::<usize>::from([3,2]);
 
-    let xx = kron_spin_op(&spin_mults,&vec![SpinOp::Sx,SpinOp::Sx]).unwrap();
-    let yy = kron_spin_op(&spin_mults,&vec![SpinOp::Sy,SpinOp::Sy]).unwrap();
-    let zz = kron_spin_op(&spin_mults,&vec![SpinOp::Sz,SpinOp::Sz]).unwrap();
-    let pm = kron_spin_op(&spin_mults,&vec![SpinOp::Sp,SpinOp::Sm]).unwrap();
-    let mp = kron_spin_op(&spin_mults,&vec![SpinOp::Sm,SpinOp::Sp]).unwrap();
+    let xx = kron_spin_op(&spin_mults,&[SpinOp::Sx,SpinOp::Sx]).unwrap();
+    let yy = kron_spin_op(&spin_mults,&[SpinOp::Sy,SpinOp::Sy]).unwrap();
+    let zz = kron_spin_op(&spin_mults,&[SpinOp::Sz,SpinOp::Sz]).unwrap();
+    let pm = kron_spin_op(&spin_mults,&[SpinOp::Sp,SpinOp::Sm]).unwrap();
+    let mp = kron_spin_op(&spin_mults,&[SpinOp::Sm,SpinOp::Sp]).unwrap();
 
     assert!(approx_eq(
           &( &(&xx + &yy) + &zz), 
@@ -1629,15 +1622,15 @@ mod tests {
           &(I*sx), tol ) ; 
       
     pass &= approx_eq( 
-          &sp, 
+          sp, 
           &(sx + I*sy), tol ) ; 
       
     pass &= approx_eq( 
-          &sm, 
+          sm, 
           &(sx - I*sy), tol ) ; 
       
     pass &= approx_eq( 
-          &s2, 
+          s2, 
           &spin2, tol ) ; 
       
       

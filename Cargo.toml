@@ -12,6 +12,8 @@ keywords = ["quantum", "spin","simulation","CCE","EPR"]
 categories = ["command-line-utilities"]
 exclude =["/.github/*","examples/*","assets/*","manual/*","pyclue/*",
          "CluE_Oxide_logo.*"]
+         
+rust-version = "1.87"
 [profile.dev]
 opt-level = 3
 

@@ -542,7 +542,7 @@ mod tests{
         let mut rng = ChaCha20Rng::seed_from_u64(seed);
         let labels = get_kmeans_partition(&mut rng,k,&data,true,1000)
           .unwrap();
-        let capacity = (n + k - 1)/k;
+        let capacity = n.div_ceil(k);
         for label in 0..k{
           let size = labels.iter().filter(|&&l| l == label).count();
           assert!(size <= capacity, "seed {}, k {}, label {}", seed, k, label);

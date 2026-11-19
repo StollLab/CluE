@@ -331,7 +331,7 @@ mod tests{
 
     
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],3, &config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],3, &config).unwrap();
 
     let mut config = Config::new();
     config.cluster_method = Some(ClusterMethod::CCE);

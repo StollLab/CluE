@@ -319,7 +319,7 @@ mod tests{
     let mut counts = ref_counts.iter().map(|_x| 0)
       .collect::<Vec::<usize>>();
 
-    for (_key, value_cluster_set) in cluster_partitions.iter(){
+    for value_cluster_set in cluster_partitions.values(){
       for (clu_size,clusters) in value_cluster_set.clusters.iter().enumerate(){
         counts[clu_size] += clusters.len();
       }
@@ -417,7 +417,7 @@ mod tests{
     let mut counts = ref_counts.iter().map(|_x| 0)
       .collect::<Vec::<usize>>();
 
-    for (_key, value_cluster_set) in cluster_partitions.iter(){
+    for value_cluster_set in cluster_partitions.values(){
       for (clu_size,clusters) in value_cluster_set.clusters.iter().enumerate(){
         counts[clu_size] += clusters.len();
       }
@@ -508,8 +508,7 @@ mod tests{
   fn get_test_structure() -> Structure{
     let bath_particles = (0..10).map(|_| 
         {
-          let particle = Particle::new(Element::Hydrogen, 0.0, 0.0, 0.0);
-          particle
+          Particle::new(Element::Hydrogen, 0.0, 0.0, 0.0)
         }).collect::<Vec::<Particle>>();
     let connections = AdjacencyList::with_capacity(1);
     let cell_offsets = Vec::<Vector3D>::new();

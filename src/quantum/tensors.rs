@@ -125,7 +125,7 @@ impl HamiltonianTensors{
       let (tensor,spherical_tensor_coefficients) 
           = construct_symmetric_tensor_from_tensor_specifier(rng,
           zerofield_specifier, None, detected_particle.spin_multiplicity(),
-          &structure,config)?;
+          structure,config)?;
       if tensor.any_nan(){
         return Err(CluEError::NANTensorZerofield(
           "the detected spin".to_string(),
@@ -316,8 +316,8 @@ impl HamiltonianTensors{
         .map(|n| (-0.5*hz*beta*idx_to_spin(n,mult)).exp() )
         .collect();
 
-      let z: f64 = weights.iter().map(|w| w).sum();
-      weights.iter_mut().for_each(|w| *w = &*w/z);
+      let z: f64 = weights.iter().sum();
+      weights.iter_mut().for_each(|w| *w /= z);
       weights_list.push(weights);
     }
 
@@ -360,6 +360,8 @@ impl HamiltonianTensors{
   /// This function sets `self.mean_field_couplings`, where  
   /// `self.mean_field_couplings[m][n]` is the coupling of spin m to the 
   /// magnetic field from spin n.
+  // `idx1` is a spin index, not only an index into `states`.
+  #[allow(clippy::needless_range_loop)]
   pub fn set_mean_field_couplings(&mut self, states: &[CxMat])
       -> Result<(),CluEError>
   {
@@ -931,25 +933,25 @@ fn construct_symmetric_tensor_from_eig_specifier(rng: &mut ChaCha20Rng,
   }
   let axis_dims = [axis_dims[0],axis_dims[1]];
 
-  let all_3_axes: [Vector3D; 3]; 
-  match axis_dims{
+   
+  let all_3_axes: [Vector3D; 3] = match axis_dims{
     [Z,X] => {
        let mut axis = axes[0].cross(&axes[1]);
        axis = axis.scale(1.0/axis.norm());
-       all_3_axes = [axes[1].clone(),axis,axes[0].clone()];
+       [axes[1].clone(),axis,axes[0].clone()]
     },
     [Z,Y] => {
        let mut axis = axes[1].cross(&axes[0]);
        axis = axis.scale(1.0/axis.norm());
-       all_3_axes = [axis,axes[1].clone(),axes[0].clone()];
+       [axis,axes[1].clone(),axes[0].clone()]
     },
     [X,Y] => {
        let mut axis = axes[0].cross(&axes[1]);
        axis = axis.scale(1.0/axis.norm());
-       all_3_axes = [axes[0].clone(),axes[1].clone(),axis];
+       [axes[0].clone(),axes[1].clone(),axis]
     },
     _ => return Err(CluEError::InvalidAxes),
-  }
+  };
 
   let rot_mat = array![
     [all_3_axes[0].x(),all_3_axes[1].x(),all_3_axes[2].x()],
@@ -1086,9 +1088,9 @@ pub fn spherical_tensors_rotate_passive(
     for coeficients in particle_tensors.iter_mut(){
       let l = coeficients.dim().0;
 
-      if !d_matrices.contains_key(&l){
+      if let std::collections::hash_map::Entry::Vacant(e) = d_matrices.entry(l) {
         let d_mat = wigner_dir(l, dir)?;
-        d_matrices.insert(l, d_mat);
+        e.insert(d_mat);
       }
 
       let Some(d_mat) = d_matrices.get(&l) else {
@@ -1282,7 +1284,7 @@ mod tests{
   fn test_construct_symmetric_tensor_from_tensor_specifier(){
     let mut rng = ChaCha20Rng::from_entropy();
     let filename = "./assets/TEMPO.pdb";
-    let mut structure = pdb::parse_pdb(&filename,0).unwrap();
+    let mut structure = pdb::parse_pdb(filename,0).unwrap();
     let mut config = Config::new();
     config.detected_spin_position = Some(
         DetectedSpinCoordinates::CentroidOverSerials(vec![28,29]) );
@@ -1349,7 +1351,7 @@ mod tests{
     assert_eq!(values,[-1119999.9999999998, -5880000.000000001, 7000000.0]);
 
     let tensor_specifier = TensorSpecifier::Eig(EigSpecifier{
-      values: Some(values.clone()),
+      values: Some(values),
       x_axis: Some(vector_specifier_no),
       y_axis: Some(vector_specifier_cc),
       z_axis: None,
@@ -1450,7 +1452,7 @@ mod tests{
     let gmr = Isotope::Hydrogen1.gyromagnetic_ratio();
     // CODATA 2022 (NIST): γp = 2.675 221 8708(11) × 10^8 s^-1 T^-1.
     let gmr0 = 2.6752218708e8;
-    assert!( (gmr-gmr0).abs() < 0.000_000_0011e8);
+    assert!( (gmr-gmr0).abs() < 0.000_000_001_1e8);
     let r = 1.5e-10;
     let freq = get_perpendicular_dipole_dipole_frequency(gmr,gmr,r);
     
@@ -1526,13 +1528,13 @@ mod tests{
 
     }
 
-    let expected_values = vec![ 1.0, 2.0, 3.0];
+    let expected_values = [1.0, 2.0, 3.0];
 
-    for ii in 0..(number as usize) {
+    for (ii, expected) in expected_values.iter().enumerate() {
 
       let ten = sf_tens.get(ii).unwrap();
       let val = ten.x();
-      assert!( (val-expected_values[ii]).abs() < 1e-12 ); 
+      assert!( (val-expected).abs() < 1e-12 ); 
 
     }
 
@@ -1546,8 +1548,8 @@ mod tests{
     let mut ss_tens = Spin2Tensors::new(number);
 
     let mut val = 0.0;
-    for ii in 0..(number as usize) {
-      for jj in 0..(number as usize) {
+    for ii in 0..number {
+      for jj in 0..number {
 
         let ten = SymmetricTensor3D::eye();
         val += 1.0;

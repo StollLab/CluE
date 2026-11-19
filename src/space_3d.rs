@@ -973,7 +973,7 @@ mod tests{
     let theta_list = (0..=10).map(|x| (2.0*(x as f64)/10.0 - 1.0f64).acos())
       .collect::<Vec::<f64>>();
 
-    let r_list = vec![0.01, 0.2 , 1.0, 2.1, 10.5];
+    let r_list = [0.01, 0.2 , 1.0, 2.1, 10.5];
 
     for &theta in theta_list.iter(){
       let ct = theta.cos();

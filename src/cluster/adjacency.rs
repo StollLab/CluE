@@ -195,13 +195,13 @@ mod tests {
         }
       }
 
-      for v in 0..n{
-        let expected = reference[v].as_ref()
+      for (v, reference_v) in reference.iter().enumerate(){
+        let expected = reference_v.as_ref()
           .map(|set| set.iter().copied().collect::<Vec::<usize>>());
         assert_eq!(graph.get_neighbors(v).cloned(), expected);
         for w in 0..n{
-          let connected = reference[v].as_ref()
-            .map_or(false, |set| set.contains(&w));
+          let connected = reference_v.as_ref()
+            .is_some_and(|set| set.contains(&w));
           assert_eq!(graph.are_connected(v,w), connected);
         }
       }

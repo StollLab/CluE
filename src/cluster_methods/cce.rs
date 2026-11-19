@@ -107,7 +107,7 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
       let rho = states.density_matrix_for(tensor_indices)?;
       let detected_spin_density_matrix = spin_ops.get_density_matrix(
           spin_multiplicity, 1)?;  
-      kron(&detected_spin_density_matrix,&rho)
+      kron(detected_spin_density_matrix,&rho)
   };
 
 
@@ -182,7 +182,7 @@ mod tests{
     config.set_defaults().unwrap();
     
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],2,&config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],2,&config).unwrap();
 
     let mut config = Config::new();
     config.number_timepoints = vec![21];
@@ -197,7 +197,7 @@ mod tests{
     let mut rng = ChaCha20Rng::from_entropy();
     let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
   
-    let signal_opt  = cce(&vec![1,2], &states,&spin_ops, &tensors, 
+    let signal_opt  = cce(&[1,2], &states,&spin_ops, &tensors, 
         &config).unwrap();
 
     let Some(signal) = signal_opt else{
@@ -214,12 +214,11 @@ mod tests{
 
     for (ii,v) in signal.data.iter().enumerate(){
       let v0 = ref_signal.data[ii];
-      let err: f64;
-      if (v+v0).norm() < 1e12{
-        err = (v-v0).norm();
+      let err: f64 = if (v+v0).norm() < 1e12{
+        (v-v0).norm()
       }else{
-        err = (2.0+(v-v0)/(v+v0)).norm();
-      }
+        (2.0+(v-v0)/(v+v0)).norm()
+      };
       assert!(err < 1e-9);
     }
   }

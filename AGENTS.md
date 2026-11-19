@@ -204,7 +204,12 @@ code is not rustfmt-formatted and a reformat would produce large diffs):
 - Unit tests live in `#[cfg(test)] mod tests` at the bottom of each module and
   frequently use files from `assets/`.
 - Keep the code free of compiler warnings (recent commits cleaned these up).
-  Cite the literature (DOI and equation number) when you implement equations from a paper.
+  Keep `cargo clippy --all-targets` free of warnings: follow clippy's advice 
+  where all results are identical.  When clippy's advice would give different 
+  behavior, check with the user before adding an `#[allow...]` in the code.
+  All the `#[allow...]`s should have a comment explaining why it is needed.   
+  Cite the literature (DOI and equation number) when you implement equations 
+  from a paper.
 
 ## Versioning and releases
 

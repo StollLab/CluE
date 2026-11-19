@@ -200,7 +200,7 @@ mod tests{
   #[allow(non_snake_case)]
   #[test]
   fn test_PulseStepSpecifier_from_toml_value(){
-    let expected = vec![
+    let expected = [
       PulseStepSpecifier::Pulse("pi/2".to_string()),
       PulseStepSpecifier::FixedDelay(4,None),  
       PulseStepSpecifier::FixedDelay(6,Some(0) ),  

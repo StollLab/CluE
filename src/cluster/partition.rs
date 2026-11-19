@@ -481,6 +481,7 @@ fn set_element_to_block_exchange_groups(
   Ok(())    
 }
 //------------------------------------------------------------------------------
+#[allow(clippy::too_many_arguments)]
 fn set_element_to_block_kmeans(
     rng: &mut ChaCha20Rng,
     element_to_block: &mut [PartitionBlock], mut max_id: usize,
@@ -1232,14 +1233,16 @@ this serial number");
     let mut element_to_block = (0..n_spins)
       .map(|_| PartitionBlock::Unset).collect::<Vec::<PartitionBlock>>();
     element_to_block[0] = PartitionBlock::Detection;
-    for ii in 1..=3{ element_to_block[ii] = PartitionBlock::Preset(1); }
+    for blk in element_to_block[1..=3].iter_mut(){
+      *blk = PartitionBlock::Preset(1);
+    }
 
     let mut rng = ChaCha20Rng::seed_from_u64(0);
     set_element_to_block_kmeans(&mut rng, &mut element_to_block, 1, 4,
         true, 1000, &graph, &structure).unwrap();
 
-    for ii in 1..=3{
-      assert_eq!(element_to_block[ii], PartitionBlock::Preset(1));
+    for blk in element_to_block[1..=3].iter(){
+      assert_eq!(*blk, PartitionBlock::Preset(1));
     }
     for blk in element_to_block.iter().skip(4){
       assert!(matches!(blk, PartitionBlock::Bath(id) if *id > 1), "{:?}", blk);

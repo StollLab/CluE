@@ -401,7 +401,7 @@ mod tests{
     // |  7-6  |
     // | /   \ |
     // 3-------2
-    let seven_clusters = vec![
+    let seven_clusters = [
       vec![0,1,2,3,4,5,6],
       vec![0,1,2,3,4,5,7],
       vec![0,1,2,3,4,6,7],
@@ -426,7 +426,7 @@ mod tests{
     // |  7-6  |
     // | /   \ |
     // 3-------2
-    let eight_clusters = vec![
+    let eight_clusters = [
       vec![0,1,2,3,4,5,6,7],
     ];
 

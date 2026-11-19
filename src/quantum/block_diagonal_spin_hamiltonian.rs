@@ -210,7 +210,7 @@ pub fn get_propagators(hamiltonian: &CxMat, times: &[f64]  )
   let Ok((eigvals, eigvecs)) = hamiltonian.eigh(UPLO::Lower) else{
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(
-          crate::math::cx_matrix_summary(&hamiltonian)));
+          crate::math::cx_matrix_summary(hamiltonian)));
   };
 
   let mut propagators = Vec::<CxMat>::with_capacity(times.len());
@@ -276,7 +276,7 @@ pub fn get_propagators_complex_time(hamiltonian: &CxMat,
   let Ok((eigvals, eigvecs)) = hamiltonian.eigh(UPLO::Lower) else{
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(
-          crate::math::cx_matrix_summary(&hamiltonian)));
+          crate::math::cx_matrix_summary(hamiltonian)));
   };
 
   let mut propagators = Vec::<CxMat>::with_capacity(times.len());
@@ -349,12 +349,12 @@ impl BlockDiagSpinHamiltonian{
     let Ok((beta_eigvals, beta_eigvecs)) = beta.eigh(UPLO::Lower) else{
       return Err(
           CluEError::CannotDiagonalizeHamiltonian(
-          crate::math::cx_matrix_summary(&beta)));
+          crate::math::cx_matrix_summary(beta)));
     };
     let Ok((alpha_eigvals, alpha_eigvecs)) = alpha.eigh(UPLO::Lower) else{
       return Err(
           CluEError::CannotDiagonalizeHamiltonian(
-          crate::math::cx_matrix_summary(&alpha)));
+          crate::math::cx_matrix_summary(alpha)));
     };
   
     Ok(BlockDiagSpinHamiltonian{
@@ -514,7 +514,7 @@ mod tests {
     config.set_defaults().unwrap();
 
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],2,&config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],2,&config).unwrap();
 
     let nt = 21;
     config.number_timepoints = vec![nt];
@@ -546,12 +546,11 @@ mod tests {
 
     for (ii,v) in signal.data.iter().enumerate(){
       let v0 = ref_signal.data[ii];
-      let err: f64;
-      if (v+v0).norm() < 1e12{
-        err = (v-v0).norm();
+      let err: f64 = if (v+v0).norm() < 1e12{
+        (v-v0).norm()
       }else{
-        err = (2.0+(v-v0)/(v+v0)).norm();
-      }
+        (2.0+(v-v0)/(v+v0)).norm()
+      };
       assert!(err < 1e-9);
     }
   }
@@ -573,7 +572,7 @@ mod tests {
 
     let spin_indices = vec![1,2];
     let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
-    let spin_ops = ClusterSpinOperators::new(det_h,&vec![2],2,&config).unwrap();
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],2,&config).unwrap();
     let mut config = Config::new();
     config.set_defaults().unwrap();
 

@@ -341,14 +341,14 @@ mod tests{
   #[test]
   fn test_parse_cluster_line(){
     let line = "[7,13,23,42]";
-    let value = parse_cluster_line(&line).unwrap();
+    let value = parse_cluster_line(line).unwrap();
     assert_eq!(value,vec![7,13,23,42]);
   }
   //----------------------------------------------------------------------------
   #[test]
   fn test_parse_number_clusters(){
     let line = "#[clusters, number_clusters = [4276,32395] ]".to_string();
-    let value = parse_number_clusters(&line, &"<file>").unwrap();
+    let value = parse_number_clusters(&line, "<file>").unwrap();
     assert_eq!(value, vec![4276,32395]);
   }
   //----------------------------------------------------------------------------

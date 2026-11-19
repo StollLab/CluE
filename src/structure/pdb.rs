@@ -97,8 +97,7 @@ fn parse_connections(filename: &str ,
     serial_to_index: HashMap::<u32,Option<usize>>) 
   -> Result<AdjacencyList,CluEError>
 {
-   let n_atoms: usize = serial_to_index.iter()
-     .filter_map(|(_key,val)| if val.is_some(){Some(1)}else{None})
+   let n_atoms: usize = serial_to_index.values().filter_map(|val| if val.is_some(){Some(1)}else{None})
      .sum();
 
    let mut connections = AdjacencyList::with_capacity(n_atoms);
@@ -1451,7 +1450,7 @@ mod tests {
   #[test]
   fn test_parse_pdb_water(){
     let filename = "./assets/water.pdb";
-    let structure = parse_pdb(&filename,0).unwrap();
+    let structure = parse_pdb(filename,0).unwrap();
     assert_eq!(structure.bath_particles.len(),3);
   }
   //----------------------------------------------------------------------------
@@ -1465,7 +1464,7 @@ mod tests {
     // total hydrons =  26956.
     //
     let filename = "./assets/TEMPO_wat_gly_70A.pdb";
-    let structure = parse_pdb(&filename,0).unwrap();
+    let structure = parse_pdb(filename,0).unwrap();
     assert_eq!(structure.bath_particles.len(),43436);
   }
   //----------------------------------------------------------------------------
@@ -1531,7 +1530,7 @@ mod tests {
     // The serials start at `first_serial`.
     let residue_lines = |chain_id: &str, numbers: &[i32], 
         first_serial: usize| numbers.iter()
-      .flat_map(|n| std::iter::repeat(format!("{:>4}", n)).take(2))
+      .flat_map(|n| std::iter::repeat_n(format!("{:>4}", n), 2))
       .enumerate()
       .map(|(ii, residue)| numbered_atom_line(first_serial + ii, chain_id, 
             &residue))
@@ -1582,7 +1581,7 @@ mod tests {
     serial_to_index.insert(21031,Some(1));
     serial_to_index.insert(21032,Some(2));
     serial_to_index.insert(21033,None);
-    let adjacency = parse_connections(&filename,serial_to_index).unwrap();
+    let adjacency = parse_connections(filename,serial_to_index).unwrap();
 
     assert!(adjacency.are_connected(0,1));
     assert!(adjacency.are_connected(0,2));
@@ -1595,7 +1594,7 @@ mod tests {
   #[test]
   fn test_parse_pdb_tempo(){
     let filename = "./assets/TEMPO.pdb";
-    let structure = parse_pdb(&filename,0).unwrap();
+    let structure = parse_pdb(filename,0).unwrap();
 
     assert_eq!(structure.bath_particles.len(),29);
     assert_eq!(structure.bath_particles[27].element,Element::Nitrogen);

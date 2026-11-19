@@ -877,8 +877,7 @@ fn list_files(dir: &str, exclude_prefix: Option<&str>)
   let mut stack = vec![root.to_path_buf()];
   let is_excluded = |path: &Path| match exclude_prefix{
     Some(prefix) => path.parent() == Some(root) 
-      && path.file_name().map_or(false, 
-          |name| name.to_string_lossy().starts_with(prefix)),
+      && path.file_name().is_some_and(|name| name.to_string_lossy().starts_with(prefix)),
     None => false,
   };
   while let Some(path) = stack.pop(){
@@ -893,7 +892,7 @@ fn list_files(dir: &str, exclude_prefix: Option<&str>)
         if !is_excluded(&entry_path){
           stack.push(entry_path);
         }
-      }else if entry_path.extension().map_or(true, |ext| ext != "tmp"){
+      }else if entry_path.extension().is_none_or(|ext| ext != "tmp"){
         if let Ok(relative) = entry_path.strip_prefix(root){
           files.push(relative.to_string_lossy().replace('\\', "/"));
         }
@@ -1983,7 +1982,7 @@ input has errors".to_string()));
 number_runs: None,\n    particles: [\n        ParticleConfig {\n            \
 label: \"h\",\n        },\n    ],\n}";
     let new = old.replace("8.0", "9.0").replace("\"h\"", "\"d\"");
-    assert_eq!(fingerprint_differences(old, &new), vec![
+    assert_eq!(fingerprint_differences(old, &new), [
         "radius:", "  - 8.0,", "  + 9.0,",
         "particles:", "  - label: \"h\",", "  + label: \"d\","]
         .iter().map(|s| s.to_string()).collect::<Vec::<String>>());
@@ -2457,7 +2456,8 @@ number_runs");
   }
   //----------------------------------------------------------------------------
   // Every signal file starts with the time columns tau and tau2 of the run,
-  // which `run` also returns; there is no tau_axis.csv, and the sans-spin
+  // which `run` also returns, followed by the real and imaginary column of
+  // each signal; there is no tau_axis.csv, and the sans-spin
   // signals are written to sans_spin_signals.csv.
   #[test]
   fn test_signal_files_have_time_columns(){
@@ -2484,7 +2484,8 @@ number_runs");
     for file in signal_files.iter(){
       let path = format!("{}/{}", out, file);
       let text = std::fs::read_to_string(&path).unwrap();
-      assert!(text.starts_with("tau,tau2,signal_0,signal_1,signal_2\n"), 
+      assert!(text.starts_with("tau,tau2,re_signal_0,im_signal_0,\
+re_signal_1,im_signal_1,re_signal_2,im_signal_2\n"), 
           "{}", file);
       let (axes, signals) = load_csv_to_vec_signals(&path).unwrap();
       assert_eq!(axes.as_ref(), Some(&tau_axes), "{}", file);
@@ -2502,7 +2503,7 @@ number_runs");
     for file in sans.iter(){
       let path = format!("{}/{}", out, file);
       assert!(std::fs::read_to_string(&path).unwrap()
-          .starts_with("tau,tau2,sans_"), "{}", file);
+          .starts_with("tau,tau2,re_sans_"), "{}", file);
       let (axes, signals) = load_csv_to_vec_signals(&path).unwrap();
       assert_eq!(axes.as_ref(), Some(&tau_axes));
       assert!(!signals.is_empty());
@@ -2514,7 +2515,7 @@ number_runs");
     for file in methyl.iter(){
       let path = format!("{}/{}", out, file);
       assert!(std::fs::read_to_string(&path).unwrap()
-          .starts_with("tau,tau2,signal\n"), "{}", file);
+          .starts_with("tau,tau2,re_signal,im_signal\n"), "{}", file);
       assert_eq!(load_csv_to_vec_signals(&path).unwrap().0.as_ref(), 
           Some(&tau_axes));
     }
