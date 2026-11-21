@@ -361,7 +361,12 @@ mod tests{
     
     let structure = Structure::new( bath_particles, connections, cell_offsets);
 
-    let mut rng = ChaCha20Rng::from_entropy();
+    // The analytic pair signal (appa_hahn) is that of the unpolarized bath,
+    // ρ = 1/4: ensemble CCE without a temperature.
+    config.ensemble_cce = Some(true);
+    config.temperature = None;
+
+    let mut rng = ChaCha20Rng::seed_from_u64(5);
     let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
     let order_n_signals = calculate_cluster_signals(&mut cluster_set, &states,
         &spin_ops, &tensors, &config, &None, &structure).unwrap();

@@ -1,5 +1,4 @@
 use crate::config::{
-  ClusterPopulations,
   Config,
   pulse_sequence::PulseSequence,
 };
@@ -8,8 +7,10 @@ use crate::signal::Signal;
 use crate::HamiltonianTensors;
 use crate::quantum::block_diagonal_spin_hamiltonian::*;
 use crate::quantum::general_spin_hamiltonian::{
+  build_bath_spin_hamiltonian,
   build_spin_hamiltonian,
   get_electron_cluster_thermal_density_matrix,
+  get_gcce_product_density_matrix,
   propagate_custom_pulse_sequence,
   propagate_pulse_sequence,
 };
@@ -20,7 +21,11 @@ use crate::quantum::pulse_sequences::{
 use crate::quantum::cluster_operators::ClusterSpinOperators;
 use crate::quantum::spin_states::SpinStates;
 
+use ndarray::Array2;
 use ndarray::linalg::kron;
+use num_complex::Complex64;
+
+type CxMat = Array2::<Complex64>;
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 /// This function calculates the cluster correlation expansion (CCE)
@@ -53,13 +58,25 @@ pub fn cce(tensor_indices: &[usize],states: &SpinStates,
   let hamiltonian = build_block_diag_hamiltonian(
       tensor_indices,spin_ops, tensors,config)?;
 
-  let Some(cluster_populations) = &config.cluster_populations else{
-    return Err(CluEError::NoClusterDensityMatrixMethod);
+  let Some(ensemble_cce) = config.ensemble_cce else{
+    return Err(CluEError::NoEnsembleCCE);
   };
-  let density_matrix = match cluster_populations{
-    ClusterPopulations::Thermal  => 
-        get_cluster_thermal_density_matrix(&hamiltonian, config)?,
-    _ => states.density_matrix_for(tensor_indices)?,
+
+  // The bath initial state (plan_populations.md, §2).
+  let density_matrix = if ensemble_cce{
+    match config.temperature{
+      // exp(-βH_C⁰)/Z, without the coupling to the detected spin.
+      Some(temperature) => get_bath_thermal_density_matrix(tensor_indices,
+          spin_ops, tensors, temperature)?,
+      // T = ∞.
+      None => {
+        let dim = hamiltonian.alpha_eigvals.len();
+        CxMat::eye(dim)/(dim as f64)
+      },
+    }
+  }else{
+    // A product of sampled one-spin eigenstates (SpinStates::generate).
+    states.density_matrix_for(tensor_indices)?
   };
 
   let signal = propagate_pulse_sequence_block_diag(
@@ -96,20 +113,33 @@ pub fn gcce(tensor_indices: &[usize], states: &SpinStates,
   let (h_eigvals, h_eigvecs) = build_spin_hamiltonian(
       &spin_indices,spin_ops,tensors)?;
 
-  if config.thermalize_cluster_populations == Some(true) && 
-      config.ensemble_cce != Some(true){
-    return Err(CluEError::ThermalizationRequiresEnsembleCCE);
-  }
-  let density_matrix = if config.thermalize_cluster_populations == Some(true){
-      get_electron_cluster_thermal_density_matrix(
-          &h_eigvals, &h_eigvecs, config)?
-    }else{
+  let Some(ensemble_cce) = config.ensemble_cce else{
+    return Err(CluEError::NoEnsembleCCE);
+  };
+
+  // The cluster initial state (plan_populations.md, §2).
+  let density_matrix = match (ensemble_cce, &config.detected_population){
+    // ρ_S ⊗ exp(-βH_C⁰)/Z, or ρ_S ⊗ 1/d_C without a temperature.
+    (true, Some(_)) => {
+      let detected_spin_density_matrix = spin_ops.get_density_matrix(
+          spin_multiplicity, 1)?;  
+      let bath_ham = build_bath_spin_hamiltonian(&spin_indices, spin_ops,
+          tensors)?;
+      get_gcce_product_density_matrix(detected_spin_density_matrix, 
+          &bath_ham, config.temperature)?
+    },
+    // exp(-βH_{S+C})/Z of the detected spin and the cluster.
+    (true, None) => get_electron_cluster_thermal_density_matrix(
+          &h_eigvals, &h_eigvecs, config)?,
+    // ρ_S ⊗ a product of sampled one-spin eigenstates.
+    (false, Some(_)) => {
       let rho = states.density_matrix_for(tensor_indices)?;
       let detected_spin_density_matrix = spin_ops.get_density_matrix(
           spin_multiplicity, 1)?;  
       kron(detected_spin_density_matrix,&rho)
+    },
+    (false, None) => return Err(CluEError::NoDetectedSpinDensityMatrix),
   };
-
 
   let Some(pulse_sequence) = &config.pulse_sequence else{
     return Err(CluEError::NoPulseSequence);
@@ -194,7 +224,12 @@ mod tests{
     config.set_defaults().unwrap();
     config.set_tau_axis().unwrap();
 
-    let mut rng = ChaCha20Rng::from_entropy();
+    // The analytic pair signal (appa_hahn) is that of the unpolarized bath,
+    // ρ = 1/4: ensemble CCE without a temperature.
+    config.ensemble_cce = Some(true);
+    config.temperature = None;
+
+    let mut rng = ChaCha20Rng::seed_from_u64(5);
     let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
   
     let signal_opt  = cce(&[1,2], &states,&spin_ops, &tensors, 

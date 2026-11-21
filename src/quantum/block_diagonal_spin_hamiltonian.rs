@@ -13,7 +13,8 @@ use crate::quantum::general_spin_hamiltonian::{
 };
 
 use ndarray::{Array1,Array2};
-use ndarray_linalg::{Eigh, UPLO, Trace};
+use ndarray_linalg::UPLO;
+use crate::ndarray_linalg_eigh_workaround::eigh_hermitian;
 use num_complex::Complex;
 
 type CxMat = Array2::<Complex<f64>>;
@@ -166,38 +167,66 @@ pub fn propagate_pulse_sequence_block_diag(
 }
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 //------------------------------------------------------------------------------
-/// This function builds the density matrix.
-pub fn get_cluster_thermal_density_matrix(
-    hamiltonian: &BlockDiagSpinHamiltonian, config: &Config)
+/// This function returns the thermal density matrix of the bath spins of
+/// a CCE cluster, exp(-βH_C⁰)/Tr, with β = h/(k_B T).
+/// H_C⁰ is the bath-only cluster Hamiltonian (`build_bath_cluster_hamiltonian`
+/// without mean fields): Zeeman, quadrupole and zero-field terms of each
+/// bath spin, and the couplings within the cluster. The coupling to the
+/// detected spin and its polarization are not included.
+/// The energies are shifted by their minimum before exponentiating, which
+/// avoids overflow and does not change the result.
+pub fn get_bath_thermal_density_matrix(spin_indices: &[usize],
+    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors,
+    temperature: f64)
   -> Result<CxMat,CluEError>
 {
-
-  let Some(temperature) = config.temperature else {
+  let ham0 = build_bath_cluster_hamiltonian(spin_indices, spin_ops, tensors,
+      false)?;
+  thermal_density_matrix(&ham0, temperature)
+}
+//------------------------------------------------------------------------------
+/// This function returns exp(-βH)/Tr[exp(-βH)] for the Hermitian matrix
+/// `hamiltonian` (Hz), with β = h/(k_B T). The energies are shifted by 
+/// their minimum before exponentiating.
+pub fn thermal_density_matrix(hamiltonian: &CxMat, temperature: f64)
+  -> Result<CxMat,CluEError>
+{
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(hamiltonian, UPLO::Lower) else{
+    return Err(CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(hamiltonian)));
+  };
+  thermal_density_matrix_from_eig(&eigvals, &eigvecs, temperature)
+}
+//------------------------------------------------------------------------------
+/// This function returns V exp(-β(E - E_min)) V† / Σ_k exp(-β(E_k - E_min)),
+/// the thermal density matrix of the Hamiltonian with eigenvalues `eigvals`
+/// (Hz) and eigenvectors `eigvecs` (columns), with β = h/(k_B T).
+pub fn thermal_density_matrix_from_eig(eigvals: &Array1::<f64>,
+    eigvecs: &CxMat, temperature: f64)
+  -> Result<CxMat,CluEError>
+{
+  if temperature.is_nan() || temperature <= 0.0{
     return Err(CluEError::NoTemperature);
-  };
-
-  let beta = I/(temperature*BOLTZMANN/HBAR);
-  
-  let rho_alpha = get_propagators_complex_time_from_eig(
-      &hamiltonian.alpha_eigvals, &hamiltonian.alpha_eigvecs,
-      &[-beta])?;
-
-  let rho_beta = get_propagators_complex_time_from_eig(
-      &hamiltonian.beta_eigvals, &hamiltonian.beta_eigvecs,
-      &[-beta])?;
-
-  let mut density_matrix = &rho_alpha[0] - &rho_beta[0];
-
-  let Ok(z) = density_matrix.trace() else{
-    return Err(CluEError::CannotTakeTrace(format!("a {}x{} matrix",
-        density_matrix.dim().0, density_matrix.dim().1)));
-  };
-  if z.norm() < 1e-12{
-    return Err(CluEError::DensityMatrixTraceVanishes(
-          "Tr[ρ_α] - Tr[ρ_β]".to_string(), z.norm()));
   }
-  density_matrix /= z;
-  Ok(density_matrix)
+  // β in 1/Hz.
+  let beta = 1.0/(JOULES_TO_HERTZ*BOLTZMANN*temperature);
+
+  let e_min = eigvals.iter().cloned().fold(f64::INFINITY, f64::min);
+  let weights = eigvals.map(|e| (-beta*(e - e_min)).exp());
+  let z: f64 = weights.sum();
+  if !(z.is_finite() && z > 0.0){
+    return Err(CluEError::DensityMatrixTraceVanishes(
+          "Σ exp(-β(E - E_min))".to_string(), z));
+  }
+
+  let n = eigvals.len();
+  let mut scaled = eigvecs.clone();
+  for k in 0..n{
+    let w = weights[k]/z;
+    scaled.column_mut(k).mapv_inplace(|v| v*w);
+  }
+  let eigvecs_dag = eigvecs.t().map(|v| v.conj());
+  Ok(scaled.dot(&eigvecs_dag))
 }
 //------------------------------------------------------------------------------
 /// This function takes a Hamiltonian (Hz) and a vector of times (s), 
@@ -207,7 +236,7 @@ pub fn get_cluster_thermal_density_matrix(
 pub fn get_propagators(hamiltonian: &CxMat, times: &[f64]  )
   -> Result<Vec::<CxMat>,CluEError> 
 {
-  let Ok((eigvals, eigvecs)) = hamiltonian.eigh(UPLO::Lower) else{
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(hamiltonian, UPLO::Lower) else{
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(
           crate::math::cx_matrix_summary(hamiltonian)));
@@ -273,7 +302,7 @@ pub fn get_propagators_complex_time(hamiltonian: &CxMat,
     times: &[Complex<f64>]  )
   -> Result<Vec::<CxMat>,CluEError> 
 {
-  let Ok((eigvals, eigvecs)) = hamiltonian.eigh(UPLO::Lower) else{
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(hamiltonian, UPLO::Lower) else{
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(
           crate::math::cx_matrix_summary(hamiltonian)));
@@ -346,12 +375,12 @@ impl BlockDiagSpinHamiltonian{
   pub fn new(beta: &CxMat,alpha: &CxMat) -> Result<Self,CluEError>
   {
 
-    let Ok((beta_eigvals, beta_eigvecs)) = beta.eigh(UPLO::Lower) else{
+    let Ok((beta_eigvals, beta_eigvecs)) = eigh_hermitian(beta, UPLO::Lower) else{
       return Err(
           CluEError::CannotDiagonalizeHamiltonian(
           crate::math::cx_matrix_summary(beta)));
     };
-    let Ok((alpha_eigvals, alpha_eigvecs)) = alpha.eigh(UPLO::Lower) else{
+    let Ok((alpha_eigvals, alpha_eigvecs)) = eigh_hermitian(alpha, UPLO::Lower) else{
       return Err(
           CluEError::CannotDiagonalizeHamiltonian(
           crate::math::cx_matrix_summary(alpha)));
@@ -404,6 +433,53 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
   let ms_alpha = spin_ms[transition[1]];
 
 
+  let ham0 = build_bath_cluster_hamiltonian(spin_indices, spin_ops, tensors,
+      true)?;
+
+  let dim = ham0.dim().0;
+  let mut ham_ms = CxMat::zeros((dim,dim));
+  
+  // electron Zeeman
+  if let Some(vec) = tensors.spin1_tensors.get(0){
+    ham_ms = CxMat::eye(dim)*vec.z();
+  }
+
+  let cluster_size = spin_indices.len();
+
+  for (sop_idx0, &ten_idx0) in spin_indices.iter().enumerate(){
+
+    let spin_mult0 = tensors.spin_multiplicities[ten_idx0];
+    let sx0 = spin_ops.get(&SpinOp::Sx,spin_mult0,cluster_size,sop_idx0)?;
+    let sy0 = spin_ops.get(&SpinOp::Sy,spin_mult0,cluster_size,sop_idx0)?;
+    let sz0 = spin_ops.get(&SpinOp::Sz,spin_mult0,cluster_size,sop_idx0)?;
+
+    // nuclear hyperfine
+    if let Some(ten) = tensors.spin2_tensors.get(0,ten_idx0){
+      ham_ms = ham_ms + sx0*ten.zx();
+      ham_ms = ham_ms + sy0*ten.zy();
+      ham_ms = ham_ms + sz0*ten.zz();
+    }
+  }
+
+  let beta = ham0.clone() + ham_ms.clone()*ms_beta;
+  let alpha = ham0 + ham_ms*ms_alpha;
+
+  BlockDiagSpinHamiltonian::new(&beta,&alpha)
+}
+//------------------------------------------------------------------------------
+/// This function builds the part of the CCE cluster Hamiltonian that does
+/// not depend on m_S, H_C⁰ (Hz): for each bath spin in `spin_indices` the
+/// Zeeman term and, if `include_mean_field` and mean-field couplings are
+/// set, the mean field of the spins outside the cluster; and for each pair
+/// in the cluster, including a spin with itself, the spin-2 tensor
+/// (dipole-dipole, exchange, quadrupole, zero-field).
+/// The electron Zeeman and hyperfine terms are added by
+/// `build_block_diag_hamiltonian`.
+pub fn build_bath_cluster_hamiltonian(spin_indices: &[usize],
+    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors,
+    include_mean_field: bool)
+  -> Result<CxMat,CluEError>
+{
   let spin_multiplicities: Vec::<usize> = 
     spin_indices.iter().map(|idx| tensors.spin_multiplicities[*idx]).collect();
 
@@ -411,12 +487,6 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
   spin_multiplicities.iter().for_each(|spin_mul| dim *= spin_mul);
 
   let mut ham0 = CxMat::zeros((dim,dim));
-  let mut ham_ms = CxMat::zeros((dim,dim));
-  
-  // electron Zeeman
-  if let Some(vec) = tensors.spin1_tensors.get(0){
-    ham_ms = CxMat::eye(dim)*vec.z();
-  }
 
   let cluster_size = spin_indices.len();
 
@@ -435,17 +505,14 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
       ham0 = ham0 + sz0*vec.z();
     }
 
-    if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,spin_indices){
-      ham0 = ham0 + sx0*vec.x();
-      ham0 = ham0 + sy0*vec.y();
-      ham0 = ham0 + sz0*vec.z();
-    }
-
-    // nuclear hyperfine
-    if let Some(ten) = tensors.spin2_tensors.get(0,ten_idx0){
-      ham_ms = ham_ms + sx0*ten.zx();
-      ham_ms = ham_ms + sy0*ten.zy();
-      ham_ms = ham_ms + sz0*ten.zz();
+    if include_mean_field{
+      if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,
+          spin_indices)
+      {
+        ham0 = ham0 + sx0*vec.x();
+        ham0 = ham0 + sy0*vec.y();
+        ham0 = ham0 + sz0*vec.z();
+      }
     }
 
     for (sop_idx1, &ten_idx1) in spin_indices.iter().enumerate().skip(sop_idx0){
@@ -472,10 +539,7 @@ pub fn build_block_diag_hamiltonian(spin_indices: &[usize],
     }
   }
 
-  let beta = ham0.clone() + ham_ms.clone()*ms_beta;
-  let alpha = ham0 + ham_ms*ms_alpha;
-
-  BlockDiagSpinHamiltonian::new(&beta,&alpha)
+  Ok(ham0)
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -491,10 +555,7 @@ mod tests {
     appa_hahn_frequency,
   };
   use crate::quantum::spin_states::SpinStates;
-
-
-  use rand_chacha::ChaCha20Rng;
-  use rand::SeedableRng;
+  use crate::quantum::general_spin_hamiltonian::build_single_spin_hamiltonian;
 
 
   //----------------------------------------------------------------------------
@@ -529,12 +590,34 @@ mod tests {
     let hamiltonian = build_block_diag_hamiltonian(&spin_indices,&spin_ops, &tensors,
         &config).unwrap();
 
-    let mut rng = ChaCha20Rng::from_entropy();
-    let states = SpinStates::generate(&mut rng, &tensors,&config).unwrap();
-    let density_matrix = states.density_matrix_for(&spin_indices).unwrap();
-
-    let signal = propagate_pulse_sequence_block_diag(
-        &density_matrix, &hamiltonian, &config).unwrap();
+    // The analytic pair signal (appa_hahn) is that of the unpolarized bath.
+    // Average the signal exactly over the four product eigenstates of the
+    // one-spin Hamiltonians (each sampled with p = 1/4 without a
+    // temperature), which equals the signal of ρ = 1/4.
+    let mut signal = Signal{data: vec![ZERO; nt]};
+    let eigvecs: Vec::<CxMat> = spin_indices.iter().map(|&n| {
+        let h = build_single_spin_hamiltonian(&tensors, n, false).unwrap();
+        eigh_hermitian(&h, UPLO::Lower).unwrap().1
+      }).collect();
+    for k1 in 0..2{
+      for k2 in 0..2{
+        let states = SpinStates{ states: vec![
+          CxMat::eye(2).column(0).to_owned().into_shape_with_order((2,1))
+            .unwrap(),
+          eigvecs[0].column(k1).to_owned().into_shape_with_order((2,1))
+            .unwrap(),
+          eigvecs[1].column(k2).to_owned().into_shape_with_order((2,1))
+            .unwrap(),
+        ]};
+        let density_matrix = states.density_matrix_for(&spin_indices)
+          .unwrap();
+        let s = propagate_pulse_sequence_block_diag(
+            &density_matrix, &hamiltonian, &config).unwrap();
+        for (v, w) in signal.data.iter_mut().zip(s.data.iter()){
+          *v += w*0.25;
+        }
+      }
+    }
 
     assert_eq!(signal.data.len(),nt);
 
@@ -651,23 +734,65 @@ mod tests {
   }
   //----------------------------------------------------------------------------
   #[test]
-  fn test_get_cluster_thermal_density_matrix(){
-    let sz = spin_z(2);
-    let delta_energy = 416732382466.5515; // kB*T/h at T = 20 K.
-    let beta = (sz.clone() -  CxMat::eye(2))*delta_energy;
-    let alpha = (sz.clone() +  CxMat::eye(2))*delta_energy;
-    let spin_hamiltonian = BlockDiagSpinHamiltonian::new(&beta,&alpha).unwrap();
+  fn test_get_bath_thermal_density_matrix(){
+    // Bath spins 1 and 2 of build_restricted_three_spin_tensors: Zeeman z1
+    // and the secular dipolar coupling b. In the basis ↑↑, ↑↓, ↓↑, ↓↓
+    // (index i is m = S - i), H⁰ = diag(z1 + b/4, ., ., -z1 + b/4) with the
+    // flip-flop block M = -b/4 [[1,1],[1,1]], whose eigenvalues are 0 for
+    // (1,-1)/√2 and -b/2 for (1,1)/√2.
+    let z1 = 100.0;
+    let b = 30.0;
+    let beta = 0.01; // 1/Hz
+    let temperature = 1.0/(JOULES_TO_HERTZ*BOLTZMANN*beta);
 
     let mut config = Config::new();
-    config.temperature = Some(20.0);
-    let density_matrix = get_cluster_thermal_density_matrix(
-        &spin_hamiltonian,&config).unwrap();
+    config.set_defaults().unwrap();
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],2,&config).unwrap();
+    let spin_indices = vec![1,2];
 
-    let e_inv = (-ONE).exp();
-    let z = e_inv*e_inv + e_inv;
-    let expected = Array2::from_diag(&array![e_inv*e_inv, e_inv])/z;
-    assert!(approx_eq(&density_matrix, &expected, 1e-12));
+    let tensors = build_restricted_three_spin_tensors(1000.0, z1, 2.0, -1.0, b);
+    let rho = get_bath_thermal_density_matrix(&spin_indices, &spin_ops,
+        &tensors, temperature).unwrap();
 
+    let e_flip = (beta*b/2.0).exp();
+    let mut expected = Array2::<f64>::zeros((4,4));
+    expected[[0,0]] = (-beta*(z1 + b/4.0)).exp();
+    expected[[3,3]] = (-beta*(-z1 + b/4.0)).exp();
+    expected[[1,1]] = 0.5*(1.0 + e_flip);
+    expected[[2,2]] = 0.5*(1.0 + e_flip);
+    expected[[1,2]] = 0.5*(e_flip - 1.0);
+    expected[[2,1]] = 0.5*(e_flip - 1.0);
+    let z: f64 = (0..4).map(|i| expected[[i,i]]).sum();
+    let expected = expected.map(|x| x/z*ONE);
+    assert!(approx_eq(&rho, &expected, 1e-12));
+
+    // The hyperfine coupling (and the electron Zeeman) do not enter.
+    let tensors2 = build_restricted_three_spin_tensors(5000.0, z1, 40.0, 7.0,
+        b);
+    let rho2 = get_bath_thermal_density_matrix(&spin_indices, &spin_ops,
+        &tensors2, temperature).unwrap();
+    assert_eq!(rho, rho2);
+
+    // T → ∞ gives 1/4.
+    let rho_inf = get_bath_thermal_density_matrix(&spin_indices, &spin_ops,
+        &tensors, 1e30).unwrap();
+    assert!(approx_eq(&rho_inf, &(CxMat::eye(4)/4.0), 1e-12));
+
+    // H⁰ is the m_S-independent part of the block-diagonal Hamiltonian:
+    // (H_α + H_β)/2 for m_S = ±1/2.
+    let hamiltonian = build_block_diag_hamiltonian(&spin_indices,&spin_ops,
+        &tensors, &config).unwrap();
+    let ham0 = build_bath_cluster_hamiltonian(&spin_indices, &spin_ops,
+        &tensors, false).unwrap();
+    let mean = (hamiltonian.alpha() + hamiltonian.beta())*0.5;
+    assert!(approx_eq(&ham0, &mean, 1e-12));
+
+    // Errors.
+    assert_eq!(thermal_density_matrix(&ham0, 0.0), 
+        Err(CluEError::NoTemperature));
+    assert_eq!(thermal_density_matrix(&ham0, -1.0), 
+        Err(CluEError::NoTemperature));
   }
   //----------------------------------------------------------------------------
   #[test]

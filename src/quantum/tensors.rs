@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::config::particle_config::{EigSpecifier,TensorSpecifier};
 use crate::isotopes::Isotope;
 use crate::math::{expectation_value,rotation_matrix_to_axis_angle};
-use crate::physical_constants::{BOLTZMANN, HBAR, JOULES_TO_HERTZ,
+use crate::physical_constants::{HBAR, JOULES_TO_HERTZ,
   MU0,MUB,MUN,PI};
 use crate::quantum::cluster_operators::{
   expmap_spin_axis_angle,
@@ -293,35 +293,6 @@ impl HamiltonianTensors{
       mean_field_couplings: None,
       })
 
-  }
-  //----------------------------------------------------------------------------
-  pub fn get_zeeman_boltzmann_weights(&self,temperature: f64) 
-      -> Vec::<Vec::<f64>>
-  {
-    let beta =  1.0/(JOULES_TO_HERTZ*BOLTZMANN*temperature);
-
-    let mut weights_list = Vec::<Vec::<f64>>::with_capacity(self.len());
-    for n in 0..self.len(){
-
-      let hz = match self.spin1_tensors.get(n){
-        Some(v) => v.z(),
-        None => 0.0,  
-      };
-
-      let mult = self.spin_multiplicities[n];
-
-      let idx_to_spin = |idx, mult| - (idx as f64) + 0.5*( (mult as f64) - 1.0);
-
-      let mut weights: Vec::<f64> = (0..mult)
-        .map(|n| (-0.5*hz*beta*idx_to_spin(n,mult)).exp() )
-        .collect();
-
-      let z: f64 = weights.iter().sum();
-      weights.iter_mut().for_each(|w| *w /= z);
-      weights_list.push(weights);
-    }
-
-    weights_list
   }
   //----------------------------------------------------------------------------
   /// This function calculates the mean field contribution to the energy
@@ -1271,13 +1242,6 @@ mod tests{
       }
     }
 
-
-    let weights_list = tensors.get_zeeman_boltzmann_weights(20.0);
-    for weights in weights_list.iter(){
-      for &w in weights.iter(){
-        assert!(!w.is_nan());
-      }
-    }
   }
   //----------------------------------------------------------------------------
   #[test]

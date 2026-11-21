@@ -20,7 +20,8 @@ use std::fmt;
 use std::collections::HashMap;
 use ndarray::{Array1,Array2};
 use ndarray::linalg::kron;
-use ndarray_linalg::{Eigh, UPLO};
+use ndarray_linalg::UPLO;
+use crate::ndarray_linalg_eigh_workaround::eigh_hermitian;
 use num_complex::Complex64;
 
 
@@ -163,10 +164,6 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     _ => (),
   }
 
-  let Some(detected_population) = &config.detected_population else{
-    return Err(CluEError::NoDetectedSpinDensityMatrix);
-  };
-
   let eigvecs = &det_hamiltonian.1;
   let inv_eigvecs = eigvecs.t().map(|v| v.conj());
 
@@ -183,15 +180,19 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     return Err(CluEError::NoDetectionFrame);  
   }; 
 
-  let density_matrix_opt = match detected_population{
-    DetectedPopulation::Matrix(mat) => {
+  // Without detected_spin.density_matrix (allowed for ensemble gCCE, which
+  // then uses the thermal state of the detected spin and cluster), no 
+  // detected-spin density matrix is built.
+  let density_matrix_opt = match &config.detected_population{
+    None => None,
+    Some(DetectedPopulation::Matrix(mat)) => {
       let rho = match frame{
         DetFrame::Eigen => eigvecs.dot( &mat.dot( &inv_eigvecs) ),
         DetFrame::Zeeman => mat.clone(),  
       };
       Some(rho)
     },
-    DetectedPopulation::S(sop) => {
+    Some(DetectedPopulation::S(sop)) => {
       let mut rho = get_spin_operator(det_multiplicity,sop);
       match frame{
         DetFrame::Eigen => rho = eigvecs.dot( &rho.dot( &inv_eigvecs) ),
@@ -199,7 +200,7 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
       }
       Some(rho)
     },
-    DetectedPopulation::Thermal => {
+    Some(DetectedPopulation::Thermal) => {
       let mut rho = get_electron_cluster_thermal_density_matrix(
           &det_hamiltonian.0, &det_hamiltonian.1, config,
         )?;
@@ -861,7 +862,7 @@ pub fn expmap_spin(multiplicity: usize, sop: &SpinOp, theta: f64) ->
   let s = get_spin_operator(multiplicity, sop);
 
   // TODO: This only works for Hermitian spinoperators.
-  let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(&s, UPLO::Lower) else{
     return Err(CluEError::CannotDiagonalizeOperator(
           crate::math::cx_matrix_summary(&s)));
   };
@@ -896,7 +897,7 @@ pub fn expmap_spin_axis_angle(multiplicity: usize, axis: &Vector3D, angle: f64)
   let sz = get_spin_operator(multiplicity, &SpinOp::Sz);
   let s = n.x()*ONE*sx + n.y()*ONE*sy + n.z()*ONE*sz;
 
-  let Ok((eigvals, eigvecs)) = s.eigh(UPLO::Lower) else{
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(&s, UPLO::Lower) else{
     return Err(CluEError::CannotDiagonalizeOperator(
           crate::math::cx_matrix_summary(&s)));
   };
@@ -1312,13 +1313,44 @@ mod tests {
     let err = (d - u).norm();
     assert!(err < 1e-12);
 
+    // expmap_spin(Sy, θ) = exp(iθSy). For spin 1/2 and θ = -π this is
+    // cos(π/2) - i·sin(π/2)·σy = -iσy = [[0,-1],[1,0]].
+    // (Before the eigh workaround, src/ndarray_linalg_eigh_workaround.rs,
+    // eigh returned the eigenvectors of Sy* = -Sy, the code computed
+    // exp(-iθSy), and this test expected [[0,1],[-1,0]].)
     let d = expmap_spin(2, &SpinOp::Sy,-PI).unwrap();
     let u = array![
-      [ZERO,ONE],
-      [-ONE,ZERO],
+      [ZERO,-ONE],
+      [ONE,ZERO],
     ];
     let err = (d - u).norm();
     assert!(err < 1e-12);
+
+    // Independent check: exp(iθS) from its Taylor series, for spin 1 and
+    // each of Sx, Sy, Sz, and for an axis with all three components.
+    let taylor = |s: &CxMat, theta: f64| -> CxMat {
+      let n = s.dim().0;
+      let a = s*(I*theta);
+      let mut term = CxMat::eye(n);
+      let mut sum = CxMat::eye(n);
+      for k in 1..60{
+        term = term.dot(&a)/(k as f64);
+        sum += &term;
+      }
+      sum
+    };
+    for sop in [SpinOp::Sx, SpinOp::Sy, SpinOp::Sz]{
+      let d = expmap_spin(3, &sop, 0.7).unwrap();
+      let reference = taylor(&get_spin_operator(3, &sop), 0.7);
+      assert!((d - reference).norm() < 1e-12);
+    }
+    let axis = Vector3D::from([0.3, -0.5, 0.8]);
+    let n = axis.scale(1.0/axis.norm());
+    let s = get_spin_operator(3, &SpinOp::Sx)*(ONE*n.x()) 
+      + get_spin_operator(3, &SpinOp::Sy)*(ONE*n.y())
+      + get_spin_operator(3, &SpinOp::Sz)*(ONE*n.z());
+    let d = expmap_spin_axis_angle(3, &axis, 1.1).unwrap();
+    assert!((d - taylor(&s, 1.1)).norm() < 1e-12);
   }
   //----------------------------------------------------------------------------
   #[test]

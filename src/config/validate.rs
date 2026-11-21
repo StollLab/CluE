@@ -3,7 +3,7 @@
 //! (`Config::check_completeness`).
 use crate::clue_errors::CluEError;
 use crate::config::{
-  ClusterMethod, ClusterPopulations, ClusterSource, Config,
+  ClusterMethod, ClusterSource, Config,
   DetectedPopulation, DetectionOp, PartitionTableConfig,
 };
 use crate::config::toml_keys::*;
@@ -91,13 +91,11 @@ const PULSE_SEQUENCE_KEYS: [&str; 5] = [
   "tau2_increments",
 ];
 
-const CLUSTER_EXPANSION_KEYS: [&str; 7] = [
+const CLUSTER_EXPANSION_KEYS: [&str; 5] = [
   "method",
   "max_cluster_size",
   "ensemble",
-  "populations",
   "mean_fields",
-  "thermalize_cluster_populations",
   "clustering",
 ];
 
@@ -226,7 +224,7 @@ const AXIS_KEYS: [&str; 6] = [
 // what replaced them.
 
 // The top-level keys and tables of the old format, and where they moved.
-const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 36] = [
+const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 34] = [
   ("clash_distance", "structure.clash_distance"),
   ("clash_distance_pbc", "structure.clash_distance_pbc"),
   ("cluster_batch_size", "run.cluster_batch_size"),
@@ -250,7 +248,6 @@ const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 36] = [
   ("partition_table", "cluster_expansion.clustering.partition_table"),
   ("partitioning", "cluster_expansion.clustering.partitioning"),
   ("pdb_model_index", "structure.pdb_model_index"),
-  ("populations", "cluster_expansion.populations"),
   ("radius", "structure.radius"),
   ("replicate_unit_cell", "structure.replicate_unit_cell"),
   ("rng_seed", "run.rng_seed"),
@@ -258,8 +255,6 @@ const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 36] = [
   ("tau_increments", "pulse_sequence.tau_increments"),
   ("tau2_increments", "pulse_sequence.tau2_increments"),
   ("temperature", "conditions.temperature"),
-  ("thermalize_cluster_populations", 
-   "cluster_expansion.thermalize_cluster_populations"),
   ("unit_of_distance", "units.distance"),
   ("unit_of_energy", "units.energy"),
   ("unit_of_magnetic_field", "units.magnetic_field"),
@@ -271,9 +266,10 @@ const MOVED_TOP_LEVEL_KEYS: [(&str,&str); 36] = [
 // an old value, which is not a table, moved to pulse_sequence.sequence.
 const OLD_KEY_PULSE_SEQUENCE: &str = "pulse_sequence";
 
-// The keys that were removed because the code did not use them, 
-// by the table they were in, with the reason.
-const REMOVED_KEYS: [(Schema,&str,&str); 11] = [
+// The keys that were removed, because the code did not use them or because
+// their setting is now fixed by other settings, by the table they were in, 
+// with the reason.
+const REMOVED_KEYS: [(Schema,&str,&str); 15] = [
   (Schema::TopLevel, "min_cell_size", "it was read but never used"),
   (Schema::TopLevel, "max_cell_size", "it was read but never used"),
   (Schema::TopLevel, "pulses", "[[pulses]] was read but never used; the \
@@ -289,7 +285,24 @@ signals are written with auxiliary_signals"),
   (Schema::Output, "run_name", REMOVED_RUN_NAME),
   (Schema::Group, "include", "renamed to require"),
   (Schema::Group, "exclude", "renamed to forbid"),
+  (Schema::TopLevel, "populations", REMOVED_POPULATIONS),
+  (Schema::ClusterExpansion, "populations", REMOVED_POPULATIONS),
+  (Schema::TopLevel, "thermalize_cluster_populations", 
+   REMOVED_THERMALIZE_CLUSTER_POPULATIONS),
+  (Schema::ClusterExpansion, "thermalize_cluster_populations",
+   REMOVED_THERMALIZE_CLUSTER_POPULATIONS),
 ];
+
+// Why populations was removed.
+const REMOVED_POPULATIONS: &str = "the bath state is set by \
+cluster_expansion.method, cluster_expansion.ensemble and \
+conditions.temperature (see the change log of 1.0.0-dev)";
+
+// Why thermalize_cluster_populations was removed.
+const REMOVED_THERMALIZE_CLUSTER_POPULATIONS: &str = "ensemble gCCE uses \
+the thermal state of the detected spin and cluster when \
+detected_spin.density_matrix is not given, and otherwise the detected-spin \
+state times the bath thermal state (see the change log of 1.0.0-dev)";
 
 // Why run_name was removed.
 const REMOVED_RUN_NAME: &str = "output directories are now named \
@@ -762,15 +775,6 @@ impl Config{
     // Settings required by other settings.
     let has_temperature = self.temperature.is_some();
 
-    // The bath populations are generated for every cluster method
-    // (`SpinStates::generate()`).
-    if self.cluster_populations == Some(ClusterPopulations::Thermal)
-      && !has_temperature
-    {
-      problems.push(format!("conditions.temperature is required for \
-cluster_expansion.populations = \"{}\"", KEY_DENSITY_MATRIX_THERMAL));
-    }
-
     // Mean-field couplings are not implemented for ensemble CCE, for any
     // cluster method (`calculate_signal_at_orientation()`).
     if self.mean_fields == Some(true) && self.ensemble_cce == Some(true){
@@ -826,25 +830,23 @@ for cluster_expansion.method = \"gcce\"".to_string()),
         },
         Some(_) => (),
       }
-      match self.detected_population{
-        None => problems.push("detected_spin.density_matrix is required \
-for cluster_expansion.method = \"gcce\"".to_string()),
-        Some(DetectedPopulation::Thermal) if !has_temperature =>
+      // The cluster initial state of gCCE (`gcce()`): without ensemble,
+      // ρ_S ⊗ (sampled bath eigenstates); with ensemble, 
+      // ρ_S ⊗ (bath thermal state) if ρ_S is given, or else the thermal
+      // state of the detected spin and cluster.
+      let is_ensemble = self.ensemble_cce == Some(true);
+      match (&self.detected_population, is_ensemble){
+        (None, false) => problems.push("detected_spin.density_matrix is \
+required for cluster_expansion.method = \"gcce\" with \
+cluster_expansion.ensemble = false".to_string()),
+        (None, true) if !has_temperature => problems.push("conditions.\
+temperature is required for cluster_expansion.method = \"gcce\" with \
+cluster_expansion.ensemble = true and no detected_spin.density_matrix: the \
+thermal state of the detected spin and cluster is used".to_string()),
+        (Some(DetectedPopulation::Thermal), _) if !has_temperature =>
           problems.push(format!("conditions.temperature is required for \
 detected_spin.density_matrix = \"{}\"", KEY_DENSITY_MATRIX_THERMAL)),
-        Some(_) => (),
-      }
-    }
-
-    // thermalize_cluster_populations is used only by gCCE (`gcce()`).
-    if is_gcce && self.thermalize_cluster_populations == Some(true){
-      if self.ensemble_cce != Some(true){
-        problems.push(CluEError::ThermalizationRequiresEnsembleCCE
-            .to_string());
-      }
-      if !has_temperature{
-        problems.push("conditions.temperature is required for \
-cluster_expansion.thermalize_cluster_populations = true".to_string());
+        _ => (),
       }
     }
 
@@ -1004,9 +1006,7 @@ mod tests{
         method = "cce"
         max_cluster_size = 2
         ensemble = false
-        populations = "uniform"
         mean_fields = false
-        thermalize_cluster_populations = false
         [cluster_expansion.clustering]
         file = "clusters.toml"
         max_spins = 4
@@ -1172,7 +1172,7 @@ cluster signals are written with auxiliary_signals".to_string(),
           .to_string(),
         "partitioning: moved to cluster_expansion.clustering.partitioning"
           .to_string(),
-        "populations: moved to cluster_expansion.populations".to_string(),
+        format!("populations: removed; {}", REMOVED_POPULATIONS),
         "pulse_sequence: moved to pulse_sequence.sequence".to_string(),
         "pulses: removed; [[pulses]] was read but never used; the pulses are \
 built from detected_spin.transition".to_string(),
@@ -1197,6 +1197,39 @@ built from detected_spin.transition".to_string(),
     for (schema, key, _) in REMOVED_KEYS.iter(){
       assert!(!schema.allows(key), "{:?}: {}", schema, key);
     }
+  }
+  //----------------------------------------------------------------------------
+  // populations and thermalize_cluster_populations were removed: the bath
+  // state follows from the method, the ensemble setting and the
+  // temperature (plan_populations.md, Stage 1).
+  #[test]
+  fn test_populations_keys_are_removed(){
+    let mut errors = key_errors(r##"
+        populations = "thermal"
+        thermalize_cluster_populations = true
+        [cluster_expansion]
+        populations = "random"
+        thermalize_cluster_populations = false
+        "##);
+    errors.sort();
+    let mut expected = vec![
+        format!("cluster_expansion.populations: removed; {}", 
+            REMOVED_POPULATIONS),
+        format!("cluster_expansion.thermalize_cluster_populations: removed; \
+{}", REMOVED_THERMALIZE_CLUSTER_POPULATIONS),
+        format!("populations: removed; {}", REMOVED_POPULATIONS),
+        format!("thermalize_cluster_populations: removed; {}", 
+            REMOVED_THERMALIZE_CLUSTER_POPULATIONS),
+    ];
+    expected.sort();
+    assert_eq!(errors, expected);
+
+    // An input with the old key does not parse.
+    let config = Config::from_toml_string(r##"
+        [cluster_expansion]
+        populations = "thermal"
+        "##);
+    assert!(config.is_err());
   }
   //----------------------------------------------------------------------------
   // The group tables include and exclude were renamed to require and forbid.
@@ -1454,21 +1487,31 @@ allowed where they appear:\n  a: unknown key\n  b: unknown key");
     let cce_file = "assets/1omp_K26R1_0.003228966616048703.toml";
     let gcce_file = "assets/1omp_K26R1_0.003228966616048703_gcce.toml";
 
-    // populations = "thermal" needs a temperature.
+    // Ensemble CCE without a temperature uses T = ∞ (1/d).
     let mut config = Config::from_toml_file(cce_file).unwrap();
     config.temperature = None;
-    assert_eq!(problems_of(&config), vec![
-        "conditions.temperature is required for \
-cluster_expansion.populations = \"thermal\"".to_string()]);
+    assert_eq!(problems_of(&config), Vec::<String>::new());
+    // So does non-ensemble CCE (the sampled eigenstates are uniform).
+    config.ensemble_cce = Some(false);
+    assert_eq!(problems_of(&config), Vec::<String>::new());
 
-    // A field set after parsing: gCCE needs the detected spin operators.
+    // A field set after parsing: gCCE needs the detection operator. With
+    // ensemble = true and a temperature, the detected-spin density matrix
+    // is optional (the joint thermal state is used without it).
     let mut config = Config::from_toml_file(cce_file).unwrap();
     config.cluster_method = Some(ClusterMethod::GCCE);
     assert_eq!(problems_of(&config), vec![
         "detected_spin.detection_operator is required for \
 cluster_expansion.method = \"gcce\"".to_string(),
-        "detected_spin.density_matrix is required for \
+    ]);
+    // Without ensemble, it is required.
+    config.ensemble_cce = Some(false);
+    assert_eq!(problems_of(&config), vec![
+        "detected_spin.detection_operator is required for \
 cluster_expansion.method = \"gcce\"".to_string(),
+        "detected_spin.density_matrix is required for \
+cluster_expansion.method = \"gcce\" with cluster_expansion.ensemble = false"
+          .to_string(),
     ]);
     // A detected spin with one state has no coherence; gCCE would panic
     // on the missing detected spin operators.
@@ -1476,25 +1519,38 @@ cluster_expansion.method = \"gcce\"".to_string(),
     assert_eq!(problems_of(&config), vec![
         "detected_spin.multiplicity must be at least 2, but is 1".to_string()]);
 
-    // The gCCE asset uses a thermal detected spin density matrix and 
-    // thermalize_cluster_populations = true.
+    // The gCCE asset uses ensemble = true without a detected-spin density
+    // matrix: the joint thermal state needs a temperature.
     let mut config = Config::from_toml_file(gcce_file).unwrap();
+    assert_eq!(problems_of(&config), Vec::<String>::new());
     config.temperature = None;
+    let joint_needs_t = "conditions.temperature is required for \
+cluster_expansion.method = \"gcce\" with cluster_expansion.ensemble = true \
+and no detected_spin.density_matrix: the thermal state of the detected spin \
+and cluster is used".to_string();
+    assert_eq!(problems_of(&config), vec![joint_needs_t.clone()]);
+
+    // With a detected-spin matrix, ensemble gCCE runs without a temperature
+    // (bath 1/d); "thermal" needs one.
+    config.detected_population = Some(DetectedPopulation::Matrix(
+        ndarray::Array2::<num_complex::Complex64>::eye(2)/2.0));
+    assert_eq!(problems_of(&config), Vec::<String>::new());
+    config.detected_population = Some(DetectedPopulation::Thermal);
+    assert_eq!(problems_of(&config), vec![
+        "conditions.temperature is required for detected_spin.density_matrix \
+= \"thermal\"".to_string()]);
     config.ensemble_cce = Some(false);
     assert_eq!(problems_of(&config), vec![
-        "conditions.temperature is required for \
-cluster_expansion.populations = \"thermal\"".to_string(),
         "conditions.temperature is required for detected_spin.density_matrix \
-= \"thermal\"".to_string(),
-        "cluster_expansion.thermalize_cluster_populations = true requires \
-cluster_expansion.ensemble = true".to_string(),
-        "conditions.temperature is required for \
-cluster_expansion.thermalize_cluster_populations = true".to_string(),
-    ]);
+= \"thermal\"".to_string()]);
+    config.detected_population = None;
+    assert_eq!(problems_of(&config), vec![
+        "detected_spin.density_matrix is required for \
+cluster_expansion.method = \"gcce\" with cluster_expansion.ensemble = false"
+          .to_string()]);
 
     // These settings are used only by gCCE.
     config.cluster_method = Some(ClusterMethod::CCE);
-    config.cluster_populations = Some(ClusterPopulations::Uniform);
     assert_eq!(problems_of(&config), Vec::<String>::new());
   }
   //----------------------------------------------------------------------------

@@ -4,10 +4,11 @@ use crate::config::{
 };
 use crate::config::pulse_sequence::PulseSequence;
 use crate::math::cxmat_pow_n;
-use crate::physical_constants::{BOLTZMANN,HALF,HBAR,I,ZERO};
+use crate::physical_constants::{HALF,ZERO};
 use crate::quantum::block_diagonal_spin_hamiltonian::{
   get_propagators_from_eig,
-  get_propagators_complex_time_from_eig,
+  thermal_density_matrix,
+  thermal_density_matrix_from_eig,
 };
 use crate::quantum::pulse_sequences::{
   PulseStep,  
@@ -25,7 +26,9 @@ use crate::quantum::tensors::HamiltonianTensors;
 
 use num_complex::Complex;
 use ndarray::{Array1,Array2};
-use ndarray_linalg::{Eigh,Trace,UPLO};
+use ndarray::linalg::kron;
+use ndarray_linalg::UPLO;
+use crate::ndarray_linalg_eigh_workaround::eigh_hermitian;
 
 type CxMat = Array2::<Complex<f64>>;
 
@@ -386,6 +389,42 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
     spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors)
   -> Result<(Array1::<f64>,CxMat),CluEError>
 {
+  let ham = build_spin_hamiltonian_matrix(spin_indices, spin_ops, tensors,
+      true, true)?;
+
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(&ham, UPLO::Lower) else{
+    return Err(
+        CluEError::CannotDiagonalizeHamiltonian(
+          crate::math::cx_matrix_summary(&ham)));
+  };
+
+  Ok((eigvals, eigvecs))
+}
+//------------------------------------------------------------------------------
+/// This function builds 1_S ⊗ H_C⁰ (Hz) for a gCCE cluster `spin_indices`
+/// (position 0 is the detected spin): the gCCE cluster Hamiltonian without
+/// the detected-spin terms, without the hyperfine couplings, and without
+/// mean fields. H_C⁰ holds the one-spin terms of the bath spins (Zeeman,
+/// quadrupole/zero-field, spherical terms up to `max_spherical_tensor_rank`)
+/// and the couplings within the cluster. It sets the bath thermal state of
+/// ensemble gCCE with a given detected-spin state
+/// (`get_gcce_product_density_matrix`).
+pub fn build_bath_spin_hamiltonian(spin_indices: &[usize],
+    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors)
+  -> Result<CxMat,CluEError>
+{
+  build_spin_hamiltonian_matrix(spin_indices, spin_ops, tensors, false, false)
+}
+//------------------------------------------------------------------------------
+// This function builds the gCCE cluster Hamiltonian matrix (Hz), made 
+// Hermitian. With `include_detected_spin = false`, the one-spin terms and
+// couplings of position 0 (the detected spin) are left out; with 
+// `include_mean_field = false`, the mean fields are left out.
+fn build_spin_hamiltonian_matrix(spin_indices: &[usize],
+    spin_ops: &ClusterSpinOperators, tensors: &HamiltonianTensors,
+    include_detected_spin: bool, include_mean_field: bool)
+  -> Result<CxMat,CluEError>
+{
 
   // Get list of spin multiplicities.
   let spin_multiplicities: Vec::<usize> =
@@ -402,6 +441,12 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
 
   // Loop through spins and build up Hamiltonian,
   for (sop_idx0, &ten_idx0) in spin_indices.iter().enumerate(){
+
+    // Position 0 is the detected spin; skipping it leaves out its one-spin
+    // terms and, since pairs start at sop_idx1 = sop_idx0, its couplings.
+    if sop_idx0 == 0 && !include_detected_spin{
+      continue;
+    }
 
 
     let spin_mult0 = if spin_multiplicities.len() == 1{
@@ -421,10 +466,14 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
       ham = ham + sz0*vec.z();
     }
 
-    if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,spin_indices){
-      ham = ham + sx0*vec.x();
-      ham = ham + sy0*vec.y();
-      ham = ham + sz0*vec.z();
+    if include_mean_field{
+      if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,
+          spin_indices)
+      {
+        ham = ham + sx0*vec.x();
+        ham = ham + sy0*vec.y();
+        ham = ham + sz0*vec.z();
+      }
     }
 
     if let Some(tens) = tensors.spin_spherical_tensors
@@ -473,22 +522,27 @@ pub fn build_spin_hamiltonian(spin_indices: &[usize],
   let ham_dag = ham.t().map(|u_ij| u_ij.conj() );
   ham = HALF*(ham + ham_dag);
 
-  let Ok((eigvals, eigvecs)) = ham.eigh(UPLO::Lower) else{
-    return Err(
-        CluEError::CannotDiagonalizeHamiltonian(
-          crate::math::cx_matrix_summary(&ham)));
-  };
-
-  Ok((eigvals, eigvecs))
+  Ok(ham)
 }
 //------------------------------------------------------------------------------
-pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
-  -> Result<(Array1::<f64>,CxMat),CluEError>
+/// This function builds the one-spin Hamiltonian (Hz) of spin `index`
+/// in the Zeeman basis (index i is m = S - i): the Zeeman term
+/// (`spin1_tensors`), the Cartesian quadrupole or zero-field term
+/// (`spin2_tensors(index,index)`), and, if `include_spherical`, the
+/// spherical-tensor terms up to `max_spherical_tensor_rank`.
+/// It has no mean field and no coupling to other spins.
+/// Bath spin states are sampled from the eigenstates of this Hamiltonian
+/// (`SpinStates::generate`); gCCE includes the spherical terms because
+/// `build_spin_hamiltonian` propagates them, while CCE does not, because
+/// `build_block_diag_hamiltonian` does not.
+pub fn build_single_spin_hamiltonian(tensors: &HamiltonianTensors,
+    index: usize, include_spherical: bool)
+  -> Result<CxMat,CluEError>
 {
-
-  let ten_idx0 = 0;
-
-  let spin_multiplicity: usize = tensors.spin_multiplicities[ten_idx0];
+  let Some(&spin_multiplicity) = tensors.spin_multiplicities.get(index) else{
+    return Err(CluEError::NoSpinWithIndex(index,
+          tensors.spin_multiplicities.len()));
+  };
 
   // Initialize Hamiltonian.
   let mut ham = CxMat::zeros((spin_multiplicity,spin_multiplicity));
@@ -498,37 +552,33 @@ pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
   let sz = spin_z(spin_multiplicity);
 
   // Zeeman
-  if let Some(vec) = tensors.spin1_tensors.get(ten_idx0){
+  if let Some(vec) = tensors.spin1_tensors.get(index){
     ham = ham + &sx*vec.x();
     ham = ham + &sy*vec.y();
     ham = ham + &sz*vec.z();
   }
 
-  if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,&[ten_idx0]){
-    ham = ham + &sx*vec.x();
-    ham = ham + &sy*vec.y();
-    ham = ham + &sz*vec.z();
-  }
+  if include_spherical{
+    if let Some(tens) = tensors.spin_spherical_tensors
+        .get(&(index,index)){
 
-  if let Some(tens) = tensors.spin_spherical_tensors
-      .get(&(ten_idx0,ten_idx0)){
-
-    for coefs in tens.iter(){
-      let il = coefs.dim().0;
-      let l = (il as i32 -1)/2;
-      if l > tensors.max_spherical_tensor_rank{
-        continue;
-      }
-      for (im,&c) in coefs.iter().enumerate(){
-        let m = im as i32 -l;
-        let tlm = spin_ist(spin_multiplicity,l,m);
-        ham = ham + tlm*c;
+      for coefs in tens.iter(){
+        let il = coefs.dim().0;
+        let l = (il as i32 -1)/2;
+        if l > tensors.max_spherical_tensor_rank{
+          continue;
+        }
+        for (im,&c) in coefs.iter().enumerate(){
+          let m = im as i32 -l;
+          let tlm = spin_ist(spin_multiplicity,l,m);
+          ham = ham + tlm*c;
+        }
       }
     }
   }
 
-  // zero-field
-  if let Some(ten) = tensors.spin2_tensors.get(ten_idx0,ten_idx0){
+  // quadrupole or zero-field
+  if let Some(ten) = tensors.spin2_tensors.get(index,index){
     ham = ham + sx.dot(&sx)*ten.xx();
     ham = ham + sx.dot(&sy)*ten.xy();
     ham = ham + sx.dot(&sz)*ten.xz();
@@ -542,13 +592,34 @@ pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
     ham = ham + sz.dot(&sz)*ten.zz();
   }
 
-  
-
   // Remove any floating point errors that break Hermiticity.
   let ham_dag = ham.t().map(|u_ij| u_ij.conj() );
   ham = HALF*(ham + ham_dag);
 
-  let Ok((eigvals, eigvecs)) = ham.eigh(UPLO::Lower) else{
+  Ok(ham)
+}
+//------------------------------------------------------------------------------
+/// This function builds and diagonalizes the Hamiltonian of the detected
+/// spin (index 0): `build_single_spin_hamiltonian` with the spherical terms,
+/// plus the mean field of the bath, if mean-field couplings are set.
+/// The eigenvalues are in ascending order.
+pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
+  -> Result<(Array1::<f64>,CxMat),CluEError>
+{
+
+  let ten_idx0 = 0;
+
+  let spin_multiplicity: usize = tensors.spin_multiplicities[ten_idx0];
+
+  let mut ham = build_single_spin_hamiltonian(tensors, ten_idx0, true)?;
+
+  if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,&[ten_idx0]){
+    ham = ham + &spin_x(spin_multiplicity)*vec.x();
+    ham = ham + &spin_y(spin_multiplicity)*vec.y();
+    ham = ham + &spin_z(spin_multiplicity)*vec.z();
+  }
+
+  let Ok((eigvals, eigvecs)) = eigh_hermitian(&ham, UPLO::Lower) else{
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(
           crate::math::cx_matrix_summary(&ham)));
@@ -557,6 +628,10 @@ pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
   Ok((eigvals, eigvecs))
 }
 //------------------------------------------------------------------------------
+/// This function returns the thermal density matrix exp(-βH)/Z of the
+/// Hamiltonian with eigenvalues `h_eigvals` (Hz) and eigenvectors
+/// `h_eigvecs`, with β = h/(k_B T) and T = `conditions.temperature`.
+/// The energies are shifted by their minimum before exponentiating.
 pub fn get_electron_cluster_thermal_density_matrix(
     h_eigvals: &Array1::<f64>, h_eigvecs: &CxMat, config: &Config)
   -> Result<CxMat,CluEError>
@@ -565,26 +640,37 @@ pub fn get_electron_cluster_thermal_density_matrix(
   let Some(temperature) = config.temperature else {
     return Err(CluEError::NoTemperature);
   };
-  let beta = I*HBAR/(temperature*BOLTZMANN);
-
-  let mut rho_list = get_propagators_complex_time_from_eig(
-      h_eigvals, h_eigvecs, &[-beta])?;
-
-  let mut density_matrix = rho_list.swap_remove(0);
-
-  let Ok(z) = density_matrix.trace() else{
-    return Err(CluEError::CannotTakeTrace(format!("a {}x{} matrix",
-        density_matrix.dim().0, density_matrix.dim().1)));
-  };
-  if z.norm() < 1e-12{
-    return Err(CluEError::DensityMatrixTraceVanishes(
-          "Tr[exp(-βH)]".to_string(), z.norm()));
+  thermal_density_matrix_from_eig(h_eigvals, h_eigvecs, temperature)
+}
+//------------------------------------------------------------------------------
+/// This function returns the initial state of an ensemble-gCCE cluster when
+/// the detected-spin state ρ_S (`rho_s`, d_S × d_S) is given:
+/// ρ_S ⊗ exp(-βH_C⁰)/Tr with `temperature`, or ρ_S ⊗ 1/d_C without.
+/// `bath_ham` is 1_S ⊗ H_C⁰ (`build_bath_spin_hamiltonian`). The thermal 
+/// state of 1_S ⊗ H_C⁰ is G = (1_S/d_S) ⊗ g_C with g_C = exp(-βH_C⁰)/Tr,
+/// and ρ_S ⊗ 1_C commutes with it, so d_S (ρ_S ⊗ 1_C) G = ρ_S ⊗ g_C.
+pub fn get_gcce_product_density_matrix(rho_s: &CxMat, bath_ham: &CxMat,
+    temperature: Option<f64>)
+  -> Result<CxMat,CluEError>
+{
+  let d_s = rho_s.dim().0;
+  let dim = bath_ham.dim().0;
+  if d_s == 0 || dim % d_s != 0 || rho_s.dim().1 != d_s 
+    || bath_ham.dim().1 != dim
+  {
+    return Err(CluEError::DetectedSpinStateDoesNotFitCluster(dim, d_s));
   }
-  density_matrix /= z;
-  Ok(density_matrix)
+  let d_c = dim/d_s;
 
-
-}  
+  match temperature{
+    None => Ok(kron(rho_s, &(CxMat::eye(d_c)/(d_c as f64)))),
+    Some(temperature) => {
+      let g = thermal_density_matrix(bath_ham, temperature)?;
+      let rho_s_bath = kron(rho_s, &CxMat::eye(d_c));
+      Ok(rho_s_bath.dot(&g)*Complex::<f64>{re: d_s as f64, im: 0.0})
+    },
+  }
+}
 //------------------------------------------------------------------------------
 
 
@@ -593,7 +679,7 @@ pub fn get_electron_cluster_thermal_density_matrix(
 mod tests{
   use super::*;
   use crate::io::FromTOMLString;
-  use crate::physical_constants::{SQRT2_INV};
+  use crate::physical_constants::{I,SQRT2_INV};
   use crate::space_3d::{Vector3D,SymmetricTensor3D};
   use crate::quantum::tensors::*;
   use crate::quantum::block_diagonal_spin_hamiltonian::{
@@ -611,7 +697,6 @@ mod tests{
        pulse_sequence.sequence = "hahn"
        pulse_sequence.number_timepoints = [101]
        pulse_sequence.tau_increments = [5e-2]
-       cluster_expansion.populations = "thermal"
        conditions.temperature = 20
        [detected_spin]
          transition = [0,1]
@@ -680,7 +765,6 @@ mod tests{
        pulse_sequence.sequence = "hahn"
        pulse_sequence.number_timepoints = [101]
        pulse_sequence.tau_increments = [5e-2]
-       cluster_expansion.populations = "thermal"
        conditions.temperature = 20
        [detected_spin]
          transition = [0,1]
@@ -918,5 +1002,284 @@ mod tests{
     for (v,v0) in signal.data.iter().zip(expected.iter()){
       assert!((v - v0).norm() < 1e-12);
     }
+  }
+  //----------------------------------------------------------------------------
+  // This function builds tensors for one spin-1 (index 0) and one spin-1/2
+  // (index 1). Spin 0 has a tilted Zeeman vector, a tilted axial Q
+  // (Q = d(n n^T - 1/3), n at polar angle theta in the xz-plane), and a
+  // rank-4 spherical term; spin 1 has only a Zeeman vector.
+  fn build_single_spin_test_tensors(nu: Vector3D, d: f64, theta: f64,
+      c4: f64, max_rank: i32) -> HamiltonianTensors
+  {
+    let mut spin1_tensors = Spin1Tensors::new(2);
+    spin1_tensors.set(0, nu);
+    spin1_tensors.set(1, Vector3D::from([0.0, 0.0, 5.0e6]));
+
+    let (st, ct) = (theta.sin(), theta.cos());
+    let mut spin2_tensors = Spin2Tensors::new(2);
+    spin2_tensors.set(0, 0, SymmetricTensor3D::from([
+        d*(st*st - 1.0/3.0), 0.0, d*st*ct,
+                        -d/3.0, 0.0,
+                                d*(ct*ct - 1.0/3.0)]));
+
+    let mut spin_spherical_tensors = SpinSphericalTensors::new();
+    let mut coefs = CxMat::zeros((9,1));
+    // Index l + m: m = 4, m = -4, and m = 0.
+    coefs[[8,0]] = Complex::<f64>{re: c4, im: 0.0};
+    coefs[[0,0]] = Complex::<f64>{re: c4, im: 0.0};
+    coefs[[4,0]] = Complex::<f64>{re: 0.5*c4, im: 0.0};
+    spin_spherical_tensors.insert((0,0), vec![coefs]);
+
+    HamiltonianTensors{
+      spin_multiplicities: vec![3,2],
+      spin1_tensors,
+      spin2_tensors,
+      spin_spherical_tensors,
+      max_spherical_tensor_rank: max_rank,
+      detected_gamma_matrix: SymmetricTensor3D::eye(),
+      magnetic_field: Vector3D::from([0.0,0.0,1.2]),
+      mean_field_couplings: None,
+    }
+  }
+  //----------------------------------------------------------------------------
+  // The detected-spin Hamiltonian as it was built before
+  // build_single_spin_hamiltonian existed (commit cecaa49), kept here as the
+  // reference for the regression test.
+  fn reference_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
+    -> CxMat
+  {
+    let m = tensors.spin_multiplicities[0];
+    let mut ham = CxMat::zeros((m,m));
+    let sx = spin_x(m);
+    let sy = spin_y(m);
+    let sz = spin_z(m);
+    if let Some(vec) = tensors.spin1_tensors.get(0){
+      ham = ham + &sx*vec.x();
+      ham = ham + &sy*vec.y();
+      ham = ham + &sz*vec.z();
+    }
+    if let Some(vec) = tensors.get_mean_field_couplings(0,&[0]){
+      ham = ham + &sx*vec.x();
+      ham = ham + &sy*vec.y();
+      ham = ham + &sz*vec.z();
+    }
+    if let Some(tens) = tensors.spin_spherical_tensors.get(&(0,0)){
+      for coefs in tens.iter(){
+        let il = coefs.dim().0;
+        let l = (il as i32 -1)/2;
+        if l > tensors.max_spherical_tensor_rank{ continue; }
+        for (im,&c) in coefs.iter().enumerate(){
+          ham = ham + spin_ist(m,l,im as i32 - l)*c;
+        }
+      }
+    }
+    if let Some(ten) = tensors.spin2_tensors.get(0,0){
+      ham = ham + sx.dot(&sx)*ten.xx();
+      ham = ham + sx.dot(&sy)*ten.xy();
+      ham = ham + sx.dot(&sz)*ten.xz();
+      ham = ham + sy.dot(&sx)*ten.yx();
+      ham = ham + sy.dot(&sy)*ten.yy();
+      ham = ham + sy.dot(&sz)*ten.yz();
+      ham = ham + sz.dot(&sx)*ten.zx();
+      ham = ham + sz.dot(&sy)*ten.zy();
+      ham = ham + sz.dot(&sz)*ten.zz();
+    }
+    let ham_dag = ham.t().map(|u_ij| u_ij.conj() );
+    HALF*(ham + ham_dag)
+  }
+  //----------------------------------------------------------------------------
+  fn sorted_eigenvalues(ham: &CxMat) -> Vec::<f64>{
+    let (e, _v) = eigh_hermitian(ham, UPLO::Lower).unwrap();
+    e.to_vec()
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_build_detected_spin_hamiltonian_unchanged(){
+    use ndarray_linalg::Norm;
+    let nu = Vector3D::from([1.0e8, -2.0e7, 9.5e9]);
+    for max_rank in [0, 4]{
+      let tensors = build_single_spin_test_tensors(nu.clone(), 2.0e9, 0.7,
+          3.0e7, max_rank);
+      let reference = reference_detected_spin_hamiltonian(&tensors);
+
+      // Without mean fields, the detected-spin Hamiltonian is the one-spin
+      // Hamiltonian with the spherical terms.
+      let ham = build_single_spin_hamiltonian(&tensors, 0, true).unwrap();
+      assert!((&ham - &reference).norm() <= 1e-12*reference.norm());
+
+      // The eigendecomposition equals that of the reference matrix, done
+      // the same way (eigh, UPLO::Lower).
+      let (e, v) = build_detected_spin_hamiltonian(&tensors).unwrap();
+      let (e_ref, v_ref) = eigh_hermitian(&reference, UPLO::Lower).unwrap();
+      let n = e.len();
+      let rebuild = |e: &Array1::<f64>, v: &CxMat| -> CxMat {
+        let mut d = CxMat::zeros((n,n));
+        for k in 0..n{ d[[k,k]] = Complex::<f64>{re: e[k], im: 0.0}; }
+        v.dot(&d).dot(&v.t().map(|x| x.conj()))
+      };
+      for k in 0..n{
+        assert!((e[k] - e_ref[k]).abs() <= 1e-12*reference.norm());
+      }
+      assert!((rebuild(&e,&v) - rebuild(&e_ref,&v_ref)).norm() 
+          <= 1e-12*reference.norm());
+    }
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_build_single_spin_hamiltonian(){
+    use ndarray_linalg::Norm;
+    let d = 2.0e9;
+    let nu = 9.5e9;
+
+    // Zeeman along z and Q along z: E(m) = nu*m + d*(m^2 - 2/3).
+    let tensors = build_single_spin_test_tensors(
+        Vector3D::from([0.0,0.0,nu]), d, 0.0, 0.0, 0);
+    let ham = build_single_spin_hamiltonian(&tensors, 0, false).unwrap();
+    let mut expected = [-2.0*d/3.0, -nu + d/3.0, nu + d/3.0];
+    expected.sort_by(|a,b| a.partial_cmp(b).unwrap());
+    for (a,b) in sorted_eigenvalues(&ham).iter().zip(expected.iter()){
+      assert!((a - b).abs() <= 1e-12*nu);
+    }
+    // Index i is m = S - i: the diagonal is (nu + d/3, -2d/3, -nu + d/3).
+    assert!((ham[[0,0]].re - (nu + d/3.0)).abs() <= 1e-12*nu);
+    assert!((ham[[1,1]].re + 2.0*d/3.0).abs() <= 1e-12*nu);
+    assert!((ham[[2,2]].re - (-nu + d/3.0)).abs() <= 1e-12*nu);
+
+    // No field, Q tilted by 0.7 rad: the levels do not depend on the tilt.
+    let tensors = build_single_spin_test_tensors(
+        Vector3D::from([0.0,0.0,0.0]), d, 0.7, 0.0, 0);
+    let ham = build_single_spin_hamiltonian(&tensors, 0, false).unwrap();
+    let expected = [-2.0*d/3.0, d/3.0, d/3.0];
+    for (a,b) in sorted_eigenvalues(&ham).iter().zip(expected.iter()){
+      assert!((a - b).abs() <= 1e-12*d);
+    }
+
+    // The spherical terms: with rank 4 the matrices with and without them
+    // differ by exactly sum_m c_4m T_4m; with rank 0 they are identical.
+    let c4 = 3.0e7;
+    let tensors = build_single_spin_test_tensors(
+        Vector3D::from([1.0e8,-2.0e7,nu]), d, 0.7, c4, 4);
+    let with = build_single_spin_hamiltonian(&tensors, 0, true).unwrap();
+    let without = build_single_spin_hamiltonian(&tensors, 0, false).unwrap();
+    let c = Complex::<f64>{re: c4, im: 0.0};
+    let term = spin_ist(3,4,4)*c + spin_ist(3,4,-4)*c + spin_ist(3,4,0)*(0.5*c);
+    let term = HALF*(&term + &term.t().map(|x| x.conj()));
+    assert!((&with - &without - &term).norm() <= 1e-12*with.norm());
+
+    let tensors = build_single_spin_test_tensors(
+        Vector3D::from([1.0e8,-2.0e7,nu]), d, 0.7, c4, 0);
+    let with = build_single_spin_hamiltonian(&tensors, 0, true).unwrap();
+    let without = build_single_spin_hamiltonian(&tensors, 0, false).unwrap();
+    assert_eq!(with, without);
+
+    // The spin-1/2 at index 1 has only its Zeeman term.
+    let ham = build_single_spin_hamiltonian(&tensors, 1, true).unwrap();
+    assert!((&ham - &(spin_z(2)*Complex::<f64>{re: 5.0e6, im: 0.0})).norm() 
+        <= 1e-12*5.0e6);
+
+    assert_eq!(build_single_spin_hamiltonian(&tensors, 2, true),
+        Err(CluEError::NoSpinWithIndex(2,2)));
+  }
+  //----------------------------------------------------------------------------
+  // Partial traces of a (d_s·d_c)×(d_s·d_c) matrix over the bath (Tr_C) and
+  // over the detected spin (Tr_S); the detected spin is the first factor.
+  fn trace_bath(rho: &CxMat, d_s: usize) -> CxMat{
+    let d_c = rho.dim().0/d_s;
+    let mut out = CxMat::zeros((d_s,d_s));
+    for i in 0..d_s{ for j in 0..d_s{ for k in 0..d_c{
+      out[[i,j]] += rho[[i*d_c + k, j*d_c + k]];
+    }}}
+    out
+  }
+  fn trace_detected(rho: &CxMat, d_s: usize) -> CxMat{
+    let d_c = rho.dim().0/d_s;
+    let mut out = CxMat::zeros((d_c,d_c));
+    for k in 0..d_c{ for l in 0..d_c{ for i in 0..d_s{
+      out[[k,l]] += rho[[i*d_c + k, i*d_c + l]];
+    }}}
+    out
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_get_gcce_product_density_matrix(){
+    use crate::physical_constants::{BOLTZMANN,JOULES_TO_HERTZ};
+    use crate::quantum::block_diagonal_spin_hamiltonian::{
+      get_bath_thermal_density_matrix,
+    };
+    use ndarray::linalg::kron;
+    use ndarray_linalg::Norm;
+
+    let (z0, z1, b) = (1000.0, 100.0, 30.0);
+    let beta = 0.01; // 1/Hz
+    let temperature = 1.0/(JOULES_TO_HERTZ*BOLTZMANN*beta);
+    let mut config = Config::new();
+    config.set_defaults().unwrap();
+    config.temperature = Some(temperature);
+
+    let det_h = (Array1::<f64>::zeros(1) ,CxMat::eye(1));
+    let spin_ops = ClusterSpinOperators::new(det_h,&[2],3,&config).unwrap();
+    let spin_indices = vec![0,1,2];
+
+    // (a) No hyperfine coupling: ρ_S ⊗ exp(-βH_C⁰)/Z equals the joint
+    // thermal state exp(-βH_{S+C})/Z, with ρ_S = exp(-βH_S)/Z.
+    let tensors = build_restricted_three_spin_tensors(z0, z1, 0.0, 0.0, b);
+    let h_s = build_single_spin_hamiltonian(&tensors, 0, true).unwrap();
+    let rho_s = thermal_density_matrix(&h_s, temperature).unwrap();
+    let bath_ham = build_bath_spin_hamiltonian(&spin_indices, &spin_ops,
+        &tensors).unwrap();
+    let product = get_gcce_product_density_matrix(&rho_s, &bath_ham,
+        Some(temperature)).unwrap();
+    let (e, v) = build_spin_hamiltonian(&spin_indices, &spin_ops, &tensors)
+      .unwrap();
+    let joint = get_electron_cluster_thermal_density_matrix(&e, &v, &config)
+      .unwrap();
+    assert!((&product - &joint).norm() < 1e-12);
+
+    // (b) With hyperfine coupling: Tr_C ρ = ρ_S and Tr_S ρ = exp(-βH_C⁰)/Z,
+    // where the latter is computed by the CCE code (block-diagonal ham0).
+    let tensors = build_restricted_three_spin_tensors(z0, z1, 40.0, -25.0, b);
+    let bath_ham = build_bath_spin_hamiltonian(&spin_indices, &spin_ops,
+        &tensors).unwrap();
+    let rho = get_gcce_product_density_matrix(&rho_s, &bath_ham,
+        Some(temperature)).unwrap();
+    assert!((trace_bath(&rho, 2) - &rho_s).norm() < 1e-12);
+    let cce_ops = ClusterSpinOperators::new((Array1::<f64>::zeros(1),
+        CxMat::eye(1)), &[2], 2, &config).unwrap();
+    let rho_c = get_bath_thermal_density_matrix(&[1,2], &cce_ops, &tensors,
+        temperature).unwrap();
+    assert!((trace_detected(&rho, 2) - &rho_c).norm() < 1e-12);
+    assert!((&rho - &kron(&rho_s, &rho_c)).norm() < 1e-12);
+
+    // (c) No temperature: ρ_S ⊗ 1/d_C.
+    let rho = get_gcce_product_density_matrix(&rho_s, &bath_ham, None)
+      .unwrap();
+    assert_eq!(rho, kron(&rho_s, &(CxMat::eye(4)/4.0)));
+
+    // The empty cluster gives ρ_S.
+    let bath_ham0 = build_bath_spin_hamiltonian(&[0], &spin_ops, &tensors)
+      .unwrap();
+    for t in [Some(temperature), None]{
+      let rho = get_gcce_product_density_matrix(&rho_s, &bath_ham0, t)
+        .unwrap();
+      assert!((&rho - &rho_s).norm() < 1e-12);
+    }
+
+    // (d) The bath Hamiltonian is the full gCCE Hamiltonian minus the
+    // detected-spin terms, z0·S_z + a1·S_z·I_z1 + a2·S_z·I_z2.
+    let (a1, a2) = (40.0, -25.0);
+    let (e, v) = build_spin_hamiltonian(&spin_indices, &spin_ops, &tensors)
+      .unwrap();
+    let mut d = CxMat::zeros((8,8));
+    for k in 0..8{ d[[k,k]] = Complex::<f64>{re: e[k], im: 0.0}; }
+    let full = v.dot(&d).dot(&v.t().map(|x| x.conj()));
+    let sz0 = spin_ops.get(&SpinOp::Sz,2,3,0).unwrap();
+    let sz1 = spin_ops.get(&SpinOp::Sz,2,3,1).unwrap();
+    let sz2 = spin_ops.get(&SpinOp::Sz,2,3,2).unwrap();
+    let detected = sz0*z0 + sz0.dot(sz1)*a1 + sz0.dot(sz2)*a2;
+    assert!((&full - &detected - &bath_ham).norm() < 1e-12*full.norm());
+
+    // Dimension error.
+    assert_eq!(get_gcce_product_density_matrix(&CxMat::eye(3), &bath_ham,
+          None), Err(CluEError::DetectedSpinStateDoesNotFitCluster(8,3)));
   }
 }

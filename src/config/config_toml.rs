@@ -106,9 +106,7 @@ pub struct ClusterExpansionTOML{
   pub method: Option<String>,
   pub max_cluster_size: Option<usize>,
   pub ensemble: Option<bool>,
-  pub populations: Option<String>, 
   pub mean_fields: Option<bool>,
-  pub thermalize_cluster_populations: Option<bool>,
   pub clustering: Option<ClusteringTOML>,
 }
 //------------------------------------------------------------------------------
@@ -265,7 +263,6 @@ mod tests{
         [cluster_expansion]
         method = "CCE"
         max_cluster_size = 4
-        populations = "thermal"
 
         [cluster_expansion.clustering]
         file = "clusters_file.toml"

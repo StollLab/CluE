@@ -14,6 +14,15 @@ NOTE:
   renamed"); entries written before that name them include and exclude.
 
 ADDED:
+  Functions for the initial states (plan_populations.md, Stage 1):
+  build_single_spin_hamiltonian (one-spin Hamiltonian of any spin),
+  build_bath_cluster_hamiltonian and get_bath_thermal_density_matrix (CCE
+  bath state), build_bath_spin_hamiltonian and
+  get_gcce_product_density_matrix (ensemble gCCE with a detected-spin
+  state), thermal_density_matrix and thermal_density_matrix_from_eig, and
+  ndarray_linalg_eigh_workaround::eigh_hermitian (see CHANGED). New errors
+  NoSpinWithIndex and DetectedSpinStateDoesNotFitCluster.
+
   Several weighted input structures (plan_multistructures.md, stage 2).
   structure.file accepts a path, a glob ("frames/*.pdb", matches sorted
   lexicographically; a path that names an existing file is that file, also
@@ -153,6 +162,63 @@ ADDED:
   process (threads) write into the log opened last.
 
 CHANGED:
+  Eigenvectors of complex Hermitian matrices are now correct. ndarray-linalg
+  eigh (0.17.0, and the latest release 0.18.1) returns the eigenvectors of
+  the complex conjugate H* for a complex matrix in C (row-major) layout
+  (upstream issue rust-ndarray/ndarray-linalg#307). CluE called it on every
+  Hamiltonian, so all propagators, thermal density matrices, the detected-
+  spin eigenframe, and the spin rotations (expmap_spin, wigner_dir,
+  wigner_euler, expmap_spin_axis_angle) used H* instead of H. CluE now calls
+  eigh through ndarray_linalg_eigh_workaround::eigh_hermitian, which passes
+  a Fortran-layout copy (report.md N26). Results change where the
+  Hamiltonian has imaginary parts, i.e. any Sy term: for the 1omp CCE test,
+  the imaginary part of the signal changes by about its own size (RMSD
+  4.8e-4) and the real part by 3.9e-7. expmap_spin(Sy, θ) is now
+  exp(iθSy), as for Sx and Sz; it was exp(-iθSy).
+
+  The initial bath state is set by cluster_expansion.method,
+  cluster_expansion.ensemble and conditions.temperature
+  (plan_populations.md, Stage 1); cluster_expansion.populations and
+  cluster_expansion.thermalize_cluster_populations are removed (see
+  REMOVED). H_n below is the interaction-free Hamiltonian of bath spin n:
+  Zeeman, quadrupole and zero-field terms, and, for gCCE only, the
+  spherical/Stevens terms up to max_spherical_tensor_rank; it has no mean
+  field and no hyperfine coupling. H_C is the bath-only Hamiltonian of a
+  cluster: the H_n of its spins and their couplings within the cluster.
+    CCE, ensemble = false: each bath spin starts in an eigenstate of H_n,
+      drawn with probability exp(-βE_k)/Z (β = h/k_B T), or uniformly
+      without a temperature; one draw per spin per orientation sample.
+      Previously the default (populations = "uniform") was the coherent
+      product state |+x>|+x>..., which differs from the ensemble result by
+      about 10 % (report.md N03).
+    CCE, ensemble = true: exp(-βH_C)/Z, or 1/d without a temperature.
+      Previously populations = "thermal" used
+      (exp(-βH_α) - exp(-βH_β))/Tr, which includes the hyperfine coupling
+      and the electron polarization. For the 1omp test (50 K) the real
+      part of the signal changes by an RMSD of 1.4e-5.
+    gCCE, ensemble = false: ρ_S ⊗ (sampled eigenstates as for CCE).
+      Previously populations = "thermal" gave random-phase superpositions
+      (report.md N09).
+    gCCE, ensemble = true: with detected_spin.density_matrix,
+      ρ_S ⊗ exp(-βH_C)/Z, or ρ_S ⊗ 1/d without a temperature; without
+      it, the thermal state exp(-βH_{S+C})/Z of the detected spin and the
+      cluster, which requires conditions.temperature.
+  detected_spin.density_matrix is now optional for gCCE with
+  ensemble = true and required with ensemble = false; --check reports the
+  missing settings. A single non-ensemble sample has a larger variance
+  than before, because each bath spin is in a sharp eigenstate: average
+  over run.number_runs or orientations.
+  Thermal density matrices are computed with the energies shifted by their
+  minimum, which avoids overflow (for example a large zero-field splitting
+  at low temperature); results change only by rounding.
+  The test test_1omp compares with a new reference,
+  assets/1omp_K26R1_0.003228966616048703_signal_bath_thermal.csv (the
+  Stage 1 bath state and the eigh fix above); the old reference csv is
+  unchanged and is still used by test_gcce. The gCCE test asset no longer
+  sets populations, thermalize_cluster_populations or density_matrix (so it
+  uses the joint thermal state), and its detection_operator is
+  [[0,0],[1,0]].
+
   Signal files store each complex signal as two columns of real numbers,
   the real part and the imaginary part, instead of one column of a+bi
   strings (breaking change of the output format; report_todo.md #24). A
@@ -775,6 +841,19 @@ CHANGED:
   were removed from it.
 
 REMOVED:
+  cluster_expansion.populations ("uniform", "random", "thermal",
+  "zeeman") and cluster_expansion.thermalize_cluster_populations. An input
+  with either key, in [cluster_expansion] or at the top level, is rejected
+  with a message that names what replaced it (see CHANGED). With them, the
+  functions SpinStates::uniform, zeros, from_weights, randomize_state,
+  randomize_state_weighted, incoherent_density_matrix_for, the field
+  SpinStates::pure_states, HamiltonianTensors::get_zeeman_boltzmann_weights,
+  get_cluster_thermal_density_matrix, the enum ClusterPopulations, the
+  Config fields cluster_populations and thermalize_cluster_populations,
+  the constants KEY_DENSITY_MATRIX_ID, KEY_DENSITY_MATRIX_RANDOM and
+  KEY_DENSITY_MATRIX_ZEEMAN, and the errors ThermalizationRequiresEnsembleCCE
+  and NoClusterDensityMatrixMethod are removed.
+
   <output>/tau_axis.csv: the time axes are the tau and tau2 columns of 
   every signal file (see CHANGED). Library: io::read_time_axis() and the
   constant output_manifest::TAU_AXIS_FILE.

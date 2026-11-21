@@ -26,10 +26,7 @@ pub const KEY_OUT_SANS_SPIN_SIGS: &str = "sans_spin_signals";
 pub const KEY_OUT_STRUC_PDB: &str = "structure_pdb";
 pub const KEY_OUT_TENSORS: &str = "tensors";
 
-pub const KEY_DENSITY_MATRIX_ID: &str  = "uniform";
-pub const KEY_DENSITY_MATRIX_RANDOM: &str  = "random";
 pub const KEY_DENSITY_MATRIX_THERMAL: &str  = "thermal";
-pub const KEY_DENSITY_MATRIX_ZEEMAN: &str  = "zeeman";
 
 pub const KEY_DET_FRAME_EIGEN: &str  = "eigen";
 pub const KEY_DET_FRAME_ZEEMAN: &str  = "zeeman";

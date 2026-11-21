@@ -14,7 +14,6 @@
 [cluster_expansion]
   method = "cce"
   max_cluster_size = 2
-  populations = "thermal"
 
 [cluster_expansion.clustering]
   max_spins = 2

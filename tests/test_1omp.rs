@@ -19,8 +19,13 @@ fn int_test_1omp(){
 
  let signal = Signal{data: signal};
 
+ // The reference of the Stage 1 bath state (plan_populations.md):
+ // ensemble CCE with exp(-βH_C⁰)/Z, and correct eigenvectors
+ // (src/ndarray_linalg_eigh_workaround.rs). The older reference
+ // assets/1omp_K26R1_0.003228966616048703_signal.csv is kept for test_gcce.
  let ref_signal = Signal::read_from_csv(
-     "assets/1omp_K26R1_0.003228966616048703_signal.csv").unwrap();
+     "assets/1omp_K26R1_0.003228966616048703_signal_bath_thermal.csv")
+   .unwrap();
 
  assert_eq!(signal.len(),ref_signal.len());
 

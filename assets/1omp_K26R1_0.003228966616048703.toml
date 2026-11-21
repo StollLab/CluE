@@ -16,7 +16,6 @@
   method = "cce"
   max_cluster_size = 2
   ensemble = true
-  populations = "thermal"
   mean_fields = false
 
 [cluster_expansion.clustering]

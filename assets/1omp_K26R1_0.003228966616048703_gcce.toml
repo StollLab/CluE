@@ -16,9 +16,7 @@
   method = "gcce"
   max_cluster_size = 2
   ensemble = true
-  populations = "thermal"
   mean_fields = false
-  thermalize_cluster_populations = true
 
 [cluster_expansion.clustering]
   max_spins = 3
@@ -34,10 +32,9 @@
   g_matrix.axes.x = {from = "r1_n", to ="r1_o"}
   g_matrix.axes.y = {from = "r1_c2", to ="r1_c5"}
   detection_operator = [
-    [0.0,1.0],
     [0.0,0.0],
+    [1.0,0.0],
   ]
-  density_matrix = "thermal"
   
 [orientations]
   grid = "vector"

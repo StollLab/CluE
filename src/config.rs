@@ -84,9 +84,7 @@ const PATH_REPLICATE_UNIT_CELL: &str = "structure.replicate_unit_cell";
 pub struct Config{
 
   // Detected Spin
-  pub cluster_populations: Option<ClusterPopulations>,
   pub detected_population: Option<DetectedPopulation>,
-  pub thermalize_cluster_populations: Option<bool>,
   pub detected_spin_frame: Option<DetFrame>,
   pub detected_spin_g_matrix: Option<TensorSpecifier>,
   pub detected_spin_identity: Option<Isotope>,
@@ -319,10 +317,6 @@ impl Config{
       self.run_in_parallel = Some(true);
     }
 
-    if self.cluster_populations. is_none(){
-      self.cluster_populations = Some(ClusterPopulations::Uniform);
-    }
-
     if self.detected_spin_frame.is_none(){
       self.detected_spin_frame = Some(DetFrame::Eigen);
     }
@@ -350,9 +344,6 @@ impl Config{
       self.tau2_increments = vec![0.0];
     }
 
-    if self.thermalize_cluster_populations.is_none(){
-      self.thermalize_cluster_populations = Some(false);
-    }
     if self.write_bath.is_none(){
       self.write_bath = Some(true);
     }
@@ -852,16 +843,6 @@ they were normalized to ({}).", label, original, sum, list(abundances));
 }
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-
-//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-#[derive(Debug,Clone,PartialEq)]
-pub enum ClusterPopulations{
-  Uniform,
-  Random,
-  Thermal,
-  Zeeman,
-}
-//>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 #[derive(Debug,Clone,PartialEq)]
@@ -1663,33 +1644,9 @@ impl Config{
       self.ensemble_cce = cluster_expansion.ensemble;
     }
 
-    // An unknown value is ignored, and the default is used.
-    if cluster_expansion.populations 
-        == Some(KEY_DENSITY_MATRIX_THERMAL.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Thermal);
-    }else if cluster_expansion.populations 
-        == Some(KEY_DENSITY_MATRIX_ID.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Uniform);
-    }else if cluster_expansion.populations 
-        == Some(KEY_DENSITY_MATRIX_RANDOM.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Random);
-    }else if cluster_expansion.populations 
-        == Some(KEY_DENSITY_MATRIX_ZEEMAN.to_string())
-    {
-      self.cluster_populations = Some(ClusterPopulations::Zeeman);
-    }
-
     if cluster_expansion.mean_fields.is_some(){
       self.mean_fields = cluster_expansion.mean_fields;
     }
-
-    if cluster_expansion.thermalize_cluster_populations.is_some(){
-      self.thermalize_cluster_populations 
-          = cluster_expansion.thermalize_cluster_populations;
-    } 
 
     if let Some(clustering) = cluster_expansion.clustering{
       self.set_from_clustering_toml(clustering, unit_of_distance, 
@@ -1908,7 +1865,6 @@ mod tests{
       structure.clash_distance_pbc = 0.1
       run.cluster_batch_size = 20000
       cluster_expansion.clustering.connect_exchange_groups = true
-      cluster_expansion.populations = "thermal"
       cluster_expansion.method = "cce"
       cluster_expansion.clustering.file = "clusters_file.toml"
       structure.file = "../../assets/TEMPO_wat_gly_70A.pdb"
@@ -2212,9 +2168,7 @@ mod tests{
         method = "gcce"
         max_cluster_size = 3
         ensemble = true
-        populations = "zeeman"
         mean_fields = false
-        thermalize_cluster_populations = true
 
         [cluster_expansion.clustering]
         file = "previous_run/structure_1/run_1"
@@ -2282,9 +2236,7 @@ mod tests{
     assert_eq!(config.cluster_method, Some(ClusterMethod::GCCE));
     assert_eq!(config.max_cluster_size, Some(3));
     assert_eq!(config.ensemble_cce, Some(true));
-    assert_eq!(config.cluster_populations, Some(ClusterPopulations::Zeeman));
     assert_eq!(config.mean_fields, Some(false));
-    assert_eq!(config.thermalize_cluster_populations, Some(true));
 
     // [cluster_expansion.clustering] and its pair_cutoffs
     assert_eq!(config.cluster_source, Some(ClusterSource::OrientationsDir(

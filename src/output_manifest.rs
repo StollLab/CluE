@@ -1434,9 +1434,9 @@ mod tests{
 
   const ASSET: &str = "assets/1omp_K26R1_0.003228966616048703.toml";
 
-  // Random bath populations differ between instances and orientations.
-  const RANDOM: [(&str,&str); 2] = [("ensemble = true","ensemble = false"),
-    ("populations = \"thermal\"","populations = \"random\"")];
+  // Without ensemble, the bath states are sampled, so they differ between
+  // instances and orientations.
+  const RANDOM: [(&str,&str); 1] = [("ensemble = true","ensemble = false")];
   const AUX: (&str,&str) 
     = ("auxiliary_signals = false","auxiliary_signals = true");
   // Two orientations with equal weights.
@@ -1536,7 +1536,7 @@ mod tests{
     let out = temp_dir("instances");
     let config = small_config(&out, 
         "number_runs = 2\nrng_seed = 11\ncluster_batch_size = 4", 
-        &[RANDOM[0], RANDOM[1], AUX]);
+        &[RANDOM[0], AUX]);
     let (_, signal) = crate::run(config.clone()).unwrap();
 
     // 1. Each instance has its own directory and checkpoints, and the 
@@ -1779,7 +1779,7 @@ build uses"));
   #[test]
   fn test_orientations_are_independent(){
     let out = temp_dir("orientations");
-    let changes = [RANDOM[0], RANDOM[1], TWO_ORIENTATIONS[0], 
+    let changes = [RANDOM[0], TWO_ORIENTATIONS[0], 
       TWO_ORIENTATIONS[1]];
     let config = small_config(&out, "rng_seed = 8", &changes);
     let (_, signal) = crate::run(config.clone()).unwrap();
@@ -1834,7 +1834,7 @@ build uses"));
   #[test]
   fn test_without_orientation_directories(){
     let out = temp_dir("no_orientations");
-    let config = small_config(&out, "rng_seed = 4", &[RANDOM[0], RANDOM[1],
+    let config = small_config(&out, "rng_seed = 4", &[RANDOM[0],
         ("orientation_signals = true","orientation_signals = false")]);
     let (_, signal) = crate::run(config.clone()).unwrap();
     let dir_1 = instance_dir(&out, 1);
@@ -2231,7 +2231,7 @@ number_runs");
     let structure_line = "file = \"assets/1omp_K26R1_0.003228966616048703.pdb\"";
     let config_with = |files: &str| small_config(&out, 
         "number_runs = 2\nrng_seed = 11", 
-        &[RANDOM[0], RANDOM[1], (structure_line, &format!("file = {}", files))]);
+        &[RANDOM[0], (structure_line, &format!("file = {}", files))]);
     let entry = |name: &str, weight: f64| format!("{{file = '{}', weight = {}}}",
         file(name), weight);
     let read_structure = |id: &str| read_signals(
@@ -2274,7 +2274,7 @@ number_runs");
     for (name, id) in [("a", "structure_1"), ("b", "structure_2")]{
       let out_single = temp_dir(&format!("several_single_{}", name));
       let single = small_config(&out_single, "number_runs = 2\nrng_seed = 11",
-          &[RANDOM[0], RANDOM[1], 
+          &[RANDOM[0],
             (structure_line, &format!("file = '{}'", file(name)))]);
       crate::run(single).unwrap();
       assert_eq!(
@@ -2585,10 +2585,9 @@ re_signal_1,im_signal_1,re_signal_2,im_signal_2\n"),
           // The block-diagonal propagation of method "cce" supports only
           // the standard sequences.
           // gCCE settings of assets/1omp_K26R1_0.003228966616048703_gcce.toml.
-          ("method = \"cce\"", "method = \"gcce\"\n  \
-thermalize_cluster_populations = true"),
-          ("g_matrix.values", "detection_operator = [[0.0,1.0],[0.0,0.0]]\n  \
-density_matrix = \"thermal\"\n  g_matrix.values")]);
+          ("method = \"cce\"", "method = \"gcce\""),
+          ("g_matrix.values", "detection_operator = [[0.0,0.0],[1.0,0.0]]\n  \
+g_matrix.values")]);
     let n1 = config.get_tau_axis().unwrap().len();
     assert_eq!(config.get_total_number_timesteps(), n1*3);
     let tau_axes = TauAxes::from_config(&config).unwrap();

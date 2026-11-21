@@ -61,6 +61,7 @@ pub enum CluEError{
   PulseSequenceNotSupported(String,String),
   DensityMatrixTraceVanishes(String,f64),
   DetectedSpinDoesNotHaveAnActiveIndex,
+  DetectedSpinStateDoesNotFitCluster(usize,usize),
   DetectedSpinPositionNotFinite(String),
   DetectedSpinSelectsNoParticles(String),
   DuplicateSerial(u32),
@@ -125,7 +126,6 @@ pub enum CluEError{
   NoClusterBatchSize,
   NoClusterMethod,
   NoClusterSource,
-  NoClusterDensityMatrixMethod,
   NoDetectionFrame,
   NoDetectedSpinDensityMatrix,
   NoDetectedSpinDetectionOperator,
@@ -165,6 +165,7 @@ pub enum CluEError{
   NoPulseOpWithMultiplicity(String,usize),
   NoSpinOpForClusterSize(usize,usize),
   NoSpinOpWithMultiplicity(usize),
+  NoSpinWithIndex(usize,usize),
   NoStevensOp(i32,i32),
   NoStructureFile,
   NotA3DRotationMatrix(String),
@@ -198,7 +199,6 @@ pub enum CluEError{
   StructureLargerThanCell(String,f64),
   StructureWeightsFileWithWeight(String),
   TensorNotSet(usize),
-  ThermalizationRequiresEnsembleCCE,
   TooManyAtomsInPDB(String,usize),
   TooManyResiduesInPDB(String,String,usize),
   TOMLArrayContainsMultipleTypes,
@@ -423,6 +423,11 @@ require.distance, since distances are measured from the detected spin",
 below 1e-12; check the temperature and the energy scale of the Hamiltonian",
           trace, value),
 
+      CluEError::DetectedSpinStateDoesNotFitCluster(dim,d_s) => write!(f,
+          "the {}-dimensional detected-spin density matrix does not fit the \
+{}-dimensional cluster Hamiltonian, whose dimension must be a multiple of it",
+          d_s, dim),
+
       CluEError::DetectedSpinDoesNotHaveAnActiveIndex => write!(f,
           "the detected spin (reference index 0) is always active and has no \
 position among the active bath particles"),
@@ -637,9 +642,6 @@ but there are {} headers and {} columns of data",filename,n_headers,n_cols),
 
       CluEError::NoClusterSource => write!(f,
           "no cluster source specified"),
-
-      CluEError::NoClusterDensityMatrixMethod=> write!(f,
-          "no density matrix method specified"),
 
       CluEError::NoDetectionFrame=> write!(f,
           "no frame for the detected spin"),
@@ -859,6 +861,10 @@ only sizes up to {}",cluster_size,max_size),
           "no spin-{} operators are built", 
           (*spin_multiplicity as f64 - 1.0)/2.0),
 
+      CluEError::NoSpinWithIndex(index,n) => write!(f,
+          "there is no spin with index {}; the spin indices are 0 to {}", 
+          index, n.saturating_sub(1)),
+
       CluEError::NoStevensOp(k,q) => write!(f,
           "cannot get Stevens operator O_{}^{}",k,q),
 
@@ -956,10 +962,6 @@ correct or remove the unit cell (CRYST1) record",span,axis),
 
       CluEError::TensorNotSet(index) => write!(f,
           "no tensor set for particle {}",index),
-
-      CluEError::ThermalizationRequiresEnsembleCCE => write!(f,
-          "cluster_expansion.thermalize_cluster_populations = true requires \
-cluster_expansion.ensemble = true"),
 
       CluEError::TooManyAtomsInPDB(filename,max) => write!(f,
           "\"{}\" has more than {} atoms in the selected model, \
@@ -1119,9 +1121,11 @@ cluster_expansion.clustering.partition_table must be 1, 2, ..., k"),
       (CluEError::NoDetectedParticle,
        "the structure has no detected spin; the detected spin is added \
 when the structure is built from the config"),
-      (CluEError::ThermalizationRequiresEnsembleCCE,
-       "cluster_expansion.thermalize_cluster_populations = true requires \
-cluster_expansion.ensemble = true"),
+      (CluEError::DetectedSpinStateDoesNotFitCluster(6,4),
+       "the 4-dimensional detected-spin density matrix does not fit the \
+6-dimensional cluster Hamiltonian, whose dimension must be a multiple of it"),
+      (CluEError::NoSpinWithIndex(5,3),
+       "there is no spin with index 5; the spin indices are 0 to 2"),
       (CluEError::InvalidStevensCoefficientShape(1,5,2),
        "Stevens coefficient entry 1 is a 5×2 matrix, but each entry must \
 have one column"),
