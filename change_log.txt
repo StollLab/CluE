@@ -162,6 +162,19 @@ ADDED:
   process (threads) write into the log opened last.
 
 CHANGED:
+  The Zeeman term of a bath spin with a g_matrix (isotope settings in
+  [[groups]]) now follows the orientation (report.md N15;
+  plan_populations.md, Stage 1.5). It was built once for a field along
+  the molecular z-axis and used for every orientation, while the couplings
+  were rotated. HamiltonianTensors stores the molecular-frame gamma matrix
+  of these spins (new field bath_gamma_matrices) and rotate_pasive rebuilds
+  their Zeeman vector as for the detected spin. Results change for runs
+  with a bath g_matrix at any orientation other than the field along the
+  molecular z-axis: the dynamics, the sampled bath states, and the Zeeman
+  neighbor cutoffs (neighbor_cutoff_delta_zeeman,
+  neighbor_cutoff_average_zeeman). Bath spins without a g_matrix are
+  unchanged.
+
   Eigenvectors of complex Hermitian matrices are now correct. ndarray-linalg
   eigh (0.17.0, and the latest release 0.18.1) returns the eigenvectors of
   the complex conjugate H* for a complex matrix in C (row-major) layout

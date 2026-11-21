@@ -46,6 +46,10 @@ pub type SpinSphericalTensors = HashMap::<(usize,usize),Vec::<CxMat>>;
 /// either between two different spins or from the same spin.
 /// Higher order terms are not supported.
 /// `detected_gamma_matrix` is the gamma matrix matrix for the detected spin.
+/// `bath_gamma_matrices` holds, for each spin index, the unrotated 
+/// (molecular-frame) gamma matrix of a bath spin with a user `g_matrix`;
+/// it is `None` for index 0 (the detected spin) and for isotropic bath spins,
+/// whose Zeeman vectors do not depend on the orientation.
 /// `magnetic_field` is the applied magnetic field, assumed to be uniform.
 #[derive(Debug,Clone)] 
 pub struct HamiltonianTensors{
@@ -55,6 +59,7 @@ pub struct HamiltonianTensors{
   pub spin_spherical_tensors: SpinSphericalTensors, 
   pub max_spherical_tensor_rank: i32,
   pub detected_gamma_matrix: SymmetricTensor3D,
+  pub bath_gamma_matrices: Vec::<Option<SymmetricTensor3D>>,
   pub magnetic_field: Vector3D,
   pub mean_field_couplings: Option<Vec::<Vec::<Vector3D>>>,
 }
@@ -72,12 +77,24 @@ impl HamiltonianTensors{
   }
   //----------------------------------------------------------------------------
   /// This function performs a passive rotation with respect to the system.
+  /// The Zeeman vectors of the detected spin and of the bath spins with a
+  /// stored gamma matrix are rebuilt by rotating their stored 
+  /// molecular-frame gamma matrices, since the field stays along the lab 
+  /// z-axis: ν = -B·(RγRᵀ)/(2π). Isotropic bath spins (`None`) are left 
+  /// unchanged.
   pub fn rotate_pasive(&mut self, dir: &UnitSpherePoint)
     -> Result<(),CluEError>
   {
     let gamma_matrix = self.detected_gamma_matrix.rotate_pasive(dir);
     self.spin1_tensors.set(0,
         construct_zeeman_tensor(&gamma_matrix,&self.magnetic_field));
+
+    for (idx, gamma_opt) in self.bath_gamma_matrices.iter().enumerate(){
+      if let Some(gamma) = gamma_opt{
+        self.spin1_tensors.set(idx, construct_zeeman_tensor(
+              &gamma.rotate_pasive(dir),&self.magnetic_field));
+      }
+    }
 
     self.spin2_tensors.rotate_pasive(dir);
     spherical_tensors_rotate_passive(&mut self.spin_spherical_tensors,dir)?;
@@ -101,6 +118,10 @@ impl HamiltonianTensors{
     let mut spin1_tensors = Spin1Tensors::new(n_spins);
     let mut spin2_tensors = Spin2Tensors::new(n_spins);
     let mut spin_spherical_tensors = SpinSphericalTensors::new();
+    let mut bath_gamma_matrices 
+      = Vec::<Option<SymmetricTensor3D>>::with_capacity(n_spins);
+    // The detected spin's gamma matrix is `detected_gamma_matrix`.
+    bath_gamma_matrices.push(None);
 
     let Some(magnetic_field) = &config.magnetic_field else{
       return Err(CluEError::NoMagneticField);
@@ -159,8 +180,9 @@ impl HamiltonianTensors{
 
 
       // nuclear Zeeman
-      let bath_zeeman = construct_bath_zeeman_tensor(rng,particle_idx0,
-          magnetic_field, structure, config)?;
+      let (bath_zeeman, bath_gamma_opt) = construct_bath_zeeman_tensor(rng,
+          particle_idx0, magnetic_field, structure, config)?;
+      bath_gamma_matrices.push(bath_gamma_opt);
 
       if bath_zeeman.any_nan(){
         return Err(CluEError::NANTensorBathZeeman(
@@ -289,6 +311,7 @@ impl HamiltonianTensors{
       spin_spherical_tensors,
       max_spherical_tensor_rank,
       detected_gamma_matrix: gamma_matrix.clone(),
+      bath_gamma_matrices,
       magnetic_field: magnetic_field.clone(),
       mean_field_couplings: None,
       })
@@ -643,14 +666,20 @@ pub fn construct_zeeman_tensor(
   (-0.5/PI)*&(magnetic_field * gyromagnetic_ratio)
 }
 //------------------------------------------------------------------------------
+// This function returns the Zeeman vector of bath particle `particle_index`
+// in the molecular frame, and, if the particle has a user `g_matrix`, its 
+// gamma matrix, which `HamiltonianTensors::rotate_pasive` needs to rebuild the
+// Zeeman vector at each orientation. Without a `g_matrix` the gamma matrix
+// is γ·ẑẑᵀ, which gives the same Zeeman vector at every orientation since
+// the field is along z, and `None` is returned for it.
 fn construct_bath_zeeman_tensor(rng: &mut ChaCha20Rng,
     particle_index: usize, magnetic_field: &Vector3D,
     structure: &Structure, config: &Config)
-  -> Result<Vector3D, CluEError>
+  -> Result<(Vector3D, Option<SymmetricTensor3D>), CluEError>
 {
   let particle = &structure.bath_particles[particle_index];
 
-  let gamma_matrix = if let Some(tensor_specifier) = structure
+  if let Some(tensor_specifier) = structure
     .extract_g_matrix_specifier(particle_index,config)
   {
     let spin_multiplicity = structure.bath_particles[particle_index]
@@ -665,7 +694,10 @@ fn construct_bath_zeeman_tensor(rng: &mut ChaCha20Rng,
       MUN
     };
 
-    g_matrix.scale(mu/HBAR)
+    let gamma_matrix = g_matrix.scale(mu/HBAR);
+
+    Ok((construct_zeeman_tensor(&gamma_matrix,magnetic_field),
+        Some(gamma_matrix)))
 
   }else{
     let gamma0 = particle.isotope.gyromagnetic_ratio();
@@ -674,10 +706,10 @@ fn construct_bath_zeeman_tensor(rng: &mut ChaCha20Rng,
                                           0.0,0.0,
                                               1.0]);
     
-    gamma0*&zz
-  };
+    let gamma_matrix = gamma0*&zz;
 
-  Ok(construct_zeeman_tensor(&gamma_matrix,magnetic_field))
+    Ok((construct_zeeman_tensor(&gamma_matrix,magnetic_field), None))
+  }
 }
 //------------------------------------------------------------------------------
 fn construct_bath_electric_quadrupole_tensor(rng: &mut ChaCha20Rng,
@@ -1242,6 +1274,120 @@ mod tests{
       }
     }
 
+  }
+  //----------------------------------------------------------------------------
+  // N15 (plan_populations.md, Stage 1.5): the Zeeman vector of a bath spin
+  // with a user g-matrix follows the orientation; isotropic bath spins do 
+  // not change.
+  #[test]
+  fn test_rotate_pasive_bath_g_matrix(){
+
+    let mut config = Config::from_toml_string(r##"
+        structure.file = "assets/TEMPO.pdb"
+        structure.radius = 18 
+        pulse_sequence.number_timepoints = [101]
+        pulse_sequence.tau_increments = [1e-1] 
+        cluster_expansion.method = "cce"
+        cluster_expansion.max_cluster_size = 2
+        conditions.magnetic_field = 1.2
+        structure.replicate_unit_cell = true
+
+        [detected_spin]
+        position = [28,29]
+
+        [[groups]]
+        name = "tempo_n"
+        require.residues = ["TEM"]
+        require.elements = ["N"]
+
+        # unrealistic, but useful for testing
+        14N.g_matrix.values = [1.0, 2.0, 3.0]
+        14N.g_matrix.axes.x = [-1.15, -0.47,  0.71]
+        14N.g_matrix.axes.y = [-1.09,  2.23, -0.49]
+        "##).unwrap();
+    config.set_defaults().unwrap();
+
+    let mut rng = ChaCha20Rng::seed_from_u64(15);
+    let structure = Structure::build_structure(&mut rng,&config).unwrap();
+    let tensors = HamiltonianTensors::generate(&mut rng, &structure, &config)
+        .unwrap();
+
+    let n_spins = tensors.spin_multiplicities.len();
+    let idx_n = n_spins - 1;
+    assert_eq!(tensors.spin_multiplicities[idx_n], 3);
+
+    // Only the nitrogen, which has a g-matrix, stores its gamma matrix.
+    assert_eq!(tensors.bath_gamma_matrices.len(), n_spins);
+    for (idx, gamma_opt) in tensors.bath_gamma_matrices.iter().enumerate(){
+      assert_eq!(gamma_opt.is_some(), idx == idx_n);
+    }
+    let gamma = tensors.bath_gamma_matrices[idx_n].clone().unwrap();
+
+    // The g-matrix is anisotropic, with eigenvalues [1, 2, 3]·μN/ħ.
+    let mu_hbar = MUN/HBAR;
+    assert!((gamma.trace() - 6.0*mu_hbar).abs() < 1e-12*mu_hbar);
+
+    let b = 1.2;
+    let dirs = [Vector3D::from([0.3, -0.5, 0.8]), 
+      Vector3D::from([-0.9, 0.2, 0.1]), Vector3D::from([0.0, 0.0, 1.0])];
+
+    for dir in dirs.iter(){
+      let d = dir.normalize();
+      let mut rotated = tensors.clone();
+      rotated.rotate_pasive(&UnitSpherePoint::from(d.clone())).unwrap();
+
+      // The field is along the lab z-axis, which is d in the molecular
+      // frame, so ν_z = -B dᵀγd/(2π), and |ν| = B|γd|/(2π).
+      let nu = rotated.spin1_tensors.get(idx_n).unwrap();
+      let gamma_d = &gamma*&d;
+      let nu_z_ref = -b*d.dot(&gamma_d)/(2.0*PI);
+      let nu_norm_ref = b*gamma_d.norm()/(2.0*PI);
+      assert!((nu.z() - nu_z_ref).abs() <= 1e-12*nu_norm_ref);
+      assert!((nu.norm() - nu_norm_ref).abs() <= 1e-12*nu_norm_ref);
+
+      // The detected spin satisfies the same relation (same convention).
+      let gamma_e = &tensors.detected_gamma_matrix;
+      let nu_e = rotated.spin1_tensors.get(0).unwrap();
+      let gamma_e_d = gamma_e*&d;
+      let nu_e_norm_ref = b*gamma_e_d.norm()/(2.0*PI);
+      assert!((nu_e.z() + b*d.dot(&gamma_e_d)/(2.0*PI)).abs() 
+          <= 1e-12*nu_e_norm_ref);
+
+      // A detected spin with the nitrogen's gamma matrix gets the same
+      // rotated Zeeman vector as the nitrogen.
+      let mut same_gamma = tensors.clone();
+      same_gamma.detected_gamma_matrix = gamma.clone();
+      same_gamma.rotate_pasive(&UnitSpherePoint::from(d.clone())).unwrap();
+      let nu_0 = same_gamma.spin1_tensors.get(0).unwrap();
+      assert!((nu_0 - nu).norm() <= 1e-12*nu_norm_ref);
+
+      // Isotropic bath spins are unchanged, bit for bit (`Vector3D`'s `==`
+      // has a tolerance, so the components are compared).
+      for idx in 1..idx_n{
+        let v = rotated.spin1_tensors.get(idx).unwrap();
+        let v0 = tensors.spin1_tensors.get(idx).unwrap();
+        assert_eq!([v.x(), v.y(), v.z()], [v0.x(), v0.y(), v0.z()]);
+      }
+
+      // The Zeeman vectors do not accumulate rotations: rotating twice
+      // equals rotating once to the last orientation.
+      let mut twice = tensors.clone();
+      twice.rotate_pasive(&UnitSpherePoint::from(
+            Vector3D::from([0.1, 0.7, -0.2]))).unwrap();
+      twice.rotate_pasive(&UnitSpherePoint::from(d.clone())).unwrap();
+      for idx in 0..n_spins{
+        let v = twice.spin1_tensors.get(idx).unwrap();
+        let v0 = rotated.spin1_tensors.get(idx).unwrap();
+        assert_eq!([v.x(), v.y(), v.z()], [v0.x(), v0.y(), v0.z()]);
+      }
+    }
+
+    // A tilted orientation changes the nitrogen's Zeeman vector.
+    let mut rotated = tensors.clone();
+    rotated.rotate_pasive(&UnitSpherePoint::from(dirs[0].clone())).unwrap();
+    let nu = rotated.spin1_tensors.get(idx_n).unwrap();
+    let nu_unrotated = tensors.spin1_tensors.get(idx_n).unwrap();
+    assert!((nu - nu_unrotated).norm() > 1e-3*nu_unrotated.norm());
   }
   //----------------------------------------------------------------------------
   #[test]

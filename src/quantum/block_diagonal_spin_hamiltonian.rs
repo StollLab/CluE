@@ -721,6 +721,8 @@ mod tests {
     let ge = -1.7609e+11;
     HamiltonianTensors{
       spin_multiplicities,
+      // No bath gamma matrices: every bath Zeeman vector is fixed.
+      bath_gamma_matrices: vec![None; spin1_tensors.len()],
       spin1_tensors,
       spin2_tensors,
       detected_gamma_matrix: SymmetricTensor3D::from([ge, 0.0, 0.0,

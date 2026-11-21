@@ -273,6 +273,8 @@ mod tests{
     }
     HamiltonianTensors{
       spin_multiplicities: vec![2, multiplicity],
+      // No bath gamma matrices: every bath Zeeman vector is fixed.
+      bath_gamma_matrices: vec![None; spin1_tensors.len()],
       spin1_tensors,
       spin2_tensors,
       spin_spherical_tensors: SpinSphericalTensors::new(),
