@@ -14,6 +14,13 @@ NOTE:
   renamed"); entries written before that name them include and exclude.
 
 ADDED:
+  For the detected-spin operators per orientation (plan_populations.md,
+  Stage 2): ClusterSpinOperators::set_detected_spin, which rebuilds the
+  detected-spin density matrix, detection operator and pulses from the
+  detected-spin Hamiltonian of one orientation and keeps the bath spin
+  operators; math::fix_eigenvector_phases; and the error
+  DetectedSpinMultiplicityChanged.
+
   Functions for the initial states (plan_populations.md, Stage 1):
   build_single_spin_hamiltonian (one-spin Hamiltonian of any spin),
   build_bath_cluster_hamiltonian and get_bath_thermal_density_matrix (CCE
@@ -162,6 +169,51 @@ ADDED:
   process (threads) write into the log opened last.
 
 CHANGED:
+  gCCE: the detected-spin state, the detection operator and the pulses 
+  now follow the orientation (report.md N05; plan_populations.md, Stage 2).
+  They were built once, from the detected-spin Hamiltonian H_S (Zeeman and
+  zero-field terms) of the unrotated tensors, and used for every
+  orientation. They are now rebuilt at each orientation from H_S of the 
+  rotated tensors, before the mean fields are set, so that H_S has no 
+  coupling to the bath. For an anisotropic g or a zero-field splitting the
+  results change at every orientation other than the field along the 
+  molecular z-axis, by about Δg/g in the operators. For the 1omp gCCE test
+  (one orientation, see below for the detection operator) the real part of
+  the signal changes by 5.7e-5 (RMSD).
+  The eigenvectors of H_S now have a fixed phase (fix_eigenvector_phases:
+  the largest-magnitude component of each is real and positive). eigh
+  leaves the phases arbitrary, and every eigen-frame input with
+  off-diagonal elements, and the pulse axes, depended on them.
+  detected_spin.density_matrix = "thermal" with frame = "eigen" (the
+  default) was transformed into the eigenframe a second time, which,
+  among other errors, inverted the polarization of a spin-1/2. The thermal
+  state exp(-βH_S)/Z is now used as is in both frames. For a spin-1/2 with
+  secular dynamics the sign cancelled in the gCCE signal, which divides
+  each cluster signal by its first point; for S > 1/2 or a tilted
+  eigenframe the results change.
+  detected_spin.frame has a new convention (plan_populations.md, S2-E
+  (d)). Level indices (detected_spin.transition and detection_operator =
+  [i, j]) name energy levels, 0 = ground state, in both frames: [i, j] is
+  |v_i><v_j|, and the transition pulses rotate within the levels
+  {v_i, v_j}, with v_l the eigenvector of level l. In the Zeeman frame
+  they named the Zeeman states m_S = -S + l before; the two agree when the
+  eigenstates are the Zeeman states in the order of m_S. In the eigen 
+  frame, matrices and operator names (density_matrix, detection_operator,
+  pulses) are now read in descending energy order: index i is level
+  m-1-i, so [[0,0],[0,1]] is the ground state. Before, index 0 was the 
+  ground state, so eigen-frame matrices and names are now read mirrored:
+  for an isotropic electron "Sz" is +S_z (was -S_z), "Sp" is S+ (was S-),
+  and the eigen and Zeeman frames are the same. With degenerate levels the
+  eigen frame is not well defined, and no error is reported.
+  assets/1omp_K26R1_0.003228966616048703_gcce.toml was changed in Stage 1
+  to detection_operator = [[0.0,0.0],[1.0,0.0]], which is S- under the new
+  convention (it was read as S+ until now). The imaginary part of its
+  signal therefore changes sign. Against the CCE signal of the same system
+  (assets/..._signal_bath_thermal.csv) the RMSD of the imaginary part goes
+  from 4.2e-4 to 2.0e-4; against the older reference of test_gcce (made
+  before the eigh fix below, which changed the sign of the CCE imaginary
+  part) the RMSD goes from 1.7811e-2 to 1.7828e-2 (tolerance 2e-2).
+
   The Zeeman term of a bath spin with a g_matrix (isotope settings in
   [[groups]]) now follows the orientation (report.md N15;
   plan_populations.md, Stage 1.5). It was built once for a field along
@@ -854,6 +906,12 @@ CHANGED:
   were removed from it.
 
 REMOVED:
+  The mean-field term of build_detected_spin_hamiltonian (the field of all
+  bath spins on the detected spin, added when mean-field couplings were
+  set). It never ran, since the function was called before the mean
+  fields were set; now H_S has no bath coupling by construction
+  (plan_populations.md, S2-D; plan_meanfields.md MF-new2, D4).
+
   cluster_expansion.populations ("uniform", "random", "thermal",
   "zeeman") and cluster_expansion.thermalize_cluster_populations. An input
   with either key, in [cluster_expansion] or at the top level, is rejected

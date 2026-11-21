@@ -266,7 +266,10 @@ fn calculate_structure_signal(seed: u64, config: &Config,
     0
   };
 
-  let spin_ops = {
+  // The bath spin operators are built once. For gCCE, the detected-spin
+  // operators built here (from the unrotated tensors) are replaced at
+  // every computed orientation in calculate_signal_at_orientation().
+  let mut spin_ops = {
 
     let spin_multiplicity_set =
         math::unique(tensors.spin_multiplicities.clone());
@@ -355,7 +358,7 @@ fn calculate_structure_signal(seed: u64, config: &Config,
         output.begin_orientation(s_idx, k, iori)?;
         let mut ori_rng = ChaCha20Rng::seed_from_u64(orientation_seeds[iori]);
         let signals = calculate_signal_at_orientation(&mut ori_rng, rot_dir,
-            &spin_ops,tensors.clone(), &structure,config, &ori_name,
+            &mut spin_ops,tensors.clone(), &structure,config, &ori_name,
             &ori_path_opt, tau_axes)?;
         output.finish_orientation(s_idx, k, iori, &ori_path_opt)?;
         signals
@@ -391,7 +394,7 @@ fn calculate_structure_signal(seed: u64, config: &Config,
 #[allow(clippy::too_many_arguments)]
 fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng, 
     rot_dir: UnitSpherePoint,
-    spin_ops: &ClusterSpinOperators,
+    spin_ops: &mut ClusterSpinOperators,
     mut tensors: HamiltonianTensors, structure: &Structure,
     config: &Config, save_dir: &str, save_path_opt: &Option<String>,
     tau_axes: &TauAxes)
@@ -400,6 +403,15 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
 
   // Rotate the coupling tensor to the specified orientation.
   tensors.rotate_pasive(&rot_dir)?;
+
+  // The detected-spin density matrix, detection operator and pulses 
+  // depend on the orientation through the eigenvectors of the detected-spin
+  // Hamiltonian. It is built here, before mean fields are set, so that it 
+  // has no coupling to the bath (plan_populations.md, S2-A, S2-D).
+  if config.cluster_method == Some(ClusterMethod::GCCE){
+    spin_ops.set_detected_spin(build_detected_spin_hamiltonian(&tensors)?,
+        config)?;
+  }
 
   let states = SpinStates::generate(rng, &tensors,config)?;
   
@@ -490,7 +502,7 @@ fn calculate_signal_at_orientation(rng: &mut ChaCha20Rng,
     //  calculate_analytic_restricted_2cluster_signals(&mut cluster_set, &tensors,
     //      config,&save_path_opt,structure)?,
     Some(_cce) => {
-      calculate_cluster_signals(&mut cluster_set, &states, spin_ops, &tensors, 
+      calculate_cluster_signals(&mut cluster_set, &states, &*spin_ops, &tensors, 
           config,save_path_opt,structure)?
     },
     None => return Err(CluEError::NoClusterMethod)

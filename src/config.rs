@@ -1018,6 +1018,19 @@ so it is read as the centroid of the atoms with serial numbers {a}, {b}, and \
 //------------------------------------------------------------------------------
 
 //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+/// `DetFrame` is the basis in which `detected_spin` matrices and operator
+/// names (`density_matrix`, `detection_operator`, and `pulses`) are read.
+/// - `Zeeman`: index i is |m_S = S - i⟩, so index 0 is m_S = +S.
+/// - `Eigen` (the default): the eigenbasis of the non-interacting 
+///   detected-spin Hamiltonian at each orientation, in descending energy 
+///   order: index i is level m-1-i, so the ground state is the bottom-right
+///   element. For an electron whose eigenstates are its Zeeman states, the
+///   two frames are identical. With degenerate levels the eigen frame is
+///   not well defined.
+///
+/// Level indices (`transition`, `detection_operator = [i, j]`) name energy
+/// levels (0 = ground state) in both frames, and the thermal density 
+/// matrix does not depend on the frame.
 #[derive(Debug,Clone,PartialEq)]
 pub enum DetFrame{
   Eigen,

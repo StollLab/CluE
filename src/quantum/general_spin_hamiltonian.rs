@@ -3,7 +3,7 @@ use crate::config::{
   Config,
 };
 use crate::config::pulse_sequence::PulseSequence;
-use crate::math::cxmat_pow_n;
+use crate::math::{cxmat_pow_n,fix_eigenvector_phases};
 use crate::physical_constants::{HALF,ZERO};
 use crate::quantum::block_diagonal_spin_hamiltonian::{
   get_propagators_from_eig,
@@ -599,31 +599,31 @@ pub fn build_single_spin_hamiltonian(tensors: &HamiltonianTensors,
   Ok(ham)
 }
 //------------------------------------------------------------------------------
-/// This function builds and diagonalizes the Hamiltonian of the detected
-/// spin (index 0): `build_single_spin_hamiltonian` with the spherical terms,
-/// plus the mean field of the bath, if mean-field couplings are set.
-/// The eigenvalues are in ascending order.
+/// This function builds and diagonalizes the non-interacting Hamiltonian 
+/// of the detected spin (index 0): `build_single_spin_hamiltonian` with the
+/// spherical terms (Zeeman and zero-field terms), without any coupling to 
+/// the bath, mean fields included. The eigenvalues are in ascending order,
+/// and the eigenvectors (columns) have the phases of 
+/// `fix_eigenvector_phases`.
+/// The tensors should be rotated to the orientation first, since the
+/// result depends on it.
 pub fn build_detected_spin_hamiltonian(tensors: &HamiltonianTensors)
   -> Result<(Array1::<f64>,CxMat),CluEError>
 {
 
   let ten_idx0 = 0;
 
-  let spin_multiplicity: usize = tensors.spin_multiplicities[ten_idx0];
+  let ham = build_single_spin_hamiltonian(tensors, ten_idx0, true)?;
 
-  let mut ham = build_single_spin_hamiltonian(tensors, ten_idx0, true)?;
-
-  if let Some(vec) = tensors.get_mean_field_couplings(ten_idx0,&[ten_idx0]){
-    ham = ham + &spin_x(spin_multiplicity)*vec.x();
-    ham = ham + &spin_y(spin_multiplicity)*vec.y();
-    ham = ham + &spin_z(spin_multiplicity)*vec.z();
-  }
-
-  let Ok((eigvals, eigvecs)) = eigh_hermitian(&ham, UPLO::Lower) else{
+  let Ok((eigvals, mut eigvecs)) = eigh_hermitian(&ham, UPLO::Lower) else{
     return Err(
         CluEError::CannotDiagonalizeHamiltonian(
           crate::math::cx_matrix_summary(&ham)));
   };
+
+  // The eigen-frame inputs of build_detection_operators() depend on the
+  // eigenvector phases, which eigh leaves arbitrary.
+  fix_eigenvector_phases(&mut eigvecs);
 
   Ok((eigvals, eigvecs))
 }

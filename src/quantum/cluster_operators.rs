@@ -18,7 +18,7 @@ use crate::space_3d::{UnitSpherePoint,Vector3D};
 
 use std::fmt;
 use std::collections::HashMap;
-use ndarray::{Array1,Array2};
+use ndarray::{Array1,Array2,s};
 use ndarray::linalg::kron;
 use ndarray_linalg::UPLO;
 use crate::ndarray_linalg_eigh_workaround::eigh_hermitian;
@@ -31,13 +31,15 @@ type CxMat = Array2::<Complex64>;
 /// spins of the form 'S⊗I⊗...I'.
 /// Within a given 'S⊗I⊗...I', all the 'I's have the same dimension.
 /// 'det_multiplicity' is the multiplicity of the detected spin:
-/// 'dim(S) = 2×det_multiplicity + 1'.  
+/// 'dim(S) = det_multiplicity' (1 for CCE, which has no detected spin
+/// operators).
 /// 'bath_multiplicities' contains the allowed spin multiplicities of the
 /// bath spins within each cluster:
 /// 'dim(I) = 2s + 1', for 's' in 'bath_multiplicities'.  
 /// `max_size` is the maximum number of spin operators in a product.
 /// 'cluster_spin_ops' contains the matrices.
 pub struct ClusterSpinOperators {
+  det_multiplicity: usize,
   bath_multiplicities: Vec<usize>, 
   max_size: usize, 
   cluster_spin_ops: Vec<KronSpinOperators>,
@@ -75,6 +77,7 @@ impl<'a> ClusterSpinOperators {
     }
 
     Ok(ClusterSpinOperators{
+        det_multiplicity,
         bath_multiplicities: bath_multiplicities.to_owned(),
         max_size,
         cluster_spin_ops,
@@ -83,6 +86,25 @@ impl<'a> ClusterSpinOperators {
   }
 
   //----------------------------------------------------------------------------
+  /// This function rebuilds the detected-spin density matrix, detection
+  /// operator, and pulses from `det_hamiltonian`, the eigenvalues and 
+  /// eigenvectors of the detected-spin Hamiltonian at the current 
+  /// orientation (`build_detected_spin_hamiltonian` of the rotated tensors).
+  /// The bath spin operators do not depend on the orientation and are kept.
+  /// The detected-spin multiplicity must equal the one used in `new`.
+  pub fn set_detected_spin(&mut self, 
+      det_hamiltonian: (Array1::<f64>,CxMat), config: &Config)
+    -> Result<(),CluEError>
+  {
+    let det_multiplicity = det_hamiltonian.0.len();
+    if det_multiplicity != self.det_multiplicity{
+      return Err(CluEError::DetectedSpinMultiplicityChanged(
+            self.det_multiplicity, det_multiplicity));
+    }
+    self.detection_ops = build_detection_operators(det_hamiltonian,
+        &self.bath_multiplicities, self.max_size, config)?;
+    Ok(())
+  }
   //----------------------------------------------------------------------------
   /// This function tries to find the matrix corresponding to the specified 
   /// spin operator for a spin of the specified multiplicity in a cluster
@@ -149,6 +171,14 @@ impl<'a> ClusterSpinOperators {
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 //------------------------------------------------------------------------------
+// This function builds, for each bath multiplicity, the detected-spin
+// density matrix, detection operator, and pulses, in the Zeeman basis, from
+// `det_hamiltonian`, the eigenvalues (ascending) and eigenvectors V of the 
+// detected-spin Hamiltonian at the current orientation.
+// Level l (0 = ground state) is |v_l⟩ in both frames; `transition` and
+// `detection_operator = [i, j]` name levels. Matrices and operator names
+// are read in `detected_spin.frame` (see `DetFrame`). The thermal density
+// matrix does not depend on the frame.
 fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     bath_multiplicities: &[usize],
     max_size: usize,
@@ -164,8 +194,9 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     _ => (),
   }
 
+  // V: the eigenvectors (columns) in ascending energy order, so that level l
+  // (0 = ground state) is column l.
   let eigvecs = &det_hamiltonian.1;
-  let inv_eigvecs = eigvecs.t().map(|v| v.conj());
 
   { 
     // Check ordering of the eigenvalues.
@@ -175,6 +206,17 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     let en_n = det_hamiltonian.0[n-1];
     assert!( en_0 <= en_n);
   }
+
+  // The eigen frame (plan_populations.md, S2-E (d)): W = V·J, the columns of
+  // V in reverse order, so that matrix index i is level m-1-i and the ground
+  // state is the bottom-right element. When the eigenvectors are the Zeeman
+  // states of an electron (ν > 0), W is the identity, given the phases of
+  // fix_eigenvector_phases().
+  let eig_frame = eigvecs.slice(s![.., ..;-1]).to_owned();
+  let eig_frame_dag = eig_frame.t().map(|v| v.conj());
+  let to_zeeman_basis = |mat: &CxMat| -> CxMat {
+    eig_frame.dot( &mat.dot( &eig_frame_dag) )
+  };
 
   let Some(frame) = &config.detected_spin_frame else{
     return Err(CluEError::NoDetectionFrame);  
@@ -187,7 +229,7 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     None => None,
     Some(DetectedPopulation::Matrix(mat)) => {
       let rho = match frame{
-        DetFrame::Eigen => eigvecs.dot( &mat.dot( &inv_eigvecs) ),
+        DetFrame::Eigen => to_zeeman_basis(mat),
         DetFrame::Zeeman => mat.clone(),  
       };
       Some(rho)
@@ -195,20 +237,17 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     Some(DetectedPopulation::S(sop)) => {
       let mut rho = get_spin_operator(det_multiplicity,sop);
       match frame{
-        DetFrame::Eigen => rho = eigvecs.dot( &rho.dot( &inv_eigvecs) ),
+        DetFrame::Eigen => rho = to_zeeman_basis(&rho),
         DetFrame::Zeeman => (),  
       }
       Some(rho)
     },
+    // exp(-βH_S)/Z is returned in the Zeeman basis and does not depend on
+    // the basis or on the eigenvector phases, so `frame` does not apply.
     Some(DetectedPopulation::Thermal) => {
-      let mut rho = get_electron_cluster_thermal_density_matrix(
+      Some(get_electron_cluster_thermal_density_matrix(
           &det_hamiltonian.0, &det_hamiltonian.1, config,
-        )?;
-      match frame{
-        DetFrame::Eigen => rho = eigvecs.dot( &rho.dot( &inv_eigvecs) ),
-        DetFrame::Zeeman => (),  
-      }
-      Some(rho)
+        )?)
     },   
   };
 
@@ -220,33 +259,28 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     DetectionOp::Matrix(mat) => { 
       
       match frame{
-        DetFrame::Eigen => eigvecs.dot( &mat.dot( &inv_eigvecs) ),
+        DetFrame::Eigen => to_zeeman_basis(mat),
         DetFrame::Zeeman => mat.clone(),  
       }
     },
     DetectionOp::S(sop) => {
       let mut det_op = get_spin_operator(det_multiplicity,sop);
       match frame{
-        DetFrame::Eigen => det_op = eigvecs.dot( &det_op.dot( &inv_eigvecs) ),
+        DetFrame::Eigen => det_op = to_zeeman_basis(&det_op),
         DetFrame::Zeeman => (),  
       }
       det_op
     },
+    // Levels name energy levels in both frames: |v_i⟩⟨v_j|.
     DetectionOp::Transition(level_0,level_1) => {
+      let v_i = eigvecs.column(*level_0);
+      let v_j = eigvecs.column(*level_1);
       let mut mat = CxMat::zeros([det_multiplicity,det_multiplicity]);
-      let (row,col) = match frame{
-        DetFrame::Eigen => {
-          (*level_0,*level_1)
-        },
-        DetFrame::Zeeman 
-          => (det_multiplicity - *level_0 - 1,det_multiplicity - *level_1 - 1),
-      };
-      mat[[row,col]] = ONE;
-
-      if *frame == DetFrame::Eigen{
-        mat = eigvecs.dot( &mat.dot( &inv_eigvecs) );
+      for row in 0..det_multiplicity{
+        for col in 0..det_multiplicity{
+          mat[[row,col]] = v_i[row]*v_j[col].conj();
+        }
       }
-
       mat
     }
   };
@@ -255,24 +289,12 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     match &config.detected_spin_transition{
       Some(transition) => {
 
-      let level_0 = &transition[0];  
-      let level_1 = &transition[1];  
-
-      let (row,col) = match frame{
-        DetFrame::Eigen 
-          => (det_multiplicity - *level_0 - 1,det_multiplicity - *level_1 - 1),
-        DetFrame::Zeeman 
-          => (*level_0,*level_1)
-      };
-
-        let mut u_half_pi = ideal_pulse(&SpinOp::Sy, 0.5*PI,
-            det_multiplicity, &[row,col]);
-        let mut u_pi = ideal_pulse(&SpinOp::Sy, PI,det_multiplicity, &[row,col]);
-
-        if *frame == DetFrame::Eigen{
-          u_half_pi = eigvecs.dot( &u_half_pi.dot( &inv_eigvecs) );
-          u_pi = eigvecs.dot( &u_pi.dot( &inv_eigvecs) );
-        }
+        // Levels name energy levels in both frames. ideal_pulse() places
+        // level l at matrix index m-1-l, which is column m-1-l of W, |v_l⟩.
+        let u_half_pi = to_zeeman_basis(&ideal_pulse(&SpinOp::Sy, 0.5*PI,
+            det_multiplicity, transition));
+        let u_pi = to_zeeman_basis(&ideal_pulse(&SpinOp::Sy, PI,
+            det_multiplicity, transition));
 
         HashMap::<String,CxMat>::from([
           (PI_OVER_2_PULSE_NAME.to_string(), u_half_pi),
@@ -285,7 +307,7 @@ fn build_detection_operators(det_hamiltonian: (Array1::<f64>,CxMat),
     match frame{
       DetFrame::Eigen => {
         for p in pulse_list.values_mut(){
-          *p = eigvecs.dot( &p.dot( &inv_eigvecs) );
+          *p = to_zeeman_basis(p);
         }
       },
       DetFrame::Zeeman => (),  
@@ -1704,6 +1726,585 @@ mod tests {
 
   //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+  //----------------------------------------------------------------------------
+  // Stage 2 of plan_populations.md: detected-spin operators per orientation,
+  // the thermal state, the eigenvector phases, and the eigen-frame level
+  // convention (S2-E (d)).
+  //----------------------------------------------------------------------------
+  use crate::quantum::tensors::{
+    HamiltonianTensors, Spin1Tensors, Spin2Tensors, SpinSphericalTensors,
+  };
+  use crate::quantum::general_spin_hamiltonian::{
+    build_bath_spin_hamiltonian,
+    build_detected_spin_hamiltonian,
+    get_gcce_product_density_matrix,
+  };
+  use crate::math::fix_eigenvector_phases;
+  use crate::space_3d::SymmetricTensor3D;
+
+  // Detected-spin gyromagnetic ratio of a free electron (rad/s/T).
+  const GAMMA_E: f64 = -1.7609e11;
+  //----------------------------------------------------------------------------
+  // Tensors for a detected spin of multiplicity `m` (index 0) and one 
+  // spin-1/2 bath nucleus (index 1) with hyperfine coupling `a_hf` (Hz, 
+  // isotropic) to it. The detected spin has the Zeeman vector `nu` (Hz),
+  // the Cartesian ZFS `zfs`, and the gamma matrix `gamma` (used by 
+  // rotate_pasive).
+  fn detected_spin_tensors(m: usize, nu: Vector3D, 
+      zfs: Option<SymmetricTensor3D>, gamma: SymmetricTensor3D, a_hf: f64)
+    -> HamiltonianTensors
+  {
+    let mut spin1_tensors = Spin1Tensors::new(2);
+    spin1_tensors.set(0, nu);
+    spin1_tensors.set(1, Vector3D::from([0.0, 0.0, -5.1e7]));
+    let mut spin2_tensors = Spin2Tensors::new(2);
+    if let Some(d) = zfs{
+      spin2_tensors.set(0, 0, d);
+    }
+    spin2_tensors.set(0, 1, SymmetricTensor3D::from([a_hf, 0.0, 0.0,
+                                                           a_hf, 0.0,
+                                                                 a_hf]));
+    HamiltonianTensors{
+      spin_multiplicities: vec![m, 2],
+      // No bath gamma matrices: the bath Zeeman vector is fixed.
+      bath_gamma_matrices: vec![None; spin1_tensors.len()],
+      spin1_tensors,
+      spin2_tensors,
+      spin_spherical_tensors: SpinSphericalTensors::new(),
+      max_spherical_tensor_rank: 0,
+      detected_gamma_matrix: gamma,
+      magnetic_field: Vector3D::from([0.0, 0.0, 1.2]),
+      mean_field_couplings: None,
+    }
+  }
+  //----------------------------------------------------------------------------
+  fn isotropic_gamma(g_factor: f64) -> SymmetricTensor3D{
+    let gamma = GAMMA_E*g_factor/2.0023;
+    SymmetricTensor3D::from([gamma, 0.0, 0.0,
+                                   gamma, 0.0,
+                                          gamma])
+  }
+  //----------------------------------------------------------------------------
+  // A gCCE config with the given detected-spin settings.
+  fn detected_spin_config(frame: DetFrame, 
+      population: Option<DetectedPopulation>, det_op: DetectionOp,
+      transition: Option<[usize;2]>, temperature: Option<f64>) -> Config
+  {
+    let mut config = Config::new();
+    config.set_defaults().unwrap();
+    config.detected_spin_frame = Some(frame);
+    config.detected_population = population;
+    config.detection_operator = Some(det_op);
+    config.detected_spin_transition = transition;
+    config.temperature = temperature;
+    config
+  }
+  //----------------------------------------------------------------------------
+  // The detected-spin objects in a one-spin cluster: (ρ_S, detection 
+  // operator, π/2 pulse, π pulse). ρ_S is `None` without a density matrix.
+  struct DetectedObjects{
+    rho: Option<CxMat>,
+    detection: CxMat,
+    half_pi: CxMat,
+    pi: CxMat,
+  }
+  fn detected_objects(spin_ops: &ClusterSpinOperators, config: &Config)
+    -> DetectedObjects
+  {
+    let rho = config.detected_population.as_ref().map(|_| 
+        spin_ops.get_density_matrix(2,1).unwrap().clone());
+    DetectedObjects{
+      rho,
+      detection: spin_ops.get_detected_operator(2,1).unwrap().clone(),
+      half_pi: spin_ops.get_pulse_operator(PI_OVER_2_PULSE_NAME,2,1)
+        .unwrap().clone(),
+      pi: spin_ops.get_pulse_operator(PI_PULSE_NAME,2,1).unwrap().clone(),
+    }
+  }
+  fn objects_from(det_h: (Array1::<f64>,CxMat), config: &Config) 
+    -> DetectedObjects
+  {
+    let spin_ops = ClusterSpinOperators::new(det_h, &[2], 1, config)
+      .unwrap();
+    detected_objects(&spin_ops, config)
+  }
+  //----------------------------------------------------------------------------
+  fn dagger(m: &CxMat) -> CxMat{
+    m.t().map(|z| z.conj())
+  }
+  //----------------------------------------------------------------------------
+  fn assert_close(a: &CxMat, b: &CxMat, tol: f64, what: &str){
+    let err = (a - b).norm();
+    assert!(err <= tol, "{}: |a - b| = {:e}\na = {}\nb = {}", what, err, a, b);
+  }
+  //----------------------------------------------------------------------------
+  // exp(a) by scaling and squaring with a Taylor series (no eigh).
+  fn expm_taylor(a: &CxMat) -> CxMat{
+    let k = 12;
+    let scaled = a/Complex64::new(2f64.powi(k), 0.0);
+    let n = a.dim().0;
+    let mut term = CxMat::eye(n);
+    let mut sum = CxMat::eye(n);
+    for j in 1..30{
+      term = term.dot(&scaled)/Complex64::new(j as f64, 0.0);
+      sum += &term;
+    }
+    cxmat_pow_n(&sum, 1 << k)
+  }
+  //----------------------------------------------------------------------------
+  // H = ν·S + S·D·S, built here from the spin matrices.
+  fn single_spin_matrix(m: usize, nu: &Vector3D, 
+      zfs: &Option<SymmetricTensor3D>) -> CxMat
+  {
+    let s = [spin_x(m), spin_y(m), spin_z(m)];
+    let mut h = &s[0]*nu.x() + &s[1]*nu.y() + &s[2]*nu.z();
+    if let Some(d) = zfs{
+      let dm = [[d.xx(), d.xy(), d.xz()], [d.yx(), d.yy(), d.yz()],
+        [d.zx(), d.zy(), d.zz()]];
+      for (i, si) in s.iter().enumerate(){
+        for (j, sj) in s.iter().enumerate(){
+          h = h + si.dot(sj)*dm[i][j];
+        }
+      }
+    }
+    h
+  }
+  //----------------------------------------------------------------------------
+  // S2-E (d) condition 3 and test (i): for an electron whose eigenstates
+  // are its Zeeman states, W = 1 and every input gives the same operator 
+  // in both frames. Test (iv): the transition pulses and the [i, j] 
+  // detection operator equal those of the code before Stage 2 
+  // (eigen frame), given the same V.
+  #[test]
+  fn test_detected_spin_frames_coincide(){
+    for m in [2, 3]{
+      let nu = Vector3D::from([0.0, 0.0, 3.363e10]);
+      let tensors = detected_spin_tensors(m, nu, None, isotropic_gamma(2.0023),
+          0.0);
+      let det_h = build_detected_spin_hamiltonian(&tensors).unwrap();
+
+      // V = J exactly, so W = V·J = 1.
+      let v = &det_h.1;
+      for i in 0..m{
+        for j in 0..m{
+          let expected = if i + j == m - 1 { ONE } else { ZERO };
+          assert_eq!(v[[i,j]], expected);
+        }
+      }
+
+      let mut off_diagonal = CxMat::zeros((m,m));
+      off_diagonal[[0,1]] = Complex64::new(0.3, -0.2);
+      off_diagonal[[1,0]] = Complex64::new(0.3, 0.2);
+      off_diagonal[[m-1,m-1]] = ONE;
+      let mut ground = CxMat::zeros((m,m));
+      ground[[m-1,m-1]] = ONE;
+      let mut user_pulse = CxMat::eye(m);
+      user_pulse[[0,0]] = I;
+
+      let populations = [
+        DetectedPopulation::Matrix(ground.clone()),
+        DetectedPopulation::Matrix(off_diagonal.clone()),
+        DetectedPopulation::S(SpinOp::Sz),
+        DetectedPopulation::S(SpinOp::Sp),
+      ];
+      let detection_ops = [
+        DetectionOp::Matrix(off_diagonal.clone()),
+        DetectionOp::S(SpinOp::Sp),
+        DetectionOp::S(SpinOp::Sz),
+        DetectionOp::Transition(0, 1),
+      ];
+      for pop in populations.iter(){
+        for det_op in detection_ops.iter(){
+          let objects = |frame: DetFrame, pulses: bool| {
+            let mut config = detected_spin_config(frame, Some(pop.clone()),
+                det_op.clone(), Some([0, 1]), None);
+            if pulses{
+              config.pulses = HashMap::from([
+                (PI_OVER_2_PULSE_NAME.to_string(), user_pulse.clone()),
+                (PI_PULSE_NAME.to_string(), user_pulse.clone()),
+              ]);
+            }
+            let spin_ops = ClusterSpinOperators::new(det_h.clone(),
+                &[2], 1, &config).unwrap();
+            let rho = spin_ops.get_density_matrix(2,1).unwrap().clone();
+            let det = spin_ops.get_detected_operator(2,1).unwrap().clone();
+            let p1 = spin_ops.get_pulse_operator(PI_OVER_2_PULSE_NAME,2,1)
+              .unwrap().clone();
+            let p2 = spin_ops.get_pulse_operator(PI_PULSE_NAME,2,1)
+              .unwrap().clone();
+            (rho, det, p1, p2)
+          };
+          for pulses in [false, true]{
+            let e = objects(DetFrame::Eigen, pulses);
+            let z = objects(DetFrame::Zeeman, pulses);
+            assert_close(&e.0, &z.0, 1e-12, "density matrix");
+            assert_close(&e.1, &z.1, 1e-12, "detection operator");
+            assert_close(&e.2, &z.2, 1e-12, "pi/2 pulse");
+            assert_close(&e.3, &z.3, 1e-12, "pi pulse");
+          }
+        }
+      }
+
+      // In both frames, "Sz" is +S_z and the bottom-right matrix element is
+      // the ground state m_S = -S.
+      let config = detected_spin_config(DetFrame::Eigen, 
+          Some(DetectedPopulation::S(SpinOp::Sz)), DetectionOp::S(SpinOp::Sp),
+          Some([0, 1]), None);
+      let spin_ops = ClusterSpinOperators::new(det_h.clone(), &[2], 1, 
+          &config).unwrap();
+      assert_close(spin_ops.get_density_matrix(2,1).unwrap(), &spin_z(m), 
+          1e-15, "Sz");
+      assert_close(spin_ops.get_detected_operator(2,1).unwrap(), 
+          &spin_plus(m), 1e-15, "Sp");
+
+      // (iv) The pulses and [i, j] of the code before Stage 2 
+      // (eigen frame, same V).
+      let config = detected_spin_config(DetFrame::Eigen, 
+          Some(DetectedPopulation::Matrix(ground.clone())),
+          DetectionOp::Transition(0, 1), Some([0, 1]), None);
+      let new = objects_from(det_h.clone(), &config);
+      let (row, col) = (m - 1, m - 2);
+      let v_dag = dagger(v);
+      let old_half_pi = v.dot(&ideal_pulse(&SpinOp::Sy, 0.5*PI, m, 
+            &[row, col])).dot(&v_dag);
+      let old_pi = v.dot(&ideal_pulse(&SpinOp::Sy, PI, m, &[row, col]))
+        .dot(&v_dag);
+      let mut old_det = CxMat::zeros((m,m));
+      old_det[[0,1]] = ONE;
+      let old_det = v.dot(&old_det).dot(&v_dag);
+      assert_close(&new.half_pi, &old_half_pi, 1e-12, "old pi/2 pulse");
+      assert_close(&new.pi, &old_pi, 1e-12, "old pi pulse");
+      assert_close(&new.detection, &old_det, 1e-12, "old [0, 1]");
+    }
+  }
+  //----------------------------------------------------------------------------
+  // S2-B and S2-5 (b): the thermal ρ_S has ⟨S_z⟩ = -tanh(hν/2k_BT)/2 for
+  // an isotropic spin-1/2 in both frames, and for a spin-1 with a tilted
+  // ZFS it equals exp(-βH)/Z (Taylor series, no eigh) in both frames.
+  #[test]
+  fn test_detected_spin_thermal_state(){
+    let temperature = 1.0;
+    let beta = 1.0/(JOULES_TO_HERTZ*BOLTZMANN*temperature);
+
+    // Spin-1/2.
+    let nu_z = 3.363e10;
+    let tensors = detected_spin_tensors(2, Vector3D::from([0.0, 0.0, nu_z]),
+        None, isotropic_gamma(2.0023), 0.0);
+    let det_h = build_detected_spin_hamiltonian(&tensors).unwrap();
+    let sz_ref = -0.5*(0.5*beta*nu_z).tanh();
+    assert!(sz_ref < -0.3);
+    for frame in [DetFrame::Eigen, DetFrame::Zeeman]{
+      let config = detected_spin_config(frame, 
+          Some(DetectedPopulation::Thermal), DetectionOp::Transition(0,1),
+          Some([0,1]), Some(temperature));
+      let rho = objects_from(det_h.clone(), &config).rho.unwrap();
+      let sz = rho.dot(&spin_z(2)).diag().sum();
+      assert!((sz.re - sz_ref).abs() < 1e-12, "{} vs {}", sz, sz_ref);
+      assert!(sz.im.abs() < 1e-15);
+    }
+
+    // Spin-1, ZFS comparable to the Zeeman energy and tilted from the field.
+    let nu = Vector3D::from([1.0e9, -2.0e8, 9.0e9]);
+    let (d, theta): (f64, f64) = (6.0e9, 0.6);
+    let (st, ct) = (theta.sin(), theta.cos());
+    let zfs = Some(SymmetricTensor3D::from([
+        d*(st*st - 1.0/3.0), 0.0, d*st*ct,
+                        -d/3.0, 0.0,
+                                d*(ct*ct - 1.0/3.0)]));
+    let h = single_spin_matrix(3, &nu, &zfs);
+    let tensors = detected_spin_tensors(3, nu, zfs, isotropic_gamma(2.0023),
+        0.0);
+    let det_h = build_detected_spin_hamiltonian(&tensors).unwrap();
+    let g = expm_taylor(&(&h*Complex64::new(-beta, 0.0)));
+    let rho_ref = &g/g.diag().sum();
+    let mut rhos = Vec::<CxMat>::new();
+    for frame in [DetFrame::Eigen, DetFrame::Zeeman]{
+      let config = detected_spin_config(frame, 
+          Some(DetectedPopulation::Thermal), DetectionOp::Transition(0,1),
+          Some([0,1]), Some(temperature));
+      let spin_ops = ClusterSpinOperators::new(det_h.clone(), &[2], 1, 
+          &config).unwrap();
+      let rho = spin_ops.get_density_matrix(2,1).unwrap().clone();
+      assert_close(&rho, &rho_ref, 1e-12, "thermal spin-1");
+      assert_close(&commutator(&rho, &h), &CxMat::zeros((3,3)), 
+          1e-12*h.norm(), "[ρ, H]");
+      rhos.push(rho);
+    }
+    assert_close(&rhos[0], &rhos[1], 1e-14, "frame invariance");
+  }
+  //----------------------------------------------------------------------------
+  // S2-5 (c): arbitrary phases on the eigenvectors, removed by
+  // fix_eigenvector_phases, give the same ρ_S, detection operator and 
+  // pulses. The thermal ρ_S does not depend on the phases at all.
+  #[test]
+  fn test_detected_spin_gauge(){
+    let nu = Vector3D::from([2.0e9, 1.5e9, 9.0e9]);
+    let (d, theta): (f64, f64) = (4.0e9, 0.9);
+    let (st, ct) = (theta.sin(), theta.cos());
+    let zfs = Some(SymmetricTensor3D::from([
+        d*(st*st - 1.0/3.0), 0.0, d*st*ct,
+                        -d/3.0, 0.0,
+                                d*(ct*ct - 1.0/3.0)]));
+    let tensors = detected_spin_tensors(3, nu, zfs, isotropic_gamma(2.0023),
+        0.0);
+    let det_h = build_detected_spin_hamiltonian(&tensors).unwrap();
+
+    let mut phased = det_h.1.clone();
+    for (k, phi) in [0.4, -1.9, 2.7].iter().enumerate(){
+      let p = Complex64::from_polar(1.0, *phi);
+      phased.column_mut(k).mapv_inplace(|z| z*p);
+    }
+    let mut regauged = phased.clone();
+    fix_eigenvector_phases(&mut regauged);
+
+    let mut mat = CxMat::zeros((3,3));
+    mat[[0,1]] = Complex64::new(0.2, 0.1);
+    mat[[1,0]] = Complex64::new(0.2, -0.1);
+    mat[[2,2]] = ONE;
+    let config = detected_spin_config(DetFrame::Eigen,
+        Some(DetectedPopulation::Matrix(mat.clone())), 
+        DetectionOp::Transition(0, 2), Some([0, 1]), Some(1.0));
+    let a = objects_from(det_h.clone(), &config);
+    let b = objects_from((det_h.0.clone(), regauged), &config);
+    assert_close(a.rho.as_ref().unwrap(), b.rho.as_ref().unwrap(), 1e-15, 
+        "density matrix");
+    assert_close(&a.detection, &b.detection, 1e-15, "detection");
+    assert_close(&a.half_pi, &b.half_pi, 1e-15, "pi/2");
+    assert_close(&a.pi, &b.pi, 1e-15, "pi");
+
+    // Without the gauge, the eigen-frame objects change.
+    let c = objects_from((det_h.0.clone(), phased.clone()), &config);
+    assert!((&a.detection - &c.detection).norm() > 0.1);
+    assert!((a.rho.as_ref().unwrap() - c.rho.as_ref().unwrap()).norm() > 0.01);
+
+    // The thermal state is the same for any phases.
+    let config = detected_spin_config(DetFrame::Eigen,
+        Some(DetectedPopulation::Thermal), DetectionOp::Transition(0, 2),
+        Some([0, 1]), Some(1.0));
+    let a = objects_from(det_h.clone(), &config);
+    let c = objects_from((det_h.0.clone(), phased), &config);
+    assert_close(a.rho.as_ref().unwrap(), c.rho.as_ref().unwrap(), 1e-15,
+        "thermal");
+  }
+  //----------------------------------------------------------------------------
+  // S2-5 (a) and S2-E test (ii), and S2-5 (f): with an anisotropic g, 
+  // after set_detected_spin at a tilted orientation, the eigen-frame 
+  // `[[0,0],[0,1]]` is the ground state (1 - n·σ)/2 of the rotated
+  // H_S = ν·S, n = ν/|ν|, and the ensemble-gCCE product state built from the
+  // stored ρ_S has Tr_C ρ = ρ_S.
+  #[test]
+  fn test_set_detected_spin_follows_orientation(){
+    let gamma = SymmetricTensor3D::from([GAMMA_E*0.97, 0.01*GAMMA_E, 0.0,
+                                                   GAMMA_E*1.0, 0.0,
+                                                          GAMMA_E*1.06]);
+    let mut tensors = detected_spin_tensors(2, Vector3D::zeros(), None, 
+        gamma, 2.0e6);
+    tensors.rotate_pasive(&UnitSpherePoint::from(
+          Vector3D::from([0.0, 0.0, 1.0]))).unwrap();
+
+    let mut ground = CxMat::zeros((2,2));
+    ground[[1,1]] = ONE;
+    let mut coherent = CxMat::zeros((2,2));
+    coherent[[0,0]] = Complex64::new(0.3, 0.0);
+    coherent[[1,1]] = Complex64::new(0.7, 0.0);
+    coherent[[0,1]] = Complex64::new(0.1, 0.2);
+    coherent[[1,0]] = Complex64::new(0.1, -0.2);
+
+    let mut config_ground = detected_spin_config(DetFrame::Eigen,
+        Some(DetectedPopulation::Matrix(ground.clone())), 
+        DetectionOp::Transition(0, 1), Some([0, 1]), Some(10.0));
+    config_ground.ensemble_cce = Some(true);
+    let mut config_coherent = config_ground.clone();
+    config_coherent.detected_population 
+      = Some(DetectedPopulation::Matrix(coherent.clone()));
+
+    // Built once from the unrotated tensors, as before the orientation loop.
+    let det_h0 = build_detected_spin_hamiltonian(&tensors).unwrap();
+    let mut spin_ops = ClusterSpinOperators::new(det_h0, &[2], 2, 
+        &config_ground).unwrap();
+    let rho_0 = spin_ops.get_density_matrix(2,1).unwrap().clone();
+
+    let sigma = [spin_x(2)*2.0, spin_y(2)*2.0, spin_z(2)*2.0];
+    let dirs = [Vector3D::from([0.5, -0.3, 0.8]), 
+      Vector3D::from([-0.7, 0.6, 0.2])];
+    let mut previous: Option<CxMat> = None;
+    for dir in dirs.iter(){
+      let mut rotated = tensors.clone();
+      rotated.rotate_pasive(&UnitSpherePoint::from(dir.normalize()))
+        .unwrap();
+      let nu = rotated.spin1_tensors.get(0).unwrap().clone();
+      let n = nu.normalize();
+      let expected = (CxMat::eye(2) - &sigma[0]*n.x() - &sigma[1]*n.y() 
+          - &sigma[2]*n.z())*Complex64::new(0.5, 0.0);
+
+      let det_h = build_detected_spin_hamiltonian(&rotated).unwrap();
+      spin_ops.set_detected_spin(det_h.clone(), &config_ground).unwrap();
+      let rho = spin_ops.get_density_matrix(2,1).unwrap().clone();
+      assert_close(&rho, &expected, 1e-12, "ground state");
+      // The tilt is O(Δg/g), and it is resolved.
+      assert!((&rho - &rho_0).norm() > 1e-3);
+
+      // (f) Ensemble gCCE with a density matrix: the empty cluster state 
+      // is ρ_S, and a one-nucleus cluster state has Tr_C ρ = ρ_S.
+      spin_ops.set_detected_spin(det_h, &config_coherent).unwrap();
+      let rho_s = spin_ops.get_density_matrix(2,1).unwrap().clone();
+      if let Some(prev) = &previous{
+        assert!((&rho_s - prev).norm() > 1e-3);
+      }
+      let empty_ham = build_bath_spin_hamiltonian(&[0], &spin_ops, &rotated)
+        .unwrap();
+      let rho_empty = get_gcce_product_density_matrix(&rho_s, &empty_ham,
+          Some(10.0)).unwrap();
+      assert_close(&rho_empty, &rho_s, 1e-12, "empty cluster");
+      let bath_ham = build_bath_spin_hamiltonian(&[0, 1], &spin_ops, 
+          &rotated).unwrap();
+      let rho_c = get_gcce_product_density_matrix(&rho_s, &bath_ham,
+          Some(10.0)).unwrap();
+      let mut tr_c = CxMat::zeros((2,2));
+      for i in 0..2{
+        for j in 0..2{
+          tr_c[[i,j]] = rho_c[[2*i,2*j]] + rho_c[[2*i+1,2*j+1]];
+        }
+      }
+      assert_close(&tr_c, &rho_s, 1e-12, "Tr_C");
+      previous = Some(rho_s);
+    }
+  }
+  //----------------------------------------------------------------------------
+  // S2-5 (d) and S2-E test (iii): a spin-1 with a ZFS that reorders the 
+  // levels. `transition = [0, 1]` acts on the two lowest levels, in both 
+  // frames and at a tilted orientation, and `detection_operator = [0, 1]` 
+  // is |v_0⟩⟨v_1| in the Zeeman frame too.
+  #[test]
+  fn test_detected_spin_levels_with_zfs(){
+    // D along z: E(m=0) = -2D/3 < E(m=-1) = D/3 - ν < E(m=+1) = D/3 + ν.
+    let (nu_z, d) = (2.0e9, 5.0e9);
+    let zfs_z = SymmetricTensor3D::from([-d/3.0, 0.0, 0.0,
+                                                -d/3.0, 0.0,
+                                                   2.0*d/3.0]);
+    let gamma = isotropic_gamma(2.0023);
+    let tensors = detected_spin_tensors(3, Vector3D::from([0.0, 0.0, nu_z]),
+        Some(zfs_z.clone()), gamma.clone(), 0.0);
+    let det_h = build_detected_spin_hamiltonian(&tensors).unwrap();
+    // Zeeman indices: m = +1 → 0, m = 0 → 1, m = -1 → 2.
+    let mut expected_det = CxMat::zeros((3,3));
+    expected_det[[1,2]] = ONE;
+    for frame in [DetFrame::Eigen, DetFrame::Zeeman]{
+      let config = detected_spin_config(frame.clone(), None, 
+          DetectionOp::Transition(0, 1), Some([0, 1]), None);
+      let o = objects_from(det_h.clone(), &config);
+      assert_close(&o.detection, &expected_det, 1e-15, "[0, 1]");
+      // The π pulse swaps m = 0 and m = -1 and leaves m = +1 alone.
+      assert!((o.pi[[0,0]] - ONE).norm() < 1e-15);
+      assert!((o.pi[[2,1]].norm() - 1.0).abs() < 1e-15);
+      assert!((o.pi[[1,2]].norm() - 1.0).abs() < 1e-15);
+    }
+
+    // Tilted orientations: the levels come from the rotated H_S, checked
+    // against H_S built here from the rotated tensors.
+    for dir in [Vector3D::from([0.4, 0.2, 0.9]), 
+      Vector3D::from([0.9, -0.4, 0.1])]
+    {
+      let mut rotated = tensors.clone();
+      rotated.rotate_pasive(&UnitSpherePoint::from(dir.normalize()))
+        .unwrap();
+      let h = single_spin_matrix(3, rotated.spin1_tensors.get(0).unwrap(),
+          &rotated.spin2_tensors.get(0,0).cloned());
+      let (e, v) = build_detected_spin_hamiltonian(&rotated).unwrap();
+      for k in 0..3{
+        let vk = v.column(k).to_owned();
+        let hv = h.dot(&vk);
+        assert!((&hv - &vk*Complex64::new(e[k], 0.0)).norm() 
+            <= 1e-12*h.norm());
+      }
+      for frame in [DetFrame::Eigen, DetFrame::Zeeman]{
+        let config = detected_spin_config(frame, None, 
+            DetectionOp::Transition(0, 1), Some([0, 1]), None);
+        let mut spin_ops = ClusterSpinOperators::new(det_h.clone(), &[2], 1,
+            &config).unwrap();
+        spin_ops.set_detected_spin((e.clone(), v.clone()), &config)
+          .unwrap();
+        let o = detected_objects(&spin_ops, &config);
+        let in_level_basis = |u: &CxMat| dagger(&v).dot(u).dot(&v);
+        for u in [&o.half_pi, &o.pi]{
+          let u_l = in_level_basis(u);
+          // Level 2 is untouched, and span{v_0, v_1} is invariant.
+          assert!((u_l[[2,2]] - ONE).norm() < 1e-12);
+          for k in 0..2{
+            assert!(u_l[[2,k]].norm() < 1e-12);
+            assert!(u_l[[k,2]].norm() < 1e-12);
+          }
+        }
+        // The π pulse takes level 0 to level 1.
+        assert!((in_level_basis(&o.pi)[[1,0]].norm() - 1.0).abs() < 1e-12);
+        let mut v0v1 = CxMat::zeros((3,3));
+        for r in 0..3{
+          for c in 0..3{
+            v0v1[[r,c]] = v[[r,0]]*v[[c,1]].conj();
+          }
+        }
+        assert_close(&o.detection, &v0v1, 1e-15, "[0, 1] tilted");
+      }
+    }
+  }
+  //----------------------------------------------------------------------------
+  // S2-5 (g): set_detected_spin rejects a Hamiltonian of another size.
+  #[test]
+  fn test_set_detected_spin_wrong_multiplicity(){
+    let config = detected_spin_config(DetFrame::Eigen, None,
+        DetectionOp::Transition(0, 1), Some([0, 1]), None);
+    let t2 = detected_spin_tensors(2, Vector3D::from([0.0, 0.0, 3.0e10]), 
+        None, isotropic_gamma(2.0023), 0.0);
+    let t3 = detected_spin_tensors(3, Vector3D::from([0.0, 0.0, 3.0e10]), 
+        None, isotropic_gamma(2.0023), 0.0);
+    let mut spin_ops = ClusterSpinOperators::new(
+        build_detected_spin_hamiltonian(&t2).unwrap(), &[2], 1, &config)
+      .unwrap();
+    let err = spin_ops.set_detected_spin(
+        build_detected_spin_hamiltonian(&t3).unwrap(), &config).unwrap_err();
+    assert_eq!(err, CluEError::DetectedSpinMultiplicityChanged(2, 3));
+    assert!(spin_ops.set_detected_spin(
+        build_detected_spin_hamiltonian(&t2).unwrap(), &config).is_ok());
+  }
+  //----------------------------------------------------------------------------
+  // S2-5 (h) and S2-D: mean fields do not enter the detected-spin 
+  // Hamiltonian, so ρ_S, the detection operator and the pulses are the 
+  // same with and without them.
+  #[test]
+  fn test_detected_spin_ignores_mean_fields(){
+    let gamma = SymmetricTensor3D::from([GAMMA_E*0.97, 0.0, 0.0,
+                                                   GAMMA_E*1.0, 0.0,
+                                                          GAMMA_E*1.06]);
+    let mut tensors = detected_spin_tensors(2, Vector3D::zeros(), None, 
+        gamma, 5.0e7);
+    tensors.rotate_pasive(&UnitSpherePoint::from(
+          Vector3D::from([0.3, 0.4, 0.8]).normalize())).unwrap();
+    let det_h = build_detected_spin_hamiltonian(&tensors).unwrap();
+
+    let mut with_mf = tensors.clone();
+    let up = ndarray::array![[ONE],[ZERO]];
+    with_mf.set_mean_field_couplings(&[up.clone(), up]).unwrap();
+    // The Overhauser field on the detected spin is not zero.
+    let overhauser = with_mf.get_mean_field_couplings(0, &[0]).unwrap();
+    assert!(overhauser.norm() > 1e7);
+    let det_h_mf = build_detected_spin_hamiltonian(&with_mf).unwrap();
+    assert_eq!(det_h.0, det_h_mf.0);
+    assert_eq!(det_h.1, det_h_mf.1);
+
+    let mut mat = CxMat::zeros((2,2));
+    mat[[0,1]] = Complex64::new(0.2, 0.1);
+    mat[[1,0]] = Complex64::new(0.2, -0.1);
+    mat[[1,1]] = ONE;
+    let config = detected_spin_config(DetFrame::Eigen,
+        Some(DetectedPopulation::Matrix(mat)), 
+        DetectionOp::S(SpinOp::Sp), Some([0, 1]), None);
+    let a = objects_from(det_h, &config);
+    let b = objects_from(det_h_mf, &config);
+    assert_eq!(a.rho, b.rho);
+    assert_eq!(a.detection, b.detection);
+    assert_eq!(a.half_pi, b.half_pi);
+    assert_eq!(a.pi, b.pi);
+  }
   //----------------------------------------------------------------------------
   #[test]
   fn test_detection_spin_op_list_errors(){

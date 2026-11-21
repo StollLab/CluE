@@ -62,6 +62,7 @@ pub enum CluEError{
   DensityMatrixTraceVanishes(String,f64),
   DetectedSpinDoesNotHaveAnActiveIndex,
   DetectedSpinStateDoesNotFitCluster(usize,usize),
+  DetectedSpinMultiplicityChanged(usize,usize),
   DetectedSpinPositionNotFinite(String),
   DetectedSpinSelectsNoParticles(String),
   DuplicateSerial(u32),
@@ -427,6 +428,10 @@ below 1e-12; check the temperature and the energy scale of the Hamiltonian",
           "the {}-dimensional detected-spin density matrix does not fit the \
 {}-dimensional cluster Hamiltonian, whose dimension must be a multiple of it",
           d_s, dim),
+
+      CluEError::DetectedSpinMultiplicityChanged(expected,got) => write!(f,
+          "the detected-spin Hamiltonian has {} levels, but the spin \
+operators were built for a detected spin with {}", got, expected),
 
       CluEError::DetectedSpinDoesNotHaveAnActiveIndex => write!(f,
           "the detected spin (reference index 0) is always active and has no \
@@ -1124,6 +1129,9 @@ when the structure is built from the config"),
       (CluEError::DetectedSpinStateDoesNotFitCluster(6,4),
        "the 4-dimensional detected-spin density matrix does not fit the \
 6-dimensional cluster Hamiltonian, whose dimension must be a multiple of it"),
+      (CluEError::DetectedSpinMultiplicityChanged(2,3),
+       "the detected-spin Hamiltonian has 3 levels, but the spin operators \
+were built for a detected spin with 2"),
       (CluEError::NoSpinWithIndex(5,3),
        "there is no spin with index 5; the spin indices are 0 to 2"),
       (CluEError::InvalidStevensCoefficientShape(1,5,2),

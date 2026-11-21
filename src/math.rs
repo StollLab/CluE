@@ -115,6 +115,34 @@ pub fn cxmat_pow_n(m: &CxMat, n: usize) -> CxMat
   a
 }
 //------------------------------------------------------------------------------
+/// This function fixes the phase of each eigenvector (column) of `eigvecs`,
+/// which an eigensolver returns only up to a factor e^{iφ}: each column is
+/// multiplied by the phase that makes its largest-magnitude component real
+/// and positive. Components whose magnitudes agree with the largest one to
+/// a relative `EIGENVECTOR_PHASE_TIE_TOLERANCE` count as ties, and the
+/// lowest index among them is used, so that rounding cannot change the
+/// choice. A zero column is left unchanged.
+/// Projectors |v⟩⟨v| do not change, but matrices built from several
+/// eigenvectors, such as |v_i⟩⟨v_j|, depend on these phases.
+pub fn fix_eigenvector_phases(eigvecs: &mut CxMat){
+  for mut column in eigvecs.columns_mut(){
+    let max_norm = column.iter().map(|z| z.norm())
+      .fold(0.0_f64, f64::max);
+    if max_norm == 0.0{
+      continue;
+    }
+    let threshold = max_norm*(1.0 - EIGENVECTOR_PHASE_TIE_TOLERANCE);
+    let Some(pivot) = column.iter().find(|z| z.norm() >= threshold) else{
+      continue;
+    };
+    // pivot* / |pivot| maps the pivot to |pivot| > 0.
+    let phase = pivot.conj()/pivot.norm();
+    column.mapv_inplace(|z| z*phase);
+  }
+}
+/// Relative tolerance for ties in `fix_eigenvector_phases`.
+pub const EIGENVECTOR_PHASE_TIE_TOLERANCE: f64 = 1e-10;
+//------------------------------------------------------------------------------
 pub fn anticommutator(mat0: &CxMat, mat1: &CxMat) -> CxMat{
   mat0.dot(mat1) + mat1.dot(mat0)
 }
@@ -351,5 +379,60 @@ mod tests{
     let large = CxMat::eye(9);
     assert_eq!(cx_matrix_summary(&large),
         "a 9x9 matrix with 0 NaN or infinite entries");
+  }
+  //----------------------------------------------------------------------------
+  #[test]
+  fn test_fix_eigenvector_phases(){
+    let c = |re: f64, im: f64| Complex64::new(re, im);
+    // Column 0: largest component at index 1 (|0.8|), phase i.
+    // Column 1: tie between |0.6| at index 0 and index 2 (up to rounding);
+    //   the lowest index wins. Phase e^{-0.7i}.
+    // Column 2: zero column, unchanged.
+    let ph = Complex64::from_polar(1.0, -0.7);
+    let rounding = 1.0 + 1e-15;
+    // 0.6² + r² + 0.6² = 1.
+    let r = 0.28_f64.sqrt();
+    let mut v = array![
+      [c(0.0, 0.6), ph*0.6, ZERO],
+      [c(0.0, 0.8), ph*c(0.0, r), ZERO],
+      [ZERO, ph*(-0.6*rounding), ZERO],
+    ];
+    let v_in = v.clone();
+    fix_eigenvector_phases(&mut v);
+
+    let expected = array![
+      [c(0.6, 0.0), c(0.6, 0.0), ZERO],
+      [c(0.8, 0.0), c(0.0, r), ZERO],
+      [ZERO, c(-0.6*rounding, 0.0), ZERO],
+    ];
+    for (a,b) in v.iter().zip(expected.iter()){
+      assert!((a - b).norm() < 1e-15, "{} != {}", a, b);
+    }
+    // Each column changed only by a phase.
+    for k in 0..3{
+      let overlap: Complex64 = v_in.column(k).iter().zip(v.column(k).iter())
+        .map(|(a,b)| a.conj()*b).sum();
+      let n2: f64 = v_in.column(k).iter().map(|z| z.norm_sqr()).sum();
+      assert!((overlap.norm() - n2).abs() < 1e-15);
+    }
+
+    // Idempotent, and independent of the input phase.
+    let mut again = v.clone();
+    fix_eigenvector_phases(&mut again);
+    assert_eq!(again, v);
+    let mut rotated = v.clone();
+    for (k, phi) in [0.3, -2.0, 1.1].iter().enumerate(){
+      let p = Complex64::from_polar(1.0, *phi);
+      rotated.column_mut(k).mapv_inplace(|z| z*p);
+    }
+    fix_eigenvector_phases(&mut rotated);
+    for (a,b) in rotated.iter().zip(v.iter()){
+      assert!((a - b).norm() < 1e-15);
+    }
+
+    // The swap matrix with LAPACK-like phases becomes J exactly.
+    let mut swap = array![[ZERO, c(0.0,-1.0)],[ONE, ZERO]];
+    fix_eigenvector_phases(&mut swap);
+    assert_eq!(swap, array![[ZERO, ONE],[ONE, ZERO]]);
   }
 }
